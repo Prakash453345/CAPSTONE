@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sim-service"
+version = "0.1.0"
+description = "[ARCH] Phase-1 home for services 3 (Traffic), 4 (Signal Controller), 5 (Optimization Engine), 17 (Simulation Adapter), 19 (IoT Gateway), 20 (GPS/AVL Adapter). M0: publishes a heartbeat only."
+requires-python = ">=3.11"
+dependencies = [
+    "itms-common",
+]
+
+[tool.setuptools.packages.find]
+include = ["sim_service*"]

@@ -1,0 +1,15 @@
+{
+  "type": "record",
+  "name": "EventEnvelope",
+  "namespace": "itms.contracts",
+  "doc": "Common wrapper for every event on the bus. [ARCH ADR-001]: one event language regardless of source (SUMO, CCTV, IoT, GPS, or platform-internal). Services deserialize the envelope first, then dispatch on event_type to decode payload.",
+  "fields": [
+    { "name": "event_id", "type": "string", "doc": "UUID, unique per event. Basis for idempotent-consumer dedup [ARCH §6.3]." },
+    { "name": "event_type", "type": "string", "doc": "e.g. 'SystemHeartbeat', 'VehiclePositionUpdated'. Selects the payload schema." },
+    { "name": "schema_version", "type": "int", "default": 1 },
+    { "name": "occurred_at", "type": { "type": "long", "logicalType": "timestamp-millis" }, "doc": "Wall-clock event time, for humans and retention policy. NEVER used for safety-duration arithmetic [ARCH §17.1] — monotonic clocks only for that, and that logic doesn't live in the envelope." },
+    { "name": "source", "type": "string", "doc": "Producing service, e.g. 'sim-service'." },
+    { "name": "partition_key", "type": ["null", "string"], "default": null, "doc": "e.g. zone_id or intersection_id — ordering key [ARCH §6.2]." },
+    { "name": "payload", "type": "bytes", "doc": "Avro-encoded bytes of the event_type's own schema." }
+  ]
+}

@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>ITMS — M0 event stream</title>
+<style>
+  body { font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; background: #0b0f14; color: #d6e2ea; margin: 0; padding: 24px; }
+  h1 { font-size: 16px; color: #7fd1ff; margin: 0 0 4px; }
+  p.sub { color: #7c8b96; margin: 0 0 20px; }
+  #status { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 12px; margin-left: 8px; }
+  #status.connecting { background: #4a3b00; color: #ffd76a; }
+  #status.open { background: #123a1f; color: #6adf8f; }
+  #status.closed { background: #3a1212; color: #ff8a8a; }
+  #log { border: 1px solid #1c2733; border-radius: 6px; padding: 12px; height: 60vh; overflow-y: auto; background: #0f151c; }
+  .row { white-space: pre-wrap; word-break: break-all; border-bottom: 1px solid #141c24; padding: 4px 0; }
+  .row .seq { color: #7fd1ff; }
+  .row .ts { color: #7c8b96; }
+</style>
+</head>
+<body>
+  <h1>ITMS — M0 event stream <span id="status" class="connecting">connecting…</span></h1>
+  <p class="sub">Connects to the api-service WebSocket and prints every event as it arrives. This page is the M0 placeholder for the real operator dashboard (build guide §9.3) — it grows into the live map, pressure decomposition, and corridor view as later milestones land.</p>
+  <div id="log"></div>
+
+<script>
+  const WS_URL = (window.ITMS_WS_URL) || "ws://localhost:8000/v1/stream";
+  const statusEl = document.getElementById("status");
+  const logEl = document.getElementById("log");
+
+  function setStatus(state, label) {
+    statusEl.className = state;
+    statusEl.textContent = label;
+  }
+
+  function appendRow(envelope) {
+    const div = document.createElement("div");
+    div.className = "row";
+    const payload = JSON.stringify(envelope.payload);
+    div.innerHTML = `<span class="ts">${envelope.occurred_at}</span> ` +
+      `<b>${envelope.event_type}</b> from ${envelope.source} ` +
+      `<span class="seq">#${envelope.payload && envelope.payload.seq}</span> ` +
+      payload;
+    logEl.prepend(div);
+    while (logEl.childElementCount > 500) {
+      logEl.removeChild(logEl.lastChild);
+    }
+  }
+
+  function connect() {
+    setStatus("connecting", "connecting…");
+    const ws = new WebSocket(WS_URL);
+    ws.onopen = () => setStatus("open", "connected");
+    ws.onclose = () => {
+      setStatus("closed", "disconnected — retrying in 2s");
+      setTimeout(connect, 2000);
+    };
+    ws.onerror = () => ws.close();
+    ws.onmessage = (evt) => {
+      try {
+        appendRow(JSON.parse(evt.data));
+      } catch (e) {
+        console.error("bad message", e, evt.data);
+      }
+    };
+  }
+
+  connect();
+</script>
+</body>
+</html>

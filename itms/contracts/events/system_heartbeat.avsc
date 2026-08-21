@@ -1,0 +1,11 @@
+{
+  "type": "record",
+  "name": "SystemHeartbeat",
+  "namespace": "itms.contracts",
+  "doc": "M0's one event. Proves a producer can publish through packages/common's EventBus, a consumer can read it back, and it reaches a browser over the api-service WebSocket. No product meaning beyond that — it goes away once M1's real events (VehiclePositionUpdated etc.) give the pipeline something real to carry, or it can stay on as an actual liveness signal; decide at M1 time.",
+  "fields": [
+    { "name": "service", "type": "string", "doc": "Which service emitted this tick, e.g. 'sim-service'." },
+    { "name": "seq", "type": "long", "doc": "Monotonically increasing per-service counter, so a consumer can notice gaps." },
+    { "name": "message", "type": "string", "default": "hello" }
+  ]
+}

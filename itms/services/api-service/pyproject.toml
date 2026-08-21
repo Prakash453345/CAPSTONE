@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "api-service"
+version = "0.1.0"
+description = "[ARCH] Phase-1 home for services 6, 8-12, 14, 15 (incidents, dispatch, routing, corridor, notification, analytics, BFF, config, audit). M0: consumes the bus and fans it out over WebSocket."
+requires-python = ">=3.11"
+dependencies = [
+    "itms-common",
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "websockets>=12",
+]
+
+[tool.setuptools.packages.find]
+include = ["api_service*"]

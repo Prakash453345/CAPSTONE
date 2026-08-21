@@ -1,0 +1,21 @@
+# The case atlas — build guide §5. One entry per row of the atlas tables
+# (5.A Perception, 5.B Traffic-state, 5.C Hardware/control, 5.D Emergency/corridor,
+# 5.E Human/institutional, 5.F Environment, 5.G Security, 5.H Distributed systems).
+#
+# Each case gets a `test_id` linking to the scenario or test that proves it, so
+# "83 of 86 cases covered, 3 deferred with rationale" is a generated report, not
+# a claim. Populated starting M2 (the safety kernel's I1-I7 property tests are
+# the first entries); most of the atlas fills in through M6-M8 as the incident,
+# corridor, and vision pipelines that most cases describe come online.
+#
+# Schema (once populated):
+#   - id: A1                  # matches the build guide table row id
+#     category: perception    # A-H per build guide §5
+#     description: "..."
+#     required_behaviour: "..."
+#     test_id: null            # null until a test exists; never delete a case
+#                               # just because it isn't covered yet
+#     status: not_started      # not_started | in_progress | covered | deferred
+#     deferred_rationale: null
+
+cases: []

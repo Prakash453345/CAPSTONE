@@ -1,0 +1,23 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+dist/
+build/
+node_modules/
+.env
+.env.*
+!.env.example
+.DS_Store
+*.log
+data/
+
+# Regenerable raw OSM downloads (large; scenarios/networks/*/build.sh recreates
+# them). The filtered/converted outputs ARE committed -- see each network's README.
+scenarios/networks/*/raw_osm.xml
