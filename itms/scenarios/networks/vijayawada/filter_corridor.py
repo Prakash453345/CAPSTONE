@@ -37,7 +37,7 @@ def load_ways(root: ET.Element) -> list[tuple[ET.Element, str | None, list[str]]
         if tags.get("highway") not in ARTERIAL_TYPES:
             continue
         name = tags.get("name") or tags.get("name:en")
-        nodes = [nd.get("ref") for nd in way.findall("nd")]
+        nodes = [ref for nd in way.findall("nd") if (ref := nd.get("ref")) is not None]
         ways.append((way, name, nodes))
     return ways
 
@@ -46,7 +46,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("input_osm")
     parser.add_argument("output_osm")
-    parser.add_argument("--arterial", required=True, help="OSM 'name' tag of the main road, e.g. 'MG Road'")
+    parser.add_argument(
+        "--arterial", required=True, help="OSM 'name' tag of the main road, e.g. 'MG Road'"
+    )
     args = parser.parse_args()
 
     tree = ET.parse(args.input_osm)

@@ -1,0 +1,15 @@
+{
+  "type": "record",
+  "name": "VehiclePositionUpdated",
+  "namespace": "itms.contracts",
+  "doc": "General traffic position, one per vehicle per tick [ARCH §3.4 'General traffic']. Per-vehicle positions are NEVER persisted (privacy posture, ARCH §21) -- consumers keep this in hot state only. M1's sim-service publishes real positions with the SUMO vehicle id as vehicle_id; the pseudonymous rotating-id requirement (ARCH §21: rotate every 15 min and on zone exit, no join key to identity) is a production/real-camera concern with no real identity to protect in simulation, so it is NOT implemented yet -- do not treat this event's vehicle_id as privacy-safe until that lands.",
+  "fields": [
+    { "name": "vehicle_id", "type": "string" },
+    { "name": "lat", "type": "double" },
+    { "name": "lon", "type": "double" },
+    { "name": "speed_mps", "type": "float", "doc": "Ground speed, m/s." },
+    { "name": "heading_deg", "type": "float", "doc": "0-360, compass bearing." },
+    { "name": "edge_id", "type": "string", "doc": "SUMO edge id the vehicle is currently on -- stands in for segment_id [ARCH §4.2 RoadSegment] until the PostGIS road network carries a stable mapping." },
+    { "name": "source", "type": "string", "default": "sumo", "doc": "'sumo' (M1) | 'cctv' | 'iot' | 'gps' (later adapters) -- ADR-001: one event language regardless of source." }
+  ]
+}

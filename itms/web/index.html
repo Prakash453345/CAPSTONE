@@ -2,30 +2,69 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>ITMS — M0 event stream</title>
+<title>ITMS — M1 live map</title>
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
 <style>
-  body { font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; background: #0b0f14; color: #d6e2ea; margin: 0; padding: 24px; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+    background: #0b0f14; color: #d6e2ea;
+    display: flex; flex-direction: column;
+  }
+  header { padding: 14px 20px 10px; flex: 0 0 auto; }
   h1 { font-size: 16px; color: #7fd1ff; margin: 0 0 4px; }
-  p.sub { color: #7c8b96; margin: 0 0 20px; }
+  p.sub { color: #7c8b96; margin: 0; font-size: 12.5px; max-width: 900px; }
   #status { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 12px; margin-left: 8px; }
   #status.connecting { background: #4a3b00; color: #ffd76a; }
   #status.open { background: #123a1f; color: #6adf8f; }
   #status.closed { background: #3a1212; color: #ff8a8a; }
-  #log { border: 1px solid #1c2733; border-radius: 6px; padding: 12px; height: 60vh; overflow-y: auto; background: #0f151c; }
+  #stats { color: #7c8b96; font-size: 12px; margin-top: 6px; }
+  #stats b { color: #d6e2ea; }
+  #main { flex: 1 1 auto; display: flex; min-height: 0; padding: 0 20px 20px; gap: 16px; box-sizing: border-box; }
+  #map { flex: 2 1 0; border: 1px solid #1c2733; border-radius: 6px; background: #0f151c; min-width: 0; }
+  #side { flex: 1 1 0; min-width: 260px; max-width: 420px; display: flex; flex-direction: column; min-height: 0; }
+  #side h2 { font-size: 13px; color: #7fd1ff; margin: 0 0 8px; font-weight: normal; }
+  #log { border: 1px solid #1c2733; border-radius: 6px; padding: 10px; flex: 1 1 auto; overflow-y: auto; background: #0f151c; font-size: 11.5px; }
   .row { white-space: pre-wrap; word-break: break-all; border-bottom: 1px solid #141c24; padding: 4px 0; }
-  .row .seq { color: #7fd1ff; }
   .row .ts { color: #7c8b96; }
+  .veh-tip { font: 11px ui-monospace, monospace; }
+  .leaflet-container { background: #0f151c; }
 </style>
 </head>
 <body>
-  <h1>ITMS — M0 event stream <span id="status" class="connecting">connecting…</span></h1>
-  <p class="sub">Connects to the api-service WebSocket and prints every event as it arrives. This page is the M0 placeholder for the real operator dashboard (build guide §9.3) — it grows into the live map, pressure decomposition, and corridor view as later milestones land.</p>
-  <div id="log"></div>
+<header>
+  <h1>ITMS — Vijayawada corridor (M1) <span id="status" class="connecting">connecting…</span></h1>
+  <p class="sub">Live map of the MG Road corridor scenario: road network in cyan, traffic-light junctions as
+    amber dots, simulated vehicles as moving markers, driven by sim-service (SUMO/TraCI) over the same
+    event bus the rest of the platform will eventually consume. Edge color darkens with vehicle occupancy
+    (from <code>ApproachState</code>) -- everything else is a placeholder until later milestones (M2 safety
+    kernel, M4 CA-MP signal control, M8 real vision/PCU).</p>
+  <div id="stats">vehicles on map: <b id="vehCount">0</b> &nbsp;|&nbsp; events received: <b id="evtCount">0</b></div>
+</header>
+<div id="main">
+  <div id="map"></div>
+  <div id="side">
+    <h2>raw event log (last 500)</h2>
+    <div id="log"></div>
+  </div>
+</div>
 
+<script src="vendor/leaflet/leaflet.js"></script>
+<script src="network_data.js"></script>
 <script>
   const WS_URL = (window.ITMS_WS_URL) || "ws://localhost:8000/v1/stream";
   const statusEl = document.getElementById("status");
   const logEl = document.getElementById("log");
+  const vehCountEl = document.getElementById("vehCount");
+  const evtCountEl = document.getElementById("evtCount");
+  let evtCount = 0;
+
+  // A vehicle is presumed to have left the network if we haven't heard a
+  // VehiclePositionUpdated for it in this long. SUMO doesn't emit a
+  // "vehicle removed" event over the bus (M1 scope), so this sweep is the
+  // only way the map notices departures. 5s is generous slack over the
+  // scenario's 1 Hz publish rate.
+  const STALE_MS = 5000;
 
   function setStatus(state, label) {
     statusEl.className = state;
@@ -37,14 +76,107 @@
     div.className = "row";
     const payload = JSON.stringify(envelope.payload);
     div.innerHTML = `<span class="ts">${envelope.occurred_at}</span> ` +
-      `<b>${envelope.event_type}</b> from ${envelope.source} ` +
-      `<span class="seq">#${envelope.payload && envelope.payload.seq}</span> ` +
-      payload;
+      `<b>${envelope.event_type}</b> ` + payload;
     logEl.prepend(div);
     while (logEl.childElementCount > 500) {
       logEl.removeChild(logEl.lastChild);
     }
   }
+
+  // ---- map setup -----------------------------------------------------
+
+  const network = window.ITMS_NETWORK || { type: "FeatureCollection", features: [] };
+  const edgeFeatures = network.features.filter(f => f.properties.kind === "edge");
+  const junctionFeatures = network.features.filter(f => f.properties.kind === "junction");
+
+  const map = L.map("map", { zoomControl: true });
+
+  // Real basemap tiles -- this is what makes it "a real map of your city"
+  // rather than just our own reconstructed road-network vectors floating in
+  // empty space. Needs whatever internet connection the browser already has;
+  // no API key. If tiles fail to load (offline use), the vector road network
+  // and vehicles below still render fine on their own.
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    maxZoom: 19,
+  }).addTo(map);
+
+  const roadLayer = L.geoJSON(edgeFeatures, {
+    style: () => ({ color: "#3d5568", weight: 3, opacity: 0.9 }),
+  }).addTo(map);
+
+  // keyed by edge_id, so ApproachState updates can restyle the right line
+  const edgeLayers = {};
+  roadLayer.eachLayer(layer => {
+    edgeLayers[layer.feature.properties.edge_id] = layer;
+  });
+
+  L.geoJSON(junctionFeatures, {
+    filter: f => f.properties.is_traffic_light,
+    pointToLayer: (f, latlng) =>
+      L.circleMarker(latlng, {
+        radius: 5, color: "#ffb020", weight: 1, fillColor: "#ffb020", fillOpacity: 0.85,
+      }).bindTooltip(f.properties.junction_id, { className: "veh-tip" }),
+  }).addTo(map);
+
+  if (edgeFeatures.length) {
+    map.fitBounds(roadLayer.getBounds(), { padding: [20, 20] });
+  } else {
+    map.setView([16.506, 80.633], 15); // MG Road corridor fallback center
+  }
+
+  // occupancy 0..1 -> a color from muted cyan (empty) to red (jammed)
+  function occupancyColor(occupancy) {
+    const t = Math.max(0, Math.min(1, occupancy));
+    const r = Math.round(61 + t * (220 - 61));
+    const g = Math.round(85 + t * (60 - 85));
+    const b = Math.round(104 + t * (60 - 104));
+    return `rgb(${r},${g},${b})`;
+  }
+
+  // ---- vehicle markers -------------------------------------------------
+
+  const vehicles = new Map(); // vehicle_id -> { marker, lastSeen }
+
+  function upsertVehicle(payload) {
+    const id = payload.vehicle_id;
+    const latlng = [payload.lat, payload.lon];
+    let entry = vehicles.get(id);
+    if (!entry) {
+      const marker = L.circleMarker(latlng, {
+        radius: 4, color: "#7fd1ff", weight: 1, fillColor: "#7fd1ff", fillOpacity: 0.9,
+      }).bindTooltip(id, { className: "veh-tip", direction: "top" });
+      marker.addTo(map);
+      entry = { marker, lastSeen: Date.now() };
+      vehicles.set(id, entry);
+    } else {
+      entry.marker.setLatLng(latlng);
+      entry.lastSeen = Date.now();
+    }
+  }
+
+  function sweepStaleVehicles() {
+    const now = Date.now();
+    for (const [id, entry] of vehicles) {
+      if (now - entry.lastSeen > STALE_MS) {
+        map.removeLayer(entry.marker);
+        vehicles.delete(id);
+      }
+    }
+    vehCountEl.textContent = String(vehicles.size);
+  }
+  setInterval(sweepStaleVehicles, 1000);
+
+  function applyApproachState(payload) {
+    // M1: movement_id holds a raw SUMO edge_id (see contracts/events/approach_state.avsc) --
+    // a real movement-group id lands with CA-MP (M4), at which point this lookup changes.
+    const layer = edgeLayers[payload.movement_id];
+    if (layer) {
+      layer.setStyle({ color: occupancyColor(payload.occupancy), weight: 4, opacity: 0.95 });
+    }
+  }
+
+  // ---- websocket -------------------------------------------------------
 
   function connect() {
     setStatus("connecting", "connecting…");
@@ -56,10 +188,21 @@
     };
     ws.onerror = () => ws.close();
     ws.onmessage = (evt) => {
+      let envelope;
       try {
-        appendRow(JSON.parse(evt.data));
+        envelope = JSON.parse(evt.data);
       } catch (e) {
         console.error("bad message", e, evt.data);
+        return;
+      }
+      evtCount += 1;
+      evtCountEl.textContent = String(evtCount);
+      appendRow(envelope);
+      if (envelope.event_type === "VehiclePositionUpdated") {
+        upsertVehicle(envelope.payload);
+        vehCountEl.textContent = String(vehicles.size);
+      } else if (envelope.event_type === "ApproachState") {
+        applyApproachState(envelope.payload);
       }
     };
   }

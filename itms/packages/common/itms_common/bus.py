@@ -15,6 +15,7 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Any, Protocol, cast
 
+import redis as redis_sync
 import redis.asyncio as redis
 
 
@@ -77,19 +78,33 @@ class RedisStreamsBus:
 
         streams = {topic: ">" for topic in topics}
         while True:
-            # redis-py's async stubs can't express the decode_responses-dependent
-            # return shape precisely; at runtime (bytes mode, our default) this is
-            # list[tuple[bytes, list[tuple[bytes, dict[bytes, bytes]]]]] or None.
-            response = cast(
-                list[tuple[Any, list[tuple[Any, dict[Any, Any]]]]] | None,
-                await self._redis.xreadgroup(
-                    groupname=group,
-                    consumername=consumer,
-                    streams=cast(Any, streams),
-                    count=100,
-                    block=block_ms,
-                ),
-            )
+            try:
+                # redis-py's async stubs can't express the decode_responses-dependent
+                # return shape precisely; at runtime (bytes mode, our default) this is
+                # list[tuple[bytes, list[tuple[bytes, dict[bytes, bytes]]]]] or None.
+                response = cast(
+                    list[tuple[Any, list[tuple[Any, dict[Any, Any]]]]] | None,
+                    await self._redis.xreadgroup(
+                        groupname=group,
+                        consumername=consumer,
+                        streams=cast(Any, streams),
+                        count=100,
+                        block=block_ms,
+                    ),
+                )
+            except redis.ResponseError as exc:
+                # A group can vanish out from under a long-lived consumer --
+                # Redis restart with no persistence, a stream deleted and
+                # recreated, an ops FLUSHALL. Recreate and keep going rather
+                # than letting the whole consume_forever task die silently
+                # (asyncio only logs "Task exception was never retrieved",
+                # easy to miss, and the dashboard just goes quiet with no
+                # visible error).
+                if "NOGROUP" not in str(exc):
+                    raise
+                for topic in topics:
+                    await self._ensure_group(topic, group)
+                continue
             if not response:
                 await asyncio.sleep(0)  # yield control; caller can cancel us here
                 continue
@@ -115,3 +130,27 @@ class RedisStreamsBus:
 
     async def close(self) -> None:
         await self._redis.aclose()
+
+
+class RedisStreamsSyncBus:
+    """Synchronous producer-side counterpart to RedisStreamsBus. Same wire
+    format (XADD to the same topics, same envelope bytes) -- the only
+    difference is the transport call isn't async.
+
+    Exists for producers driven by something that's already blocking and has
+    no concurrency to gain from asyncio -- the TraCI loop is the case this
+    was built for (traci.simulationStep() blocks on subprocess IPC every
+    tick regardless). ADR-003's "one bus abstraction" still holds: this is
+    the producer half of the same Redis Streams contract the async
+    RedisStreamsBus consumes, not a second bus design.
+    """
+
+    def __init__(self, url: str = "redis://localhost:6379/0"):
+        self._redis = redis_sync.from_url(url)
+
+    def publish(self, topic: str, raw: bytes) -> str:
+        message_id = self._redis.xadd(topic, {"raw": raw})
+        return message_id.decode() if isinstance(message_id, bytes) else message_id
+
+    def close(self) -> None:
+        self._redis.close()

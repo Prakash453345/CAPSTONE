@@ -1,51 +1,84 @@
-"""sim-service, M0 slice.
+"""sim-service entrypoint.
 
-Eventually: the TraCI loop (M1), traffic state (M1), the safety kernel and
-optimizer (M2/M4), the IoT/GPS adapters (M1). Today: publish a SystemHeartbeat
-once a second so there's something flowing through the bus to prove the plumbing
-works end to end before any of that exists. This function gets replaced by the
-real TraCI loop in M1, not extended in place — a heartbeat and a simulation tick
-are different loops.
+M1 default: run the real SUMO/TraCI simulation against the Vijayawada
+corridor scenario (scenarios/demand/vijayawada/vijayawada_corridor.sumocfg),
+publishing VehiclePositionUpdated and ApproachState at 1 Hz. This replaces
+M0's heartbeat as the default -- the heartbeat loop still exists
+(sim_service.heartbeat) for bus-plumbing sanity checks, but `make dev` now
+shows real simulated traffic, which is the actual point of M1.
+
+Env vars:
+  SIM_MODE           "sumo" (default) | "heartbeat"
+  SUMOCFG_PATH        path to a .sumocfg (default: the Vijayawada corridor scenario)
+  SIM_REALTIME_FACTOR  pacing for the demo loop (default 1.0 -- see traci_loop.run)
+  SIM_STEP_LENGTH      seconds of sim time per step (default 1.0, matches the M1 gate's "1 Hz")
+  SIM_MAX_STEPS         stop after N steps (unset = run to scenario end); mainly for tests
+  REDIS_URL
 """
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import os
-
-from itms_common import RedisStreamsBus, encode_envelope
+from pathlib import Path
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s sim-service %(message)s")
-log = logging.getLogger("sim-service")
+log = logging.getLogger("sim-service.main")
+
+# services/sim-service/sim_service/main.py -> repo root is three parents up.
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+_DEFAULT_SUMOCFG = (
+    _REPO_ROOT / "scenarios" / "demand" / "vijayawada" / "vijayawada_corridor.sumocfg"
+)
 
 REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
-HEARTBEAT_TOPIC = "system.heartbeat"
 
 
-async def run() -> None:
-    bus = RedisStreamsBus(REDIS_URL)
-    seq = 0
-    log.info("starting, publishing to %s via %s", HEARTBEAT_TOPIC, REDIS_URL)
+def _run_sumo() -> None:
+    from itms_common import RedisStreamsSyncBus
+
+    from sim_service.adapters.sumo import traci_loop
+
+    sumocfg = os.environ.get("SUMOCFG_PATH", str(_DEFAULT_SUMOCFG))
+    if not Path(sumocfg).exists():
+        raise SystemExit(
+            f"no scenario at {sumocfg} -- run scenarios/networks/vijayawada/build.sh "
+            f"and scenarios/demand/vijayawada/build.sh first, or set SUMOCFG_PATH"
+        )
+
+    realtime_factor = float(os.environ.get("SIM_REALTIME_FACTOR", "1.0"))
+    step_length = float(os.environ.get("SIM_STEP_LENGTH", "1.0"))
+    max_steps_env = os.environ.get("SIM_MAX_STEPS")
+    max_steps = int(max_steps_env) if max_steps_env else None
+
+    bus = RedisStreamsSyncBus(REDIS_URL)
+    log.info("starting SUMO scenario %s via %s", sumocfg, REDIS_URL)
     try:
-        while True:
-            seq += 1
-            raw = encode_envelope(
-                event_type="SystemHeartbeat",
-                source="sim-service",
-                payload={"service": "sim-service", "seq": seq, "message": "hello"},
-                partition_key="sim-service",
-            )
-            message_id = await bus.publish(HEARTBEAT_TOPIC, raw)
-            log.info("published seq=%d id=%s", seq, message_id)
-            await asyncio.sleep(1.0)
+        summary = traci_loop.run(
+            sumocfg,
+            bus,
+            step_length=step_length,
+            realtime_factor=realtime_factor,
+            max_steps=max_steps,
+        )
+        log.info("scenario finished: %s", summary)
     finally:
-        await bus.close()
+        bus.close()
+
+
+def _run_heartbeat() -> None:
+    from sim_service import heartbeat
+
+    heartbeat.main()
 
 
 def main() -> None:
+    mode = os.environ.get("SIM_MODE", "sumo")
     try:
-        asyncio.run(run())
+        if mode == "heartbeat":
+            _run_heartbeat()
+        else:
+            _run_sumo()
     except KeyboardInterrupt:
         pass
 

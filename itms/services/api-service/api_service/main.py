@@ -1,11 +1,17 @@
-"""api-service, M0 slice.
+"""api-service, M1 slice.
 
 Eventually: incidents, dispatch, routing, corridor, notification, analytics,
-config, audit, and the viewport-filtered WebSocket fan-out [ARCH ADR-007]. Today:
-one topic, no viewport filtering, no auth — just enough to prove an event
-published by sim-service reaches a browser. Each of those pieces gets added when
-its milestone lands (auth in M6/M7 alongside dispatch, viewport filtering once
-there's a map worth filtering in M1), not stubbed in now.
+config, audit, and the viewport-filtered WebSocket fan-out [ARCH ADR-007].
+Today: three topics (heartbeat + M1's vehicle positions and edge state), no
+viewport filtering, no auth. Viewport filtering is real architecture, not
+gold-plating -- ARCH §7.2's whole point is that a client shouldn't receive
+2 million vehicles when it can see 200 -- but this milestone's network has
+16 junctions and low triple-digit vehicle counts at most, so broadcasting
+every event to every client is still cheap enough not to be worth the
+complexity yet. Add it when the network is big enough that it isn't -- there
+will be an obvious moment (the dashboard visibly falling behind, or a much
+larger network landing) rather than guessing preemptively. Auth arrives in
+M6/M7 alongside dispatch.
 """
 
 from __future__ import annotations
@@ -25,7 +31,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s api-service %(messag
 log = logging.getLogger("api-service")
 
 REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
-TOPICS = ["system.heartbeat"]
+TOPICS = ["system.heartbeat", "traffic.vehicle-positions", "traffic.updated"]
 CONSUMER_GROUP = "api-service"
 
 

@@ -1,0 +1,16 @@
+{
+  "type": "record",
+  "name": "ApproachState",
+  "namespace": "itms.contracts",
+  "doc": "M1 simplified version. The real ApproachState (build guide §3.2.2) is keyed by movement_id -- a per-junction, per-turning-movement polygon on the ground plane -- with q_pcu as PCU-weighted ground-plane occupancy, confidence from a real sensor pipeline, etc. None of that exists yet: movement groups aren't defined until junction phases exist (M2's safety kernel), and there's no camera/vision pipeline until M8. This M1 version reports the same shape one level coarser -- per SUMO edge, straight from simulation ground truth (confidence 1.0, no sensor noise) -- so the event pipeline and downstream consumers (the dashboard, eventually CA-MP) have something real to work against now, without pretending this is the movement-level PCU estimate it will become. Expect a breaking schema change here when M4/M8 land the real version; contracts/events/README.md tracks that.",
+  "fields": [
+    { "name": "movement_id", "type": "string", "doc": "M1: holds the SUMO edge_id, not a real movement-group id. Renamed/reshaped when movement groups exist (M2+)." },
+    { "name": "q_pcu", "type": "float", "doc": "M1: raw vehicle count on the edge, NOT PCU-weighted (build guide §3.2.1 PCU weighting arrives with CA-MP, M4)." },
+    { "name": "occupancy", "type": "float", "doc": "SUMO's own edge occupancy (fraction of edge length covered by vehicles), [0,1]." },
+    { "name": "arrival_rate_pcu_s", "type": "float", "doc": "M1: vehicles/second over the last step, not PCU-weighted." },
+    { "name": "queue_truncated", "type": "boolean", "default": false, "doc": "Always false in M1 -- FOV/extrapolation logic (build guide §3.2.3) doesn't apply to simulation ground truth." },
+    { "name": "confidence", "type": "float", "default": 1.0, "doc": "Always 1.0 in M1 (ground truth). Real confidence scoring arrives with the sensor-equivalence layer and vision pipeline (M8)." },
+    { "name": "model", "type": "string", "default": "ground_truth_sim" },
+    { "name": "source", "type": "string", "default": "sumo" }
+  ]
+}

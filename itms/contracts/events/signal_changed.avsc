@@ -1,0 +1,11 @@
+{
+  "type": "record",
+  "name": "SignalChanged",
+  "namespace": "itms.contracts",
+  "doc": "Produced by the Signal Controller [ARCH §2.2] every time it successfully commands a new phase -- the one and only chokepoint for signal state, per the architecture's central safety decision (optimisers and the corridor engine propose, they never command). M2: emitted by services/sim-service/sim_service/signal_controller/arbiter.py's `tick()`, one event per successful command. Not yet wired onto the bus (see arbiter.py's module docstring) -- the payload shape here is what that wiring will publish once a producer calls it, matching Decision.events' dict shape exactly so that wiring is a straight encode-and-publish, not a reshape.",
+  "fields": [
+    { "name": "intersection_id", "type": "string" },
+    { "name": "phase_id", "type": "string", "doc": "The phase now commanded live." },
+    { "name": "source", "type": "string", "doc": "Which arbitration-ladder rung produced the plan this phase came from -- 'fixed_time' (M2's only real rung), 'camp' (M4), 'manual_override' (M6), 'corridor_preemption' (M6/M7)." }
+  ]
+}

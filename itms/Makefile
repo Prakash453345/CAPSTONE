@@ -11,6 +11,7 @@ setup: $(VENV)/bin/activate
 	$(PIP) install --upgrade pip -q
 	$(PIP) install -r requirements-dev.txt -q
 	$(PIP) install -e packages/common -q
+	$(PIP) install -e packages/domain -q
 	$(PIP) install -e services/sim-service -q
 	$(PIP) install -e services/api-service -q
 

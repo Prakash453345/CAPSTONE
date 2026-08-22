@@ -5,10 +5,15 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "sim-service"
 version = "0.1.0"
-description = "[ARCH] Phase-1 home for services 3 (Traffic), 4 (Signal Controller), 5 (Optimization Engine), 17 (Simulation Adapter), 19 (IoT Gateway), 20 (GPS/AVL Adapter). M0: publishes a heartbeat only."
+description = "[ARCH] Phase-1 home for services 3 (Traffic), 4 (Signal Controller), 5 (Optimization Engine), 17 (Simulation Adapter), 19 (IoT Gateway), 20 (GPS/AVL Adapter). M2: safety kernel (control/safety) + fixed-time strategy + arbitration ladder (signal_controller)."
 requires-python = ">=3.11"
 dependencies = [
     "itms-common",
+    "itms-domain",
+    "eclipse-sumo>=1.19",
+    "traci>=1.19",
+    "sumolib>=1.19",
+    "pyproj>=3.6",
 ]
 
 [tool.setuptools.packages.find]

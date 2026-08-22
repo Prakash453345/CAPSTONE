@@ -1,0 +1,11 @@
+{
+  "type": "record",
+  "name": "SignalFaulted",
+  "namespace": "itms.contracts",
+  "doc": "Produced by the Signal Controller whenever `tick()` takes a failsafe/degraded branch instead of committing a plan [build guide §5.C, cases C1-C5]. Every such branch is a defined safe state (I6), and every one alarms via this event rather than failing silently -- see signal_controller/arbiter.py's Decision.mode for the exhaustive list of branches this can report. Not yet wired onto the bus, same note as signal_changed.avsc.",
+  "fields": [
+    { "name": "intersection_id", "type": "string" },
+    { "name": "fault_type", "type": "string", "doc": "'comms_lost' (C3) | 'conflict_monitor_trip' (C2) | 'power_restart' (C4) | 'readback_divergence' (C5, or a manual field override, E1) | 'no_legal_plan' (C1, every phase faulted) | 'interlock_rejected' (a proposed plan failed Layer 0 -- should only ever happen for a buggy future strategy, since fixed_time is proven always-safe by property test)." },
+    { "name": "detail", "type": "string", "doc": "Human-readable specifics -- e.g. which invariant(s) rejected the plan, or what the divergence was." }
+  ]
+}
