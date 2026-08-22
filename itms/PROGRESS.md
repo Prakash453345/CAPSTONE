@@ -227,3 +227,172 @@ cases per invariant, and the fault-injection tests (C1–C5) all reach a
 defined safe state. `SignalPlan` proposals from a deliberately malicious
 test strategy cannot produce a conflicting green." **Fully satisfied** —
 see Verification above.
+
+## M3 — Baselines and KPI harness
+
+**Status:** in progress. All three required baseline strategies (Webster
+fixed-time, semi-actuated, coordinated-actuated) exist, are property- and
+unit-tested, and have each been run end-to-end against the real 7-junction
+Vijayawada corridor with zero interlock violations. The metrics collector,
+10-seed statistical harness, and `make bench` report — the gate's literal
+deliverable — are not yet built.
+
+**What exists:**
+
+- `sim_service/signal_controller/traci_cabinet.py` (`TraCICabinet`): the
+  real `CabinetPort` implementation M2 deliberately deferred — backs the
+  arbitration ladder onto a live TraCI connection instead of `FakeCabinet`.
+  SUMO has no fault-injection surface at this layer, so C1-C5 stay proven
+  once against `FakeCabinet` (M2) rather than re-proven per backend; that
+  split is documented in the module's own docstring.
+- `sim_service/control/runner.py` (`run_controlled_scenario`): drives a
+  full SUMO run under the real arbiter/interlocks, handling the
+  yellow → all-red → next-green sequencing the cabinet layer doesn't own.
+  Widened twice this milestone: `StrategySource` accepts either one
+  strategy for every junction (fixed-time's original shape) or a
+  per-junction mapping (Webster, coordinated-actuated — each needs a
+  different tuned plan per junction); an optional `link_lanes` parameter
+  wires a live `ActuationDetector` per junction for demand-aware
+  strategies (semi-actuated, coordinated-actuated).
+- `scenarios/networks/vijayawada/extract_tier0_config.py`: extracts real
+  `Tier0Config`s (phases, ring order, conflict matrix) from the corridor's
+  own `.net.xml` — conflict data and phase structure are netconvert's real
+  traffic-engineering output, not a hand approximation. `min_green_s` /
+  `max_green_s` and per-junction `max_wait_s` are deliberate additions,
+  fixed to principled safety-engineering constants after an earlier
+  version wrongly took them from netconvert's own guessed fixed-time
+  `duration` (see the module's docstring for the full account — this bug
+  silently capped every tuning strategy in the project to netconvert's
+  arbitrary ~39s regardless of measured demand).
+- `scenarios/networks/vijayawada/measure_flows.py`: real per-link flow
+  counts from the corridor's own route file, feeding Webster's tuning
+  instead of an assumed/uniform flow.
+- `scenarios/networks/vijayawada/link_lanes.py`: lane-granularity link map
+  used by `ActuationDetector` to sample real lane occupancy per movement.
+- `scenarios/networks/vijayawada/corridor_geometry.py`: real junction
+  ordering and cumulative distance along the corridor, from the network's
+  own UTM-projected coordinates (2D PCA along the dominant axis, not an
+  assumed order) — feeds coordinated-actuated's progression offsets.
+- `sim_service/signal_controller/detectors.py` (`ActuationDetector`): a
+  loop-detector emulation (gap-timeout presence + a separate service-reset
+  wait clock) standing in for real vehicle detectors, used by
+  semi-actuated and coordinated-actuated.
+- `sim_service/control/strategies/`:
+  - `fixed_time.py` — M2's ring-at-min-green-floor strategy, now actually
+    driving the real corridor via `TraCICabinet`.
+  - `webster.py` — Webster's 1958 delay-minimizing cycle/split formula
+    (`compute_timing`), computed from real measured flows per junction,
+    not guessed. Accepts an optional `fixed_cycle_s` (added for
+    coordinated-actuated) to compute a proportional split within an
+    externally-fixed shared cycle instead of its own optimum.
+  - `semi_actuated.py` — major phase on continuous recall, minor phases
+    actuated with longest-wait priority among calls.
+  - `coordinated_actuated.py` — a shared corridor-wide cycle (set by the
+    most-saturated junction), per-junction travel-time offsets for
+    green-wave progression, a guaranteed coordinated window with a hard
+    force-off deadline for minor phases.
+- `scripts/smoke_m3_*.py`: one real end-to-end SUMO smoke test per
+  strategy against the actual 7-junction network (not part of the pytest
+  suite — each shells out to a real SUMO process).
+
+**Bugs found and fixed this milestone** (every one found by running the
+real 7-junction network end-to-end, *not* by the Hypothesis property
+suites, which passed cleanly throughout — property tests alone did not
+catch config-parameter-relationship bugs; real-data verification did):
+
+1. `min_green_s`/`max_green_s` taken directly from netconvert's guessed
+   fixed-time `duration`, defeating any real tuning (see
+   `extract_tier0_config.py` above). Fixed with documented fixed safety
+   constants (10.0s / 90.0s), chosen over the alternative after an
+   explicit check-in on which approach to take.
+2. The `ActuationDetector`'s wait clock never reset for a continuously-
+   busy lane, even while it was being actively served — eventually
+   tripped I5 on a heavily-trafficked movement that *was* being served
+   regularly. Fixed by resetting the wait clock for any currently-served
+   movement regardless of occupancy.
+3. A per-junction blanket `max_wait_s` default was structurally too small
+   for a 4-phase ring's own `max_green_s` ceiling, legitimately starving a
+   minor movement. Fixed by scaling `max_wait_s` per junction to that
+   ring's own worst-case full-rotation time.
+4. Coordinated-actuated's raw Webster split could leave the coordinated
+   phase so large that other phases structurally could not fit their own
+   `min_green_s` + clearance inside the remaining cycle — permanently
+   starving a minor phase (observed: one phase held green 262+ seconds
+   straight). Fixed by capping `coordinated_green_s` in
+   `build_corridor_plan` to guarantee room for every other phase's bare
+   structural minimum, plus a 5-second margin against exact-boundary /
+   discretization risk at 1 Hz tick granularity.
+
+**Known, accepted limitation (not a bug):** one of the 7 real junctions
+(`cluster_1880441740_4393296791`, 4 phases) has no room left in the
+54.8s shared corridor cycle for its own coordinated window once its other
+3 phases' bare structural minimum (3 × (10s min_green + 8s clearance) =
+54s) is reserved — `build_corridor_plan` correctly clamps its
+`coordinated_green_s` to 0. This junction still runs completely safely
+(zero interlock violations there specifically); it just runs like
+semi-actuated instead of getting a green-wave window, because more-phase
+junctions structurally cannot share a cycle length tuned for their
+simpler neighbours without either running non-coordinated or lengthening
+the cycle for everyone. This is standard practice on real coordinated
+corridors (not every intersection along a coordinated corridor is
+"coordinated"), and lengthening the shared cycle to accommodate it would
+very likely increase average delay at the other six, already
+well-tuned junctions — a worse trade made without any actual benchmark
+data to justify it. Revisit only if the M3 metrics collector (not yet
+built) shows this junction as a measurable outlier.
+
+**Honest single-seed comparison** (seed=1, not yet the required 10-seed
+statistical comparison — see Not yet built):
+
+| Strategy | avg wait (s) | avg trip duration (s) |
+|---|---|---|
+| fixed-time (M2, untuned) | 113.4 | 268.9 |
+| Webster (tuned) | 60.1 | 208.5 |
+| semi-actuated | 204.0 | 373.1 |
+| coordinated-actuated | 74.4 | 220.5 |
+
+Webster wins outright on this seed — plausible, since the corridor's
+demand is currently uniform-random rather than the directionally-skewed,
+platoon-forming traffic that semi-actuated's "dominant major street"
+assumption and coordinated-actuated's green-wave progression are designed
+to exploit (see `scenarios/demand/vijayawada/README.md`: the demand is
+explicitly placeholder, not calibrated). This is a real, reportable
+finding, not a bug — it will be revisited once real turning-movement
+demand exists and once the 10-seed harness replaces a single seed.
+
+**Verification:**
+
+- `ruff check .` and `mypy packages services infra scenarios` clean
+  throughout.
+- 56 tests passing (Hypothesis property suites per strategy — each
+  threading demand/wait state realistically across ticks rather than
+  redrawing it independently per tick, which would manufacture physically
+  impossible states — plus deterministic mechanics tests and
+  `corridor_geometry`'s hand-checkable synthetic-geometry tests).
+- Each strategy run end-to-end against the real 7-junction corridor for
+  the full 1800s scenario: zero interlock violations, zero fault events,
+  in all four cases (fixed-time, Webster, semi-actuated,
+  coordinated-actuated).
+
+**Not yet built:**
+
+- The metrics collector: person-delay (occupancy-weighted — the current
+  corridor demand is single-vType `veh_passenger` only, so this needs
+  either a documented proxy or a heterogeneous vType mix with stated
+  occupancy assumptions before "person-delay" is more than relabeled
+  vehicle-delay), person-throughput, max per-approach wait (distribution,
+  not just mean), stops per vehicle, queue-spillback events.
+- The 10-seed statistical harness with confidence intervals (paired
+  across controllers on the same seed set), and the `make bench` target
+  that produces the gate's comparison table.
+- `SignalChanged`/`SignalFaulted` are still not published onto the event
+  bus from a live run (flagged as M3's job in the M2 section above) —
+  the smoke scripts and `run_controlled_scenario` don't wire a producer
+  yet.
+
+**Gate (build guide M3):** "you can run `make bench` and get a table of
+person-delay, throughput, max-wait, and stops for three baseline
+controllers over 10 seeds with confidence intervals." **Not yet
+satisfied** — the three baselines are tuned, safe, and verified
+end-to-end; the metrics collector and bench harness that turn that into
+the gate's actual table are the remaining work.

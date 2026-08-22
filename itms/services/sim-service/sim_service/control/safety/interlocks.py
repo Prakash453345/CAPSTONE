@@ -41,7 +41,11 @@ from itms_domain import JunctionContext, SignalPlan, Tier0Config, Violation
 
 
 def no_conflicting_greens(plan: SignalPlan, cfg: Tier0Config) -> list[Violation]:
-    """I1: no two conflicting movements are ever simultaneously green."""
+    """I1: no two conflicting *protected* movements are ever simultaneously
+    green. Deliberately checks `phase.protected_movements`, not
+    `green_movements` -- see `Phase`'s docstring for why a permissive/yield
+    movement (SUMO's lowercase 'g') is excluded rather than a hole in the
+    invariant."""
     violations = []
     for step in plan.steps:
         phase = cfg.phases.get(step.phase_id)
@@ -50,7 +54,7 @@ def no_conflicting_greens(plan: SignalPlan, cfg: Tier0Config) -> list[Violation]
                 Violation("I1", f"plan references unknown phase {step.phase_id!r}")
             )
             continue
-        movements = sorted(phase.green_movements)
+        movements = sorted(phase.protected_movements or phase.green_movements)
         for i, a in enumerate(movements):
             for b in movements[i + 1 :]:
                 if b in cfg.conflict_matrix.get(a, frozenset()):

@@ -35,11 +35,29 @@ class Violation:
 @dataclass(frozen=True)
 class Phase:
     """A named set of movements that are simultaneously green. `is_pedestrian`
-    marks a phase that serves a walk signal -- I4 only applies to these."""
+    marks a phase that serves a walk signal -- I4 only applies to these.
+
+    `protected_movements` is the subset of `green_movements` that I1
+    ("no two conflicting movements simultaneously green") actually checks
+    against each other. Defaults to all of `green_movements` -- correct for
+    every synthetic/hand-built junction (every M2 test config). Real
+    SUMO-derived junctions can have permissive/yield movements (SUMO's
+    lowercase 'g' -- e.g. a free/permitted turn) that are deliberately
+    excluded here: SUMO enforces a dynamic yield check for those at
+    runtime, independent of phase design, so they're already safe by a
+    mechanism I1 doesn't need to duplicate. See
+    `scenarios/networks/vijayawada/extract_tier0_config.py` for where a
+    real junction's 'G' vs 'g' distinction gets translated into this
+    field."""
 
     id: str
     green_movements: frozenset[str]
     is_pedestrian: bool = False
+    protected_movements: frozenset[str] | None = None
+
+    def __post_init__(self) -> None:
+        if self.protected_movements is None:
+            object.__setattr__(self, "protected_movements", self.green_movements)
 
 
 @dataclass(frozen=True)

@@ -20,3 +20,41 @@ vehicles moving on the real network, visible on the dashboard at 1 Hz.
 
 `vijayawada_corridor.sumocfg` ties this demand to the network in
 `../../networks/vijayawada/` for `sumo`/`sumo-gui`/TraCI runs.
+
+## Vehicle mix (`assign_vtypes.py`)
+
+`build.sh` alone produces a fleet of identical `veh_passenger` vehicles,
+which is fine for M1's "traffic moves on the map" gate but wrong for M3's
+person-delay metric (build guide §8.1: vehicle-delay weighted by
+occupancy — a bus with 40 people must not lose to two cars). Running
+
+```bash
+python3 assign_vtypes.py
+```
+
+after `build.sh` reassigns every existing vehicle's `type=` to one of four
+vTypes (car, motorcycle, auto-rickshaw, bus), by a seeded weighted draw
+(seed 7), **without changing any route or depart time** — so every flow
+measurement (`measure_flows.py`) and every Webster/coordination tuning
+number already verified against this demand stays exactly as measured.
+Each vType carries an `occupancy` param the metrics collector reads
+directly:
+
+| vType | vClass | mix share | occupancy (persons/vehicle) |
+|---|---|---|---|
+| `veh_motorcycle` | `motorcycle` | 35% | 1.3 |
+| `veh_car` | `passenger` | 40% | 1.5 |
+| `veh_auto` | `taxi` (closest built-in class to a shared auto-rickshaw) | 20% | 2.5 |
+| `veh_bus` | `bus` | 5% | 40.0 |
+
+**The mix share and occupancy figures are commonly-cited approximate
+values for a mixed Indian urban arterial, not measured for this
+corridor** — same honesty level as the trip generation above. vClass
+physical dynamics (accel/decel/length/speed factor) are left at SUMO's
+own maintained defaults for each class, not invented here; all four
+classes are permitted on every lane of this network (checked against the
+net.xml's `disallow` lists), so no vehicle's route changes.
+
+The checked-in `vijayawada_corridor.rou.xml` already has this mix
+applied. Re-run `assign_vtypes.py` after regenerating with `build.sh` if
+you rebuild the base trips from scratch.
