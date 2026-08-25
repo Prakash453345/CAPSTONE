@@ -2,7 +2,7 @@
   "type": "record",
   "name": "SignalChanged",
   "namespace": "itms.contracts",
-  "doc": "Produced by the Signal Controller [ARCH §2.2] every time it successfully commands a new phase -- the one and only chokepoint for signal state, per the architecture's central safety decision (optimisers and the corridor engine propose, they never command). M2: emitted by services/sim-service/sim_service/signal_controller/arbiter.py's `tick()`, one event per successful command. Not yet wired onto the bus (see arbiter.py's module docstring) -- the payload shape here is what that wiring will publish once a producer calls it, matching Decision.events' dict shape exactly so that wiring is a straight encode-and-publish, not a reshape.",
+  "doc": "Produced by the Signal Controller [ARCH §2.2] every time it successfully commands a new phase -- the one and only chokepoint for signal state, per the architecture's central safety decision (optimisers and the corridor engine propose, they never command). Emitted by services/sim-service/sim_service/signal_controller/arbiter.py's `tick()`, one event per successful command, and published onto the `signal.changed` topic by control/runner.py's `run_controlled_scenario` (its optional `bus` parameter) -- a straight encode-and-publish, since Decision.events' dict shape already matches this schema field-for-field.",
   "fields": [
     { "name": "intersection_id", "type": "string" },
     { "name": "phase_id", "type": "string", "doc": "The phase now commanded live." },

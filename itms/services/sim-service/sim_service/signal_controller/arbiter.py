@@ -44,9 +44,12 @@ class Decision:
     this tick (any fault branch) -- `mode` says which ladder rung / fault
     path produced the outcome, and `events` carries the
     SignalChanged/SignalFaulted payloads that path implies (shaped to match
-    `contracts/events/signal_changed.avsc` / `signal_faulted.avsc`; nothing
-    here publishes them onto the bus yet -- see this module's docstring and
-    PROGRESS.md for why that wiring is scoped to M3)."""
+    `contracts/events/signal_changed.avsc` / `signal_faulted.avsc` field-
+    for-field). Publishing these onto the real event bus is
+    `control/runner.py`'s job, not this module's -- `run_controlled_scenario`'s
+    optional `bus` parameter does exactly that, straight encode-and-publish
+    with no reshape, since the dicts built below already match their
+    target schemas."""
 
     mode: str
     plan: SignalPlan | None

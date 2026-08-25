@@ -28,7 +28,13 @@ weight:
 Occupancy is stored as a `<param key="occupancy">` on each `<vType>`
 rather than in a separate constants table, so the metrics collector reads
 it from the same file that defines the vType, instead of two places that
-could drift apart.
+could drift apart. `<param key="pcu">` (added alongside it) is the same
+idea for M4's CA-MP strategy [build guide §3.2.1]: passenger-car-unit
+equivalence, IRC SP:41's indicative prior (two-wheeler 0.3, auto-rickshaw
+0.6, car 1.0, bus 3.0) -- a different physical quantity from occupancy
+(roadway space consumed, not people carried) that the guide happens to
+tabulate from the same per-class source. `signal_controller/queue_state.py`
+reads it the same way `metrics.py.load_vtype_occupancy` reads occupancy.
 
 Deliberately does NOT touch which route or depart time any vehicle has --
 only the `type=` attribute changes, assigned by a seeded weighted draw in
@@ -73,6 +79,16 @@ _OCCUPANCY = {
     "veh_bus": 40.0,
 }
 
+# IRC SP:41 indicative PCU prior [build guide §3.2.1] -- "a prior, not a
+# constant"; real recalibration from this corridor's own discharge
+# headways is future work (§8.5), same caveat as MIX/OCCUPANCY above.
+_PCU = {
+    "veh_motorcycle": 0.3,
+    "veh_car": 1.0,
+    "veh_auto": 0.6,
+    "veh_bus": 3.0,
+}
+
 # vClass chosen per type from what's actually permitted on every lane of
 # this network (checked against the net.xml's `disallow` lists, which
 # only ever exclude rail/ship/pedestrian/bicycle) -- physical dynamics
@@ -114,6 +130,7 @@ def assign_vtypes(rou_path: Path = _ROU_PATH, *, seed: int = _SEED) -> None:
         ET.SubElement(
             vtype_el, "param", {"key": "occupancy", "value": str(_OCCUPANCY[type_id])}
         )
+        ET.SubElement(vtype_el, "param", {"key": "pcu", "value": str(_PCU[type_id])})
         root.insert(0, vtype_el)
 
     rng = random.Random(seed)
@@ -130,4 +147,12 @@ def assign_vtypes(rou_path: Path = _ROU_PATH, *, seed: int = _SEED) -> None:
 
 
 if __name__ == "__main__":
-    assign_vtypes()
+    import sys
+
+    # Optional path arg -- lets `build_demand_levels.sh`'s light/heavy
+    # route files (and any future one) go through the exact same vType
+    # assignment as the original medium file, without a second script.
+    if len(sys.argv) > 1:
+        assign_vtypes(Path(sys.argv[1]))
+    else:
+        assign_vtypes()

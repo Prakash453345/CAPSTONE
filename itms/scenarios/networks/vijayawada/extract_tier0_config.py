@@ -67,6 +67,10 @@ relationship a real deployment tunes these two parameters by, rather than
 an arbitrary global default disconnected from how many phases a specific
 ring actually has to cycle through.
 
+`sat_flow_pcu_s` is populated too, for M4 -- every movement gets the same
+conventional per-lane placeholder value (`_SAT_FLOW_PCU_S` below), not a
+measured one; see that constant's own comment for why.
+
 What's NOT modeled: pedestrian phases. This network has no crossing
 infrastructure (a plain netconvert import with no explicit pedestrian
 data), so every extracted `Phase.is_pedestrian` is False and
@@ -111,6 +115,19 @@ _ALL_RED_S = 2.0
 _MIN_GREEN_S = 10.0  # safety floor, not netconvert's guessed plan duration -- see module docstring
 _MAX_GREEN_S = 90.0  # conventional urban-signal ceiling
 _MAX_WAIT_MARGIN_S = 60.0  # headroom above a ring's own worst-case full rotation
+
+# `s_lm` [build guide §3.9] -- 1800 PCU/h == 0.5 PCU/s per lane, the same
+# order of magnitude as HCM's "ideal" per-lane saturation flow and within
+# the range IRC guidelines cite for a well-behaved urban lane. The guide
+# is explicit that this must eventually be *measured* per approach, per
+# condition (§8.5: "do not use a manual value") -- this build has no
+# discharge-headway field data yet, so every movement gets the same
+# conventional per-lane placeholder rather than a per-approach number
+# this project hasn't earned. Flagged here, in PROGRESS.md, and in
+# camp.py's own gate criteria as a documented limitation to replace with
+# real calibration before any CA-MP result is reported as more than a
+# software-correctness demonstration.
+_SAT_FLOW_PCU_S = 0.5
 
 
 def _conflicts_from_foes(foes: str) -> list[int]:
@@ -166,6 +183,13 @@ def _extract_one(tls_id: str, tl_logic: ET.Element, junction: ET.Element) -> Tie
         max_green_s[phase_id] = _MAX_GREEN_S
         green_phase_count += 1
 
+    # Every movement that is ever green in some phase gets the same
+    # conventional placeholder saturation flow -- see _SAT_FLOW_PCU_S.
+    all_green_links: set[str] = set()
+    for phase in phases.values():
+        all_green_links.update(phase.green_movements)
+    sat_flow_pcu_s = dict.fromkeys(all_green_links, _SAT_FLOW_PCU_S)
+
     # max_wait_s sized off this ring's own worst-case full rotation (every
     # phase maxing out once, plus clearance overhead), not left at
     # Tier0Config's blanket 120.0s default -- see module docstring for why
@@ -184,6 +208,7 @@ def _extract_one(tls_id: str, tl_logic: ET.Element, junction: ET.Element) -> Tie
         yellow_s=yellow_s,
         all_red_s=_ALL_RED_S,
         max_wait_s=max_wait_s,
+        sat_flow_pcu_s=sat_flow_pcu_s,
     )
 
 

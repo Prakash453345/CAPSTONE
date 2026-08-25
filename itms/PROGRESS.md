@@ -376,23 +376,501 @@ demand exists and once the 10-seed harness replaces a single seed.
 
 **Not yet built:**
 
-- The metrics collector: person-delay (occupancy-weighted — the current
-  corridor demand is single-vType `veh_passenger` only, so this needs
-  either a documented proxy or a heterogeneous vType mix with stated
-  occupancy assumptions before "person-delay" is more than relabeled
-  vehicle-delay), person-throughput, max per-approach wait (distribution,
-  not just mean), stops per vehicle, queue-spillback events.
-- The 10-seed statistical harness with confidence intervals (paired
-  across controllers on the same seed set), and the `make bench` target
-  that produces the gate's comparison table.
-- `SignalChanged`/`SignalFaulted` are still not published onto the event
-  bus from a live run (flagged as M3's job in the M2 section above) —
-  the smoke scripts and `run_controlled_scenario` don't wire a producer
-  yet.
+**Update — metrics collector, vehicle mix, and the bench harness now
+exist:**
+
+- `scenarios/demand/vijayawada/assign_vtypes.py`: reassigns the
+  corridor's 708 vehicles across four vTypes (motorcycle 35%, car 40%,
+  auto-rickshaw 20%, bus 5%) by a seeded weighted draw, without touching
+  any route or depart time. Occupancy per vType (1.3 / 1.5 / 2.5 / 40.0
+  persons) is stored as a `<param>` on the vType itself. Mix shares and
+  occupancy figures are commonly-cited approximations for a mixed Indian
+  urban arterial, **not measured for this corridor** — same honesty
+  level the demand's own README already applies to trip generation.
+  vClass physical dynamics are left at SUMO's own defaults per class, not
+  invented; all four classes are permitted on every lane of this network,
+  so no vehicle's route changed and no Webster/coordination tuning needed
+  redoing.
+- `sim_service/control/metrics.py`: parses a run's `--tripinfo-output`
+  plus the route file's vType occupancy into person-delay (SUMO's own
+  per-vehicle `timeLoss`, occupancy-weighted), person-throughput,
+  a wait-time **distribution** (mean/p50/p95/p99/max, not just a mean),
+  and stops per vehicle. First 600s of departures excluded from
+  delay/wait/stops (network still filling); throughput is deliberately
+  not warm-up-filtered (see the module's own docstring for why).
+- `sim_service/control/bench_stats.py`: dependency-free 95% confidence
+  intervals using the correct Student's t critical value for small N
+  (2.262 at the gate's own N=10, not the normal distribution's 1.96,
+  which understates the interval by ~15% at this sample size).
+- `scripts/bench.py` / `make bench`: runs the three tuned baselines
+  (Webster, semi-actuated, coordinated-actuated) over the same fixed
+  10-seed set each (paired comparison, §8.2), scores every run, and
+  prints the table below. Raw per-seed numbers are written to
+  `scripts/bench_results.json`, checked in alongside the seed list itself
+  as the fixed workload manifest.
+
+**The M3 gate table** (10 seeds each, mean ± 95% CI; all 30 runs: zero
+interlock violations, zero fault events):
+
+| controller | person-delay (person-s) | throughput (persons/h) | max-wait p95 (s) | stops/vehicle |
+|---|---|---|---|---|
+| Webster (tuned) | 190,234 ± 8,953 | 5,203.2 ± 0.0 | 167.4 ± 16.6 | 3.0 ± 0.2 |
+| semi-actuated | 629,350 ± 27,442 | 5,203.2 ± 0.0 | 670.5 ± 34.6 | 6.1 ± 0.2 |
+| coordinated-actuated | 203,200 ± 3,790 | 5,203.2 ± 0.0 | 216.8 ± 14.5 | 2.9 ± 0.1 |
+
+Confirms the single-seed finding from earlier in this milestone, now with
+real statistical backing: semi-actuated is decisively worse on this
+demand (over 3x the person-delay, over 3x the p95 wait). Webster edges
+out coordinated-actuated on person-delay and wait — plausible, since the
+current demand is still uncalibrated uniform-random rather than the
+directionally-skewed platooning traffic coordination is built to exploit
+— but coordinated-actuated has the *fewest* stops per vehicle of all
+three, a real and expected signature of progression (fewer stop-and-go
+events even when total delay isn't the lowest). A genuine, reportable
+trade-off, not a wash.
+
+**Two honest caveats about this table, found while building it, not
+smoothed over:**
+
+1. **Person-throughput came out numerically identical (5,203.2 ± 0.0)
+   across every controller and every seed.** This is a real property of
+   the current experimental setup, not a bug: the corridor demand is a
+   *fixed* trip list (same 708 vehicles, same depart times, same routes
+   in every run) — `--seed` only perturbs SUMO's internal car-following/
+   lane-changing randomness, not which trips exist. Combined with SUMO's
+   300s forced-teleport (which prevents true permanent gridlock), every
+   one of the same 708 vehicles eventually arrives under all three
+   controllers, on every seed — so total persons served is a constant of
+   the demand file, not a signal of controller quality. The build guide's
+   own reasoning for including throughput at all ("pairs with delay;
+   delay alone can be gamed by holding vehicles outside the network")
+   doesn't get exercised by this scenario, because nothing in it is
+   capable of actually stranding vehicles outside the network. It would
+   become a real, discriminating metric either once demand is
+   heavy/calibrated enough to saturate the network, or by measuring
+   throughput over a shorter rolling window instead of the whole
+   scenario. Reported as-is rather than hidden or re-defined to look more
+   interesting than it is.
+2. **A handful of simulated vehicle-vehicle collisions/teleports appeared
+   during the bench runs** (SUMO's own car-following model occasionally
+   producing a negative gap between two vehicles, e.g. a motorcycle and a
+   car, followed by a forced teleport) — more frequently than with the
+   original all-`veh_passenger` fleet. This is a SUMO microscopic-model
+   artifact of introducing heterogeneous vehicle dynamics without also
+   re-tuning car-following parameters for a mixed fleet, not a signal
+   controller issue (I1-I7 interlocks, which govern signal-phase
+   legality, are unaffected — zero interlock violations were recorded in
+   every one of the 30 runs). Worth a closer look before this demand mix
+   is relied on for anything beyond the M3 comparison it was built for.
 
 **Gate (build guide M3):** "you can run `make bench` and get a table of
 person-delay, throughput, max-wait, and stops for three baseline
-controllers over 10 seeds with confidence intervals." **Not yet
-satisfied** — the three baselines are tuned, safe, and verified
-end-to-end; the metrics collector and bench harness that turn that into
-the gate's actual table are the remaining work.
+controllers over 10 seeds with confidence intervals." **Satisfied** —
+see the table above; `make bench` reproduces it end-to-end.
+
+**Two remaining M3 loose ends, now closed:**
+
+- `sim_service/signal_controller/spillback.py` (`SpillbackTracker`):
+  counts queue-spillback episodes (§8.1: "count of link-full episodes") —
+  a rising-edge count per lane crossing a 90% TraCI occupancy threshold,
+  over every controlled junction's approach lanes. Wired into
+  `run_controlled_scenario` as an optional `spillback_lane_ids` parameter
+  (off by default — existing callers unaffected); the result dict now
+  carries `spillback_events`. Verified against the real corridor for both
+  fixed-time and semi-actuated: **zero spillback episodes on either**,
+  consistent with (and explained by) the same finding as the
+  person-throughput caveat above — the current demand simply isn't heavy
+  enough to saturate any lane to 90%+ occupancy under any baseline,
+  including the worst-performing one. Not a bug in the tracker (5 unit
+  tests with a mocked occupancy sequence confirm the rising-edge counting
+  logic directly); a real property of this demand level, honestly
+  reported rather than tuned to produce a more interesting number.
+- `control/runner.py`'s optional `bus` parameter: every `arbiter.tick()`
+  decision is now published as a real `SignalChanged`/`SignalFaulted`
+  event, through the same `RedisStreamsSyncBus`/`encode_envelope` path
+  `traci_loop.py`'s live dashboard producer already uses (ADR-003 — one
+  bus contract, same wire format). Topics: `signal.changed` (named in
+  ARCH §6.2's own table) and `signal.faulted` (not named there explicitly
+  — inferred from the same `signal.<verb>` convention `signal.changed`/
+  `signal.override.*` follow, documented as an inference in both the
+  module docstring and the `.avsc` files rather than presented as
+  something the architecture doc actually specifies). Off by default —
+  the M3 smoke scripts and `scripts/bench.py` don't pass a bus, since a
+  30-run bench sweep publishing to a bus nothing is consuming would just
+  be noise, not a behaviour change for any existing caller.
+  `test_signal_events.py` proves the payload shape round-trips through
+  the real `contracts/events/*.avsc` schemas (a gap PROGRESS.md's M2
+  section had claimed was already "verified" without an actual checked-in
+  test); `test_runner_bus_integration.py` proves the wiring fires for
+  real — a live SUMO run whose published events are read back off a real
+  Redis stream and decoded, not just asserted in isolation. Both new test
+  files, plus `test_spillback.py`, bring the suite to 82 tests (80 run by
+  default, 2 integration tests gated behind `RUN_INTEGRATION_TESTS=1` +
+  a reachable Redis, same convention `packages/common`'s existing
+  integration test already established).
+
+M3 is now fully closed out: three tuned, safe, benchmarked baselines; the
+gate table; and both loose ends that had been carried since M2.
+
+## M4 — CA-MP (Corridor-Anticipatory Max-Pressure), Layer 1 — in progress
+
+**What exists:**
+
+- `packages/domain/itms_domain/signal.py`: additive-only extension.
+  `JunctionContext` gained `queue_pcu`/`receiving_occupancy`/`confidence`
+  (all default empty, same non-breaking pattern `has_demand`/
+  `wait_times_s` set before them); `Tier0Config` gained `sat_flow_pcu_s`
+  (default empty). Every M2/M3 strategy is provably unaffected — full
+  suite passed unchanged right after this change.
+- `sim_service/control/strategies/camp.py`: the algorithm itself —
+  `pressure(p) = P_flow(p) − P_block(p) + F(p) − S(p)` (build guide
+  §3.4's Terms 1, 2, 3, 6; Terms 4/5 — corridor anticipation and debt
+  recovery — are explicitly Contribution 1, deferred to M7 once the
+  Green Corridor Engine can supply real reservations), cyclic ring
+  selection with hysteresis/skip/k-lookahead (§3.7), and a real
+  degradation-ladder `select_mode` (§3.8) that only has two behaviourally
+  real branches in this build — full CA-MP, or fall back to the
+  property-tested-safe `fixed_time` — because nothing before M8 can ever
+  produce a real movement confidence below 1.0.
+  - **A resolved ambiguity, documented rather than silently picked**: the
+    guide's prose defines the blocking term's queue as `q_m`, "queue on
+    the receiving link" — a different quantity from Term 1's own upstream
+    queue `q_l`. The guide's own §4 reference implementation, though,
+    reuses the identical `q_pcu` field for both terms. This build follows
+    the code, not the prose, for the reason spelled out in `camp.py`'s
+    own module docstring: inventing a second per-movement "downstream
+    queue" concept would mean guessing at data no extraction script in
+    this project has ever computed. One real, load-bearing consequence
+    of that choice, worth stating plainly: at zero receiving-link
+    occupancy (`θ_m == 1`), the flow and block terms cancel **exactly**,
+    for every movement, regardless of queue size — so in free flow
+    (nothing downstream congested yet), phase selection is driven
+    entirely by wait-time fairness, not raw queue length. This is a real
+    property of the algorithm as specified, not a bug; it matters for
+    the θ_m ablation the M4 gate requires (see Not yet built).
+  - **A bug caught before it shipped**: my own first test for "advances
+    to the highest-pressure candidate" assumed bigger queue always wins,
+    which is exactly the case the paragraph above rules out at zero
+    occupancy. Caught by actually running the test, not by inspection —
+    fixed by differentiating the test scenario via wait time instead.
+- `sim_service/signal_controller/queue_state.py` (new): the live sampler
+  CA-MP needs before it can see anything but empty defaults —
+  `QueueStateSampler.sample()` returns real `(queue_pcu,
+  receiving_occupancy)` from TraCI every tick. `queue_pcu[l]` is
+  build guide §3.2.1's observed term: the PCU-weighted count of vehicles
+  actually **stopped** (speed < 0.1 m/s, SUMO's own halting-speed
+  convention) on movement `l`'s approach lane, weighted by each vehicle's
+  own vType PCU value. `receiving_occupancy[l]` is `ρ_m`: the downstream
+  lane's live occupancy fraction, reusing the exact query
+  `SpillbackTracker` already uses, pointed at each movement's own
+  receiving lane via a new `link_lanes.link_to_receiving_lane_map()`
+  (same `<connection>` parse as the existing upstream map, reading
+  `to`/`toLane` instead of `from`/`fromLane`).
+  - `assign_vtypes.py` gained a `<param key="pcu">` alongside the
+    existing `occupancy` param on each vType — IRC SP:41's indicative
+    prior (two-wheeler 0.3, auto-rickshaw 0.6, car 1.0, bus 3.0), the
+    same not-measured-for-this-corridor caveat as MIX/OCCUPANCY.
+    Regenerated `vijayawada_corridor.rou.xml` in place; vehicle
+    type/route/depart assignment is unchanged (same seed, same mix
+    logic — only the new param was added).
+  - `extract_tier0_config.py` now populates `Tier0Config.sat_flow_pcu_s`
+    for every real movement in the corridor, but **with a single
+    conventional placeholder value (0.5 PCU/s/lane ≈ 1800 PCU/h), not a
+    measured one** — the build guide is explicit that saturation flow
+    must be measured per approach ("do not use a manual value," §8.5),
+    and this project has no discharge-headway field data yet. Flagged
+    here as a limitation to close before any CA-MP result is presented
+    as more than a software-correctness demonstration.
+- `sim_service/control/runner.py`: `run_controlled_scenario` gained two
+  more optional, additive parameters — `receiving_lanes` and
+  `vtype_pcu` — which, together with the existing `link_lanes`, wire a
+  `QueueStateSampler` per junction and merge its output into the same
+  `JunctionContext` rebuild `ActuationDetector` already feeds. Both
+  default to `None`; every M2/M3 caller is unaffected.
+- `scripts/smoke_m4_camp_runner.py` (new): CA-MP driving all 7 real
+  junctions of the corridor, real PCU-weighted queues and real receiving
+  occupancy from live TraCI state, `nominal_cycle_s` per junction taken
+  from Webster's own tuned cycle (tying the duration heuristic to
+  already-measured flow data rather than a second invented constant).
+  **Result: 2406 steps, zero interlock violations, zero fault events,
+  zero spillback episodes** — consistent with (not contradicting) M3's
+  own finding that current demand on this corridor isn't heavy enough to
+  jam any lane solid under any controller tested so far.
+
+**Verification:**
+
+- `test_camp.py`: 26 tests — `select_mode` unit tests, a degraded-
+  confidence-falls-back-to-fixed_time test, hand-checked pressure-term
+  unit tests (flow/block/fairness/switch, including the zero-occupancy
+  cancellation case above), ring-candidate/skippability unit tests, two
+  Hypothesis property tests (general interlock-safety over many ticks,
+  and fault-routing around a faulted phase — 300 and 200 examples), an
+  all-phases-faulted edge case, and five deterministic mechanics tests
+  (extend-below-min-green, advance-once-maxed-out, hysteresis, and both
+  `_allocate_green` fallback/clamp cases).
+- `test_queue_state.py`: 11 tests — PCU-weighted halted-vehicle counting,
+  the halting-speed boundary (strictly less-than, not ≤), unknown-vtype
+  default, empty-lane, receiving-occupancy-reads-the-downstream-lane (not
+  the approach lane), a link with no receiving-lane entry, independence
+  across multiple links, and `load_vtype_pcu`'s own file-parsing (synthetic
+  fixtures plus one test read straight off the real checked-in corridor
+  route file).
+- `ruff`, `mypy`, and the full pytest suite (117 passed, 2 skipped — the
+  2 integration tests, same as before) all clean after every change in
+  this section, not just at the end.
+- `scripts/smoke_m4_camp_runner.py` run against the real corridor: PASS
+  (see above).
+
+**Update — 3 demand levels built and CA-MP proven safe at all of them:**
+
+- `build.sh` gained two optional positional args (`period`, `suffix`),
+  defaulting to the original medium invocation exactly (`./build.sh` with
+  no args reproduces the checked-in medium file byte-for-byte) — every
+  earlier milestone's dependency on the plain invocation is unaffected.
+  `build_demand_levels.sh` (new) calls it twice more: LIGHT (period 5.0,
+  360 vehicles) and HEAVY (period 1.25, 1440 vehicles) as separate
+  `vijayawada_corridor_light.rou.xml`/`_heavy.rou.xml` files (plus
+  matching `.sumocfg`s), never touching the medium file. The 0.5x/2x
+  spread around medium's 708 vehicles is a plain volume choice, not
+  derived from any measured capacity (this corridor still has no
+  calibrated saturation point) — three genuinely different, ordered
+  congestion levels to compare, not levels picked to flatter a result.
+  `assign_vtypes.py`'s `__main__` now takes an optional path argument so
+  the same seeded vType-mix logic runs against light/heavy too.
+- `smoke_m4_camp_runner.py` gained an optional demand-suffix CLI arg
+  (`_light`/`_heavy`) and now measures flows from *that* demand level's
+  own route file for Webster tuning (`compute_link_flows(net_path,
+  route_path)`, not the medium default) — each demand level gets its own
+  correctly-scaled `nominal_cycle_s`, not medium's cycle reused
+  elsewhere.
+- **Ran CA-MP end-to-end against the real corridor at all 3 levels.**
+  Light: 2295 steps, 0 interlock violations, 0 fault events, 0 spillback
+  episodes. Medium: 2406 steps, 0/0/0 (see above). Heavy: 3178 steps, 0
+  interlock violations, 0 fault events, **0 spillback episodes** — CA-MP
+  stays safe at 2x medium demand, but a genuinely worth-stating finding:
+  even heavy demand didn't push any of the 7 junctions' own approach
+  lanes to the 90%-occupancy spillback threshold, despite SUMO's own
+  teleport log showing real congestion forming elsewhere on the network
+  (`"waited too long (jam)"` warnings appear only under heavy). That
+  congestion is happening off the specific lanes this build instruments,
+  not proof CA-MP's blocking term did anything yet — consistent with,
+  not contradicting, the zero-occupancy-cancellation property `camp.py`'s
+  docstring already flags. It confirms rather than removes the need for
+  a deliberately-engineered bottleneck (next) rather than "just add more
+  demand" to ever exercise θ_m for real.
+
+**Update — the θ_m ablation is built and run, and it surfaced a real
+runner-level bug (found, fixed, verified) plus a genuine, dramatic
+finding for the blocking term:**
+
+- `run_controlled_scenario` gained `bottleneck_lane_speeds_mps` (another
+  additive, `None`-by-default parameter): applies `traci.lane.setMaxSpeed`
+  to named lanes once at scenario start, to engineer a downstream capacity
+  reduction on purpose rather than hoping demand finds one (see the last
+  update's finding that it doesn't, on this corridor, at any demand level
+  tested). `camp.py`'s `CampConfig` gained `enable_blocking: bool = True`,
+  an ablation switch that zeroes Term 2 entirely inside the *same*
+  `pressure()` codepath (not a second hand-maintained copy) — the M4
+  gate's own required "with vs. without θ_m" comparison needs exactly
+  this, and nothing else in the build reads or sets it.
+- `scripts/m4_bottleneck_ablation.py` (new): picks the single busiest
+  measured movement under heavy demand, throttles every lane of its real
+  receiving edge to a crawl (2.0 m/s), and runs 2×2 = 4 arms (blocking
+  on/off × bottleneck on/off), same seed and heavy demand throughout,
+  comparing person-delay, trips completed, and a spillback count scoped
+  to just the bottleneck's own lanes.
+- **A real bug the first full run found**: `cluster_1880441740_4393296791`
+  (the same 4-phase junction flagged back in M3 as structurally tight —
+  its bare minimum barely fits its own cycle) hit
+  `failsafe_interlock_rejected` under the blocking-disabled arm, and
+  *never recovered* — thousands of consecutive rejections for the rest of
+  the run. Root cause, confirmed by direct diagnosis (see `runner.py`'s
+  own `_recover_from_fault` docstring for the full chain): every failsafe
+  branch commanded all-red and left `JunctionContext` completely
+  untouched; `TraCICabinet` can't map an all-red raw state back to any
+  known phase, so the divergence check never re-fires, the *same* frozen
+  `current_phase_id`/`current_phase_elapsed_s` gets re-proposed forever,
+  other movements' real (still-live) wait times climb without bound, and
+  I5 rejects every subsequent proposal too — a permanent lock, not a
+  transient one. This is a **runner-level gap, not specific to CA-MP** —
+  any strategy could in principle trigger it; CA-MP's more adaptive
+  proposals under engineered stress are just what first exposed it.
+  **Fixed**: `_recover_from_fault` now re-commands the ring's first phase
+  and resets elapsed time to 0.0 whenever a junction takes any non-nominal
+  branch, mirroring the exact "defined resume, not an assumed one"
+  precedent the scenario's own startup code already uses. 2 new unit
+  tests (`test_runner_fault_recovery.py`, using `FakeCabinet` — no SUMO
+  needed) confirm it. Full suite: 120 passed, 2 skipped.
+- **The ablation result, run to completion after the fix** (heavy demand,
+  1440 vehicles, capped at 3600 steps — see below for why):
+
+  | arm                          | delay_s   | trips completed | interlock violations |
+  |-------------------------------|-----------|------------------|-----------------------|
+  | blocking on, bottleneck on   | 2,199,714 | 1439 / 1440      | 0                     |
+  | blocking off, bottleneck on  |   807,988 | 1177 / 1440      | 2525                  |
+  | blocking on, bottleneck off  | 1,634,273 | 1440 / 1440      | 0                     |
+  | blocking off, bottleneck off |   938,369 | 1193 / 1440      | 2201                  |
+
+  With blocking enabled, zero interlock violations in both conditions and
+  essentially every vehicle completes its trip. With blocking disabled,
+  thousands of interlock violations **in both conditions** — not only
+  under the engineered bottleneck, but under heavy demand alone — and
+  roughly 250 fewer vehicles even finish their trip within the same
+  capped run. That's a stronger and more general result than the gate's
+  own "wins under a bottleneck, nothing in free flow" framing expected:
+  on this corridor, disabling θ_m doesn't just fail to prevent feeding a
+  jam, it appears to destabilize an already structurally-tight junction's
+  own phase timing badly enough to violate I5 (max-wait) under ordinary
+  heavy demand, bottleneck or not.
+  **A trap worth naming plainly**: read delay_s alone and blocking-off
+  looks *better* (lower delay) — exactly backwards. A trip that never
+  completes contributes zero to that sum, so a run that strands ~250 more
+  vehicles necessarily reports a *smaller* total. The trips-completed
+  column is what actually orders these four arms correctly; delay_s is
+  only meaningful compared within equal completion counts. Added a
+  `trips_completed` column to the script's own output table so this
+  can't be missed next time either.
+  **Why capped at 3600 steps, not run to natural completion**: the first
+  full-length run left the blocking-disabled arm rejecting the same
+  junction for well over 4000 consecutive ticks with no sign of
+  resolving — the recovery fix stops it from being a *permanent* freeze,
+  but it doesn't make the underlying heavy-demand-exceeds-this-junction's-
+  safe-capacity condition resolve any faster. Capping is itself part of
+  the honest result, not a shortcut around it: "still rejecting after
+  3600 ticks" is already the finding.
+- What this does **not** yet show: the gate's own bottleneck-specific
+  claim in isolation, cleanly separated from the heavier "blocking-off
+  alone destabilizes this junction" effect — a lighter demand level with
+  the same bottleneck (to see whether the free-flow arms stay clean while
+  only the bottleneck arm degrades) would isolate that if it's still
+  worth doing once the real saturation-flow numbers below exist.
+
+### M4 gate comparison — CA-MP vs. tuned Webster, 3 demand levels, 10 seeds each
+
+`scripts/m4_gate_comparison.py` — same paired-seed design as the M3 gate
+(`scripts/bench.py`): both controllers see the identical 10-seed set per
+demand level, so seed-to-seed demand noise cancels out of the comparison
+rather than adding to it. Webster is re-tuned per demand level from that
+level's own measured flows (a fair, non-strawman baseline, not one fixed
+timing reused everywhere). CA-MP runs with `enable_blocking=True` — the
+real controller, not the ablation's disabled arm. 60 real SUMO runs total
+(2 controllers × 3 levels × 10 seeds); raw per-seed results are in
+`scripts/m4_gate_results.json`, not just the aggregate.
+
+**Results** (person-delay, mean ± 95% CI over 10 seeds; every run
+completed 100% of its trips at every level, so this is a clean comparison
+with no completion-rate confound this time):
+
+| demand | webster delay (p-s) | camp delay (p-s) | verdict |
+|--------|---------------------|-------------------|---------|
+| light  | 69,541 ± 1,837      | 160,326 ± 9,144   | CA-MP loses, ~2.3× worse |
+| medium | 183,547 ± 12,349    | 373,888 ± 14,189  | CA-MP loses, ~2.0× worse |
+| heavy  | 1,368,840 ± 43,105  | 1,361,664 ± 76,088| statistical tie — CIs overlap almost entirely |
+
+Interlock violations: **zero, in all 60 runs, at every demand level.**
+The safety half of the gate — "does not starve any approach" — is fully
+met: I5 (`max_wait_not_exceeded`) never fired once across the whole
+comparison.
+
+**The honest verdict: M4's gate, taken literally — "CA-MP beats the
+tuned fixed-time baseline on person-delay at 3 demand levels" — is not
+met.** CA-MP loses decisively at light and medium demand (well outside
+each other's CI, not noise) and only ties at heavy demand (a "win" by
+raw mean, but the CIs overlap almost completely — reporting that as a win
+without the CI would be exactly the kind of unqualified claim this
+project has been trying not to make). This is a real negative result,
+not a bug: build guide line ~1028 explicitly anticipates this outcome
+("CA-MP does not beat MP on cross-street delay... then that is the
+result. Report it, analyse why... A negative result honestly analysed
+marks better than a fudged positive one") — for a different baseline
+(pure MP) but the same principle applies here.
+
+**Why, as best this can be analysed without more instrumentation:** the
+`stops_per_vehicle` column (also in the raw results) shows an interesting
+crossover — CA-MP has *more* stops than Webster at light/medium (2.1 vs
+1.9, 3.1 vs 2.9) but *fewer* at heavy (7.5 vs 8.7). Re-reading §3.7's own
+`DECIDE` pseudocode against `camp.py`'s implementation line-by-line
+confirms the extend/advance logic matches the spec exactly — this isn't
+an implementation bug. The likely mechanism: at light/medium demand,
+queues are small and 𝒫(p) differences between phases are close to noise,
+so the extend test (`𝒫(current) ≥ max 𝒫 − hysteresis`) rarely fails
+decisively, and CA-MP tends to ride each phase out toward its own
+`max_green_s` rather than cycling as briskly as Webster's short, already-
+well-tuned fixed cycle — more, longer-held phases per unit time than a
+demand-blind cycle needs when demand is genuinely light. At heavy demand
+the picture partly flips: CA-MP's *lower* stop count despite tied delay
+is consistent with `θ_m` gating doing what it's designed to do — declining
+to discharge into an already-congested downstream link means fewer, longer
+holds instead of many short stop-and-go releases into a jam. That matches
+this project's own earlier ablation finding (θ_m's real value shows up
+under contention/spillback risk, not as a free-flow average-delay win).
+
+**What this means going forward:** CA-MP Layer 1, as currently scoped
+(pressure function minus Terms 4-5, cyclic ring, degradation ladder — no
+corridor anticipation/debt yet, and still on the placeholder saturation
+flow, not measured per-approach `s_lm`), is exactly as safe as Webster
+and has an already-demonstrated, large, real robustness advantage under
+heavy demand + an engineered bottleneck (the earlier ablation) — but does
+not currently beat Webster's plain average person-delay at light or
+medium demand, and only ties at heavy. Reported here rather than tuned
+until it looked better, per this project's standing honesty norm.
+Concrete, not-yet-tried next steps if this gets revisited: (1) real
+saturation-flow calibration — the current uniform placeholder likely
+washes out real per-approach capacity differences that would otherwise
+let 𝒫(p) differentiate more decisively at light/medium demand; (2) the
+`hysteresis_frac`/`k` ring-lookahead constants are §3.9 tunables, never
+swept — worth trying smaller hysteresis or an explicit low-demand
+"gap-out" rule (not in the given §3.7 pseudocode, but standard real-world
+actuated practice) to reduce needless max-green riding; (3) Terms 4-5
+(corridor anticipation/debt) are explicitly out of M4's scope per this
+milestone's own module docstring, so this comparison is Layer-1-only CA-MP,
+not the full algorithm — M7 may change this picture.
+
+### Hysteresis sweep — tried, and it isn't the lever
+
+`scripts/m4_hysteresis_sweep.py` tested `hysteresis_frac` ∈ {0.0, 0.05
+(the §3.9 default), 0.15} at light and medium demand, 5 seeds each
+(triage scale, not the gate's 10) — the hypothesis above being that a
+wide tolerance band was letting CA-MP coast to `max_green_s` instead of
+switching promptly.
+
+**Result: every seed produced bit-identical person-delay across all three
+`hysteresis_frac` values** — e.g. light demand seed 1 is 170,161.7 person-s
+at h=0.0, h=0.05, *and* h=0.15, and the same holds for all 10 seed×level
+combinations tested. That's not "hysteresis doesn't matter much" — it's
+"hysteresis had zero effect at all," which only happens if the extend
+test's tolerance term was never the deciding factor in the first place.
+
+Re-reading the extend condition explains why: `pressures[current] >=
+best_pressure - hysteresis_frac * abs(best_pressure)`. If `current`'s
+pressure is *already* the outright highest among all candidates —
+tolerance band or no tolerance band — then subtracting any hysteresis
+amount (0 up to 15% of the max) from the right-hand side changes nothing,
+because the comparison was never close enough to need the slack. That is
+apparently what's happening here: at light/medium demand, the currently-
+green phase's own pressure stays on top of the ranking for the entire
+stretch up to `max_green_s`, on its own merits, not by a tie-break
+technicality. So the original hypothesis (§3.9's tolerance band is too
+generous) was wrong — the tolerance band was never in play. This is a
+real, useful negative result in its own right: it rules out the cheapest
+possible fix and narrows down where the actual cause has to live — inside
+`pressure()`'s own terms (most likely `P_flow`'s `q_l`, which keeps
+counting the served phase's own queue while it's green, or `S(p)`'s
+switching cost outweighing everything else at low pressure magnitudes),
+not in the extend/hysteresis comparison layer built on top of them.
+
+**Not yet built:**
+
+- Real saturation-flow calibration (`sat_flow_pcu_s` is currently one
+  conventional placeholder value corridor-wide, not measured per
+  approach) — still a candidate lever on the light/medium gap, though the
+  hysteresis result above means it's no longer the *only* remaining
+  suspect.
+- A cleaner isolation of the earlier ablation's bottleneck-specific effect
+  from the more general blocking-off-under-heavy-demand effect — worth
+  doing, not required to already have a real, reportable finding.
+- Instrumenting `pressure()`'s individual terms per tick (flow/block/
+  fairness/switch, not just the combined value) at light demand, to see
+  which term is actually keeping the current phase's pressure on top for
+  so long — the hysteresis sweep ruled out the tolerance band itself, but
+  not yet identified which of the four remaining terms is the real cause.

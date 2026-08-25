@@ -44,15 +44,19 @@
 <routes xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/routes_file.xsd">
     <vType id="veh_bus" vClass="bus">
         <param key="occupancy" value="40.0" />
+        <param key="pcu" value="3.0" />
     </vType>
     <vType id="veh_auto" vClass="taxi">
         <param key="occupancy" value="2.5" />
+        <param key="pcu" value="0.6" />
     </vType>
     <vType id="veh_motorcycle" vClass="motorcycle">
         <param key="occupancy" value="1.3" />
+        <param key="pcu" value="0.3" />
     </vType>
     <vType id="veh_car" vClass="passenger">
         <param key="occupancy" value="1.5" />
+        <param key="pcu" value="1.0" />
     </vType>
     <vehicle id="veh0" type="veh_motorcycle" depart="0.00">
         <route edges="350502993#2 350502993#4 350502993#6 350502993#7 350502993#8 219187866#2 1058429866" />

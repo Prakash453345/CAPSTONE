@@ -107,6 +107,21 @@ class JunctionContext:
     `ped_phase_in_progress` / `ped_phase_elapsed_s`: at most one pedestrian
     phase can be "in progress" at a time by construction (one ring position
     is active). `None` means no walk signal is currently mid-cycle.
+
+    `queue_pcu` / `receiving_occupancy` / `confidence`: added for M4's
+    CA-MP strategy [build guide §3.4/§3.8] -- per movement, the PCU-
+    weighted queue `q_l`, the receiving link's occupancy `ρ_m` (used by
+    CA-MP's blocking/gating term), and the state estimate's confidence
+    `c_l` (drives the degradation ladder, §3.8). All default to an empty
+    mapping, same additive-not-a-behaviour-change pattern as
+    `has_demand`/`wait_times_s` before them: `fixed_time`/`webster`/
+    `semi_actuated`/`coordinated_actuated` never read these fields, so
+    every existing caller is unaffected. A movement absent from
+    `confidence` is treated as fully confident (`c_l = 1.0`) by CA-MP --
+    correct for this build, where every movement's state still comes
+    from SUMO ground truth (no sensor-equivalence degradation layer
+    exists before M8) rather than a real vision pipeline that could
+    actually be less than fully confident.
     """
 
     intersection_id: str
@@ -118,6 +133,9 @@ class JunctionContext:
     faulted_phases: frozenset[str] = frozenset()
     ped_phase_in_progress: str | None = None
     ped_phase_elapsed_s: float = 0.0
+    queue_pcu: Mapping[str, float] = field(default_factory=dict)
+    receiving_occupancy: Mapping[str, float] = field(default_factory=dict)
+    confidence: Mapping[str, float] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -132,6 +150,13 @@ class Tier0Config:
     config; C7 ("bad Tier-0 config value rejected, last-known-good
     retained") is implemented as this type's own validation, not the dual-
     control workflow.
+
+    `sat_flow_pcu_s` (`s_lm` [§3.9]): per-movement saturation flow, PCU/s,
+    condition-adjusted -- Tier-1 (measured, hot-reloadable), not itself an
+    interlock parameter, but kept alongside them here since it's still a
+    per-junction physical property of the approach, the same home as
+    `min_green_s`/`max_green_s`. Defaults to empty; only CA-MP (M4) reads
+    it -- every M2/M3 strategy is unaffected by its absence.
     """
 
     intersection_id: str
@@ -146,6 +171,7 @@ class Tier0Config:
     ped_clearance_s: Mapping[str, float] = field(default_factory=dict)
     max_wait_s: float = 120.0
     max_preempt_s_per_hour: float = 300.0
+    sat_flow_pcu_s: Mapping[str, float] = field(default_factory=dict)
 
     def validate(self) -> list[str]:
         """C7: "bad Tier-0 config value rejected at load, last-known-good

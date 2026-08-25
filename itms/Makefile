@@ -1,4 +1,4 @@
-.PHONY: dev setup infra-up infra-down test lint down clean
+.PHONY: dev setup infra-up infra-down test lint bench down clean
 
 VENV := .venv
 PY := $(VENV)/bin/python
@@ -30,6 +30,12 @@ test: setup
 lint: setup
 	$(VENV)/bin/ruff check .
 	$(VENV)/bin/mypy packages services
+
+# M3 gate [build guide §7/§8]: 3 tuned baseline controllers x 10 seeds,
+# person-delay/throughput/max-wait/stops with 95% CIs. Shells out to 30
+# real SUMO processes -- a few minutes, not a test-suite-speed target.
+bench: setup
+	$(VENV)/bin/python scripts/bench.py
 
 down:
 	docker compose down
