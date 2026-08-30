@@ -44,6 +44,7 @@ from __future__ import annotations
 
 import xml.etree.ElementTree as ET
 from collections.abc import Mapping
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import traci
@@ -56,6 +57,29 @@ _HALTING_SPEED_MPS = 0.1
 # Fallback PCU for a vType with no `pcu` param -- car-equivalent, the same
 # default `load_vtype_occupancy` uses for a missing `occupancy` param.
 _DEFAULT_PCU = 1.0
+
+# How far ahead the arrival test looks, in seconds. Sized to one clearance
+# interval plus a short green: a vehicle further out than this cannot be
+# served by the decision currently being made, so counting it would raise
+# a phase's claim on green for traffic that will still be inbound when
+# that green ends. Tier-1 (tunable, and in fact tuned -- `tuning.py`
+# treats it as a learnable parameter), not a Tier-0 safety constant.
+_ARRIVAL_HORIZON_S = 8.0
+
+
+@dataclass(frozen=True)
+class QueueSample:
+    """One tick's complete per-movement state estimate, keyed by link id
+    throughout. A record rather than a tuple because the four fields are
+    all `dict[str, float]` and positional unpacking of four same-typed
+    dicts is a mis-destructuring waiting to happen. Field names match
+    `JunctionContext`'s own exactly, so the runner's construction of a
+    context from one of these is a rename-free copy."""
+
+    queue_pcu: dict[str, float] = field(default_factory=dict)
+    receiving_occupancy: dict[str, float] = field(default_factory=dict)
+    receiving_queue_pcu: dict[str, float] = field(default_factory=dict)
+    approaching_pcu: dict[str, float] = field(default_factory=dict)
 
 
 def load_vtype_pcu(route_path: str | Path) -> dict[str, float]:
@@ -93,11 +117,92 @@ class QueueStateSampler:
         pcu_by_vtype: Mapping[str, float],
         *,
         halting_speed_mps: float = _HALTING_SPEED_MPS,
+        arrival_horizon_s: float = _ARRIVAL_HORIZON_S,
+        lane_cache=None,
     ):
         self._approach_lanes = approach_lanes
         self._receiving_lanes = receiving_lanes
         self._pcu_by_vtype = pcu_by_vtype
         self._halting_speed_mps = halting_speed_mps
+        self._arrival_horizon_s = arrival_horizon_s
+        # Optional so every existing caller and test keeps working
+        # unchanged; when present, lane reads are shared with every other
+        # sampler on the same tick instead of repeated. See
+        # `lane_cache.LaneCache` for the profile that motivated it.
+        self._cache = lane_cache
+        # Lane geometry is fixed for the whole run -- queried once on first
+        # use rather than once per tick per lane. `traci.lane.getLength` is
+        # a network property, not live state, so caching it cannot go stale
+        # the way a queue reading would.
+        self._lane_length_m: dict[str, float] = {}
+
+    def _length_of(self, lane_id: str) -> float:
+        cached = self._lane_length_m.get(lane_id)
+        if cached is None:
+            cached = traci.lane.getLength(lane_id)
+            self._lane_length_m[lane_id] = cached
+        return cached
+
+    def _halting_pcu(self, lane_id: str) -> float:
+        if self._cache is not None:
+            return sum(
+                pcu
+                for _, speed, pcu in self._cache.state(lane_id).values()
+                if speed < self._halting_speed_mps
+            )
+        total = 0.0
+        for veh_id in traci.lane.getLastStepVehicleIDs(lane_id):
+            if traci.vehicle.getSpeed(veh_id) < self._halting_speed_mps:
+                vtype_id = traci.vehicle.getTypeID(veh_id)
+                total += self._pcu_by_vtype.get(vtype_id, _DEFAULT_PCU)
+        return total
+
+    def _approaching_pcu(self, lane_id: str) -> float:
+        """PCU-weighted count of vehicles still *moving* on `lane_id` whose
+        time-to-stopline is inside `arrival_horizon_s`.
+
+        Deliberately a time-to-arrival test, not Advanced-MP's own fixed
+        "effective range" `L = v_max · t_duration` [Zhang et al., ICML
+        2022 §4.2] which counts every running vehicle inside a fixed
+        *distance*. Both answer "who can actually get here before the
+        decision I'm making now expires", but a fixed distance answers it
+        correctly only when every vehicle inside it travels at `v_max`.
+        This corridor's demand is explicitly heterogeneous
+        (`assign_vtypes.py`'s 35/40/20/5 motorcycle/car/auto/bus mix, each
+        with its own `maxSpeed`), and its approaches are frequently
+        partly-queued, so a fixed radius would count a bus crawling at
+        2 m/s behind a queue as equivalent to a motorcycle at 14 m/s in
+        clear air -- the slow one cannot arrive in time and should not
+        raise this phase's claim on green. Dividing by each vehicle's own
+        live speed prices that difference directly, using data already in
+        the same TraCI call the queue loop makes.
+
+        Vehicles below the halting threshold are excluded outright rather
+        than given a large time-to-arrival: they are, by this module's own
+        definition, already counted in `queue_pcu`, and counting them in
+        both would double-weight a stopped vehicle in any downstream
+        consumer that adds the two (which is exactly what an arrival-
+        augmented `q̂_l = q_l + ...` does). The halting threshold is thus
+        the single partition between the two measurements, not two
+        independently-chosen cutoffs that could overlap or leave a gap."""
+        total = 0.0
+        if self._cache is not None:
+            for distance_m, speed, pcu in self._cache.state(lane_id).values():
+                if speed < self._halting_speed_mps:
+                    continue  # already counted as queue -- see docstring
+                if distance_m / speed <= self._arrival_horizon_s:
+                    total += pcu
+            return total
+        length_m = self._length_of(lane_id)
+        for veh_id in traci.lane.getLastStepVehicleIDs(lane_id):
+            speed = traci.vehicle.getSpeed(veh_id)
+            if speed < self._halting_speed_mps:
+                continue  # already counted as queue -- see docstring
+            distance_m = max(0.0, length_m - traci.vehicle.getLanePosition(veh_id))
+            if distance_m / speed <= self._arrival_horizon_s:
+                vtype_id = traci.vehicle.getTypeID(veh_id)
+                total += self._pcu_by_vtype.get(vtype_id, _DEFAULT_PCU)
+        return total
 
     def sample(self) -> tuple[dict[str, float], dict[str, float]]:
         """Poll every tracked lane once via live TraCI state. Returns
@@ -108,18 +213,53 @@ class QueueStateSampler:
         elements, but not assumed) is simply left out of
         `receiving_occupancy` -- `camp.py`'s own pressure terms already
         treat a missing entry as ρ=0, the correct reading for "no
-        downstream data" here too."""
+        downstream data" here too.
+
+        Kept at its original two-value return shape, unchanged, so every
+        existing caller (`runner.py`'s M4 path, `test_queue_state.py`)
+        keeps working exactly as before -- `sample_extended` below is the
+        superset, not a replacement."""
+        queue_pcu = {
+            link_id: self._halting_pcu(lane_id)
+            for link_id, lane_id in self._approach_lanes.items()
+        }
+        receiving_occupancy = {
+            link_id: traci.lane.getLastStepOccupancy(lane_id) / 100.0
+            for link_id, lane_id in self._receiving_lanes.items()
+        }
+        return queue_pcu, receiving_occupancy
+
+    def sample_extended(self) -> QueueSample:
+        """Everything `sample()` returns, plus the two measurements M5's
+        A-CA-MP needs that M4 had no source for: the downstream lane's own
+        stopped queue (`receiving_queue_pcu`) and the inbound-platoon count
+        (`approaching_pcu`). Returned as a named record rather than a
+        4-tuple because a 4-tuple of same-typed dicts is exactly the shape
+        that gets silently mis-destructured at a call site.
+
+        Separate method rather than widening `sample()`'s return: this is
+        strictly more TraCI work per tick (one extra pass over every
+        approach lane for the arrival test, one extra pass over every
+        receiving lane for its queue), and M4's `camp.propose` reads
+        neither field, so making its 60-run gate pay that cost to produce
+        numbers it then ignores would slow the comparison arm without
+        changing it. The runner picks the method by what the strategy
+        under test actually consumes."""
         queue_pcu: dict[str, float] = {}
+        approaching_pcu: dict[str, float] = {}
         for link_id, lane_id in self._approach_lanes.items():
-            total = 0.0
-            for veh_id in traci.lane.getLastStepVehicleIDs(lane_id):
-                if traci.vehicle.getSpeed(veh_id) < self._halting_speed_mps:
-                    vtype_id = traci.vehicle.getTypeID(veh_id)
-                    total += self._pcu_by_vtype.get(vtype_id, _DEFAULT_PCU)
-            queue_pcu[link_id] = total
+            queue_pcu[link_id] = self._halting_pcu(lane_id)
+            approaching_pcu[link_id] = self._approaching_pcu(lane_id)
 
         receiving_occupancy: dict[str, float] = {}
+        receiving_queue_pcu: dict[str, float] = {}
         for link_id, lane_id in self._receiving_lanes.items():
             receiving_occupancy[link_id] = traci.lane.getLastStepOccupancy(lane_id) / 100.0
+            receiving_queue_pcu[link_id] = self._halting_pcu(lane_id)
 
-        return queue_pcu, receiving_occupancy
+        return QueueSample(
+            queue_pcu=queue_pcu,
+            receiving_occupancy=receiving_occupancy,
+            receiving_queue_pcu=receiving_queue_pcu,
+            approaching_pcu=approaching_pcu,
+        )

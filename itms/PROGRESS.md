@@ -859,18 +859,1456 @@ counting the served phase's own queue while it's green, or `S(p)`'s
 switching cost outweighing everything else at low pressure magnitudes),
 not in the extend/hysteresis comparison layer built on top of them.
 
+### Root cause confirmed — `S(p)`'s switching cost dominates flow pressure at every demand level tested
+
+`scripts/m4_camp_diagnostics.py` instruments every junction's `camp.propose`
+call (without modifying `camp.py`) to classify each tick's decision and log
+the actual pressure magnitudes in play, one seed per demand level. This
+directly tests the hypothesis the hysteresis result pointed at: that the
+switching-cost term `S(p) = λ_s · (yellow_s + all_red_s + startup_lost_s) /
+t_dec_s` — a fixed ~9.86-point subtraction for switching away from the
+current phase, with this build's defaults — is large enough relative to
+typical flow pressure that the currently-green phase never stops being the
+outright pressure-maximum, so nothing except hitting `max_green_s` ever
+ends a green.
+
+**Confirmed, decisively, at all three demand levels:**
+
+| demand | phase changes | % by max_green timeout | current phase was outright pressure-max | mean flow pressure | switch cost |
+|---|---|---|---|---|---|
+| light  | 161 | **100%** | **100%** (n=13,120 ticks) | 0.16 | 9.86 |
+| medium | 168 | **100%** | **100%** (n=13,744 ticks) | 0.45 | 9.86 |
+| heavy  | 217 | **100%** | **100%** (n=17,776 ticks) | 1.98 | 9.86 |
+
+Every single phase change, at every demand level, was a `max_green_s`
+timeout — zero were a genuine pressure-driven early exit. The current
+phase's pressure was the literal outright maximum on 100% of over 44,000
+extend-eligible ticks combined. This means the hysteresis tolerance band
+was never once in a position to matter (fully explaining the earlier
+sweep's bit-identical result — it wasn't a fluke or an implementation
+bug, it's a direct consequence of this), *and* that CA-MP as currently
+tuned is functionally a fixed-time controller running every phase to its
+own `max_green_s` ceiling — the pressure function has not driven a single
+real decision in any test run so far, at any demand level.
+
+**The mechanism, and one important correction to the obvious story:** the
+switch cost (9.86, fixed) is 61× typical flow pressure at light demand,
+22× at medium, and still ~5× at heavy — shrinking as demand rises (flow
+pressure scales with real queue size, the switch cost doesn't), but never
+once crossing over into flow pressure actually winning, even at heavy
+demand, in this corridor with this build's parameters. So heavy demand's
+earlier tie against Webster is *not* CA-MP "becoming adaptive" — it's
+still 100% timeout-driven there too. Checking Webster's own computed cycle
+lengths directly confirms the real explanation: at light demand Webster's
+cycle is a flat 40s floor at every junction, while CA-MP is stuck running
+close to its own (much longer) max-green-sum cycle regardless of demand —
+at heavy demand, several junctions' *Webster* cycle balloons to 180s,
+converging toward CA-MP's already-long fixed cycle. The gap closes because
+the baseline's optimal cycle grows to meet CA-MP's stuck-at-maximum
+behaviour, not because CA-MP started making real decisions.
+
+**Practical root cause:** `_switch`'s numerator (`yellow_s + all_red_s +
+startup_lost_s`, real seconds) and `_flow_pressure`'s output
+(`sat_flow_pcu_s × queue_pcu`, small in this build because the placeholder
+`sat_flow_pcu_s = 0.5` keeps it low unless queue sizes are large) live on
+completely different numeric scales, and the pressure function subtracts
+them directly with no normalization between the two. That's a real scale-
+mismatch in this build's own parameterization of §3.4 Term 6, not
+something the spec's algebra itself forces — a term meant to be a modest
+tie-breaking discount ends up as an near-insurmountable flat penalty at
+this corridor's actual queue magnitudes.
+
+**One more consequence, worth stating plainly:** because every phase
+change observed so far has been a timeout, the fairness term (`F(p)`) and
+the I5 max-wait interlock have not been meaningfully exercised in any M4
+result reported so far — the "zero starvation, zero violations" safety
+result is real, but it's currently being delivered by the max_green
+ceiling acting as a de facto fixed-cycle, not by the adaptive fairness
+logic actually working. Once the switching-cost scaling is fixed and
+pressure starts making real decisions, the fairness/I5 checks will be
+exercised for the first time and should be re-verified rather than assumed
+to still hold.
+
+### Switching-cost fix — `S(p)` rescaled to match `P_flow`'s own units
+
+`camp._switch` originally returned a bare `λ_s · lost_time_s / t_dec_s` —
+real seconds, with no `sat_flow_pcu_s` weighting at all — while every other
+term in `pressure()` (`_flow_pressure`, `_block_pressure`, `_fairness`) is a
+`sat_flow_pcu_s`-weighted quantity. That's the actual mechanism behind the
+root cause confirmed above: `S(p)` was the one term in 𝒫(p) living on a
+different numeric scale from the rest, not something tunable-sweeping
+(`hysteresis_frac`, `t_dec_s` alone) could fix, because the mismatch itself
+grows and shrinks with `sat_flow_pcu_s` — the same quantity every other
+term already scales by.
+
+**The fix:** price the lost green time the way `_flow_pressure` prices a
+real queue. `mean(sat_flow_pcu_s[m] for m in phase's movements) *
+(lost_time_s / t_dec_s)` is a phantom "queue" of the vehicles the candidate
+phase could have discharged during the lost clearance time; weighting that
+phantom queue by the same mean saturation flow again — exactly how
+`_flow_pressure` turns a real `queue_pcu[m]` into a pressure term — brings
+`S(p)` onto `P_flow`'s own scale instead of a bare seconds count. This is a
+deviation from the guide's literal `λ_s · lost_time_s / t_dec_s` shape (no
+`sat_flow_pcu_s` factor there) — flagged in `_switch`'s own docstring
+exactly as Term 2's ambiguity is flagged in the module docstring, not
+silently changed.
+
+**A real regression caught before it shipped:** the first version of this
+fix *summed* `sat_flow_pcu_s` over the candidate phase's green movements
+(matching `_flow_pressure`'s own literal shape). Re-running
+`m4_camp_diagnostics.py` against the real corridor immediately surfaced why
+that was wrong — with one uniform corridor-wide `sat_flow_pcu_s`, summing
+makes `S(p)` scale with how many movements a phase happens to bundle, so
+multi-movement phases got penalized more to switch into than single-
+movement ones, for no reason connected to real switching cost (the
+yellow/all-red/startup clearance interval doesn't get longer because more
+movements share the next phase). That skew showed up as new
+`failsafe_interlock_rejected` events (2-3 per run, all three demand levels)
+that the unfixed build never produced. The safety architecture caught every
+one — zero unsafe plans ever reached the simulated cabinet, all-red
+commanded instead, exactly as `arbiter.tick` is supposed to — but a "fix"
+that makes the safety net fire *more often* than the original bug is a real
+regression, not an acceptable trade. Switched to the *mean* over the
+phase's movements instead of the sum: keeps `S(p)` on the correct
+sat_flow-weighted scale without making it depend on movement count.
+Re-running the diagnostics after that correction: **zero interlock
+violations at all three demand levels, matching the original (buggy)
+build's safety record exactly** — the fix is scale-correcting only, not
+behavior-distorting.
+
+**Verified, real SUMO runs, before → after:**
+
+| demand | switch cost | switch cost ÷ flow pressure (before) | switch cost ÷ flow pressure (after) | interlock violations |
+|---|---|---|---|---|
+| light  | 9.86 → 2.46 | 6155% | **1539%** | 0 → 0 |
+| medium | 9.86 → 2.46 | 2172% | **543%**  | 0 → 0 |
+| heavy  | 9.86 → 2.46 | 498%  | **125%**  | 0 → 0 |
+
+Also re-ran `smoke_m4_camp_runner.py` (full 7-junction real corridor, medium
+demand): PASS, zero interlock violations, zero fault events, over 2402
+steps — unchanged from M4's original result.
+
+**Honestly, this alone does not unlock pressure-driven decisions yet.**
+Phase-change counts at all three demand levels are numerically identical to
+the pre-fix run (161 / 168 / 217, still 100% `max_green_s` timeouts) — the
+scale mismatch shrank by exactly 4× at every level (since both `P_flow` and
+`S(p)` are anchored to the same uniform placeholder `sat_flow_pcu_s = 0.5`
+corridor-wide, the ratio between them is invariant to that placeholder's
+actual value), but heavy demand's 125% means the switch cost still edges
+out flow pressure even there, so the currently-green phase still holds the
+outright pressure-max on every tick observed. This is not a sign the fix
+failed — it's the same, already-identified deeper limitation the bullet
+below described before this fix, now closer to resolved rather than fully
+resolved: `P_flow` and `S(p)` both still lean on one conventional
+placeholder saturation flow rather than this corridor's real per-approach
+capacity, so neither term is at its real scale yet. Deliberately not
+"fixed" further by hand-picking a smaller constant to force phase changes
+to look pressure-driven — that would be exactly the "tuned until it looked
+better" move this project's own honesty norm rules out. The real unlock is
+the next bullet.
+
+### Real saturation-flow calibration — built, and it surfaced a real, pre-existing gap
+
+`scripts/measure_saturation_flow.py` measures real per-lane discharge
+capacity directly on the corridor network: isolate one movement (every
+other kept red, no other traffic present -- saturation flow is *unimpeded*
+capacity by definition), queue a heavy backlog using this corridor's own
+vType mix (`assign_vtypes.py`'s exact 35/40/20/5 motorcycle/car/auto/bus
+split, imported rather than re-declared), hold it green, and time real
+discharge crossings past the first `_DISCARD_N` (the startup-lost-time
+wave). A real routing ambiguity turned up during its own pilot run and is
+worth recording: several movements at this junction's own geometry share
+one physical lane feeding two SUMO `linkIndex`es that differ only by
+destination *lane*, not destination edge -- an edge-level route can't
+disambiguate which one to use, and the first pilot silently measured the
+wrong (still-red) link as a result. Fixed by recognizing saturation flow is
+a property of the *lane*, not the abstract movement label: `_group_links_
+by_lane` measures once per distinct physical lane and applies that result
+to every `L{i}` sharing it -- both more correct and side-steps the
+ambiguity entirely. 68 of 73 movements corridor-wide got a clean measured
+value (5 skipped, insufficient queue depth in their window -- omitted, not
+guessed); `extract_tier0_config.py` now loads `sat_flow_calibration.json`
+when present and falls back to the original placeholder per-movement for
+anything missing.
+
+**This is where re-running `m4_camp_diagnostics.py` with real calibration
+wired in stopped being a clean win and became a real finding.** Medium
+demand and the full-corridor `smoke_m4_camp_runner.py` (medium demand)
+stayed clean -- zero interlock violations, matching every prior result.
+**Light demand did not**: the run grew from 2295 to 10887 steps and produced
+10235 interlock violations, versus zero in every run before it (uncalibrated,
+switch-fix-only, and this same calibration under medium/heavy demand).
+Traced with a per-tick instrumented rerun (kept only as this write-up, not
+committed as a script) to one junction
+(`cluster_1880441740_4393296791`) stuck from step 652 onward: movements
+`L6`/`L7` (phase P1) hit their `max_wait_s` bound (452s) with a real,
+substantial queue (5.4 PCU) and stayed there, because **`P1`'s pressure was
+structurally incapable of ever winning**, not just unlucky. With
+`receiving_occupancy` empty (light demand -- nothing downstream is
+congested), `P_flow` and `P_block` cancel exactly (the zero-occupancy
+property the module docstring already documents), leaving pressure decided
+by fairness minus switching cost alone. Fairness's own ceiling is capped at
+`λ_f · Σ sat_flow_pcu_s[m]` for the starved movements (`0.6 × (0.4135 +
+0.4135) ≈ 0.50` here) -- but `S(p)`'s own fix computes switching cost from
+the *same* `sat_flow_pcu_s` values, and for a 3-movement phase that
+consistently comes out several times larger than fairness's ceiling
+(`1.91` here) at this corridor's real saturation-flow scale. No matter how
+long `L6`/`L7` wait -- `wait_ratio` is already capped at `1.0` -- `P1`'s
+pressure cannot cross zero while flow/block keep cancelling. That's a
+structural deadlock, provable from the numbers, not a near-miss the
+hysteresis band or a longer run would have eventually broken.
+
+The safety architecture caught every one of the 10235 rejections -- zero
+unsafe plans reached the simulated cabinet, exactly as designed. What it
+exposed instead is a second, compounding gap: `_recover_from_fault`
+(`runner.py`) unconditionally resets a faulted junction to `ring_order[0]`,
+with no notion of *which* movement actually needs serving -- so once `P1`
+starts losing this way, recovery keeps landing back on a phase that still
+doesn't serve it, `L6`/`L7`'s wait keeps climbing, and the same rejection
+repeats every tick for the rest of the run rather than ever resolving.
+That gap was already flagged, in the exact words its own docstring uses,
+as "not maximally rigorous" -- this is the first time it's actually been
+exercised, not a new discovery about the code, but the first real evidence
+of the failure mode it warned about.
+
+**Why this took a real calibration run to surface, not the switch-cost fix
+by itself:** PROGRESS.md said as much when the fix landed --
+*"the fairness/I5 checks will be exercised for the first time and should
+be re-verified rather than assumed to still hold."* With the uniform
+placeholder, `S(p)` was ~9.86 (pre-fix) or ~2.46 (post-fix, still uniform)
+against a fairness ceiling in the same ballpark either way for a uniform-
+sat_flow phase -- and every run before this one was still 100%
+`max_green_s`-timeout-driven at every demand level, meaning no movement's
+wait had ever actually reached its bound in any prior test. Real,
+non-uniform per-lane calibration was the first change that let a run last
+long enough, and diverge enough phase-to-phase, for a starved movement to
+genuinely hit its wait ceiling for the first time in this project's
+testing -- so this bug is not new and not caused by miscalibrated data; it
+was always reachable, and simply hadn't been reached yet.
+
+### Both gaps fixed, and re-verified against the exact run that failed
+
+Both directions flagged above were built, not just one -- belt and
+suspenders, since they fix different halves of the same failure (CA-MP's
+own math never reaching the starved movement, and the safety-net recovery
+path not knowing where to go if it doesn't):
+
+- **`camp.py`: a starvation override.** New `_critical_phases(cfg, ctx,
+  live_phases)` returns every live phase serving a movement within
+  `_SKIP_WAIT_MARGIN_S` (the same 15s margin `_skippable` already uses) of
+  its `max_wait_s` bound, with real demand -- most-urgent-first. `propose()`
+  checks this immediately after the unconditional min-green floor (I3) and
+  before the ordinary pressure-based extend decision, not only inside the
+  advance branch: pressure can otherwise judge even a totally idle current
+  phase the outright best candidate and "extend" it forever, in which case
+  the advance branch is never reached at all -- exactly what happened at
+  `cluster_1880441740_4393296791`. When a critical phase exists and current
+  isn't it, `propose` skips the k-step ring lookahead and the pressure
+  ranking entirely for that one decision and advances straight to the most
+  urgent one. Can never fire before `min_green_s` (I3 still absolute) --
+  verified by a dedicated test, not just asserted.
+- **`runner.py`/`arbiter.py`: fault-aware recovery.** `Decision` gained a
+  `violated_movements: frozenset[str]` field (Python-side routing data, not
+  part of the wire event contract -- `_faulted_event`'s dict stays exactly
+  as schema-shaped as before), populated from the union of every rejected
+  `Violation.movements` when `mode == "failsafe_interlock_rejected"`.
+  `_recover_from_fault` now resumes into whichever ring phase actually
+  serves one of those movements, falling back to `ring_order[0]` only when
+  none do (every other fault mode, or a violation naming no movement) --
+  otherwise a rejection could keep landing recovery back on a phase that
+  still doesn't serve the flagged movement, repeating the same rejection
+  forever, which is exactly the mechanism that turned one I5 trip into
+  10235 of them.
+
+**Tests added, not just the fix:** `_critical_phases` unit tests (empty
+when nothing's close, ignores a movement with no real demand, orders
+most-urgent-first); a deterministic reproduction of the exact
+`cluster_1880441740_4393296791` numbers (idle current phase at pressure
+0.0 vs. a 3-movement candidate whose own real sat_flow makes its pressure
+provably negative even at `wait_ratio == 1.0`) confirming the override
+fires; a test confirming the override never cuts a phase short of
+`min_green_s`; a new Hypothesis property test
+(`test_camp_never_lets_i5_fire_across_heterogeneous_saturation_flows`,
+200 examples) that -- unlike the original safety property test, which
+uses a uniform `sat_flow=1.0` and can't exercise this bug class at all --
+draws per-phase saturation flow independently and holds `max_wait_s` tight
+enough to actually be reachable, asserting `interlocks.check` never fires
+over many ticks; and `_recover_from_fault`/`arbiter.tick` tests confirming
+`violated_movements` is populated correctly and recovery actually routes
+to the phase that serves it (with a fallback test for when it can't).
+132 tests pass corridor-wide (was 121 before this fix).
+
+**Re-verified against the exact run that failed, not just the unit
+tests:** `m4_camp_diagnostics.py`, full real corridor, all three demand
+levels, real calibration data:
+
+| demand | before this fix | after this fix |
+|---|---|---|
+| light  | steps=10887, **10235 interlock violations** | steps=2387, **0 violations** (3 starvation-override advances fired) |
+| medium | steps=2539, 0 violations | steps=2539, 0 violations |
+| heavy  | steps=3652 (untested to completion before the fix) | steps=3652, **0 violations** (1 starvation-override advance fired) |
+
+`smoke_m4_camp_runner.py` (full 7-junction corridor, medium demand): PASS,
+zero interlock violations, zero fault events, over 2539 steps. The
+override firing a small, nonzero number of times (3 at light demand, 1 at
+heavy) rather than zero is itself part of the evidence this is doing real
+work, not dead code the tests merely tolerate.
+
 **Not yet built:**
 
-- Real saturation-flow calibration (`sat_flow_pcu_s` is currently one
-  conventional placeholder value corridor-wide, not measured per
-  approach) — still a candidate lever on the light/medium gap, though the
-  hysteresis result above means it's no longer the *only* remaining
-  suspect.
+
+---
+
+**A note on how this document continues from here.** Two separate work
+sessions branched from this exact point and ran concurrently without
+awareness of each other: this session picked up the "re-run the sweep and
+gate comparison" item directly below and drove the M4/CA-MP switching-cost
+investigation to a corridor-calibrated `λ_s`; a second session started the
+much larger structural investigation that becomes "M5 — A-CA-MP" further
+down. Both are kept in full, in the order each was written, with a
+reconciliation note after the M5 section tying the two together --
+notably, the `λ_s` recalibration below was not yet applied when M5's own
+"camp (M4)" gate numbers were produced, which matters for reading those
+numbers correctly (see the reconciliation note).
+
+---
+
 - A cleaner isolation of the earlier ablation's bottleneck-specific effect
-  from the more general blocking-off-under-heavy-demand effect — worth
+  from the more general blocking-off-under-heavy-demand effect -- worth
   doing, not required to already have a real, reportable finding.
-- Instrumenting `pressure()`'s individual terms per tick (flow/block/
-  fairness/switch, not just the combined value) at light demand, to see
-  which term is actually keeping the current phase's pressure on top for
-  so long — the hysteresis sweep ruled out the tolerance band itself, but
-  not yet identified which of the four remaining terms is the real cause.
+
+### Re-ran the sweep and the gate comparison — the predicted "real unlock" didn't happen
+
+The bullet just above predicted that real per-lane calibration would be
+"the real unlock" for pressure-driven decisions, since with one uniform
+placeholder `sat_flow_pcu_s` the `S(p)`/`P_flow` ratio is mathematically
+invariant to that placeholder's value. Calibration is now loaded (both
+gaps' fixes from the section above are in place too), so this was re-run
+for real. It wasn't the unlock. Reporting that honestly rather than
+re-running until a flattering number appeared.
+
+**`m4_hysteresis_sweep.py` (5-seed triage), real calibration loaded:**
+bit-identical across `hysteresis_frac` ∈ {0.0, 0.05, 0.15} again, at both
+demand levels tested -- the exact symptom the switching-cost fix was
+supposed to have addressed. And the gap to Webster *widened*, not
+narrowed: light went from the old placeholder-`sat_flow` run's +130% to
+**+182%**; medium from +105% to **+144%**. Important caveat before
+reading that as "the fix made things worse": the earlier ±130%/±105% run
+used the uniform `sat_flow_pcu_s = 0.5` placeholder throughout, so this
+isn't a clean before/after of the fix alone -- the calibration data
+changed at the same time. Isolating which of the two actually moved the
+number wasn't the goal here; the diagnostics below explain the mechanism
+directly instead of trying to tease the two apart statistically.
+
+**`m4_camp_diagnostics.py` re-run fresh (1 seed/level, real calibration)
+to check the mechanism directly rather than guess from the symptom:**
+
+| demand | phase changes that were pure `max_green` timeouts | current phase was the outright pressure max | mean `P_flow` | `S(p)` ÷ `P_flow` |
+|---|---|---|---|---|
+| light  | 98.2% (166/169) | **100.0%** (n=13622) | 0.14 | 1127% (was 1539%) |
+| medium | 100.0% (161/161) | **100.0%** (n=13063) | 0.29 | 550% (was 543%) |
+| heavy  | 99.6% (244/245) | **100.0%** (n=20034) | 1.76 | 92% (was 125%) |
+
+Two things worth being precise about here. First, "current phase was the
+outright pressure max" hitting exactly 100.0% at *every* demand level,
+over 13,000-20,000 ticks each, is not noise -- it's a direct, exhaustive
+answer to why the hysteresis sweep comes back bit-identical: `pressures[current]
+>= best_pressure - hysteresis_frac * abs(best_pressure)` can only ever
+fail to hold on a tick where `current` *isn't* already the outright max,
+and that tick never occurred in any of these three runs. The tolerance
+band's width is irrelevant when the thing it's supposed to gate never
+comes up. Second, heavy demand's `S(p)`÷`P_flow` ratio finally dropped
+*below* 100% for the first time (92%, vs. 125% before calibration) --
+switch cost is, on average, now smaller than a phase's own flow pressure
+at heavy demand -- and current still won the argmax on every single
+tick anyway. That's the diagnostic's own documented limitation showing
+up for real: it compares switch cost against current's raw `P_flow` as a
+rough proxy, not the full signed `𝒫(p) = P_flow - P_block + F - S`
+comparison `propose()` actually makes between *two* phases. The mean
+comparison being close doesn't mean individual ticks are close -- it
+means the honest mechanism needs the full pressure equation, not this
+proxy, to characterize further if that's wanted.
+
+**`m4_gate_comparison.py`, the real 10-seed gate deliverable, real
+calibration, both fixes in place:**
+
+| demand | webster person-delay | camp person-delay | webster stops/veh | camp stops/veh | violations |
+|---|---|---|---|---|---|
+| light  | 74872.4 ± 1921.7 | 196409.1 ± 7133.6 | 1.9 ± 0.0 | 2.4 ± 0.0 | 0 / 0 |
+| medium | 190234.4 ± 8953.3 | 437613.2 ± 21883.3 | 3.0 ± 0.2 | 3.2 ± 0.1 | 0 / 0 |
+| heavy  | 1392383.6 ± 36642.5 | 1544745.8 ± 57843.7 | 8.4 ± 0.3 | **7.9 ± 0.2** | 0 / 0 |
+
+CA-MP does not win on person-delay at any of the three demand levels now
+-- heavy demand's earlier "tie" (measured under the uniform placeholder)
+does not hold up under real calibration; CA-MP is ~11% worse there too,
+with non-overlapping 95% CIs. Zero interlock violations across all 60
+runs at every level -- the safety kernel and both starvation fixes hold
+up under the full statistical gate, this is a performance finding, not a
+safety one. The one place CA-MP still shows a real edge, consistent with
+the pattern noted the first time this comparison was run: fewer
+stops/vehicle at heavy demand (7.9 vs. 8.4) -- holding phases longer
+produces smoother, less stop-and-go heavy-demand flow even while losing
+on total delay.
+
+**Root cause, stated plainly:** `λ_s = 1.0` is the build guide's own
+§3.9-tabulated default, not a made-up constant -- but this corridor's
+real, measured per-lane saturation flows (~0.27-0.63 pcu/s, calibrated
+from actual SUMO discharge measurements, not assumed) are apparently low
+enough that the fixed physical cost of switching (yellow + all-red +
+startup lost time, priced the same way a real queue is priced) still
+outweighs the marginal pressure benefit of switching at essentially every
+tick, at every demand level tested on this specific corridor. Both fixes
+above did exactly what they were meant to do -- scale-correct `S(p)` and
+close the starvation deadlock -- and both are verified working. What's
+left is a real, open tuning/design question, not a bug: does `λ_s` need
+to be re-derived from this corridor's actual measured capacity rather
+than carried over as a generic default, or is CA-MP's current form
+genuinely expected to lose to a well-tuned static baseline on *this*
+corridor under steady demand (with its real value being resilience to
+demand patterns a fixed cycle can't adapt to -- which a steady-demand
+benchmark like this one doesn't test at all)? Not deciding this
+unilaterally -- flagging it for direction rather than hand-tuning `λ_s`
+until the gate comparison looks better, which the honesty norm this log
+has followed throughout rules out.
+
+### Is `S(p)` actually the deciding term? A per-tick answer, not another mean
+
+The mean-ratio table above (`S(p) ÷ P_flow`: 1127% / 550% / 92%) is a
+coarse proxy -- it compares corridor-wide averages, not the actual
+per-tick comparison `propose()` makes between two specific phases. Heavy
+demand's ratio dropping to 92% (switch cost *smaller* than mean flow
+pressure, on average) while "current is the outright pressure max" still
+held on 100.0% of ticks was the tell that the proxy wasn't telling the
+real story. Built `m4_camp_pressure_gap_diagnostics.py` to answer it
+directly: for every extend-eligible tick, compute the ranking of live
+phases twice -- once on `P_flow - P_block + F` alone (§3.4 minus the
+switching term), once on the full signed `𝒫(p)` `propose()` actually
+uses -- and classify the tick as one of: **current is genuinely the best
+phase even with switching priced at zero** (`S(p)` isn't the reason
+CA-MP stays), **some other phase's raw signal was ahead but `S(p)`
+pulled it back below current** (`S(p)` is actively suppressing a switch
+the rest of the formula wanted), or **a real pressure-driven switch
+happens anyway**.
+
+One seed per demand level, real calibration, both prior fixes in place:
+
+| demand | current genuinely best | **switch cost is deciding** | would switch anyway | mean suppressed raw gap | max suppressed raw gap |
+|---|---|---|---|---|---|
+| light  | 39.53% (5385) | **60.47% (8237)** | 0.00% (0) | 0.0541 | 0.9226 |
+| medium | 27.12% (3543) | **72.88% (9520)** | 0.00% (0) | 0.0671 | 1.1040 |
+| heavy  | 43.92% (8799) | **56.08% (11235)** | 0.00% (0) | 0.0681 | 1.1701 |
+
+This is the honest mechanism, stated precisely: on a **majority of every
+extend-eligible tick at all three demand levels (56-73%)**, the corridor's
+own flow/block/fairness signal already prefers a different phase than the
+one currently green -- `S(p)` is what overrides that preference, every
+time, not an occasional tie-breaker. And it doesn't take much raw signal
+to get overridden: the suppressed gaps that `S(p)` beats are consistently
+tiny (mean 0.054-0.068, max under 1.2 in every case observed) against
+`S(p)`'s own corridor-wide mean of roughly 1.5-1.6 (see the ratio table
+above; `S(p)`'s magnitude is set almost entirely by corridor geometry --
+`yellow_s`/`all_red_s`/`startup_lost_s`/mean sat_flow -- so it stays
+roughly constant across demand levels while the genuine pressure signal
+it's compared against does not). Put plainly: `S(p)` at its current scale
+is roughly 20-30x larger than the pressure differentials this corridor
+actually produces tick to tick, so it wins almost every comparison
+regardless of what the real traffic state is saying. This directly
+explains both open questions from the section above in one mechanism:
+why the hysteresis sweep is bit-identical (there's essentially no tick
+where the *margin* between candidates is close enough for a 5-15%
+tolerance band to matter -- `S(p)` has already decided the winner by a
+wide margin almost every time) and why CA-MP loses the full gate
+comparison at every demand level (it's not reading the traffic it's
+supposedly reacting to most of the time; it's riding each phase to
+`max_green_s` regardless).
+
+**What this is not:** a case for picking a smaller `λ_s` because it
+would make the gate comparison look better -- that's exactly the "tuned
+until it looked better" move this log has refused throughout. What it
+is: a quantified, per-tick, three-demand-level measurement that `S(p)`'s
+current scale is disconnected from the actual distribution of pressure
+signal this corridor produces, using real calibrated data end to end.
+Both `λ_s` and `t_dec_s` (the two knobs `S(p)` depends on) are
+build-guide §3.9-tabulated tunables, not something invented in this
+codebase -- re-deriving either from this corridor's own measured
+pressure-gap distribution, rather than guessing at what the guide's
+generic worked example intended by its defaults, is a real calibration
+question worth the same direction-check the starvation-deadlock fix got
+before being implemented, not a decision to make unilaterally here.
+
+### Recalibrating `λ_s` from the corridor's own measured pressure-gap distribution
+
+Direction confirmed with the user before touching a build-guide-tabulated
+default (see immediately above): recalibrate `λ_s` from this corridor's
+own measured raw-pressure-gap distribution -- the same per-tick data
+`m4_camp_pressure_gap_diagnostics.py` produced -- rather than the
+guide's generic `1.0`, then re-run the full gate comparison and report
+the real result either way.
+
+**The calibration.** Extended the diagnostic to record the full
+distribution of positive raw-pressure gaps (every tick where some other
+live phase's flow/block/fairness signal already exceeded `current`'s),
+pooled across all three demand levels: n=28992, p50=0.011, p75=0.033,
+**p90=0.228**, p95=0.397, max=1.17. Chose the pooled 90th percentile as
+`S(p)`'s new target magnitude -- large enough to filter out the bottom
+90% (mostly near-zero noise, given the median is 0.011), small enough
+that the genuine top-decile signal can actually win an argmax
+comparison. `λ_s`'s new value follows directly: `0.228 / 1.6 ≈ 0.143`
+(`1.6` being the corridor-wide mean `S(p)` already measured at `λ_s=1.0`
+across all three demand levels). The 90th percentile is a judgment call,
+not a uniquely correct number -- p75 and p95 were both measured and are
+both on record above if this needs revisiting -- but it was fixed before
+ever re-running the gate comparison, specifically so the choice couldn't
+be quietly steered by watching the benchmark outcome. Full derivation
+lives in `CampConfig.lambda_s`'s own docstring now, not just here.
+
+One existing test (`test_starvation_override_advances_even_though_
+current_has_the_highest_pressure`) hard-coded `camp.CampConfig()`'s bare
+default to reproduce the exact real-corridor starvation trap -- at the
+new default, that specific trap no longer reproduces on those exact
+numbers (fairness's ceiling now exceeds the smaller switch cost in that
+one scenario). Pinned the test to `CampConfig(lambda_s=1.0)` explicitly
+rather than loosening the assertion: the override property being tested
+must hold under *any* plausible `λ_s` -- including the guide's own
+default, which a different corridor or a future reset could still be
+running -- not just today's calibrated value. 132 tests still pass.
+
+**Re-verified, real SUMO runs, full 10-seed gate comparison, before →
+after recalibration:**
+
+| demand | webster | camp (before recalibration) | camp (after recalibration) | camp stops/veh (before → after) |
+|---|---|---|---|---|
+| light  | 74872.4 ± 1921.7 | 196409.1 ± 7133.6 | 167835.3 ± 3425.2 | 2.4 → 2.1 |
+| medium | 190234.4 ± 8953.3 | 437613.2 ± 21883.3 | 379216.6 ± 22743.7 | 3.2 → 2.9 |
+| heavy  | 1392383.6 ± 36642.5 | 1544745.8 ± 57843.7 | **1416246.3 ± 74717.4** | 7.9 → **7.4** |
+
+Zero interlock violations across all 60 runs, both before and after --
+the safety kernel and both starvation fixes are untouched by this and
+hold up exactly as before. Reporting the honest result: CA-MP still does
+not win on person-delay at light or medium demand -- the gap narrowed
+(light: +182%→+124%, medium: +144%→+99%) but did not close. **Heavy
+demand's confidence intervals now overlap** (webster's range tops out at
+1429026.1, camp's bottom is 1341528.9) -- statistically indistinguishable
+at the 95% level, a real change from the clear pre-recalibration loss
+there (non-overlapping CIs). And CA-MP's one consistent edge sharpened
+further: 7.4 stops/vehicle at heavy demand vs. webster's 8.4, the largest
+gap in CA-MP's favor on that metric measured yet.
+
+`m4_camp_pressure_gap_diagnostics.py` re-run after recalibration confirms
+the mechanism actually shifted, not just the aggregate number: switch
+cost as a fraction of mean flow pressure dropped from 1127%/550%/92% to
+**183%/67%/20%** (light/medium/heavy), and genuine pressure-driven phase
+changes (not timeouts, not starvation-override advances) rose from
+3/0/1 to 6/9/6 out of 164-243 total phase changes per level. Still a
+small minority of phase changes overall -- CA-MP remains mostly
+timeout-driven even after recalibration -- but measurably, verifiably
+less so, in the direction the calibration targeted, at every demand
+level.
+
+**Stated honestly:** recalibrating `λ_s` from real measured data made
+CA-MP meaningfully more responsive and closed a real part of the gap to
+Webster, most convincingly at heavy demand where it's now statistically
+tied while producing smoother traffic (fewer stops/vehicle). It did not
+make CA-MP win outright at light or medium demand. Whether that's because
+`t_dec_s` (the other constant `S(p)` depends on, left untouched here) also
+needs recalibrating, because a 90th-percentile threshold is still too
+conservative, or because CA-MP's extend logic has no separate mechanism
+for cutting a phase short once its own queue clears (a phase can still
+ride to `max_green_s` on residual fairness pressure alone even after
+serving all its demand) is not yet determined -- flagging as the open
+question rather than continuing to iterate on `λ_s` alone in search of a
+number that wins.
+
+## M5 — A-CA-MP (Adaptive CA-MP): fixing the pressure function, and giving the controller a memory
+
+Motivating observation, and it was the right one: *the controller does
+not learn from past experience.* Investigating that turned up four
+distinct places where CA-MP has no memory, at four different timescales,
+and — while designing the fix for the shortest of them — one structural
+defect in `𝒫(p)` that turns out to explain M4's whole negative gate
+result.
+
+`camp.py` is deliberately **not modified**. M4's gate is a recorded
+experimental result and a strategy edited after the fact makes it
+unreproducible. M5 is a second strategy (`control/strategies/acamp.py`)
+that the gate runs *against* CA-MP.
+
+### The defect: M4's flow/block pair can never be positive
+
+`camp.py` computes `P_flow = s_m·q_m` and `P_block = s_m·q_m·θ_m` with
+`θ_m = min(θ_max, 1/max(ε, 1−ρ_m))`, and subtracts the second from the
+first. But `1/(1−ρ) ≥ 1` for every `ρ ∈ [0,1)`, so **`θ_m ≥ 1` always**,
+so the pair is `s_m·q_m·(1−θ_m) ≤ 0` **for every legal input** — and
+grows *more negative* as the queue grows. The two terms that constitute
+the max-pressure core of a max-pressure controller are jointly a penalty
+on having a queue at all. A phase with 20 PCU waiting scores strictly
+worse than an identical phase with 0 PCU waiting.
+
+This is not a new observation so much as a re-reading of one already in
+`camp.py`'s own docstring, which records the `ρ = 0` special case
+("`P_flow` and `P_block` cancel *exactly* ... raw queue size alone cannot
+break a tie between two candidate phases") and reasons about it as a
+faithful consequence of following §4's reference code over §3.4's prose.
+It is faithful to that code. It is also, at every `ρ > 0`, strictly worse
+than cancellation. Two Hypothesis property tests now assert both facts
+over the whole legal input domain
+(`test_m4_flow_minus_block_is_never_positive`,
+`test_m4_pressure_decreases_as_queue_grows`) — 500 examples, both pass,
+which is to say the defect is confirmed rather than argued.
+
+It is sufficient on its own to explain M4's gate: CA-MP lost worst at
+light and medium demand, which is exactly where receiving links are empty
+and nothing else in `𝒫(p)` scales with queue size either.
+
+The root cause is the ambiguity M4 flagged and resolved the wrong way.
+§3.4's prose defines `P_block` over the queue on the *receiving* link;
+§4's reference code reuses `m`'s own upstream `q_pcu`; M4 followed the
+code because no lane→downstream-lane queue source existed. One did exist
+— `link_lanes.link_to_receiving_lane_map()`, already used for
+`receiving_occupancy`. `JunctionContext.receiving_queue_pcu` now carries
+the real downstream queue, and the prose reading is available:
+
+    P_press(p) = Σ_m s_m · (q̂_m · gate(ρ_m) − r_m)
+    gate(ρ)   = max(0, 1 − (ρ/ρ_jam)^β) ∈ [0, 1]
+
+At free flow this reduces to `Σ s_m·q̂_m` — textbook max-pressure
+[Varaiya, TR-C 36 (2013)] — monotone increasing in queue size, the
+property M4's version inverted. `gate ∈ [0,1]` replaces `θ ∈ [1,θ_max]`:
+a multiplicative discount can reduce a discharge benefit to nothing but
+cannot invert its sign, which is precisely the failure `θ` had. The `−r_m`
+term supplies the genuine negative pressure "do not discharge into a jam"
+needs, from a real measurement rather than a scaled copy of the upstream
+queue.
+
+### The four missing memories
+
+1. **Tick-to-tick — architecturally impossible.** `runner.py` rebuilds
+   `JunctionContext` from scratch every tick and types a strategy as
+   `Callable[[Tier0Config, JunctionContext], SignalPlan]`. A plain
+   function has no channel to remember anything, so M4 could not have had
+   a memory even if `q_hist` had existed. Fixed by making the strategy a
+   callable *object* — same type, owns state. `runner.py` needed no
+   signature change.
+2. **Seconds — blind to platoons.** M4 set `q̂_l = q_l`, deferring
+   arrival augmentation to Layer 2's projected-outflow exchange. But the
+   part of `∫ â_l dτ` contributed by vehicles already on this junction's
+   own approach needs no exchange — only a look at the lane.
+   `JunctionContext.approaching_pcu` supplies it via a time-to-arrival
+   test (deliberately a *time* test, not Advanced-MP's fixed distance;
+   this corridor's vType mix means a bus at 2 m/s and a motorcycle at
+   14 m/s are not interchangeable at equal distance).
+3. **Hours/days — no demand profile.** `control/memory.py` builds the
+   `q_hist` §3.8 named, as a per-(junction, movement, 15-min bin) EWMA
+   across runs, persisted to JSON. One SUMO seed is treated as one *day*:
+   same time-of-day demand shape, different stochastic realization.
+4. **Across runs — hand-set constants.** `control/tuning.py` fits
+   `AcampConfig` with CMA-ES. PROGRESS.md's own M4 history — a hysteresis
+   sweep that came back bit-identical, a diagnostic run to find `S(p)`'s
+   scale, a rescale, a starvation deadlock, an override — is a record of
+   doing this by hand, one hypothesis at a time. That is a numerical
+   optimization problem.
+
+### Removed rather than fixed: the subtracted switching cost
+
+There is no switching term in `𝒫(p)` at all. M4's `S(p)` is a per-phase
+constant, and a constant is `O(1)` against pressure differences that
+scale with queue size, so some demand level below which it dominates
+always exists — measured at 61x/22x/5x typical flow pressure, with 100%
+of phase changes being `max_green_s` timeouts. The rescale that followed
+was correct as far as it went and then produced a structural starvation
+deadlock needing an override to contain. Both failures are the same
+shape: a scale-free comparison decided by a term that does not scale.
+
+Switching is now a separate test between incumbent and challenger,
+`switch iff max_p 𝒫(p) > 𝒫(current) + F(scale)`, with `F(x) = κ·x^α` and
+`α` constrained **strictly inside (0,1)** — the sublinearity condition
+throughput-optimality needs when a switching penalty is introduced at all
+[Xu et al., TR-C 137 (2022), Thm. 3]. `F(x)/x → 0` makes M4's failure
+mode unreachable *by construction* rather than by tuning: however large
+`κ` is, the hold bias eventually stops mattering. `α = 0` is exactly M4's
+constant and `sublinear_hold_bias` raises rather than clamps on it — a
+silent reconstruction of a known bug is worse than a crash.
+
+`hysteresis_frac` is gone. M4's own sweep found it bit-identical across
+{0.0, 0.05, 0.15}; `F(scale)` is that tolerance band, made
+state-dependent and given a reason to exist.
+
+### Gate — 4 arms x 3 demand levels x 10 seeds, paired
+
+`scripts/m5_gate_comparison.py`, same paired-seed methodology as M3's and
+M4's gates. M4's controller runs as a **live arm** rather than being
+quoted, so differences are attributable to the controller and not to a
+changed harness or the calibration that landed between milestones.
+Evaluated on seeds 1..10 — the same seeds M4's gate used, and disjoint
+from the 101..110 the parameters and profile were fitted on.
+
+Harness validation: Webster reproduces M4's recorded numbers to the digit
+(69,542 / 183,547 / 1,368,840 vs. 69,541 / 183,547 / 1,368,840).
+
+| level | arm | person-delay (mean ± 95% CI) | viol | vs Webster |
+|---|---|---|---|---|
+| light | webster | 69,542 ± 1,837 | 0 | — |
+| light | camp (M4) | 188,822 ± 9,209 | 0 | +171.5% |
+| light | **acamp** | 59,511 ± 3,109 | 0 | −14.4% |
+| light | **acamp tuned** | **56,295 ± 5,957** | 0 | **−19.0%** |
+| medium | webster | 183,547 ± 12,349 | 0 | — |
+| medium | camp (M4) | 434,729 ± 16,004 | 0 | +136.8% |
+| medium | acamp | 224,883 ± 27,404 | 0 | +22.5% |
+| medium | **acamp tuned** | **198,890 ± 16,349** | 0 | **+8.4% (CIs overlap — tie)** |
+| heavy | webster | 1,368,840 ± 43,105 | 0 | — |
+| heavy | camp (M4) | 1,523,050 ± 66,583 | 0 | +11.3% |
+| heavy | acamp | 1,508,017 ± 59,171 | 2 | +10.2% |
+| heavy | acamp tuned | 1,603,074 ± 79,624 | 8 | +17.1% |
+
+**Light demand: the M4 gate's stated goal is met** — A-CA-MP beats the
+tuned fixed-time baseline on person-delay, CIs disjoint, zero interlock
+violations. **Medium: a statistical tie** after tuning (the CIs overlap:
+182,541 vs 195,896), up from a decisive loss. **Heavy: still a loss, and
+tuning made it worse.**
+
+The decision accounting is the clearest evidence the diagnosis was right.
+M4 measured 100% of phase changes as `max_green_s` timeouts and 0%
+pressure-driven, across 44,000+ ticks. A-CA-MP tuned, one light-demand
+run: 363 pressure-driven switches against 36 timeouts — **91%
+pressure-driven**. The pressure function is making real decisions for the
+first time in this project.
+
+### Answering M4's own open question: re-running its gate with the fixes in
+
+M4 left this explicitly not-yet-done. The `camp` arm above **is** that
+re-run — post-switching-cost-fix, post-calibration, post-starvation-
+override. Result: 188,822 / 434,729 / 1,523,050 against M4's originally
+recorded 160,326 / 373,888 / 1,361,664. **The fixes made CA-MP measurably
+worse at all three demand levels.** They were each correct in isolation
+and each addressed a real diagnosed problem; they did not address the
+sign defect underneath, and the starvation override they added is
+expensive precisely because `𝒫(p)` kept ranking starved phases last.
+
+### Tuning — what CMA-ES found, and where it failed
+
+36 candidates x 2 levels x 2 seeds, `max_steps=1500`, training seeds
+only. Best objective 48,673 against a first candidate of 85,125.
+
+| param | default | tuned | reading |
+|---|---|---|---|
+| `eta_arrival` | 0.5 | 1.02 | anticipation weighted ~2x higher — a strong endorsement of the arrival term |
+| `rho_jam` | 0.75 | 0.91 | gate should stay open longer than assumed |
+| `beta_gate` | 2.0 | 3.71 | sharper knee — flat, then sudden, as capacity really behaves |
+| `lambda_f` | 0.6 | 0.59 | §3.9's fairness default was already right |
+| `gamma` | 3.0 | 3.57 | ~unchanged |
+| `kappa_switch` | 0.5 | 0.46 | ~unchanged |
+| `alpha_switch` | 0.5 | 0.11 | far more sublinear than assumed |
+| `k` | 2 | 4 | wants full ring lookahead, not §3.7's 2 |
+
+**And it broke heavy demand.** Trained on light+medium only, the search
+had no reason to preserve switching resistance under congestion:
+`α = 0.11` makes `x^α` grow so slowly that the hold bias is nearly
+constant, so it does not scale up as the junction loads. Heavy demand
+regressed from +10.2% to +17.1% and from 2 interlock violations to 8.
+
+This is exactly the failure mode the LESCMP paper describes for vanilla
+max-pressure — "PWBP fails because it switches too frequently" — arrived
+at from the opposite direction. M4 was frozen by too much switching
+resistance; the tuner, optimizing where congestion never appears, removed
+almost all of it. The literature's own prescription (switching resistance
+should *rise* with congestion, sublinearly) is what both failures violate
+in opposite directions, and the sublinearity bound is what stopped the
+tuner going all the way to M4's constant.
+
+Two honest readings, and the second is more likely: (a) train on all
+three levels; (b) one parameter vector across all demand regimes is the
+wrong model, and the parameters should be conditioned on observed
+congestion — which is itself a memory idea, and the natural M6.
+
+### The demand memory does not pay for itself yet — a negative result
+
+`scripts/m5_sensor_degradation.py`. The gate runs on SUMO ground truth,
+so `confidence` is always 1.0, `select_mode` always returns "camp_full",
+and the blending rung never executes (`blended: 0` in every gate run).
+Measuring a memory in a regime where it is dormant would be claiming
+credit for dead code, so confidence is injected at 0.6 — the
+"camp_blended" band — to stand in for M8's vision pipeline degrading.
+
+| level | memory ON | memory OFF (M4's fixed-time fallback) | delta |
+|---|---|---|---|
+| light | 101,325 ± 8,691 | 73,571 ± 3,354 | **ON is 37.7% worse** |
+| medium | 235,590 ± 18,691 | 233,860 ± 27,900 | tie |
+
+Blending is verified live (14,356 blended ticks/run; the OFF arm is
+8,604/8,604 ticks of `fallback_fixed_time`, i.e. exactly M4's behaviour).
+So the comparison is sharper than it was designed to be: it is not
+"memory vs. no memory" but **"blend against history vs. fall back to
+fixed-time"** — and fixed-time wins at light demand, decisively.
+
+The likely mechanism: `blend(live, hist, c) = c·live + (1−c)·hist` treats
+confidence as a Bayesian precision weight, but a 15-minute cross-run mean
+is a *smoothed* quantity — much lower variance and much lower information
+content than a noisy live reading. Mixing 40% of it into the live state
+washes out exactly the queue differences pressure needs to discriminate
+between phases. Historical priors help where live data is *absent*, not
+where it is merely *noisy*, and the ladder currently conflates those.
+M4's choice to fall back to fixed-time rather than half-implement a blend
+is, on this evidence, the better engineering call and is reinstated as
+the default recommendation until the blend is reformulated.
+
+### Tests
+
+177 pass corridor-wide, up from 134, zero regressions. 43 new:
+- Two property tests establishing the M4 sign defect over its whole legal
+  input domain, and their A-CA-MP counterparts establishing monotonicity.
+- `test_acamp_never_lets_an_interlock_fire` in the heterogeneous
+  saturation-flow form M4's suite adopted after a uniform-`sat_flow`
+  test proved unable to catch the starvation bug that shipped — with the
+  *switching parameters drawn too*, since a safety proof that only holds
+  at the default parameter vector is worthless once the optimizer runs.
+- Sublinearity of `F(x)` asserted as the exact analytic decay
+  `F(x)/x = κ·x^(α−1)` rather than a threshold.
+- `memory.py`: cold start, EWMA tracking a demand shift, a short run not
+  diluting a bin it never reached, in-progress runs not contaminating
+  their own history, atomic save.
+- `tuning.py`: bounds, `alpha_switch` unreachable outside (0,1), the
+  safety penalty ranking, and one test that **records a limitation** —
+  where violations are binary rather than graded, the penalized region is
+  flat and the search can sit in it. The safety guarantee comes from
+  `interlocks.check`, which no parameter can reach, never from the
+  objective.
+
+### Not yet built
+
+- Re-training across all three demand levels, or (better) conditioning
+  parameters on observed congestion.
+- Reformulating the blend so history is used where live data is absent
+  rather than where it is noisy.
+- The heavy-demand interlock rejections all land on
+  `cluster_1880441740_4393296791` — the same junction as M4's deadlock.
+  Not diagnosed here.
+- Terms 4-5 (corridor anticipation / debt) still require the Green
+  Corridor Engine and remain M7's.
+
+### Fixing heavy demand — diagnosis, two defects, and a regime-conditioned switching rule
+
+The M5 gate left heavy demand as the one unambiguous loss (+17.1% against
+Webster after tuning, and 8 interlock violations against 0 untuned).
+Diagnosed rather than guessed at: `scripts/m5_heavy_diagnostics.py`
+instruments a real heavy run against two hypotheses that predict
+different signatures.
+
+**Both starting hypotheses were wrong**, and the measurement said so
+immediately:
+
+| | heavy | light |
+|---|---|---|
+| all pressures <= 0 | 47.0% | 41.0% |
+| switch rate | 4.25% | 3.53% |
+| median `gate(rho)` | 1.000 | 1.000 |
+| green **allocated** | 47.6s | 28.6s |
+| green **served** | **22.0s** | 26.2s |
+
+Not an over-switching problem (rates barely differ) and not a gate
+problem (the spillback gate never closes -- receiving-link *occupancy* is
+near zero even at heavy demand, because a long lane holding a real queue
+still reads as mostly empty). The signature is the allocated/served gap:
+the controller allocates 47.6s and serves 22.0s, because the pressure
+ranking is re-litigated every tick and cuts greens in half. Webster runs
+~45s phases at heavy demand there. With ~5s of clearance that is 18.5% of
+capacity spent on lost time against Webster's 10% -- and under saturation
+capacity is the whole game.
+
+**Defect A: `allocate_green` collapsed to `min_green_s` whenever every
+pressure was negative.** Taking each pressure's positive part means a
+uniformly negative ranking produces a zero total and the floor for
+everyone. But 41-47% of ticks are uniformly negative on this corridor at
+*both* demand levels -- receiving-link queues routinely exceed approach
+queues here, so that is the normal case, not a degenerate one. Measured
+consequence: 30% of all allocations pinned at the bare minimum for
+reasons unconnected to the traffic.
+
+Fixed by weighting from pressure's *rank* rather than its sign: shift by
+the minimum before normalizing, so the allocation is invariant to the
+offset that corridor-wide downstream congestion applies to every phase
+equally. Property-tested as that invariance. Effect alone: min-green
+allocations 29.9% -> 7.5%, heavy delay 1,628,008 -> 1,530,007, heavy
+violations 1 -> 0, and light improved too (62,239 -> 56,711). An
+unambiguous win at every demand level.
+
+**Defect B: the switching rule had no notion of what a switch costs.**
+`sublinear_hold_bias` is asymptotically negligible by design -- that is
+the property it exists for -- so the resistance it provides vanishes
+*relative* to the pressure differences it participates in, exactly as
+demand rises. Measured on the same parameter vector at two demand levels:
+
+    light   spread 0.69   bias 0.29   bias/spread 0.424
+    heavy   spread 3.49   bias 0.37   bias/spread 0.107
+
+Spread grows 5.1x, a sublinear bias grows 1.3x.
+
+Added `memory.switch_cost_bias`, derived rather than tuned: over a horizon
+`T`, holding yields `P_cur·T` and switching yields `P_best·(T − L)`, so
+switching is worthwhile exactly when `P_best − P_cur > P_best·L/T`. Linear
+in pressure, so it holds its proportion at every demand level. This
+forfeits Theorem 3's sublinearity condition, and the honest accounting is
+recorded in both docstrings: non-starvation here rests on `max_green_s`,
+`_critical_phases` and I5, all three of which a pure acyclic max-pressure
+controller lacks -- so the trade costs a redundancy, not a property. An
+earlier claim in `tuning.py` that the `alpha_switch` bound preserved
+throughput-optimality was an overstatement and has been corrected in
+place.
+
+**Then the term turned out to be regime-dependent, which is the real
+finding.** `scripts/m5_lost_time_sweep.py`:
+
+| `lost_time_weight` | heavy | light |
+|---|---|---|
+| 0.0 | 1,635,840 | 60,263 |
+| 1.0 (derived) | **1,474,598 (-9.9%)** | 116,752 (**+93.7%**) |
+| 2.0 | 1,475,769 (-9.8%) | 166,587 (+176.4%) |
+
+The derived weight is near-optimal at heavy and nearly doubles delay at
+light. The economics genuinely invert: under saturation a clearance
+interval is capacity that cannot be recovered, so amortizing it is right;
+under light demand there is spare capacity, nobody is queued behind the
+switch, and reluctance to serve a waiting movement buys a saving that
+does not exist. **No single global weight can serve both regimes** -- now
+measured rather than suspected, and the same fact that broke the first
+tuning round in the opposite direction.
+
+So the weight is gated on congestion. Two false starts, both recorded
+because the reasons are not obvious from the run-level averages that
+motivated them:
+
+- Gating on live `pressure_scale` did nothing. Averaged over a run it
+  separates the regimes cleanly (~1.1 light vs ~8.5 heavy); sampled at
+  the ticks where the switch test actually executes it does not -- median
+  0.21 light against 0.28 heavy, with the difference entirely in the tail
+  (p90 9.8 vs 37.8). A light-demand junction with a platoon arriving is
+  instantaneously indistinguishable from a saturated one.
+- Setting the amortization horizon to the full `nominal_cycle_s` inverted
+  the term. That cycle comes from Webster and correctly lengthens under
+  load -- 180s heavy against a 40s floor at light -- so `L/T` *shrank*
+  from 17% to 4% as demand rose, making the threshold most permissive
+  exactly where lost time costs most. Fixed by using one phase's share of
+  the ring.
+
+The gate therefore reads an EWMA of `pressure_scale` -- whether the
+junction has *been* loaded, not whether it is loaded this second. That is
+the controller's fourth memory, and the only one consulted on every tick.
+It is also per-junction, which turned out to matter: smoothed load at
+heavy demand is `[0.17, 0.16, 0.18, 0.43, 1.52, 1.55, 22.02]` across the
+corridor, so one junction carries it and lost-time pricing applies where
+capacity is actually scarce rather than corridor-wide.
+
+**One more defect, in the training objective itself.** A raw mean of
+person-delay across demand levels is not a neutral aggregation: heavy is
+~1.37M against light's ~70k, so an unnormalized mean weights heavy 20x
+and the search optimizes it almost alone. That is not hypothetical --
+the first tuning round ran on light+medium, where medium outweighs light
+2.6x, and produced exactly the lopsided vector that result showed.
+`train_acamp.py` now divides each level by its own Webster baseline
+before averaging, so a 10% gain at light counts as much as a 10% gain at
+heavy. The violation penalty had to become *multiplicative* to survive
+that change -- an additive constant sized for raw person-seconds is inert
+on an O(1) objective, which a new test pins at three different scales.
+
+**Retrained on all three demand levels, 12 parameters, 42 candidates.**
+Objective 107.35 -> 0.2711 (mean fraction of Webster's delay; truncated
+training runs, so flattering -- the gate re-measures on full runs). The
+search found the regime separation on its own: a sharp, high-threshold
+gate (`switch_scale_exponent` 5.95, `switch_scale_ref` 7.10) on a heavily
+smoothed load (`load_halflife_s` 891s), with lost time priced hard
+(`lost_time_weight` 2.55). "Charge for the clearance interval, but only
+under genuinely sustained load."
+
+**Gate, full runs, held-out seeds 1-10, paired per-seed t-test (n=10,
+df=9) -- the correct test for this design, and more powerful than
+comparing intervals:**
+
+| level | arm | paired mean diff vs Webster | 95% CI of the difference | verdict |
+|---|---|---|---|---|
+| light | acamp v2 | **-11,613** | [-14,469, -8,758] | **beats Webster** |
+| medium | acamp v2 | +29,194 | [-11,516, +69,904] | tie |
+| heavy | acamp v2 | +85,556 | [-2,348, +173,460] | tie |
+
+| level | webster | camp (M4) | acamp untuned | acamp tuned v1 | **acamp v2** |
+|---|---|---|---|---|---|
+| light | 69,542 | 188,822 | 59,511 | 56,295 | **57,928 (-16.7%)** |
+| medium | 183,547 | 434,729 | 224,883 | 198,890 | **212,741 (+15.9%)** |
+| heavy | 1,368,840 | 1,523,050 | 1,508,017 | 1,603,074 | **1,454,395 (+6.3%)** |
+| violations (heavy) | 0 | 0 | 2 | **8** | **0** |
+
+**Heavy demand is fixed.** The gap to Webster fell from +17.1% to +6.3%,
+the paired confidence interval now contains zero where every previous
+version was significantly worse, and the 8 interlock violations are gone.
+Across all three levels A-CA-MP now beats the tuned fixed-time baseline
+at light demand and ties it at medium and heavy, with **zero interlock
+violations anywhere** -- which is M4's gate condition, met.
+
+Two honest qualifications. The heavy result is a *marginal* tie: the
+point estimate is still +6.3% and the CI's upper bound is far from zero,
+so more seeds would plausibly resolve it as a real if small loss rather
+than a tie. And medium regressed from v1's +8.4% to +15.9% -- v1 was
+better at medium and far worse at heavy, and the normalized objective
+deliberately chose the vector with the better worst case. Whether that is
+the right trade is a judgement about what the corridor needs, not
+something the optimizer can settle.
+
+**Tests:** 157 pass corridor-wide, up from 146, zero regressions. New:
+`allocate_green`'s invariance to a common pressure offset (the Defect A
+property), `switch_cost_bias` non-negativity and proportion-holding under
+Hypothesis, the congestion gate's monotonicity and regime separation,
+the EWMA distinguishing a single platoon from sustained load, cold-start
+pricing no switching cost, and the multiplicative violation penalty
+holding at three delay scales.
+
+**Still open:**
+
+- The heavy tie is marginal; more seeds would settle it.
+- Medium is worse under the whole-regime vector than under the
+  medium-specialized one. A per-regime parameter table -- selected by the
+  same smoothed load the switch gate already reads -- is the obvious next
+  step and needs no new sensing.
+- The demand-memory blend remains a net negative under degraded sensors
+  and is still off by default.
+
+### Learning from prediction error — the controller checking its own model
+
+Up to here, nothing in M5 was learning from *mistakes*. `DemandMemory`
+records what the corridor looked like; `tuning.py` fits parameters to an
+aggregate outcome offline and then freezes them; the load EWMA is a fixed
+formula. None of them compares a prediction to its result. The controller
+had no error signal at all, and made three implicit predictions per
+decision without checking any:
+
+    "this phase will discharge s_m x green PCU"   <- sat_flow_pcu_s
+    "this approach is empty, safe to skip"        <- _skippable
+    "this platoon arrives within the horizon"     <- approaching_pcu
+
+`control/online_calibration.py` + `signal_controller/discharge_observer.py`
+close the loop on the first and third.
+
+**Why saturation flow first.** `s_m` multiplies every term in `𝒫(p)`, so
+an error in it is an error in everything — and it is the project's most
+confidently-held wrong number. `measure_saturation_flow.py` measures it
+once, offline, on an isolated empty approach with an artificial backlog:
+the textbook definition, correctly executed, describing a road that does
+not exist during operation. It is then trusted forever. Five of 73
+movements never got a clean reading and sit on a 0.5 placeholder against
+a measured corridor mean of 0.400 — 25% high, permanently.
+
+**The identification problem is the whole difficulty.** The naive
+estimator (discharge ÷ green time) is biased in one direction: a queue
+that clears after 8s of a 20s green makes the average rate look far below
+saturation flow, so the estimator would drag `s_m` down at exactly the
+movements that are keeping up. An observation therefore only counts when
+the queue was still non-empty at the end of the green — the same
+condition `measure_saturation_flow.py` engineers deliberately, here
+waited for rather than manufactured. Measured consequence: **91.1% of
+observed greens are rejected as unsaturated**, 8.9% as too small, 0% as
+too short. That yield is a fact about a corridor being served adequately,
+not a threshold set wrong, and the split is reported so the two cannot be
+confused.
+
+**Two measurement bugs found and fixed during the build**, both worth
+recording:
+
+- Vehicle PCU was being looked up *after* the vehicle left the lane.
+  `traci.vehicle.getTypeID` raises on a departed vehicle, and the guard
+  that swallowed it returned a 1.0 default — so every vehicle that
+  crossed and then left the network was measured as a car regardless of
+  what it was. On demand that is 35% motorcycles at 0.25 PCU that
+  silently inflates measured discharge. PCU is now captured while the
+  vehicle is still observed, removing the lookup rather than guarding it.
+- `report()` emitted the rejection breakdown only when something had been
+  learned — so the diagnostics vanished in exactly the case they exist
+  for. Caught by a test, not by a run.
+
+**What it learns, fitted on 9 TRAIN-seed runs:** 64 of 73 movements, 1,556
+saturated samples, mean correction −4.6% (range −28.3% to +17.2%), nothing
+clamped at either bound, and an arrival reliability of 0.936 — i.e. ~6.4%
+of the traffic counted as "approaching" never arrives within the horizon,
+so the anticipation term had been overstating those movements' claim on
+green by that much.
+
+**Does it improve delay? No.** `scripts/m5_calibration_gate.py`, three
+arms on held-out seeds 1–10, paired against the no-calibration
+controller:
+
+| level | arm | vs no-calibration | 95% CI of paired diff | significant |
+|---|---|---|---|---|
+| light | frozen | +1.7% | [−3,294, +5,254] | no |
+| light | online | +8.2% | [−259, +9,815] | no |
+| medium | frozen | −9.5% | [−68,799, +28,194] | no |
+| medium | online | −0.4% | [−33,172, +31,460] | no |
+| heavy | frozen | +0.0% | [−76,944, +77,028] | no |
+| heavy | online | **+6.1%** | [+20,598, +155,943] | **yes, worse** |
+
+Frozen calibration changes nothing measurable anywhere. The cold-start
+online arm is significantly *worse* at heavy demand, which is the
+expected cost of learning during the run it is scored on — it spends the
+early portion with an unlearned model, and a `s_m` that moves while
+pressures are being compared makes those comparisons non-stationary.
+
+**But it does something else, clearly.** Per-seed standard deviation of
+person-delay at heavy demand:
+
+| arm | sd across seeds |
+|---|---|
+| A-CA-MP, no calibration | 86,117 |
+| **A-CA-MP + frozen calibration** | **47,966** |
+| tuned Webster | 60,260 |
+
+A 44% reduction in run-to-run spread, taking the controller from *less*
+consistent than Webster to noticeably *more* consistent. For a signal
+controller that is a real property — an operator cares whether tomorrow
+resembles today — but it is consistency, not speed, and it should not be
+reported as a delay improvement.
+
+**And it corrects an earlier claim in this log.** The heavy-demand "tie"
+recorded in the previous section was partly a power artefact. Paired
+against Webster at heavy:
+
+| measurement | mean diff | sd of paired diff | 95% CI | verdict |
+|---|---|---|---|---|
+| acamp v2, no calibration | +85,556 | 122,889 | [−2,348, +173,460] | tie |
+| acamp v2 + frozen calibration | +85,598 | 57,764 | [+44,278, +126,917] | **worse** |
+
+The same mean, measured with half the noise, no longer contains zero.
+The honest reading is that heavy demand is a real if modest loss against
+tuned Webster (~+6%), and the earlier "tie" reflected a measurement too
+noisy to resolve it rather than genuine parity. The v2 fixes remain a
+large improvement (+17.1% → +6.3%, 8 violations → 0); they did not reach
+parity.
+
+**Zero interlock violations across all 60 calibration-gate runs.**
+
+**What was deliberately not built.** The second prediction —
+`_skippable`'s "this approach is empty, safe to pass over" — is the only
+one of the three without a clean residual. Discharge and arrival both
+have an observable outcome: the traffic either crossed or it did not. A
+skip does not; once the phase is passed over, what would have happened is
+unobservable, and the wait that accumulates afterwards is a consequence
+of every later decision too. Estimating it properly needs a
+counterfactual model or deliberate randomized exploration — serving
+skippable phases occasionally on purpose — and randomized exploration on
+a live junction is a different proposition from passive observation,
+however well the safety kernel bounds it. Flagged rather than
+approximated with a residual that does not mean what it appears to.
+
+**Tests:** 169 pass, up from 157. New: the unsaturated-green refusal (the
+identification property), the too-small/too-short refusals, convergence
+to a known true rate, the placeholder-movement case specifically, the
+band clamping an implausible estimate, unobserved movements behaving
+exactly as before, arrival reliability learning a shortfall and never
+exceeding 1.0, rejection causes reported separately, and save/load.
+
+### Audit — a measurement bug in the learning layer, and a 4.7x performance fix
+
+A deliberate review pass over everything M5 added, rather than another
+feature. Static analysis first (`ruff`: 19 findings, all cosmetic -- 15
+line-length, 2 import order, 1 unused import, 1 unused loop variable; no
+correctness findings), then the two things static analysis cannot see.
+
+**Bug: `DischargeObserver` overestimated saturation flow by up to 40%.**
+
+The observer subtracted `startup_lost_s` from the green duration but kept
+counting the crossings that happened *during* the start-up wave. A
+numerator over one interval divided by a denominator over a shorter one.
+Its own module docstring claimed the `measure_saturation_flow.py`
+convention ("discards its first crossings"); the code applied that
+convention to one side of the ratio only. A second, compounding
+off-by-one left `elapsed_s` at zero for the first tick of every green,
+shrinking the denominator again.
+
+Measured against a synthetic queue discharging at exactly 1.000 PCU/s:
+
+| green | measured rate | bias |
+|---|---|---|
+| 8s | 1.400 | **+40.0%** |
+| 10s | 1.286 | +28.6% |
+| 15s | 1.167 | +16.7% |
+| 20s | 1.118 | +11.8% |
+| 30s | 1.074 | +7.4% |
+| 60s | 1.035 | +3.5% |
+
+The bias is `startup / (green − startup)`, so it is worst exactly where
+greens are shortest -- light demand and min-green cases. Nothing caught
+it: the unit tests exercised the *learner* against synthetic residuals,
+and the integration runs had no ground truth to compare against. This is
+the failure mode of testing the two halves of a measurement separately.
+
+Fixed by cutting the numerator at the same point as the denominator.
+Post-fix the measured rate is exactly 1.000 at every green duration
+tested. `tests/signal_controller/test_discharge_observer.py` (14 tests)
+now pins the recovered rate against known ground truth across seven green
+durations and three discharge rates, so the two sides cannot drift apart
+again -- plus teleport exclusion, lane-change exclusion, and a bound on
+arrival-cohort growth.
+
+**What the bug was hiding.** Re-fitting the same run post-fix moves the
+mean learned correction from −4.6% to **−8.9%**. The overestimate was
+masking half the real signal: operational discharge on this corridor is
+meaningfully below the isolated offline measurement, and by roughly twice
+as much as previously reported.
+
+**Performance: 972 TraCI round-trips per simulation step.**
+
+`cProfile` over one medium run (2387 steps, 261s): 2,319,510 TraCI calls,
+**234 of 261 seconds inside `traci.domain._getUniversal`**. 90% of
+wall-clock was protocol round-trips; the controller's own arithmetic did
+not appear until far down the profile. Two specific wastes:
+
+- `getTypeID` called **444,510 times** for a value that cannot change --
+  a vehicle's type is fixed for its lifetime.
+- `QueueStateSampler` and `DischargeObserver` each read the same lanes
+  independently every tick, because each was written self-contained.
+  Self-containment is right for correctness and wrong for a protocol
+  where every attribute access is a network hop.
+
+`signal_controller/lane_cache.py` gives one TraCI read per lane per tick
+shared across every sampler, plus a permanent per-vehicle type cache.
+Both samplers take it as an optional constructor argument, so every
+existing caller and test is unaffected.
+
+| | wall (2387 steps) | per step |
+|---|---|---|
+| before | 261s | 109.2 ms |
+| after | **56s** | **23.4 ms** |
+| | | **4.68x** |
+
+Person-delay and the learned calibration are unchanged -- this is pure
+I/O elimination, not a behaviour change.
+
+**The remaining headroom, and the honest bound on it.** The run is still
+I/O-bound. TraCI's *subscription* API (`subscribe` / `subscribeContext`)
+collapses per-lane reads into one round-trip per step for the whole
+network, and `libsumo` removes the socket entirely by running SUMO
+in-process. `libsumo` is the larger win and is close to a drop-in (same
+module-level API surface), but note it ships with the official SUMO
+binary/source distribution and **not** with the `eclipse-sumo` pip wheel
+this project installs -- the wheel carries `libsumocpp.so` and the
+headers but no Python binding. Switching would mean changing how SUMO is
+obtained, which is a build-system decision rather than a code one, and it
+gives up TraCI's multi-client and remote-connection abilities. Stated as
+a real tradeoff rather than a free win.
+
+**Tests:** 214 pass, up from 200, zero regressions.
+
+---
+
+## Reconciling two concurrent sessions
+
+While the M5 work above was underway in a separate session, this session
+was independently working the M4 thread from the same branch point:
+recalibrating `λ_s` from the corridor's own measured pressure-gap
+distribution (the "Recalibrating `λ_s`..." section above). Both sessions
+wrote to the same local project folder; a `PROGRESS.md` write from this
+session was overwritten by the other session's later write with no
+conflict warning (the sync call was missing the mtime guard that exists
+for exactly this case). Nothing else was lost -- every other file the two
+sessions touched independently was either disjoint or, where both existed
+on disk, byte-identical -- but this file needed a manual merge, done here
+by splicing both branches back together at their confirmed common prefix
+(everything through "Both gaps fixed, and re-verified against the exact
+run that failed").
+
+**Reconciliation checks performed:**
+
+- Every pre-existing file shared by both branches (77 files: all of
+  `packages/`, `scenarios/`, the M2/M3/M4-era `services/` and `scripts/`
+  code) was hashed on both copies. Exactly three differ, all of them
+  purely additive on inspection: `packages/domain/itms_domain/signal.py`
+  (two new optional `JunctionContext` fields M2-M4 code never reads),
+  `services/sim-service/sim_service/control/runner.py` (new optional
+  memory/calibration/lane-cache plumbing, gated behind a duck-typed
+  `set_sim_time` check so M2-M4 strategies take the exact code path they
+  always did), and `signal_controller/queue_state.py` (a new
+  `sample_extended()` method and `QueueSample` record alongside the
+  original, unchanged `sample()`). `camp.py` and `test_camp.py`
+  themselves are untouched by the M5 branch -- confirmed identical to
+  this session's post-`λ_s`-recalibration versions.
+- All 31 new M5 files (`acamp.py`, `memory.py`, `tuning.py`,
+  `online_calibration.py`, `discharge_observer.py`, `lane_cache.py`,
+  their tests, and the `scripts/m5_*` harness/results) pulled into this
+  sandbox.
+- Full test suite re-run against the merged tree: **214 passed, 2
+  skipped** -- matching the M5 section's own last-recorded count exactly,
+  so the merge introduced no regression and nothing was silently dropped.
+
+**An open numeric question this merge surfaces, not yet resolved.** The
+M5 section's gate-comparison table above records a "camp (M4)" arm of
+188,822 / 434,729 / 1,523,050 (light/medium/heavy) and treats that as the
+current M4 baseline when concluding this session's earlier fix chain
+"made CA-MP measurably worse at all three demand levels." Those numbers
+don't cleanly match either of this session's own two recorded M4
+gate-comparison runs -- 196,409.1 / ... (before the `λ_s` recalibration)
+or 167,835.3 / ... (after it, light demand shown; see the table above for
+all three levels). Since `camp.py` on disk is now, and has been
+confirmed to be, identical between both branches (`λ_s = 0.143`, the
+recalibrated value), it isn't clear from the artifacts alone which `λ_s`
+value was in effect when the M5 branch's own "camp (M4)" gate numbers
+were generated, and the two branches' gate scripts may also differ
+slightly in methodology (this session's paired-seed CI-overlap check vs.
+the M5 branch's paired per-seed t-test). Rather than guess, the honest
+next step is a fresh, single re-run of the gate comparison against this
+now-merged tree -- one `camp.py`, one `λ_s`, both arms measured in the
+same script, in the same run -- before drawing any further conclusion
+about whether the switch-cost recalibration helped, hurt, or is beside
+the point next to the structural fix A-CA-MP makes. Not yet done.
+
+**Scope note.** The standing project instruction for this session has
+been to hold off on new incident-detection and green-corridor work until
+asked, and to stay on traffic management until then. A-CA-MP is an
+adaptive-signal-control improvement layer -- a deeper fix to the same M4
+traffic-management problem this session has been benchmarking, not
+incident detection or green-corridor/ambulance routing -- so integrating
+and reporting on it here reads as in-scope, but this wasn't explicitly
+cleared with the user before doing the reconciliation and is worth
+confirming.
+
+---
+
+## Fresh unified gate re-run — resolving the reconciliation's open question
+
+Re-ran the gate from scratch against this now-merged tree in one
+environment, one script, one `camp.py` (`λ_s = 0.143`): `webster`,
+`camp`, and `acamp` (untuned) via `m5_gate_comparison.py`'s default arms,
+then `acamp` again with `--tuned-config scripts/m5_artifacts/acamp_tuned.json`
+(the v2-tuned parameters) for the fourth arm. Same eval seeds (1-10) as
+every gate before it. Raw results: `scripts/m5_gate_results_reconciled_untuned.json`,
+`scripts/m5_gate_results_reconciled_tuned.json`.
+
+| demand | Webster | CA-MP (M4) | A-CA-MP (untuned) | A-CA-MP (tuned) |
+|---|---|---|---|---|
+| light  | 74,872 ± 1,922   | 167,835 ± 3,425   | 109,539 ± 19,751 (0 viol) | **66,915 ± 4,353** (0 viol) |
+| medium | 190,234 ± 8,953  | 379,217 ± 22,744  | 246,780 ± 15,151 (1 viol) | 213,622 ± 29,446 (0 viol) |
+| heavy  | 1,392,384 ± 36,643 | 1,416,246 ± 74,717 | 1,563,893 ± 87,183 (7 viol) | 1,491,441 ± 52,477 (0 viol) |
+
+**The `λ_s` question is settled.** `camp` (M4) reproduces this session's
+own post-recalibration numbers (167,835 / 379,217 / 1,416,246) almost to
+the decimal -- not the M5 section's recorded 188,822 / 434,729 /
+1,523,050. That confirms the M5 section's "camp (M4)" baseline was
+measured with `λ_s = 1.0` (pre-recalibration), before this session's fix
+landed, not against the corridor-calibrated value. Read against *this*
+number, CA-MP(M4) is somewhat better than the M5 section describes, but
+the qualitative story is unchanged: it still loses badly to Webster at
+light (+124%) and medium (+99%), and is a statistical tie at heavy (CIs
+overlap) -- consistent with what this session already reported before
+the merge.
+
+**A-CA-MP's own headline conclusion holds up.** Comparing tuned A-CA-MP's
+CI against Webster's at each level: light's intervals don't overlap and
+tuned A-CA-MP is the lower one (**a genuine win**, matching the M5
+section's claim); medium's intervals overlap substantially (**a tie**,
+also matching); heavy's intervals do not overlap and tuned A-CA-MP is the
+*higher* one (**a genuine, if modest ~7% loss**, matching the M5
+section's own later-corrected reading, not its earlier "tie" claim). So
+despite every absolute number shifting, the three-way verdict --
+beats Webster light, ties medium, loses modestly heavy -- reproduces
+exactly.
+
+**What did not reproduce cleanly, and an honest account of why.** The
+absolute numbers themselves differ more than seed variance alone should
+allow, and only for A-CA-MP: light demand for both the untuned and tuned
+arms moved by 20-80% depending on the run, well outside the recorded 95%
+CIs (e.g. tuned light: 66,915 ± 4,353 here vs. 57,928 ± 2,631 recorded;
+non-overlapping intervals). Two things rule out the obvious suspects:
+every file involved (`acamp.py`, `memory.py`, `tuning.py`,
+`m5_gate_comparison.py`, `acamp_tuned.json`, and the rest of the 31 new
+files) is confirmed byte-identical between the local copy and this
+sandbox via `md5sum`, so this isn't a transfer or merge error; and
+`webster` and `camp` -- run in the very same script, same process pool,
+same tick -- reproduce almost exactly, so it isn't a harness or
+environment problem in general. What's left is version drift in SUMO
+itself: `pyproject.toml` pins `eclipse-sumo>=1.19` with no upper bound,
+and this sandbox resolved to **1.27.1**; the M5 section's original numbers
+were produced in a different session, quite possibly against a different
+resolved `eclipse-sumo` version, on the assumption that "same seed" is
+enough for reproducibility. It usually is for a stateless controller
+(Webster is open-loop; M4's CA-MP reacts to live state but carries no
+memory of its own across ticks), but A-CA-MP is explicitly the milestone
+that gave the controller memory -- an EWMA of load, a sublinear hold-bias
+that compounds tick over tick -- and that is exactly the kind of
+feedback loop that turns a small version-level difference in SUMO's own
+vehicle dynamics into a materially different trajectory over a
+multi-thousand-tick run, without any of it being a code defect on either
+side. Concretely reproducible: pin `eclipse-sumo`/`traci`/`sumolib` to an
+exact version (`==1.27.1` or whatever the team standardizes on) in
+`pyproject.toml`, so "re-run this gate" means the same thing on every
+machine going forward. Not yet done -- flagged here rather than
+silently worked around.
+
+**Practical upshot:** none of this changes which controller to build on.
+A-CA-MP's win/tie/loss pattern against Webster is robust across two
+independent environments even though the exact magnitudes are not, and
+CA-MP(M4) is confirmed, now on a corrected `λ_s`, to still be the weakest
+of the three arms at every demand level tested.
+
+---
+
+## Attempting the heavy-demand fix: a real defect found and fixed, the trade-off not resolved
+
+Picked up the "obvious next step" the M5 section itself recorded: give
+the congestion gate a per-junction, rather than global, sense of what
+counts as "loaded". Measured first, not assumed --
+`scripts/m5_regime_threshold_probe.py` ran the tuned controller at all
+three demand levels and recorded each junction's own smoothed load, not
+just the corridor-wide average the original tuning was justified against.
+Result: at heavy demand the seven junctions read `[0.94, 1.02, 0.70, 1.86,
+5.66, 3.39, 33.03]` -- a 47x spread -- while their total discharge
+capacity spans only 2.4-6.8 (2.8x). One junction dominates the
+corridor-wide average the tuned `switch_scale_ref = 7.10` was fit
+against, clears it easily, and was already more than halfway there at
+*medium* demand (mean 6.86). The other six junctions never approach 7.10
+even at heavy demand. **A single global absolute reference gives six of
+this corridor's seven junctions essentially no congestion pricing at any
+demand level tested** -- the same shape of measurement mistake this
+module's own history already made once (a corridor-wide average hiding
+what individual ticks see, fixed earlier in this same section) recurring
+one level up, at the junction rather than the tick.
+
+**The fix, and it is a real, tested one.** `AdaptiveCamp` now tracks a
+second, slower EWMA of load (`baseline_halflife_s`) alongside the
+existing fast one, and can feed the congestion gate `relative_load =
+smoothed_load / baseline_load` instead of the raw absolute value.
+`test_relative_load_is_scale_invariant_across_junction_size` proves the
+actual property that matters: two junctions an order of magnitude apart
+in absolute scale, put through the same *relative* demand step-up, read
+approximately the same `relative_load`, which the raw absolute signal
+cannot do. 216 tests pass, up from 214.
+
+**It does not close the heavy-demand gap, and the honest reason is
+structural.** `scripts/m5_relative_congestion_sweep.py` searched the new
+ratio-scale `switch_scale_ref` on `TRAIN_SEEDS` (seed discipline kept --
+never the `EVAL_SEEDS` a gate reports on) and found every value that
+helped heavy materially hurt medium:
+
+| `switch_scale_ref` (ratio) | medium | heavy |
+|---|---|---|
+| 1.30 | 415,134 | 1,537,546 |
+| 2.00 | 414,433 | 1,505,831 |
+| 2.50 | 393,692 | 1,472,423 |
+| 3.00 | 275,546 (**+38%** vs control) | 1,457,423 (**-9.6%** vs control) |
+| 7.10 (control -- ~never fires under the new ratio scale) | 199,776 | 1,613,059 |
+
+No candidate is a clean win. The likely reason isn't a bad parameter
+choice: each `AdaptiveCamp` instance is built fresh per simulated run,
+so `_baseline_load_ewma` starts cold every time, and a single demand-level
+run here lasts only ~2,400-3,700 simulated seconds (this section's own
+earlier step counts). That's too short, at any baseline half-life slow
+enough to deserve the name, for the baseline to separate "this run's
+genuine normal" from "still catching up from a cold start". `DemandMemory`
+already solves exactly this shape of problem for queues (`q_hist`,
+persisted across seeds on disk, one seed treated as one day) but has no
+equivalent yet for this load signal -- persisting the baseline the same
+way is the concrete next step, not a re-run of this same sweep.
+
+**Shipped as off by default.** `AcampConfig.use_relative_congestion_gate`
+defaults `False`; the default code path was verified, not just tested, to
+reproduce the exact recorded person-delay figures bit-for-bit on four
+spot-check seeds (medium 1: 243,296.975; medium 2: 202,501.669; heavy 1:
+1,497,287.75; heavy 2: 1,395,704.115 -- all exact matches against the
+already-recorded gate results). Nothing about the current, reported
+benchmark changes. The fix is real, tested, and kept -- it is the
+regime-conditioning attempt that didn't pan out, documented rather than
+either hidden or quietly shipped as an improvement it isn't.
+
+**Heavy demand's ~7% loss to Webster is still open.**

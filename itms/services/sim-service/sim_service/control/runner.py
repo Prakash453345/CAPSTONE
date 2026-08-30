@@ -45,7 +45,11 @@ from itms_common.bus import RedisStreamsSyncBus
 from itms_common.events import encode_envelope
 from itms_domain import JunctionContext, SignalPlan, Tier0Config
 
+from sim_service.control.memory import DemandMemory
+from sim_service.control.online_calibration import OnlineCalibration
 from sim_service.signal_controller import arbiter
+from sim_service.signal_controller.discharge_observer import DischargeObserver
+from sim_service.signal_controller.lane_cache import LaneCache
 from sim_service.signal_controller.detectors import ActuationDetector
 from sim_service.signal_controller.queue_state import QueueStateSampler
 from sim_service.signal_controller.spillback import SpillbackTracker
@@ -131,9 +135,12 @@ class _JunctionState:
     transition: _Transition | None = None
     detector: ActuationDetector | None = None
     queue_sampler: QueueStateSampler | None = None
+    discharge: DischargeObserver | None = None
 
 
-def _recover_from_fault(js: _JunctionState, tls_id: str) -> None:
+def _recover_from_fault(
+    js: _JunctionState, tls_id: str, violated_movements: frozenset[str] = frozenset()
+) -> None:
     """A real, previously-unpatched gap the M4 bottleneck ablation
     surfaced: every failsafe branch in `arbiter.tick()` that isn't
     cabinet-fault-flag-gated (`failsafe_interlock_rejected`,
@@ -160,20 +167,41 @@ def _recover_from_fault(js: _JunctionState, tls_id: str) -> None:
 
     The fix mirrors the exact precedent `run_controlled_scenario`'s own
     startup already uses for "state doesn't match a known phase" (a
-    defined resume, not an assumed one): command the ring's first phase
-    directly and reset `current_phase_elapsed_s` to 0.0, so the next tick
-    starts from a clean, current snapshot instead of an ever-more-stale
-    one. Commanding straight into a green with no yellow first is safe
-    here specifically because nothing is currently green to clear from
-    (the junction is already sitting in all-red) -- the same reasoning
-    that makes the cold-boot resume path safe without one either. Not
-    maximally rigorous: a real deployment would likely want to enforce a
-    minimum all-red dwell before resuming, to guarantee physical
-    clearance for anything still moving from before the fault, rather
-    than resuming on the very next tick. Flagged as a real simplification
-    rather than silently matched to the boot-resume precedent's own
-    rigor level."""
+    defined resume, not an assumed one): command a phase directly and
+    reset `current_phase_elapsed_s` to 0.0, so the next tick starts from a
+    clean, current snapshot instead of an ever-more-stale one. Commanding
+    straight into a green with no yellow first is safe here specifically
+    because nothing is currently green to clear from (the junction is
+    already sitting in all-red) -- the same reasoning that makes the
+    cold-boot resume path safe without one either. Not maximally rigorous:
+    a real deployment would likely want to enforce a minimum all-red dwell
+    before resuming, to guarantee physical clearance for anything still
+    moving from before the fault, rather than resuming on the very next
+    tick. Flagged as a real simplification rather than silently matched to
+    the boot-resume precedent's own rigor level.
+
+    Which phase to resume into is `violated_movements`-aware as of the same
+    fix this docstring's "Observed in practice" paragraph anticipated
+    (PROGRESS.md's "Real saturation-flow calibration" section): resetting
+    to `ring_order[0]` unconditionally, regardless of which movement an I5
+    rejection actually named, is exactly how the gap above turns into an
+    unrecoverable loop -- if `ring_order[0]` doesn't serve the flagged
+    movement either, recovery lands right back where the *next* proposal
+    fails the *same* way, forever. Given `arbiter.Decision.violated_
+    movements` (populated only for `failsafe_interlock_rejected`), resume
+    into whichever ring phase actually serves one of those movements
+    instead, falling back to `ring_order[0]` only when there isn't one
+    (every other fault mode, or a violation naming no specific movement)."""
     recovery_phase = js.cfg.ring_order[0]
+    if violated_movements:
+        recovery_phase = next(
+            (
+                p
+                for p in js.cfg.ring_order
+                if js.cfg.phases[p].green_movements & violated_movements
+            ),
+            recovery_phase,
+        )
     js.cabinet.command(recovery_phase)
     js.ctx = JunctionContext(
         intersection_id=tls_id, current_phase_id=recovery_phase, current_phase_elapsed_s=0.0
@@ -195,6 +223,8 @@ def run_controlled_scenario(
     receiving_lanes: Mapping[str, Mapping[str, str]] | None = None,
     vtype_pcu: Mapping[str, float] | None = None,
     bottleneck_lane_speeds_mps: Mapping[str, float] | None = None,
+    demand_memory: DemandMemory | None = None,
+    calibration: OnlineCalibration | None = None,
 ) -> dict:
     """Run one full scenario with `strategy` governing every junction in
     `configs`. Returns run stats: step count, how many times the arbiter
@@ -243,6 +273,18 @@ def run_controlled_scenario(
     M4 section), so the ablation needs a lane whose capacity is capped on
     purpose, independent of how much demand a scenario happens to carry.
     Left `None` (the default), every caller's behaviour is unchanged.
+
+    `demand_memory` (M5), if given, has every tick's *live* per-movement
+    queue and inbound-platoon reading recorded into it, and `end_run()`
+    called once the scenario finishes -- so one call of this function is
+    one "day" folded into the across-run profile
+    (`control/memory.py` explains why a seed is a legitimate day). Only
+    recorded for junctions whose strategy is time-aware, since a strategy
+    that cannot read the profile has no use for one and would only be
+    paying the sampling cost. Note this is orthogonal to whether the
+    strategy *uses* memory: a training run records without blending, and
+    an evaluation run against a frozen profile blends without recording,
+    depending on what the caller passes where.
     """
     _ensure_sumo_home()
     sumo_binary = _resolve_sumo_binary()
@@ -269,6 +311,11 @@ def run_controlled_scenario(
         for lane_id, speed_mps in bottleneck_lane_speeds_mps.items():
             traci.lane.setMaxSpeed(lane_id, speed_mps)
     junctions: dict[str, _JunctionState] = {}
+    # One shared lane cache for the whole corridor: every sampler on a
+    # given tick reads each lane at most once between them. See
+    # `lane_cache.LaneCache` for the profile that made this necessary --
+    # 972 TraCI round-trips per simulation step, 90% of run wall-clock.
+    lane_cache = LaneCache(vtype_pcu or {})
     spillback = SpillbackTracker(spillback_lane_ids) if spillback_lane_ids is not None else None
     try:
         for tls_id, cfg in configs.items():
@@ -295,10 +342,21 @@ def run_controlled_scenario(
                 and vtype_pcu is not None
             ):
                 queue_sampler = QueueStateSampler(
-                    link_lanes[tls_id], receiving_lanes[tls_id], vtype_pcu
+                    link_lanes[tls_id], receiving_lanes[tls_id], vtype_pcu,
+                    lane_cache=lane_cache,
+                )
+            discharge = None
+            if calibration is not None and link_lanes is not None and tls_id in link_lanes:
+                discharge = DischargeObserver(
+                    link_lanes[tls_id], vtype_pcu or {}, lane_cache=lane_cache
                 )
             junctions[tls_id] = _JunctionState(
-                cfg=cfg, cabinet=cabinet, ctx=ctx, detector=detector, queue_sampler=queue_sampler
+                cfg=cfg,
+                cabinet=cabinet,
+                ctx=ctx,
+                detector=detector,
+                queue_sampler=queue_sampler,
+                discharge=discharge,
             )
 
         step = 0
@@ -307,6 +365,9 @@ def run_controlled_scenario(
         while traci.simulation.getMinExpectedNumber() > 0:
             traci.simulationStep()
             step += 1
+            # Invalidate the per-tick memo exactly once, right after the
+            # simulation advances and before any sampler reads.
+            lane_cache.advance(float(step))
 
             if spillback is not None:
                 spillback.sample()
@@ -315,6 +376,18 @@ def run_controlled_scenario(
                 if js.transition is not None:
                     _advance_transition(js, step_length)
                     continue
+
+                junction_strategy = strategy[tls_id] if isinstance(strategy, Mapping) else strategy
+                # A strategy that owns state advertises it by exposing
+                # `set_sim_time` (M5's `acamp.AdaptiveCamp`). Duck-typed
+                # rather than gated on a new `run_controlled_scenario`
+                # parameter, so a caller mixing a stateful strategy at one
+                # junction with a pure one at another -- which the
+                # per-junction `Mapping` form already allows -- cannot get
+                # the pairing wrong.
+                time_aware = hasattr(junction_strategy, "set_sim_time")
+                if time_aware:
+                    junction_strategy.set_sim_time(traci.simulation.getTime())
 
                 if js.detector is not None or js.queue_sampler is not None:
                     has_demand: Mapping[str, bool] = {}
@@ -326,8 +399,21 @@ def run_controlled_scenario(
                         )
                     queue_pcu: Mapping[str, float] = {}
                     receiving_occupancy: Mapping[str, float] = {}
+                    receiving_queue_pcu: Mapping[str, float] = {}
+                    approaching_pcu: Mapping[str, float] = {}
                     if js.queue_sampler is not None:
-                        queue_pcu, receiving_occupancy = js.queue_sampler.sample()
+                        if time_aware:
+                            # Strictly more TraCI work per tick -- only paid
+                            # for a strategy that reads the extra fields, so
+                            # M4's own gate arm is unaffected in both
+                            # behaviour and runtime.
+                            sample = js.queue_sampler.sample_extended()
+                            queue_pcu = sample.queue_pcu
+                            receiving_occupancy = sample.receiving_occupancy
+                            receiving_queue_pcu = sample.receiving_queue_pcu
+                            approaching_pcu = sample.approaching_pcu
+                        else:
+                            queue_pcu, receiving_occupancy = js.queue_sampler.sample()
                     js.ctx = JunctionContext(
                         intersection_id=js.ctx.intersection_id,
                         current_phase_id=js.ctx.current_phase_id,
@@ -336,16 +422,52 @@ def run_controlled_scenario(
                         wait_times_s=wait_times_s,
                         queue_pcu=queue_pcu,
                         receiving_occupancy=receiving_occupancy,
+                        receiving_queue_pcu=receiving_queue_pcu,
+                        approaching_pcu=approaching_pcu,
                     )
+                    if js.discharge is not None and calibration is not None:
+                        # Driven from the *live* sample, and only for a
+                        # settled junction -- a mid-transition junction is
+                        # skipped by the `continue` above, which is correct:
+                        # nothing discharges during yellow or all-red, so
+                        # those seconds belong to neither green's window.
+                        served = js.cfg.phases[js.ctx.current_phase_id].green_movements
+                        for movement, pcu, eff_green, remained in js.discharge.tick(
+                            served, step_length, approaching_pcu
+                        ):
+                            calibration.observe_green(
+                                tls_id,
+                                movement,
+                                baseline_sat_flow=js.cfg.sat_flow_pcu_s.get(movement, 0.5),
+                                discharged_pcu=pcu,
+                                effective_green_s=eff_green,
+                                queue_remained=remained,
+                            )
+                        for movement, predicted, arrived in js.discharge.expired_cohorts():
+                            calibration.observe_arrivals(
+                                tls_id,
+                                movement,
+                                baseline_sat_flow=js.cfg.sat_flow_pcu_s.get(movement, 0.5),
+                                predicted_pcu=predicted,
+                                arrived_pcu=arrived,
+                            )
 
-                junction_strategy = strategy[tls_id] if isinstance(strategy, Mapping) else strategy
+                    if demand_memory is not None and time_aware:
+                        # Recorded from the *live* sample, before any
+                        # blending the strategy may apply -- a memory fed
+                        # its own blended output would converge on itself
+                        # rather than on what the corridor actually does.
+                        demand_memory.observe_tick(
+                            tls_id, traci.simulation.getTime(), queue_pcu, approaching_pcu
+                        )
+
                 decision = arbiter.tick(js.cfg, js.ctx, js.cabinet, strategy=junction_strategy)
                 if bus is not None:
                     _publish_decision_events(bus, decision)
                 if decision.mode not in ("fixed_time",):
                     fault_events.append((tls_id, step, decision.mode))
                     log.warning("junction %s took %s at step %d", tls_id, decision.mode, step)
-                    _recover_from_fault(js, tls_id)
+                    _recover_from_fault(js, tls_id, decision.violated_movements)
                     continue
                 assert decision.plan is not None  # "fixed_time" mode always carries a plan
 
@@ -372,11 +494,20 @@ def run_controlled_scenario(
     finally:
         traci.close()
 
+    if demand_memory is not None:
+        # After `traci.close()`, deliberately: committing the run's bins
+        # into the across-run EWMA is bookkeeping on data already
+        # gathered, and doing it inside the `try` would skip it on the
+        # very runs (an exception mid-scenario) whose partial data is
+        # least trustworthy to fold in anyway.
+        demand_memory.end_run()
+
     interlock_violations = sum(
         1 for _, _, mode in fault_events if mode == "failsafe_interlock_rejected"
     )
     return {
         "steps": step,
+        "lane_cache": lane_cache.stats(),
         "interlock_violations": interlock_violations,
         "fault_events": fault_events,
         "spillback_events": spillback.episode_count if spillback is not None else None,

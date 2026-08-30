@@ -10,9 +10,19 @@ requires-python = ">=3.11"
 dependencies = [
     "itms-common",
     "itms-domain",
-    "eclipse-sumo>=1.19",
-    "traci>=1.19",
-    "sumolib>=1.19",
+    # Pinned exactly, not >=: A-CA-MP (M5) carries state across ticks
+    # (EWMA load, a compounding hold-bias), which makes its results
+    # sensitive to small version-to-version differences in SUMO's own
+    # vehicle dynamics -- confirmed empirically when two sessions on two
+    # different resolved eclipse-sumo versions got the same seeds but
+    # measurably different A-CA-MP numbers, while the stateless Webster
+    # and memory-less M4 CA-MP strategies reproduced almost exactly. An
+    # open `>=` range means "reproduce this benchmark" silently stops
+    # meaning the same thing on a different machine or after a future
+    # `pip install`. See PROGRESS.md, "Fresh unified gate re-run".
+    "eclipse-sumo==1.27.1",
+    "traci==1.27.1",
+    "sumolib==1.27.1",
     "pyproj>=3.6",
 ]
 

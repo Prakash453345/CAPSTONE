@@ -197,11 +197,79 @@ def test_fairness_rises_with_wait_and_caps_at_full_wait_ratio():
 
 
 def test_switch_is_zero_for_the_current_phase_and_positive_otherwise():
+    # sat_flow defaults to 1.0 in _ring_config, where the sat_flow-weighted
+    # formula (see _switch's docstring -- the M4 root-cause fix) reduces to
+    # exactly the original bare lost_time_s/t_dec_s value.
     cfg = _ring_config(2, 3.0, 2.0, [10.0, 10.0], [30.0, 30.0])
     camp_cfg = camp.CampConfig()
     assert camp._switch(camp_cfg, cfg, "P0", "P0") == 0.0
     expected = camp_cfg.lambda_s * ((3.0 + 2.0 + camp_cfg.startup_lost_s) / camp_cfg.t_dec_s)
     assert camp._switch(camp_cfg, cfg, "P0", "P1") == expected
+
+
+def test_switch_scales_with_saturation_flow_squared():
+    # Regression test for the M4 root-cause fix (see _switch's docstring
+    # and PROGRESS.md's "Root cause confirmed" section): before the fix,
+    # switching cost was a flat constant, entirely independent of
+    # sat_flow_pcu_s, unlike every other pressure term. It must now shrink
+    # and grow with sat_flow the same way _flow_pressure does -- and since
+    # sat_flow enters twice (the phantom lost queue, then that queue's own
+    # pricing), a 4x change in sat_flow is a 16x change in switch cost.
+    low_sat = _ring_config(2, 3.0, 2.0, [10.0, 10.0], [30.0, 30.0], sat_flows=[0.5, 0.5])
+    high_sat = _ring_config(2, 3.0, 2.0, [10.0, 10.0], [30.0, 30.0], sat_flows=[2.0, 2.0])
+    camp_cfg = camp.CampConfig()
+    low = camp._switch(camp_cfg, low_sat, "P0", "P1")
+    high = camp._switch(camp_cfg, high_sat, "P0", "P1")
+    assert low > 0.0
+    assert high == low * 16.0
+
+
+def test_switch_cost_does_not_scale_with_the_candidate_phases_movement_count():
+    # A phase with two green movements must not cost more to switch into
+    # than one with a single movement at the same sat_flow -- the ring's
+    # own yellow/all-red/startup clearance interval doesn't get longer just
+    # because more movements happen to share the next phase. (A first draft
+    # of this fix summed sat_flow over the phase's own movements instead of
+    # averaging, and that materialized as real `failsafe_interlock_rejected`
+    # events on the real corridor that the unfixed build never produced --
+    # see _switch's docstring for the full story.)
+    phases = {
+        "P0": Phase("P0", frozenset({"m0"})),
+        "P1": Phase("P1", frozenset({"m1a", "m1b"})),
+    }
+    cfg = Tier0Config(
+        intersection_id="J", phases=phases, ring_order=("P0", "P1"),
+        conflict_matrix={
+            "m0": frozenset({"m1a", "m1b"}),
+            "m1a": frozenset({"m0"}),
+            "m1b": frozenset({"m0"}),
+        },
+        min_green_s={"P0": 10.0, "P1": 10.0}, max_green_s={"P0": 30.0, "P1": 30.0},
+        yellow_s=3.0, all_red_s=2.0,
+        sat_flow_pcu_s={"m0": 1.0, "m1a": 1.0, "m1b": 1.0},
+    )
+    camp_cfg = camp.CampConfig()
+    switch_into_single_movement_phase = camp._switch(camp_cfg, cfg, "P1", "P0")
+    switch_into_two_movement_phase = camp._switch(camp_cfg, cfg, "P0", "P1")
+    assert switch_into_single_movement_phase == switch_into_two_movement_phase
+
+
+def test_switch_cost_no_longer_swamps_flow_pressure_at_light_demand_scale():
+    # Pins down the diagnosed bug as a regression test: at this corridor's
+    # real placeholder saturation flow (0.5 pcu/s) and a realistic small
+    # queue, switching cost must be the same order of magnitude as flow
+    # pressure -- a modest discount -- not the 22x-61x blowout
+    # `m4_camp_diagnostics.py` measured against the old flat-constant
+    # formula (fixed switch cost 9.86 vs mean flow pressure 0.16-1.98).
+    cfg = _ring_config(2, 3.0, 2.0, [10.0, 10.0], [30.0, 30.0], sat_flows=[0.5, 0.5])
+    ctx = JunctionContext(
+        intersection_id="J", current_phase_id="P0", current_phase_elapsed_s=0.0,
+        queue_pcu={"m1": 2.0},
+    )
+    camp_cfg = camp.CampConfig()
+    flow = camp._flow_pressure(cfg, ctx, "P1")
+    switch = camp._switch(camp_cfg, cfg, "P0", "P1")
+    assert switch < flow * 5.0
 
 
 # ---- ring candidates / skip -------------------------------------------------
@@ -446,3 +514,168 @@ def test_allocate_green_clamps_to_max_green():
     pressures = {"P0": 1.0, "P1": 99.0}
     g = camp._allocate_green(cfg, "P1", pressures, nominal_cycle_s=200.0)
     assert g == 15.0
+
+
+# ---- starvation override -----------------------------------------------------
+#
+# Regression tests for a real, pre-existing gap that a real saturation-flow
+# calibration run on the corridor finally exercised (see PROGRESS.md's "Real
+# saturation-flow calibration" section): at zero receiving-link occupancy,
+# pressure() reduces to fairness minus switching cost, fairness's own
+# ceiling for a movement is capped once wait_ratio hits 1.0, and _switch's
+# sat_flow-weighted fix can price a multi-movement phase's switching cost
+# several times higher than that ceiling -- so a starved movement's own
+# phase can be structurally unable to ever win, no matter how long it
+# waits, while a completely idle current phase (own pressure exactly 0)
+# keeps "extending" itself forever. _critical_phases/the override in
+# propose() exist to make sure I5 is never the only thing standing between
+# that gap and an unserved movement.
+
+
+def test_critical_phases_empty_when_nothing_is_close_to_the_bound():
+    cfg = _ring_config(2, 3.0, 2.0, [5.0, 5.0], [30.0, 30.0], max_wait_s=100.0)
+    ctx = JunctionContext(
+        intersection_id="J", current_phase_id="P0", current_phase_elapsed_s=10.0,
+        wait_times_s={"m1": 50.0}, queue_pcu={"m1": 1.0},
+    )
+    assert camp._critical_phases(cfg, ctx, list(cfg.ring_order)) == []
+
+
+def test_critical_phases_ignores_a_movement_with_no_demand():
+    # High wait alone isn't enough -- I5 itself only fires "with demand"
+    # (has_demand=True), so a movement with a stale wait clock but no
+    # current demand must not force an override either.
+    cfg = _ring_config(2, 3.0, 2.0, [5.0, 5.0], [30.0, 30.0], max_wait_s=100.0)
+    ctx = JunctionContext(
+        intersection_id="J", current_phase_id="P0", current_phase_elapsed_s=10.0,
+        wait_times_s={"m1": 95.0}, has_demand={"m1": False},
+    )
+    assert camp._critical_phases(cfg, ctx, list(cfg.ring_order)) == []
+
+
+def test_critical_phases_orders_most_urgent_first():
+    cfg = _ring_config(3, 3.0, 2.0, [5.0, 5.0, 5.0], [30.0, 30.0, 30.0], max_wait_s=100.0)
+    ctx = JunctionContext(
+        intersection_id="J", current_phase_id="P0", current_phase_elapsed_s=10.0,
+        wait_times_s={"m1": 90.0, "m2": 95.0},  # both within the 15s margin of 100
+        has_demand={"m1": True, "m2": True},
+    )
+    assert camp._critical_phases(cfg, ctx, list(cfg.ring_order)) == ["P2", "P1"]
+
+
+def test_starvation_override_advances_even_though_current_has_the_highest_pressure():
+    # Reconstructs the real corridor's failure mode with real-scale numbers:
+    # an idle current phase (own pressure exactly 0, per the documented
+    # zero-occupancy P_flow/P_block cancellation) versus a 3-movement
+    # candidate phase whose own real sat_flow makes its switching cost
+    # dwarf fairness's ceiling -- so ordinary pressure ranking picks the
+    # idle phase every time, and only the override can ever reach the
+    # starved one.
+    cfg = _ring_config(
+        2, yellow_s=6.0, all_red_s=2.0, min_greens=[10.0, 10.0], max_greens=[90.0, 90.0],
+        max_wait_s=452.0, sat_flows=[0.4, 0.4],
+    )
+    ctx = JunctionContext(
+        intersection_id="J", current_phase_id="P0", current_phase_elapsed_s=57.0,
+        wait_times_s={"m1": 452.0}, has_demand={"m1": True}, queue_pcu={"m1": 5.4},
+    )
+    # Pin lambda_s to the build guide's own §3.9 default (1.0) explicitly,
+    # rather than relying on CampConfig()'s bare default -- that default
+    # is now the corridor-calibrated 0.143 (see CampConfig.lambda_s's own
+    # docstring / PROGRESS.md's "Recalibrating lambda_s" section), which
+    # happens to no longer reproduce this exact trap on these exact
+    # numbers. The override this test guards must hold regardless of
+    # which lambda_s is in effect -- a different corridor, or a reset to
+    # the guide's own default, can still hit this trap -- so the
+    # regression test stays pinned to the value that reproduces it
+    # instead of silently tracking whatever CampConfig's default becomes.
+    camp_cfg = camp.CampConfig(lambda_s=1.0)
+    # Confirm the trap is real before checking the fix: P1's own pressure
+    # (fairness capped at wait_ratio=1.0, minus P0->P1's switching cost)
+    # must be negative, i.e. worse than idle P0's exact 0.0.
+    assert camp.pressure(camp_cfg, cfg, ctx, "P1") < 0.0
+    assert camp.pressure(camp_cfg, cfg, ctx, "P0") == 0.0
+
+    plan = camp.propose(cfg, ctx, camp_cfg=camp_cfg, tick_s=1.0)
+    assert len(plan.steps) == 2
+    assert plan.steps[1].phase_id == "P1"
+
+
+def test_starvation_override_never_cuts_short_of_min_green():
+    # I3's floor is absolute -- even a movement already past its I5 bound
+    # must wait for current's own min_green_s, exactly like the ordinary
+    # pressure-based advance already does.
+    cfg = _ring_config(
+        2, 3.0, 2.0, min_greens=[20.0, 20.0], max_greens=[90.0, 90.0],
+        max_wait_s=100.0, sat_flows=[0.4, 0.4],
+    )
+    ctx = JunctionContext(
+        intersection_id="J", current_phase_id="P0", current_phase_elapsed_s=5.0,  # < min_green
+        wait_times_s={"m1": 100.0}, has_demand={"m1": True}, queue_pcu={"m1": 5.0},
+    )
+    plan = camp.propose(cfg, ctx, tick_s=1.0)
+    assert len(plan.steps) == 1
+    assert plan.steps[0].phase_id == "P0"
+
+
+@given(
+    n_phases=st.integers(min_value=2, max_value=4),
+    sat_flows=st.lists(st.floats(min_value=0.2, max_value=0.6), min_size=4, max_size=4),
+    data=st.data(),
+)
+@settings(max_examples=200, deadline=None)
+def test_camp_never_lets_i5_fire_across_heterogeneous_saturation_flows(n_phases, sat_flows, data):
+    # The property test above (test_camp_never_violates_interlocks_over_many_ticks)
+    # uses a uniform sat_flow=1.0 across every phase, which can't exercise
+    # this bug class at all -- the fairness-ceiling-vs-switching-cost gap
+    # only shows up once phases have genuinely different sat_flow_pcu_s, the
+    # real corridor's own condition once calibrated. A tight max_wait_s (so
+    # the bound is actually reachable within a short run) plus real
+    # heterogeneous sat_flow is the direct regression guard for the
+    # override this test file's "starvation override" section added.
+    yellow_s, all_red_s = 3.0, 2.0
+    min_greens = [5.0] * n_phases
+    max_greens = [20.0] * n_phases
+    max_wait_s = 40.0  # tight enough to be reachable in well under 80 ticks
+    cfg = _ring_config(
+        n_phases, yellow_s, all_red_s, min_greens, max_greens,
+        max_wait_s=max_wait_s, sat_flows=sat_flows[:n_phases],
+    )
+    assert cfg.validate() == []
+
+    current = cfg.ring_order[0]
+    elapsed = 0.0
+    movements = [f"m{i}" for i in range(n_phases)]
+    wait_times = dict.fromkeys(movements, 0.0)
+    n_ticks = data.draw(st.integers(min_value=10, max_value=80))
+
+    for _ in range(n_ticks):
+        served_now = cfg.phases[current].green_movements
+        # Every movement has standing demand throughout -- the adversarial
+        # case: nothing ever un-demands itself to give the ring an easy out.
+        for m in wait_times:
+            wait_times[m] = wait_times[m] + 1.0 if m not in served_now else 0.0
+        queue_pcu = {
+            m: data.draw(st.floats(min_value=0.0, max_value=10.0), label=f"q_{m}")
+            for m in movements
+        }
+        ctx = JunctionContext(
+            intersection_id="J",
+            current_phase_id=current,
+            current_phase_elapsed_s=elapsed,
+            wait_times_s=dict(wait_times),
+            has_demand=dict.fromkeys(movements, True),
+            queue_pcu=queue_pcu,
+        )
+        plan = camp.propose(cfg, ctx, tick_s=1.0)
+        violations = interlocks.check(plan, ctx, cfg)
+        assert violations == [], (
+            f"camp let I5 (or another interlock) fire: {violations} "
+            f"(current={current}, elapsed={elapsed}, wait_times={wait_times}, "
+            f"sat_flows={sat_flows[:n_phases]}, plan={plan})"
+        )
+        if len(plan.steps) == 1:
+            elapsed += plan.steps[0].green_s
+        else:
+            current = plan.steps[1].phase_id
+            elapsed = 0.0

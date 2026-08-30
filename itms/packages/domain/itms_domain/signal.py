@@ -122,6 +122,41 @@ class JunctionContext:
     from SUMO ground truth (no sensor-equivalence degradation layer
     exists before M8) rather than a real vision pipeline that could
     actually be less than fully confident.
+
+    `receiving_queue_pcu` / `approaching_pcu`: added for M5's A-CA-MP
+    strategy, and both exist to close gaps M4's own module docstring
+    named as open.
+
+    `receiving_queue_pcu[m]` is the PCU-weighted *stopped* queue on the
+    downstream lane movement `m` discharges into -- the same physical
+    quantity `queue_pcu` measures, pointed one link forward. M4 had no
+    source for this ("that would need a lane -> downstream-lane map this
+    build doesn't have", `camp.py`'s docstring) and worked around its
+    absence by reusing `queue_pcu[m]` inside its own blocking term, which
+    is what makes M4's `P_flow`/`P_block` pair cancel exactly at zero
+    receiving occupancy. The map in fact already existed --
+    `link_lanes.link_to_receiving_lane_map()`, which
+    `receiving_occupancy` is itself sampled through -- so this is the
+    same lane, measured for queue instead of only occupancy. With it,
+    pressure can be the textbook upstream-minus-downstream difference
+    [Varaiya 2013] rather than a scaled self-difference.
+
+    `approaching_pcu[m]` is the PCU-weighted count of vehicles *moving*
+    on `m`'s own approach lane whose time-to-stopline falls inside the
+    controller's decision horizon -- the observable half of M4's deferred
+    `q̂_l = q_l + ∫ â_l dτ` arrival augmentation. M4 scoped that term to
+    M5's Layer-2 projected-outflow exchange (a neighbour *publishing* its
+    predicted departures) and therefore left `q̂_l = q_l`; but the portion
+    of that integral contributed by vehicles already on this junction's
+    own approach needs no inter-junction exchange at all, only a look at
+    the lane the junction can already see. Layer 2's exchange remains the
+    right source for arrivals still upstream of the neighbour; this field
+    is the strictly-local part that never needed to wait for it.
+
+    Both default empty, the same additive pattern `queue_pcu`/
+    `receiving_occupancy` followed: no M2/M3/M4 strategy reads either, so
+    `fixed_time`/`webster`/`semi_actuated`/`coordinated_actuated`/`camp`
+    are all bit-for-bit unaffected by their existence.
     """
 
     intersection_id: str
@@ -136,6 +171,8 @@ class JunctionContext:
     queue_pcu: Mapping[str, float] = field(default_factory=dict)
     receiving_occupancy: Mapping[str, float] = field(default_factory=dict)
     confidence: Mapping[str, float] = field(default_factory=dict)
+    receiving_queue_pcu: Mapping[str, float] = field(default_factory=dict)
+    approaching_pcu: Mapping[str, float] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

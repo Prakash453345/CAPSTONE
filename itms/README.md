@@ -8,8 +8,14 @@ README.
 
 ## Current milestone
 
-**M2 — Safety kernel — done.** M3 (baselines and KPI harness) is next.
-See `PROGRESS.md` for what's built and what's next.
+**M5 — A-CA-MP (adaptive signal control) — done, one known open item.**
+It beats the tuned Webster baseline at light demand, ties it at medium,
+and is a modest (~7%) loss at heavy demand -- the corridor's one
+remaining weak spot, and the obvious next thing to fix (see PROGRESS.md's
+"Fixing heavy demand" and "Reconciling two concurrent sessions" sections).
+M6 (incident detection) and M7 (green corridor) are intentionally not
+started yet -- traffic management first, by design.
+See `PROGRESS.md` for the full history of what's built and what's next.
 
 ## Quick start
 
@@ -71,8 +77,9 @@ itms/
 │   │   └── sim_service/
 │   │       ├── adapters/sumo/       # TraCI loop (M1)
 │   │       ├── control/safety/      # L0 interlocks — pure predicates (M2)
-│   │       ├── control/strategies/  # fixed_time (M2); webster/actuated (M3), camp (M4)
-│   │       └── signal_controller/   # arbitration ladder + cabinet port (M2)
+│   │       ├── control/strategies/  # fixed_time (M2); webster/actuated (M3); camp (M4); acamp (M5)
+│   │       ├── control/memory.py, tuning.py, online_calibration.py  # M5's learning layer
+│   │       └── signal_controller/   # arbitration ladder + cabinet port (M2); +lane_cache, discharge_observer (M5)
 │   ├── api-service/          # [ARCH] services 6,8-12,14,15 — incidents, dispatch, routing, corridor, config, audit
 │   └── vision-service/       # [ARCH] services 7,18 — vision pipeline, camera ingestion
 ├── scenarios/                 # networks + demand for real/synthetic areas; suite/ (acceptance tests) arrives M2+
@@ -80,6 +87,9 @@ itms/
 ├── cases/atlas.yaml          # the case atlas, machine-readable — arrives M2+
 ├── bench/                     # benchmark harness — arrives M3
 ├── notebooks/                 # calibration notebooks — arrives M8
+├── scripts/                   # gate/benchmark/diagnostic scripts (M3-M5), one per experiment
+│   └── results/                # every script's generated JSON output — never hand-edited,
+│                                # regenerate by re-running the script that wrote it
 └── web/                       # demo page — live map as of M1, grows with each milestone
 ```
 
@@ -90,11 +100,11 @@ itms/
 | M0 | Skeleton | ✅ done |
 | M1 | SUMO adapter and traffic state | ✅ done |
 | M2 | Safety kernel (L0 interlocks) | ✅ done |
-| M3 | Baselines and KPI harness | not started |
-| M4 | CA-MP Layer 1 | not started |
-| M5 | Layer 2 coordination | not started |
-| M6 | Incident → dispatch → routing | not started |
-| M7 | Green corridor + anticipation + debt | not started |
+| M3 | Baselines and KPI harness (Webster) | ✅ done |
+| M4 | CA-MP Layer 1 | ✅ done — loses to Webster; superseded by M5 |
+| M5 | A-CA-MP (adaptive, with memory) | ✅ done — beats/ties Webster except heavy (~7% loss, open) |
+| M6 | Incident → dispatch → routing | not started (by design — see README top) |
+| M7 | Green corridor + anticipation + debt | not started (by design — see README top) |
 | M8 | Vision on real footage | not started |
 | M9 | Benchmark, evaluation, site | not started |
 

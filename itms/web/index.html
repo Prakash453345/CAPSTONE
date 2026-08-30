@@ -1,200 +1,1126 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>ITMS — M1 live map</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ITMS — Vijayawada corridor pilot</title>
+<meta name="description" content="A safety-proven adaptive traffic control platform for a real Vijayawada corridor: an interlock-guaranteed signal safety kernel, three tuned baseline controllers with a statistical benchmark harness, and an adaptive max-pressure controller in active development — built toward network coordination, incident detection, and emergency green corridors." />
+<meta property="og:title" content="ITMS — Vijayawada corridor pilot" />
+<meta property="og:description" content="A safety-proven adaptive traffic control platform, built and benchmarked in the open on a real 16-junction corridor." />
+<meta property="og:type" content="website" />
+<meta name="theme-color" content="#101416" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='16' fill='%2314181A'/%3E%3Crect x='14.8' y='7' width='2.4' height='9' rx='1.2' fill='%233FE0FF'/%3E%3Crect x='7' y='14.8' width='9' height='2.4' rx='1.2' fill='%235C6B70'/%3E%3C/svg%3E" />
 <link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-  html, body { height: 100%; margin: 0; }
-  body {
-    font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
-    background: #0b0f14; color: #d6e2ea;
-    display: flex; flex-direction: column;
-  }
-  header { padding: 14px 20px 10px; flex: 0 0 auto; }
-  h1 { font-size: 16px; color: #7fd1ff; margin: 0 0 4px; }
-  p.sub { color: #7c8b96; margin: 0; font-size: 12.5px; max-width: 900px; }
-  #status { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 12px; margin-left: 8px; }
-  #status.connecting { background: #4a3b00; color: #ffd76a; }
-  #status.open { background: #123a1f; color: #6adf8f; }
-  #status.closed { background: #3a1212; color: #ff8a8a; }
-  #stats { color: #7c8b96; font-size: 12px; margin-top: 6px; }
-  #stats b { color: #d6e2ea; }
-  #main { flex: 1 1 auto; display: flex; min-height: 0; padding: 0 20px 20px; gap: 16px; box-sizing: border-box; }
-  #map { flex: 2 1 0; border: 1px solid #1c2733; border-radius: 6px; background: #0f151c; min-width: 0; }
-  #side { flex: 1 1 0; min-width: 260px; max-width: 420px; display: flex; flex-direction: column; min-height: 0; }
-  #side h2 { font-size: 13px; color: #7fd1ff; margin: 0 0 8px; font-weight: normal; }
-  #log { border: 1px solid #1c2733; border-radius: 6px; padding: 10px; flex: 1 1 auto; overflow-y: auto; background: #0f151c; font-size: 11.5px; }
-  .row { white-space: pre-wrap; word-break: break-all; border-bottom: 1px solid #141c24; padding: 4px 0; }
-  .row .ts { color: #7c8b96; }
-  .veh-tip { font: 11px ui-monospace, monospace; }
-  .leaflet-container { background: #0f151c; }
+:root{
+  --bg:#F5F4F2; --card:#FFFFFF; --ink:#14181A; --grey:#AFAFAB; --body:#5E6568;
+  --line:#E7E5E1; --line2:#D9D6D1; --dark:#101416; --dark2:#191E21;
+  --cy:#3FE0FF; --cy-d:#0A9AB0;
+  --sans:'Plus Jakarta Sans',-apple-system,sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,monospace;
+  --gut:clamp(20px,4.6vw,56px); --max:1280px;
+  --ease:cubic-bezier(.16,1,.3,1);
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html{scroll-behavior:smooth;}
+section[id],#top{scroll-margin-top:100px;}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.6;
+  -webkit-font-smoothing:antialiased;overflow-x:hidden;letter-spacing:-.011em;}
+a{color:inherit;text-decoration:none;}
+:focus-visible{outline:2px solid var(--ink);outline-offset:3px;border-radius:4px;}
+.skiplink{position:absolute;left:16px;top:-60px;background:var(--ink);color:#fff;padding:11px 18px;
+  border-radius:10px;font-size:14px;font-weight:500;z-index:200;transition:top .25s var(--ease);}
+.skiplink:focus{top:16px;}
+.wrap{max-width:var(--max);margin:0 auto;padding:0 var(--gut);}
+.mono{font-family:var(--mono);letter-spacing:0;}
+
+/* ---------- type ---------- */
+h1,h2,h3,h4{font-weight:600;letter-spacing:-.032em;line-height:1.02;text-wrap:balance;}
+.h1{font-size:clamp(38px,5.6vw,80px);}
+.h2{font-size:clamp(30px,4.3vw,60px);}
+.dim{color:var(--grey);}
+p{color:var(--body);text-wrap:pretty;}
+.lede{font-size:clamp(15.5px,1.25vw,18px);line-height:1.6;color:var(--body);}
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:var(--grey);}
+
+/* reveal: quick, subtle, not a showcase */
+.rv{opacity:0;transform:translateY(10px);transition:opacity .4s var(--ease),transform .4s var(--ease);}
+.rv.in{opacity:1;transform:none;}
+.stg>*{opacity:0;transform:translateY(8px);transition:opacity .35s var(--ease),transform .35s var(--ease);}
+.stg.in>*{opacity:1;transform:none;}
+.stg.in>*:nth-child(1){transition-delay:0s}.stg.in>*:nth-child(2){transition-delay:.04s}
+.stg.in>*:nth-child(3){transition-delay:.08s}.stg.in>*:nth-child(4){transition-delay:.12s}
+.stg.in>*:nth-child(5){transition-delay:.16s}.stg.in>*:nth-child(6){transition-delay:.2s}
+.stg.in>*:nth-child(7){transition-delay:.24s}.stg.in>*:nth-child(8){transition-delay:.28s}
+
+/* ---------- floating nav ---------- */
+.navdock{position:fixed;top:16px;left:0;right:0;z-index:90;display:flex;justify-content:center;
+  pointer-events:none;}
+.nav{pointer-events:auto;display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.82);
+  backdrop-filter:blur(20px) saturate(1.6);border:1px solid var(--line);border-radius:999px;
+  padding:7px 7px 7px 14px;box-shadow:0 4px 20px rgba(20,24,26,.06),0 1px 2px rgba(20,24,26,.05);
+  transition:padding .6s var(--ease),gap .6s var(--ease),box-shadow .4s;}
+.nav .mark{display:flex;align-items:center;gap:9px;font-weight:700;font-size:15px;letter-spacing:-.02em;
+  white-space:nowrap;padding-right:6px;}
+.nav .glyph{width:26px;height:26px;border-radius:50%;background:var(--ink);position:relative;flex:0 0 26px;}
+.nav .glyph::before{content:'';position:absolute;left:50%;top:6px;width:2.4px;height:9px;border-radius:2px;
+  background:var(--cy);transform:translateX(-50%);}
+.nav .glyph::after{content:'';position:absolute;left:50%;bottom:6px;width:9px;height:2.4px;border-radius:2px;
+  background:#5C6B70;transform:translateX(-50%);}
+.nav .lk{display:flex;align-items:center;gap:2px;overflow:hidden;max-width:520px;opacity:1;
+  transition:max-width .6s var(--ease),opacity .35s var(--ease),margin .6s var(--ease);}
+.nav .lk a{padding:8px 13px;font-size:14px;color:var(--body);border-radius:999px;white-space:nowrap;
+  transition:background .25s,color .25s;}
+.nav .lk a:hover{background:var(--bg);color:var(--ink);}
+.nav .cta{background:var(--ink);color:#fff;border-radius:999px;padding:9px 17px;font-size:14px;
+  font-weight:500;white-space:nowrap;transition:transform .3s var(--ease),background .3s;}
+.nav .cta:hover{transform:translateY(-1px);background:#242A2D;}
+.nav .dots{display:none;width:34px;height:34px;border-radius:50%;background:var(--bg);border:0;
+  cursor:pointer;align-items:center;justify-content:center;gap:3px;}
+.nav .dots i{width:3.4px;height:3.4px;border-radius:50%;background:var(--body);display:block;}
+.navdock.shrunk .nav{padding:7px 7px 7px 14px;}
+.navdock.shrunk .nav .lk{max-width:0;opacity:0;margin-left:-6px;}
+.navdock.shrunk .nav .cta{display:none;}
+.navdock.shrunk .nav .dots{display:flex;}
+.navdock.shrunk.open .nav .lk{max-width:520px;opacity:1;margin-left:0;}
+.navdock.shrunk.open .nav .cta{display:block;}
+
+/* ---------- buttons ---------- */
+.btn{display:inline-flex;align-items:center;gap:9px;font-size:15px;font-weight:500;padding:13px 22px;
+  border-radius:999px;background:var(--ink);color:#fff;border:1px solid var(--ink);white-space:nowrap;
+  transition:transform .35s var(--ease),background .3s,box-shadow .35s;}
+.btn:hover{transform:translateY(-2px);background:#242A2D;box-shadow:0 10px 26px rgba(20,24,26,.16);}
+.btn:active{transform:translateY(0) scale(.97);transition-duration:.1s;}
+.btn.gh{background:transparent;color:var(--ink);border-color:var(--line2);}
+.btn.gh:hover{background:#fff;border-color:var(--ink);box-shadow:0 8px 22px rgba(20,24,26,.07);}
+.btn .av{width:26px;height:26px;border-radius:50%;background:#2B3336;margin:-6px 0 -6px -10px;
+  display:flex;align-items:center;justify-content:center;flex:0 0 26px;}
+.btn .arw{transition:transform .3s var(--ease);}
+.btn:hover .arw{transform:translateX(4px);}
+.btn.sm{padding:10px 17px;font-size:14px;}
+
+/* ---------- hero ---------- */
+.hero{padding:clamp(96px,11vw,150px) 0 clamp(40px,6vw,80px);position:relative;}
+.herogrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.02fr);gap:clamp(24px,4vw,60px);
+  align-items:center;}
+.badge{display:inline-flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--line);
+  border-radius:999px;padding:6px 14px 6px 10px;font-size:13px;color:var(--body);font-weight:500;}
+.badge .live{width:7px;height:7px;border-radius:50%;background:#37B26A;box-shadow:0 0 0 0 rgba(55,178,106,.5);
+  animation:ping 2.4s ease-out infinite;}
+@keyframes ping{70%{box-shadow:0 0 0 7px rgba(55,178,106,0)}100%{box-shadow:0 0 0 0 rgba(55,178,106,0)}}
+.hero h1{margin:24px 0 22px;max-width:14ch;}
+.hero .lede{max-width:48ch;}
+.herocta{display:flex;gap:11px;flex-wrap:wrap;margin-top:30px;}
+.proof{display:flex;align-items:center;gap:13px;margin-top:34px;}
+.pstack{display:flex;}
+.pstack i{width:34px;height:34px;border-radius:50%;background:var(--dark);border:2.5px solid var(--bg);
+  margin-left:-11px;display:flex;align-items:center;justify-content:center;flex:0 0 34px;}
+.pstack i:first-child{margin-left:0;}
+.proof .txt{font-size:13.5px;color:var(--body);line-height:1.35;}
+.proof .txt b{display:block;color:var(--ink);font-weight:600;font-size:14px;}
+
+/* ---------- hero visual: one clean panel, not a mockup stack ---------- */
+.hvis{position:relative;}
+.screen{border-radius:14px;overflow:hidden;background:var(--dark);border:1px solid rgba(255,255,255,.08);
+  box-shadow:0 24px 50px -24px rgba(20,24,26,.35);}
+.screen .bar{height:34px;background:#0B0F11;display:flex;align-items:center;gap:6px;padding:0 14px;
+  border-bottom:1px solid rgba(255,255,255,.07);}
+.screen .bar b{width:7px;height:7px;border-radius:50%;background:#2B3439;display:block;}
+.screen .bar span{margin-left:9px;font-family:var(--mono);font-size:10.5px;color:#5B686D;letter-spacing:.03em;}
+.screen svg{display:block;width:100%;}
+.screenfoot{display:flex;gap:clamp(14px,3vw,28px);padding:16px 18px;border-top:1px solid #1B2225;
+  flex-wrap:wrap;}
+.screenfoot span{font-family:var(--mono);font-size:11px;color:#8FA5AD;letter-spacing:.01em;}
+.screenfoot b{display:block;font-family:var(--sans);font-size:19px;font-weight:700;color:#fff;
+  letter-spacing:-.02em;font-variant-numeric:tabular-nums;margin-bottom:2px;}
+
+/* ---------- sections ---------- */
+section{padding:clamp(64px,8vw,128px) 0;}
+.shead{display:grid;grid-template-columns:1fr auto;gap:26px;align-items:end;
+  margin-bottom:clamp(30px,4vw,52px);}
+.shead .sub{max-width:40ch;}
+
+/* module cards */
+.mods{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start;}
+.mod{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:24px 24px 0;
+  overflow:hidden;transition:transform .5s var(--ease),box-shadow .5s var(--ease),border-color .4s;}
+.mod:hover{transform:translateY(-6px);box-shadow:0 26px 56px -20px rgba(20,24,26,.24);border-color:var(--line2);}
+.mod .ev{font-family:var(--mono);font-size:10.5px;color:var(--cy-d);letter-spacing:.02em;}
+.mod h3{font-size:26px;margin:12px 0 10px;}
+.mod p{font-size:14.6px;max-width:46ch;}
+.modvis{margin:22px -24px 0;background:var(--dark);border-top:1px solid var(--line);position:relative;
+  overflow:hidden;}
+.modvis svg{display:block;width:100%;height:168px;}
+.modfoot{display:flex;align-items:center;justify-content:space-between;padding:14px 0;}
+.modfoot .n{font-size:14px;font-weight:600;}
+.modfoot .g{font-size:13.5px;color:var(--grey);display:flex;align-items:center;gap:6px;}
+
+/* ---------- statement ---------- */
+.stmt{text-align:center;max-width:26ch;margin:0 auto;font-size:clamp(24px,3.5vw,46px);
+  font-weight:500;letter-spacing:-.032em;line-height:1.14;}
+.stmt b{font-weight:600;}
+.stmt .dim{color:var(--grey);font-weight:500;}
+.stmtby{display:flex;align-items:center;justify-content:center;gap:11px;margin-top:30px;}
+.stmtby .ic{width:38px;height:38px;border-radius:50%;background:var(--ink);display:flex;
+  align-items:center;justify-content:center;}
+.stmtby .t{text-align:left;font-size:13.5px;color:var(--grey);line-height:1.35;}
+.stmtby .t b{display:block;color:var(--ink);font-weight:600;font-size:14px;}
+
+/* ---------- capability list ---------- */
+
+/* ---------- flow ---------- */
+.flow{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;}
+.fs{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:22px;
+  transition:transform .5s var(--ease),box-shadow .5s var(--ease);}
+.fs:hover{transform:translateY(-5px);box-shadow:0 22px 46px -20px rgba(20,24,26,.2);}
+.fs .t{font-size:34px;font-weight:700;letter-spacing:-.04em;line-height:1;font-variant-numeric:tabular-nums;}
+.fs .t sub{font-family:var(--mono);font-size:12px;font-weight:400;color:var(--grey);vertical-align:baseline;
+  margin-left:3px;letter-spacing:0;}
+.fs h4{font-size:17px;margin:12px 0 8px;}
+.fs p{font-size:13.6px;}
+.fs .ev{display:block;font-family:var(--mono);font-size:10px;color:var(--grey);margin-top:14px;
+  padding-top:11px;border-top:1px solid var(--line);letter-spacing:.02em;}
+
+/* ---------- shared dark-panel texture ---------- */
+.band::before,.consolecard::before,.ctac::before{content:'';position:absolute;inset:0;z-index:0;opacity:.05;
+  mix-blend-mode:overlay;pointer-events:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");}
+
+/* ---------- dark metric band ---------- */
+.band{background:var(--dark);color:#fff;border-radius:26px;padding:clamp(32px,5vw,64px);
+  position:relative;overflow:hidden;}
+.band h2{color:#fff;position:relative;}
+.band .dim{color:#5B686D;}
+.band p{color:#9BAAB0;}
+.mets{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:#232A2D;margin-top:44px;
+  border:1px solid #232A2D;border-radius:14px;overflow:hidden;position:relative;}
+.met{background:var(--dark);padding:24px 22px 26px;}
+.met b{display:block;font-size:clamp(30px,3.6vw,46px);font-weight:700;letter-spacing:-.04em;
+  line-height:1;color:#fff;font-variant-numeric:tabular-nums;}
+.met span{display:block;font-size:13.4px;color:#93A3A9;margin-top:9px;}
+.met em{display:block;font-family:var(--mono);font-style:normal;font-size:9.5px;letter-spacing:.13em;
+  text-transform:uppercase;color:#5B686D;margin-top:12px;}
+
+/* ---------- phases ---------- */
+.phases{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+.ph{border:1px solid var(--line);border-radius:20px;padding:30px;background:var(--card);
+  display:flex;flex-direction:column;}
+.ph.now{background:var(--dark);border-color:var(--dark);color:#fff;}
+.ph.now p{color:#9BAAB0;}
+.ph.now .fl li{color:#C3D0D4;border-color:#232A2D;}
+.ph.now .fl li::before{background:var(--cy);}
+.ph .tagx{align-self:flex-start;font-family:var(--mono);font-size:10px;letter-spacing:.13em;
+  text-transform:uppercase;padding:5px 11px;border-radius:999px;background:rgba(63,224,255,.14);
+  color:var(--cy);margin-bottom:18px;}
+.ph:not(.now) .tagx{background:var(--bg);color:var(--grey);}
+.ph h3{font-size:27px;margin-bottom:9px;}
+.ph.now h3{color:#fff;}
+.ph>p{font-size:14.4px;margin-bottom:22px;}
+.fl{list-style:none;margin-top:auto;}
+.fl li{font-size:14px;padding:10px 0 10px 22px;border-bottom:1px solid var(--line);position:relative;
+  color:var(--body);}
+.fl li:last-child{border-bottom:0;}
+.fl li::before{content:'';position:absolute;left:0;top:18px;width:9px;height:1.6px;background:var(--ink);}
+.contract{margin-top:16px;border:1px dashed var(--line2);border-radius:16px;padding:20px 22px;
+  font-size:14px;color:var(--body);line-height:1.75;background:var(--card);}
+.contract b{color:var(--ink);font-weight:600;}
+
+/* ---------- faq ---------- */
+.faqgrid{display:grid;grid-template-columns:1.35fr .85fr;gap:clamp(20px,3vw,42px);align-items:start;}
+.fq{background:var(--card);border:1px solid var(--line);border-radius:15px;margin-bottom:10px;
+  transition:box-shadow .4s,border-color .4s;}
+.fq.open{box-shadow:0 14px 34px -18px rgba(20,24,26,.22);border-color:var(--line2);}
+.fqb{width:100%;background:none;border:0;cursor:pointer;text-align:left;display:flex;gap:14px;
+  align-items:center;padding:19px 20px;font-family:inherit;color:inherit;}
+.fqb .n{font-family:var(--mono);font-size:12px;color:var(--grey);flex:0 0 22px;}
+.fqb .q{flex:1;font-size:16.5px;font-weight:600;letter-spacing:-.022em;line-height:1.3;}
+.fqb .ic{flex:0 0 24px;height:24px;position:relative;transition:transform .5s var(--ease);}
+.fqb .ic::before,.fqb .ic::after{content:'';position:absolute;background:var(--ink);left:50%;top:50%;
+  transform:translate(-50%,-50%);border-radius:2px;}
+.fqb .ic::before{width:12px;height:1.7px;}
+.fqb .ic::after{width:1.7px;height:12px;transition:opacity .35s;}
+.fq.open .ic{transform:rotate(180deg);}
+.fq.open .ic::after{opacity:0;}
+.fqa{max-height:0;overflow:hidden;transition:max-height .55s var(--ease);}
+.fqa div{padding:0 54px 20px 56px;font-size:14.6px;color:var(--body);}
+.stickcard{position:sticky;top:100px;background:var(--card);border:1px solid var(--line);
+  border-radius:20px;padding:26px;}
+.stickcard .ic{width:52px;height:52px;border-radius:50%;background:var(--ink);margin-bottom:18px;
+  display:flex;align-items:center;justify-content:center;}
+.stickcard h3{font-size:23px;margin-bottom:10px;}
+.stickcard h3 .dim{display:block;}
+.stickcard p{font-size:14.2px;margin-bottom:20px;}
+
+/* ---------- adr cards ---------- */
+.adrs{display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:16px;}
+.adr{background:var(--card);border:1px solid var(--line);border-radius:18px;overflow:hidden;
+  display:flex;flex-direction:column;transition:transform .5s var(--ease),box-shadow .5s var(--ease);}
+.adr:hover{transform:translateY(-6px);box-shadow:0 26px 52px -22px rgba(20,24,26,.22);}
+.adr .img{background:var(--dark);height:172px;position:relative;overflow:hidden;}
+.adr .img svg{width:100%;height:100%;display:block;}
+.adr .bd{padding:20px 22px 24px;flex:1;display:flex;flex-direction:column;}
+.adr .meta{font-family:var(--mono);font-size:10.5px;color:var(--grey);letter-spacing:.06em;
+  text-transform:uppercase;margin-bottom:10px;}
+.adr h4{font-size:19px;line-height:1.2;margin-bottom:9px;}
+.adr p{font-size:13.8px;}
+.adr .rd{margin-top:auto;padding-top:16px;font-size:13.5px;font-weight:500;display:flex;
+  align-items:center;gap:6px;}
+
+/* ---------- live console ---------- */
+.consolecard{background:var(--dark);border-radius:26px;padding:clamp(20px,3vw,32px);position:relative;
+  overflow:hidden;}
+.conhead{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;
+  position:relative;margin-bottom:16px;}
+.conhead h3{color:#fff;font-size:19px;}
+.constatus{display:inline-flex;align-items:center;gap:7px;font-family:var(--mono);font-size:11.5px;
+  padding:5px 12px;border-radius:999px;background:#1B2225;color:#8FA5AD;}
+.constatus .dot{width:7px;height:7px;border-radius:50%;background:#5E7178;}
+.constatus.open{color:#7BE3C7;background:#153A31;}
+.constatus.open .dot{background:#57C97B;}
+.constatus.closed{color:#E8A3A3;background:#3A1212;}
+.constatus.closed .dot{background:#C8384A;}
+.congrid{display:grid;grid-template-columns:2fr 1fr;gap:16px;position:relative;}
+#conmap{height:clamp(320px,42vw,480px);border-radius:14px;border:1px solid #232A2D;background:#0F151C;}
+.conside{display:flex;flex-direction:column;gap:12px;min-height:0;}
+.constats{display:flex;gap:10px;}
+.constat{flex:1;background:#161D20;border:1px solid #232A2D;border-radius:12px;padding:12px 14px;}
+.constat b{display:block;font-size:22px;color:#fff;font-weight:700;letter-spacing:-.03em;
+  font-variant-numeric:tabular-nums;}
+.constat span{display:block;font-size:10.5px;color:#5E7178;font-family:var(--mono);letter-spacing:.05em;
+  text-transform:uppercase;margin-top:4px;}
+.conlogwrap{flex:1;min-height:0;background:#161D20;border:1px solid #232A2D;border-radius:12px;
+  padding:10px 12px;overflow-y:auto;font-family:var(--mono);font-size:10.5px;color:#8FA5AD;
+  max-height:clamp(220px,29vw,332px);}
+.conlogwrap .row{white-space:pre-wrap;word-break:break-all;border-bottom:1px solid #1B2225;padding:5px 0;}
+.conlogwrap .row:last-child{border-bottom:0;}
+.conlogwrap .row .ts{color:#4E6068;}
+.conlogwrap .row b{color:#DCE7EA;}
+.connote{font-size:12.5px;color:#9BAAB0;margin-top:16px;position:relative;line-height:1.6;}
+
+/* ---------- cta ---------- */
+.ctac{background:var(--dark);border-radius:26px;padding:clamp(34px,5.5vw,74px);position:relative;
+  overflow:hidden;display:grid;grid-template-columns:1fr auto;gap:34px;align-items:end;}
+.ctac h2{color:#fff;position:relative;}
+.ctac p{color:#9BAAB0;max-width:36ch;margin-top:16px;position:relative;}
+.ctac .btn{background:#fff;color:var(--ink);border-color:#fff;}
+.ctac .btn:hover{background:#EDECEA;}
+.ctac .btn.gh{background:transparent;color:#fff;border-color:#33393C;}
+.ctac .btn.gh:hover{background:#1B2124;}
+
+/* ---------- footer ---------- */
+footer{padding-bottom:26px;}
+.fgrid{display:grid;grid-template-columns:1.7fr 1fr 1fr;gap:30px;padding:clamp(44px,6vw,80px) 0 40px;}
+.fgrid h5{font-family:var(--mono);font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--grey);margin-bottom:15px;font-weight:400;}
+.fgrid a,.fgrid span{display:block;color:var(--body);font-size:14.5px;padding:5px 0;transition:color .25s;}
+.fgrid a:hover{color:var(--ink);}
+.fgrid span{color:var(--grey);}
+.kin{font-size:clamp(26px,3.6vw,44px);font-weight:600;letter-spacing:-.035em;line-height:1.08;
+  margin-bottom:16px;}
+.kin .cy{color:var(--cy-d);}
+.wm{display:flex;justify-content:space-between;border-top:1px solid var(--line);padding-top:12px;
+  font-size:clamp(58px,20vw,268px);font-weight:800;letter-spacing:-.05em;line-height:.78;
+  color:#E4E2DE;user-select:none;overflow:hidden;}
+.fbot{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;padding-top:18px;
+  font-family:var(--mono);font-size:11px;color:var(--grey);letter-spacing:.02em;}
+
+/* ---------- responsive ---------- */
+@media(max-width:1040px){
+  .herogrid{grid-template-columns:1fr;}
+  .hvis{margin-top:14px;}
+  .mods,.phases{grid-template-columns:1fr;}
+  .flow{grid-template-columns:1fr 1fr;}
+  .adrs{grid-template-columns:1fr 1fr;}
+  .faqgrid{grid-template-columns:1fr;}
+  .stickcard{position:static;}
+  .mets{grid-template-columns:1fr 1fr;}
+  .fgrid{grid-template-columns:1fr 1fr;}
+  .congrid{grid-template-columns:1fr;}
+  #conmap{height:340px;}
+}
+@media(max-width:700px){
+  .nav .lk{max-width:0;opacity:0;margin-left:-6px;}
+  .nav .dots{display:flex;}
+  .navdock.open .nav .lk{max-width:60vw;opacity:1;margin-left:0;overflow-x:auto;}
+  .flow,.adrs{grid-template-columns:1fr;}
+  .shead{grid-template-columns:1fr;}
+  .ctac{grid-template-columns:1fr;}
+  .fgrid{grid-template-columns:1fr;}
+  .fqa div{padding:0 20px 20px;}
+  .constats{flex-wrap:wrap;}
+}
+@media(prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms!important;transition-duration:.01ms!important;}
+  .rv,.stg>*{opacity:1;transform:none;}
+}
 </style>
 </head>
 <body>
-<header>
-  <h1>ITMS — Vijayawada corridor (M1) <span id="status" class="connecting">connecting…</span></h1>
-  <p class="sub">Live map of the MG Road corridor scenario: road network in cyan, traffic-light junctions as
-    amber dots, simulated vehicles as moving markers, driven by sim-service (SUMO/TraCI) over the same
-    event bus the rest of the platform will eventually consume. Edge color darkens with vehicle occupancy
-    (from <code>ApproachState</code>) -- everything else is a placeholder until later milestones (M2 safety
-    kernel, M4 CA-MP signal control, M8 real vision/PCU).</p>
-  <div id="stats">vehicles on map: <b id="vehCount">0</b> &nbsp;|&nbsp; events received: <b id="evtCount">0</b></div>
-</header>
-<div id="main">
-  <div id="map"></div>
-  <div id="side">
-    <h2>raw event log (last 500)</h2>
-    <div id="log"></div>
-  </div>
+
+<a class="skiplink" href="#top">Skip to content</a>
+
+<div class="navdock" id="navdock">
+  <nav class="nav">
+    <a class="mark" href="#top"><span class="glyph"></span>ITMS</a>
+    <div class="lk">
+      <a href="#modules">Platform</a>
+      <a href="#console">Live console</a>
+      <a href="#deploy">Roadmap</a>
+      <a href="#faq">FAQ</a>
+    </div>
+    <a class="cta" href="#console">Live console</a>
+    <button class="dots" id="dots" aria-label="Menu"><i></i><i></i><i></i></button>
+  </nav>
 </div>
+
+<main id="top">
+<!-- ================= HERO ================= -->
+<section class="hero">
+  <div class="wrap">
+    <div class="herogrid">
+      <div>
+        <span class="badge rv"><i class="live"></i> Live pilot · Vijayawada corridor · adaptive control in progress</span>
+        <h1 class="h1 rv"><span class="dim">An ambulance should never meet</span> a red light.</h1>
+        <p class="lede rv">That's the destination. What's actually running today is the foundation it has to
+          stand on: a signal safety kernel that provably cannot produce an unsafe phase, three tuned baseline
+          controllers with a real statistical benchmark, and an adaptive max-pressure controller currently in
+          active development — bugs found, root-caused, and fixed in the open.</p>
+        <div class="herocta rv">
+          <a class="btn" href="#console"><span class="av">
+            <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M2 7h10M8 3l4 4-4 4"
+              stroke="#3FE0FF" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </span>Watch the live simulation</a>
+          <a class="btn gh" href="#modules">See what's built</a>
+        </div>
+        <div class="proof rv">
+          <div class="pstack">
+            <i><svg width="15" height="15" viewBox="0 0 16 16" fill="none"><rect x="5.5" y="1.5" width="5" height="13" rx="2.5" stroke="#8FA5AD" stroke-width="1.3"/><circle cx="8" cy="5" r="1.2" fill="#3FE0FF"/></svg></i>
+            <i><svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M1.5 11h13M3 11V7l2.5-3h5L13 7v4" stroke="#8FA5AD" stroke-width="1.3" stroke-linejoin="round"/><circle cx="4.8" cy="12.6" r="1.3" stroke="#8FA5AD" stroke-width="1.3"/><circle cx="11.2" cy="12.6" r="1.3" stroke="#8FA5AD" stroke-width="1.3"/></svg></i>
+            <i><svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M1.5 9c1.7-5 3.4-5 5 0s3.4 5 5 0 2.6-3.4 4 -1.7" stroke="#3FE0FF" stroke-width="1.3" stroke-linecap="round"/></svg></i>
+          </div>
+          <div class="txt"><b>16 junctions · 7 signal-controlled · 708 simulated vehicles</b>
+            Running live in your browser below, not a screenshot</div>
+        </div>
+      </div>
+
+      <div class="hvis rv">
+        <div class="screen">
+          <div class="bar"><b></b><b></b><b></b><span>MG Road corridor · illustrative signal simulation</span></div>
+          <svg id="netstrip" viewBox="0 0 900 420" preserveAspectRatio="xMidYMid meet" role="img"
+            aria-label="Stylized animated road network illustrating adaptive signal switching under simulated traffic. This is a decorative illustration, not the live feed -- see the live console section further down the page for the actual running simulation."></svg>
+          <div class="screenfoot">
+            <span><b>90,000</b>test cases, 0 failed</span>
+            <span><b>0</b>interlock violations, 60 runs</span>
+            <span><b>100%</b>of the CA-MP shortfall root-caused</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= MODULES ================= -->
+<section id="modules">
+  <div class="wrap">
+    <div class="shead">
+      <h2 class="h2 rv"><span class="dim">Four systems,</span> one event language.</h2>
+      <div>
+        <p class="lede sub rv">Every module publishes and consumes the same versioned events through one
+          internal message bus, so the core never learns whether it's optimising a simulation or a city.</p>
+        <a class="btn gh sm rv" style="margin-top:14px" href="../PROGRESS.md">Read the full build log <span class="arw">→</span></a>
+      </div>
+    </div>
+
+    <div class="mods stg">
+      <article class="mod">
+        <span class="ev">SignalChanged / SignalFaulted</span>
+        <h3>Interlock-safe arbitration</h3>
+        <p>Eight safety predicates (I1–I7 plus a Tier-0 config guard) sit below every strategy. Proposals from an
+          automated, randomized adversarial test suite — 90,000 cases across 9 invariants — cannot produce a
+          conflicting green. Five injected hardware faults (lamp failure, comms loss, power restart, and more)
+          each reach a defined, tested safe state.</p>
+        <div class="modvis"><svg viewBox="0 0 480 168" id="v1" role="img" aria-label="Five interlock checks, all passing across 90,000 generated test cases"></svg></div>
+        <div class="modfoot"><span class="n">Safety kernel</span>
+          <span class="g">Done <svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M3 11L11 3M11 3H5M11 3v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span></div>
+      </article>
+
+      <article class="mod">
+        <span class="ev">Webster · semi-actuated · coordinated</span>
+        <h3>Tuned baseline controllers</h3>
+        <p>Three real controllers — Webster's 1958 delay-minimizing formula, semi-actuated with longest-wait
+          priority, and a coordinated green-wave corridor — each computed from measured flows on the real
+          network, not guessed timings. Benchmarked over 10 paired seeds with 95% confidence intervals, the
+          same statistical rigor throughout.</p>
+        <div class="modvis"><svg viewBox="0 0 480 168" id="v2" role="img" aria-label="Bar chart comparing mean person-delay across three baseline controllers, Webster lowest"></svg></div>
+        <div class="modfoot"><span class="n">Baselines + KPI harness</span>
+          <span class="g">Done <svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M3 11L11 3M11 3H5M11 3v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span></div>
+      </article>
+
+      <article class="mod">
+        <span class="ev">Live queue-pressure scoring</span>
+        <h3>Adaptive pressure control (CA-MP)</h3>
+        <p>A max-pressure-family controller that reads real PCU-weighted queues and downstream occupancy from
+          live simulation state each tick. Currently mid-fix: a 60-run gate comparison and a root-cause
+          diagnostic together confirmed a scoring-scale bug, now being corrected in the open rather than
+          quietly patched over.</p>
+        <div class="modvis"><svg viewBox="0 0 480 168" id="v3" role="img" aria-label="Diagnostic chart showing phase changes are 100 percent timeout-driven at every demand level tested"></svg></div>
+        <div class="modfoot"><span class="n">Max-pressure control</span>
+          <span class="g">In progress <svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M3 11L11 3M11 3H5M11 3v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span></div>
+      </article>
+
+      <article class="mod">
+        <span class="ev">Live vehicle + signal state</span>
+        <h3>Live simulation pipeline</h3>
+        <p>A live simulation steps the real corridor, publishes state once a second onto the event bus, and
+          streams it out to any connected browser — with zero dropped ticks measured at 2× real time. The same
+          pipeline the console below is drawing from, live, right now.</p>
+        <div class="modvis"><svg viewBox="0 0 480 168" id="v4" role="img" aria-label="Diagram of the live pipeline from simulation step through the event bus to the browser"></svg></div>
+        <div class="modfoot"><span class="n">Event pipeline</span>
+          <span class="g">Done <svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M3 11L11 3M11 3H5M11 3v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span></div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ================= STATEMENT ================= -->
+<section style="padding-top:0">
+  <div class="wrap">
+    <div class="rv">
+      <p class="stmt"><span class="dim">A controller that appears to work on the first try is unverified, not
+        successful.</span> <b>A negative result, root-caused and explained, is worth more than a positive one
+        nobody can account for.</b></p>
+      <div class="stmtby">
+        <span class="ic"><svg width="17" height="17" viewBox="0 0 18 18" fill="none"><path d="M9 2l6 3v4c0 3.4-2.4 6.2-6 7-3.6-.8-6-3.6-6-7V5l6-3z" stroke="#3FE0FF" stroke-width="1.4" stroke-linejoin="round"/></svg></span>
+        <span class="t"><b>This week's diagnostic</b>60 runs, a real bug found, root-caused with data, fix in progress</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= LIVE CONSOLE ================= -->
+<section id="console" style="padding-top:0">
+  <div class="wrap">
+    <div class="shead">
+      <h2 class="h2 rv"><span class="dim">The actual</span> live simulation.</h2>
+      <p class="lede sub rv">Connects to the real simulation service over the same WebSocket the rest of the
+        platform uses. Signals here run the simulator's own default program — this view proves the live
+        pipeline, not the controllers, which are benchmarked separately (see Modules above).</p>
+    </div>
+    <div class="consolecard rv">
+      <div class="conhead">
+        <h3>Vijayawada corridor — MG Road, Benz Circle → PNBS</h3>
+        <span class="constatus connecting" id="constatus"><i class="dot"></i><span id="constatusText">connecting…</span></span>
+      </div>
+      <div class="congrid">
+        <div id="conmap"></div>
+        <div class="conside">
+          <div class="constats">
+            <div class="constat"><b id="conVeh">0</b><span>vehicles on map</span></div>
+            <div class="constat"><b id="conEvt">0</b><span>events received</span></div>
+          </div>
+          <div class="conlogwrap" id="conlog"></div>
+        </div>
+      </div>
+      <p class="connote">If the map looks idle, the simulation isn't running right now — it stays idle rather
+        than fake a connection.</p>
+      </div>
+  </div>
+</section>
+
+<!-- ================= FLOW ================= -->
+<section id="flow">
+  <div class="wrap">
+    <div class="shead">
+      <h2 class="h2 rv"><span class="dim">Tick to signal,</span> safety-checked end to end.</h2>
+      <p class="lede sub rv">This is the real control loop running underneath every controller above —
+        fixed-time, tuned baselines, and CA-MP all pass through the same arbitration path.</p>
+    </div>
+    <div class="flow stg">
+      <div class="fs"><div class="t">1<sub>Hz</sub></div><h4>Sense</h4>
+        <p>The pipeline reads real queue length, occupancy, and downstream state from the live simulation every
+          tick — the same signal any strategy sees, live or in a test.</p>
+        <span class="ev">ApproachState</span></div>
+      <div class="fs"><div class="t">1<sub>call</sub></div><h4>Propose</h4>
+        <p>The active strategy (fixed-time, a tuned baseline, or CA-MP) proposes one signal plan. It never
+          commands anything directly — only ever a proposal.</p>
+        <span class="ev">SignalPlan</span></div>
+      <div class="fs"><div class="t">8<sub>checks</sub></div><h4>Arbitrate</h4>
+        <p>Every proposal passes eight interlock predicates before anything reaches a signal head. A rejected
+          proposal degrades to a defined-safe recovery, never an assumed one.</p>
+        <span class="ev">Interlock check</span></div>
+      <div class="fs"><div class="t">1<sub>writer</sub></div><h4>Command</h4>
+        <p>Only the arbiter ever writes to the signal head. Every decision it makes — accepted or refused — is
+          published as a real event, not just logged locally.</p>
+        <span class="ev">SignalChanged / SignalFaulted</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= DARK BAND ================= -->
+<section style="padding-top:0">
+  <div class="wrap">
+    <div class="band rv">
+      <h2 class="h2"><span class="dim">Real numbers,</span><br>not projections.</h2>
+      <p class="lede" style="max-width:52ch;margin-top:20px">Every figure below is measured from an actual run
+        against the real 16-junction corridor extracted from OpenStreetMap, not a target or an estimate.</p>
+      <div class="mets stg">
+        <div class="met"><b data-count="16">0</b><span>Junctions in the corridor (7 signal-controlled)</span><em>Built</em></div>
+        <div class="met"><b data-count="1" data-suffix=" Hz">0</b><span>Live snapshot to every dashboard, 0 dropped ticks</span><em>Measured</em></div>
+        <div class="met"><b data-count="90" data-suffix="k">0</b><span>Generated safety-property test cases, 0 failures</span><em>Measured</em></div>
+        <div class="met"><b data-count="0">0</b><span>Interlock violations across 60 benchmark runs</span><em>Measured</em></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= PHASES ================= -->
+<section id="deploy" style="padding-top:0">
+  <div class="wrap">
+    <div class="shead">
+      <h2 class="h2 rv"><span class="dim">What's built,</span> what's next.</h2>
+      <p class="lede sub rv">A specific, checkable claim for each piece — not "it seems to work." Nothing past
+        what's listed as built has been started yet.</p>
+    </div>
+    <div class="phases stg">
+      <div class="ph now">
+        <span class="tagx">Built</span>
+        <h3>Foundation &amp; adaptive control</h3>
+        <p>One machine, live simulation, a real safety kernel, and an adaptive controller currently being
+          debugged in the open rather than shipped quietly broken.</p>
+        <ul class="fl">
+          <li>Live simulation with a real, versioned event bus underneath it</li>
+          <li>Interlock safety kernel — 90,000 property-test cases, 5 fault classes</li>
+          <li>3 tuned baselines + a 10-seed statistical bench harness</li>
+          <li>CA-MP adaptive pressure controller — root cause found, fix in progress</li>
+          <li>Automated test suite and static analysis, run in CI on every push</li>
+        </ul>
+      </div>
+      <div class="ph">
+        <span class="tagx">Planned next</span>
+        <h3>Coordination, incidents &amp; scale</h3>
+        <p>The same event contracts, unfolded onto the parts of the platform its name promises but doesn't
+          have yet.</p>
+        <ul class="fl">
+          <li>Network-wide green-wave coordination across the corridor</li>
+          <li>Incident detection, dispatch, and live re-routing</li>
+          <li>Green-corridor reservations and the controller's anticipation logic</li>
+          <li>Real camera vision, calibrated against ground truth</li>
+          <li>A final benchmark, evaluation, and the project report</li>
+        </ul>
+      </div>
+    </div>
+    <div class="contract rv">
+      <b>Identical at both scales:</b> the event contracts · the arbitration priorities · the interlock
+      invariants · the strategy interfaces.<br>
+      <b>Different at both scales:</b> one lightweight event bus today, swappable by design · one machine today,
+      more later · simulated cameras today, real ones later.
+    </div>
+  </div>
+</section>
+
+<!-- ================= FAQ ================= -->
+<section id="faq">
+  <div class="wrap">
+    <div class="shead">
+      <h2 class="h2 rv">Your questions <span class="dim">answered.</span></h2>
+    </div>
+    <div class="faqgrid">
+      <div class="rv" id="faqlist">
+        <div class="fq open">
+          <button class="fqb" aria-expanded="true"><span class="n">01</span>
+            <span class="q">Why does the adaptive controller currently lose to the simple tuned one?</span><span class="ic"></span></button>
+          <div class="fqa"><div>Because we found and root-caused a real bug rather than hiding it: a fixed
+            switching-cost penalty in the scoring formula outweighs typical traffic pressure by up to 61× at
+            light demand, so the controller ends up running every phase to its maximum timer regardless of
+            actual traffic — confirmed by instrumenting over 44,000 real decisions, not guessed. The fix
+            (rescaling that term) is in progress, and the diagnostic script that found it is checked in
+            alongside the result.</div></div>
+        </div>
+        <div class="fq">
+          <button class="fqb" aria-expanded="false"><span class="n">02</span>
+            <span class="q">How do you know the signal logic can't do something unsafe?</span><span class="ic"></span></button>
+          <div class="fqa"><div>An automated, property-based test suite generates 10,000 randomized cases per
+            invariant — 90,000 total — each specifically engineered to try to trigger a conflicting green, a
+            truncated minimum green, or a starved approach. All 90,000 pass. Five injected hardware failures
+            (lamp failure, comms loss, power restart, and more) each land in a defined, tested safe state
+            rather than an assumed one.</div></div>
+        </div>
+        <div class="fq">
+          <button class="fqb" aria-expanded="false"><span class="n">03</span>
+            <span class="q">Why simulate instead of starting with real cameras?</span><span class="ic"></span></button>
+          <div class="fqa"><div>Because every source — simulation now, real cameras and sensors later — has to
+            normalise into the same event contract. Building against the simulation first proves the core
+            architecture can't tell the difference, which is exactly what needs to be true before a real
+            camera feed is trusted with the same decisions.</div></div>
+        </div>
+        <div class="fq">
+          <button class="fqb" aria-expanded="false"><span class="n">04</span>
+            <span class="q">Is the traffic demand in this simulation real, measured data?</span><span class="ic"></span></button>
+          <div class="fqa"><div>No, and that's stated plainly rather than implied otherwise: trip generation is
+            randomized (not calibrated origin-destination demand), and the vehicle mix and PCU weights use
+            commonly-cited approximations for a mixed Indian urban arterial, not values measured on this
+            corridor. Real calibration against ground truth comes later, and isn't claimed early.</div></div>
+        </div>
+      </div>
+
+      <aside class="stickcard rv">
+        <span class="ic"><svg width="22" height="22" viewBox="0 0 22 22" fill="none"><path d="M3 6.5A2.5 2.5 0 015.5 4h11A2.5 2.5 0 0119 6.5v9a2.5 2.5 0 01-2.5 2.5h-11A2.5 2.5 0 013 15.5v-9z" stroke="#fff" stroke-width="1.5"/><path d="M3.6 6l7.4 5.4L18.4 6" stroke="#3FE0FF" stroke-width="1.5" stroke-linecap="round"/></svg></span>
+        <h3><span class="dim">Still not sure?</span>Watch it run yourself.</h3>
+        <p>The live console below connects to the real simulation over the same event bus the rest of the
+          platform uses — no screenshots, no mockups.</p>
+        <a class="btn" href="#console">Open the live console <span class="arw">→</span></a>
+      </aside>
+    </div>
+  </div>
+</section>
+
+<!-- ================= ADRs ================= -->
+<section style="padding-top:0">
+  <div class="wrap">
+    <div class="shead">
+      <h2 class="h2 rv"><span class="dim">From the architecture,</span> decisions that cost something.</h2>
+      <a class="btn gh sm rv" href="#modules">See what they enable <span class="arw">→</span></a>
+    </div>
+    <div class="adrs stg">
+      <article class="adr">
+        <div class="img"><svg viewBox="0 0 460 172" id="a1" role="img" aria-label="Diagram of four data sources routing through one internal event bus"></svg></div>
+        <div class="bd">
+          <div class="meta">Accepted</div>
+          <h4>One event bus contract, transport swappable later</h4>
+          <p>A lightweight message bus runs the whole system today, because this phase doesn't need a heavier,
+            more operationally expensive one yet. Every producer and consumer talks to one internal interface,
+            so the transport underneath can change without touching a single caller when it's actually needed.</p>
+          <span class="rd">Read the decision <svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M3 11L11 3M11 3H5M11 3v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span>
+        </div>
+      </article>
+      <article class="adr">
+        <div class="img"><svg viewBox="0 0 460 172" id="a2" role="img" aria-label="Diagram showing every strategy proposes while only the arbiter commands the signal"></svg></div>
+        <div class="bd">
+          <div class="meta">Accepted</div>
+          <h4>The signal controller is the sole command authority</h4>
+          <p>Every strategy proposes; only the arbiter commands. Interlocks live below arbitration, which makes
+            an unsafe phase structurally unrepresentable rather than merely unlikely.</p>
+          <span class="rd">Read the decision <svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M3 11L11 3M11 3H5M11 3v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span>
+        </div>
+      </article>
+      <article class="adr">
+        <div class="img"><svg viewBox="0 0 460 172" id="a3" role="img" aria-label="Diagram of a spec ambiguity resolved by following the reference code, documented in place"></svg></div>
+        <div class="bd">
+          <div class="meta">Documented</div>
+          <h4>Follow the reference code over the spec's prose, and say so</h4>
+          <p>When the build guide's own worked example computed a term differently than its prose described it,
+            this build followed the code — and wrote down exactly why, and what it implies, rather than quietly
+            picking one.</p>
+          <span class="rd">Read the decision <svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M3 11L11 3M11 3H5M11 3v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span>
+        </div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ================= CTA ================= -->
+<section id="cta" style="padding-top:0">
+  <div class="wrap">
+    <div class="ctac rv">
+      <div>
+        <h2 class="h2"><span class="dim">See it run</span><br>before you believe it.</h2>
+        <p>The live console connects to the real simulation over the real event pipeline — the same pipeline
+          every controller above is measured against.</p>
+      </div>
+      <div style="display:flex;gap:11px;flex-wrap:wrap;position:relative">
+        <a class="btn" href="#console">Open the live console <span class="arw">→</span></a>
+        <a class="btn gh" href="#deploy">See the roadmap</a>
+      </div>
+    </div>
+  </div>
+</section>
+</main>
+
+<!-- ================= FOOTER ================= -->
+<footer>
+  <div class="wrap">
+    <div class="fgrid">
+      <div>
+        <div class="kin">Let's <span class="cy">clear</span> the road ahead.</div>
+        <p style="font-size:14.5px;max-width:32ch">Intelligent Traffic Management &amp; Emergency Response
+          Platform · Vijayawada corridor pilot, capstone build.</p>
+      </div>
+      <div><h5>Platform</h5>
+        <a href="#modules">Modules</a><a href="#console">Live console</a>
+        <a href="#deploy">Roadmap</a><a href="#faq">FAQ</a></div>
+      <div><h5>Planned next</h5>
+        <span>Incident detection · vision</span><span>Emergency dispatch &amp; routing</span>
+        <span>Green corridor reservations</span></div>
+    </div>
+    <div class="wm" aria-hidden="true"><span>I</span><span>T</span><span>M</span><span>S</span></div>
+    <div class="fbot">
+      <span>Intelligent Traffic Management Platform · capstone project</span>
+      <span>Figures marked "measured" come from a real run; everything else is labeled built vs. planned</span>
+    </div>
+  </div>
+</footer>
 
 <script src="vendor/leaflet/leaflet.js"></script>
 <script src="network_data.js"></script>
 <script>
-  const WS_URL = (window.ITMS_WS_URL) || "ws://localhost:8000/v1/stream";
-  const statusEl = document.getElementById("status");
-  const logEl = document.getElementById("log");
-  const vehCountEl = document.getElementById("vehCount");
-  const evtCountEl = document.getElementById("evtCount");
-  let evtCount = 0;
+(function(){
+"use strict";
+var RM = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+var $ = function(s,r){ return (r||document).querySelector(s); };
+var $$ = function(s,r){ return Array.prototype.slice.call((r||document).querySelectorAll(s)); };
 
-  // A vehicle is presumed to have left the network if we haven't heard a
-  // VehiclePositionUpdated for it in this long. SUMO doesn't emit a
-  // "vehicle removed" event over the bus (M1 scope), so this sweep is the
-  // only way the map notices departures. 5s is generous slack over the
-  // scenario's 1 Hz publish rate.
-  const STALE_MS = 5000;
+/* ---------- nav shrink + dots ---------- */
+var dock = $('#navdock');
+function nscroll(){ dock.classList.toggle('shrunk', window.scrollY > 90); }
+nscroll(); window.addEventListener('scroll', nscroll, {passive:true});
+$('#dots').addEventListener('click', function(){ dock.classList.toggle('open'); });
 
-  function setStatus(state, label) {
-    statusEl.className = state;
-    statusEl.textContent = label;
+/* ---------- reveals ---------- */
+var targets = $$('.rv, .stg');
+if('IntersectionObserver' in window && !RM){
+  var io = new IntersectionObserver(function(es){
+    es.forEach(function(e){
+      if(!e.isIntersecting) return;
+      e.target.classList.add('in');
+      if(e.target.querySelector('[data-count]') || e.target.hasAttribute('data-count')) countUp(e.target);
+      io.unobserve(e.target);
+    });
+  },{rootMargin:'0px 0px -9% 0px', threshold:.08});
+  targets.forEach(function(t){ io.observe(t); });
+} else {
+  targets.forEach(function(t){ t.classList.add('in'); });
+  countUp(document);
+}
+
+function countUp(root){
+  $$('[data-count]', root).forEach(function(el){
+    var to = parseFloat(el.getAttribute('data-count'));
+    var pre = el.getAttribute('data-prefix') || '';
+    var suf = el.getAttribute('data-suffix') || '';
+    var dur = 1300, t0 = performance.now();
+    if(RM){ el.textContent = pre + to + suf; return; }
+    (function tick(now){
+      var p = Math.min(1,(now-t0)/dur), e = 1-Math.pow(1-p,3);
+      var val = to < 10 ? (to*e).toFixed(to%1?1:0) : Math.round(to*e);
+      el.textContent = pre + val + suf;
+      if(p<1) requestAnimationFrame(tick);
+    })(t0);
+  });
+}
+
+/* ---------- faq ---------- */
+$$('.fq').forEach(function(fq){
+  var b = $('.fqb',fq), a = $('.fqa',fq);
+  if(fq.classList.contains('open')) requestAnimationFrame(function(){ a.style.maxHeight = a.scrollHeight+'px'; });
+  b.addEventListener('click', function(){
+    var was = fq.classList.contains('open');
+    $$('.fq').forEach(function(o){
+      o.classList.remove('open'); $('.fqa',o).style.maxHeight = null;
+      $('.fqb',o).setAttribute('aria-expanded','false');
+    });
+    if(!was){ fq.classList.add('open'); a.style.maxHeight = a.scrollHeight+'px';
+      b.setAttribute('aria-expanded','true'); }
+  });
+});
+
+/* ---------- magnetic buttons ---------- */
+if(!RM) $$('.btn').forEach(function(b){
+  b.addEventListener('mouseenter', function(){ b.style.transition = 'transform .2s cubic-bezier(.16,1,.3,1)'; });
+  b.addEventListener('mousemove', function(e){
+    var r = b.getBoundingClientRect();
+    var x = (e.clientX - r.left - r.width/2) / r.width;
+    var y = (e.clientY - r.top - r.height/2) / r.height;
+    b.style.transform = 'translate('+(x*7).toFixed(1)+'px,'+(y*5-2).toFixed(1)+'px)';
+  });
+  b.addEventListener('mouseleave', function(){ b.style.transform = ''; b.style.transition = ''; });
+});
+
+/* ================= module + adr visuals (real content) ================= */
+function setSVG(id, s){ var e = document.getElementById(id); if(e) e.innerHTML = s; }
+var F = "font-family:'IBM Plex Mono',monospace";
+
+// v1 -- interlock check ladder (M2, real predicates)
+setSVG('v1', '<rect width="480" height="168" fill="#101416"/>'
++[['I1 no conflicting greens',1,32],['I3 min green satisfied',1,58],['I5 max wait not exceeded',1,84],
+  ['I6 phase reachable',1,110],['I7 command / readback converge',1,136]]
+  .map(function(r){ return '<text x="24" y="'+(r[2]-4)+'" fill="#5B686D" font-size="9.5" style="'+F+'">'+r[0]+'</text>'
+   +'<rect x="24" y="'+r[2]+'" width="300" height="6" rx="3" fill="#1E2528"/>'
+   +'<rect x="24" y="'+r[2]+'" width="300" height="6" rx="3" fill="#57C97B"/>'
+   +'<text x="336" y="'+(r[2]+6)+'" fill="#57C97B" font-size="10" style="'+F+'">pass</text>'; }).join('')
++'<text x="24" y="156" fill="#4C585C" font-size="9.5" style="'+F+'">90,000 generated cases · 0 failures</text>');
+
+// v2 -- baseline bench comparison (M3, real measured numbers, person-delay)
+setSVG('v2', '<rect width="480" height="168" fill="#101416"/>'
++[['WEBSTER',190234,'#57C97B',38],['SEMI-ACTUATED',629350,'#E2703A',76],['COORDINATED',203200,'#3FE0FF',114]]
+  .map(function(r){ var w = 26 + (r[1]/629350)*300;
+    return '<text x="24" y="'+(r[3]-10)+'" fill="#5B686D" font-size="9.5" letter-spacing="1.2" style="'+F+'">'+r[0]+'</text>'
+   +'<rect x="24" y="'+r[3]+'" width="330" height="6" rx="3" fill="#1E2528"/>'
+   +'<rect x="24" y="'+r[3]+'" width="'+w+'" height="6" rx="3" fill="'+r[2]+'"/>'
+   +'<text x="366" y="'+(r[3]+6)+'" fill="#A9BEC6" font-size="9.5" style="'+F+'">'+r[1].toLocaleString()+' p-s</text>'; }).join('')
++'<text x="24" y="150" fill="#4C585C" font-size="9.5" style="'+F+'">person-delay, mean of 10 seeds, 95% CI</text>');
+
+// v3 -- CA-MP diagnostic (M4, real finding)
+setSVG('v3', '<rect width="480" height="168" fill="#101416"/>'
++[['LIGHT DEMAND',100,38],['MEDIUM DEMAND',100,76],['HEAVY DEMAND',100,114]]
+  .map(function(r){ return '<text x="24" y="'+(r[2]-10)+'" fill="#5B686D" font-size="9.5" letter-spacing="1.2" style="'+F+'">'+r[0]+' · timeout-driven</text>'
+   +'<rect x="24" y="'+r[2]+'" width="300" height="6" rx="3" fill="#1E2528"/>'
+   +'<rect x="24" y="'+r[2]+'" width="300" height="6" rx="3" fill="#E2703A"/>'
+   +'<text x="336" y="'+(r[2]+6)+'" fill="#E2703A" font-size="10" style="'+F+'">'+r[1]+'%</text>'; }).join('')
++'<text x="24" y="150" fill="#4C585C" font-size="9.5" style="'+F+'">44,000+ decisions instrumented · fix in progress</text>');
+
+// v4 -- live pipeline (M0/M1, real event names)
+setSVG('v4', '<rect width="480" height="168" fill="#101416"/>'
++[['sim-service','simulation step, 1 Hz',38],['event bus','VehiclePositionUpdated',72],
+  ['api-service','WebSocket fan-out',106],['browser','live map + log',140]]
+  .map(function(r,i){ return '<rect x="26" y="'+(r[2]-16)+'" width="180" height="26" rx="6" fill="#171E21" stroke="#252D31"/>'
+   +'<text x="36" y="'+(r[2])+'" fill="#DCE7EA" font-size="10" style="'+F+'">'+r[0]+'</text>'
+   +'<text x="220" y="'+(r[2])+'" fill="#5B686D" font-size="9" style="'+F+'">'+r[1]+'</text>'
+   +(i<3?'<line x1="116" y1="'+(r[2]+10)+'" x2="116" y2="'+(r[2]+26)+'" stroke="#2C6070" stroke-width="1.4"/>':''); }).join('')
++'<text x="26" y="160" fill="#4C585C" font-size="9" style="'+F+'">0 dropped ticks at 2x real time</text>');
+
+setSVG('a1','<rect width="460" height="172" fill="#101416"/>'
++['Sim (now)','Camera','IoT','Fleet'].map(function(s,i){ return '<rect x="'+(26+i*104)+'" y="26" width="88" height="30" rx="7" fill="#171E21" stroke="#252D31"/>'
+  +'<text x="'+(70+i*104)+'" y="45" fill="#8B9DA4" font-size="9.5" text-anchor="middle" style="'+F+'">'+s+'</text>'
+  +'<path d="M'+(70+i*104)+' 56 L'+(70+i*104)+' 74 L230 74 L230 92" stroke="#252D31" fill="none"/>'; }).join('')
++'<rect x="120" y="92" width="220" height="34" rx="8" fill="#16262B" stroke="#2C6070"/>'
++'<text x="230" y="114" fill="#3FE0FF" font-size="11" text-anchor="middle" style="'+F+'">Internal EventBus</text>'
++'<text x="230" y="150" fill="#4C585C" font-size="9.5" text-anchor="middle" style="'+F+'">one contract · transport swappable by design</text>');
+
+setSVG('a2','<rect width="460" height="172" fill="#101416"/>'
++['FIXED-TIME','WEBSTER / CA-MP'].map(function(s,i){ return '<rect x="26" y="'+(28+i*44)+'" width="150" height="28" rx="7" fill="#171E21" stroke="#252D31"/>'
+  +'<text x="101" y="'+(46+i*44)+'" fill="#8B9DA4" font-size="9.5" text-anchor="middle" style="'+F+'">'+s+'</text>'
+  +'<path d="M176 '+(42+i*44)+' L220 '+(42+i*44)+' L220 76 L256 76" stroke="#252D31" fill="none"/>'; }).join('')
++'<rect x="256" y="58" width="130" height="36" rx="8" fill="#16262B" stroke="#2C6070"/>'
++'<text x="321" y="80" fill="#3FE0FF" font-size="10" text-anchor="middle" style="'+F+'">ARBITER</text>'
++'<path d="M386 76 L420 76" stroke="#252D31"/><circle cx="432" cy="76" r="9" fill="#0B0F11" stroke="#2E383C"/>'
++'<rect x="430.8" y="70" width="2.4" height="12" rx="1.2" fill="#57C97B"/>'
++'<text x="256" y="140" fill="#4C585C" font-size="9.5" style="'+F+'">every strategy proposes · one writer commands</text>');
+
+setSVG('a3','<rect width="460" height="172" fill="#101416"/>'
++'<text x="26" y="40" fill="#5B686D" font-size="10" style="'+F+'">spec prose: q_m = downstream queue</text>'
++'<text x="26" y="60" fill="#8B9DA4" font-size="10" style="'+F+'">reference code: reuses upstream q_pcu</text>'
++'<rect x="26" y="80" width="200" height="22" rx="5" fill="#171E21" stroke="#252D31"/>'
++'<text x="36" y="95" fill="#8B9DA4" font-size="9.5" style="'+F+'">this build follows the code</text>'
++'<path d="M226 91 L286 91" stroke="#252D31"/>'
++'<rect x="286" y="80" width="150" height="52" rx="8" fill="#16262B" stroke="#2C6070"/>'
++'<text x="361" y="103" fill="#3FE0FF" font-size="11" text-anchor="middle" style="'+F+'">documented</text>'
++'<text x="361" y="120" fill="#7E9098" font-size="9" text-anchor="middle" style="'+F+'">in camp.py’s docstring</text>'
++'<text x="26" y="156" fill="#4C585C" font-size="9.5" style="'+F+'">ambiguity resolved, and the resolution recorded</text>');
+
+/* ================= hero decorative network (illustrative only) ================= */
+var NS='http://www.w3.org/2000/svg';
+function E(n,a){ var e=document.createElementNS(NS,n); for(var k in a) e.setAttribute(k,a[k]); return e; }
+var svg = document.getElementById('netstrip');
+if(svg){
+  var NC=5, NR=4, nodes=[], edges=[], adj=[];
+  for(var r=0;r<NR;r++) for(var c=0;c<NC;c++)
+    nodes.push({x:90+c*180, y:66+r*96, c:c, r:r, phase:(c+r)%2?'NS':'EW', t:Math.random()*8, pre:false});
+  for(var i=0;i<nodes.length;i++) adj.push([]);
+  function link(a,b,ori){
+    var A=nodes[a],B=nodes[b];
+    edges.push({a:a,b:b,ori:ori,len:Math.hypot(A.x-B.x,A.y-B.y)});
+    adj[a].push({e:edges.length-1,to:b}); adj[b].push({e:edges.length-1,to:a});
+  }
+  for(var r1=0;r1<NR;r1++) for(var c1=0;c1<NC-1;c1++) link(r1*NC+c1, r1*NC+c1+1,'H');
+  for(var c2=0;c2<NC;c2++) for(var r2=0;r2<NR-1;r2++) link(r2*NC+c2,(r2+1)*NC+c2,'V');
+
+  var veh=[];
+  for(var v=0;v<72;v++){
+    var ei=Math.floor(Math.random()*edges.length);
+    veh.push({e:ei,dir:Math.random()<.5?1:-1,u:Math.random(),sp:34+Math.random()*16,stop:false});
   }
 
-  function appendRow(envelope) {
-    const div = document.createElement("div");
-    div.className = "row";
-    const payload = JSON.stringify(envelope.payload);
-    div.innerHTML = `<span class="ts">${envelope.occurred_at}</span> ` +
-      `<b>${envelope.event_type}</b> ` + payload;
-    logEl.prepend(div);
-    while (logEl.childElementCount > 500) {
-      logEl.removeChild(logEl.lastChild);
-    }
-  }
+  for(var gx=0; gx<=900; gx+=45) svg.appendChild(E('line',{x1:gx,y1:0,x2:gx,y2:420,stroke:'#141A1D','stroke-width':1}));
+  for(var gy=0; gy<=420; gy+=45) svg.appendChild(E('line',{x1:0,y1:gy,x2:900,y2:gy,stroke:'#141A1D','stroke-width':1}));
 
-  // ---- map setup -----------------------------------------------------
-
-  const network = window.ITMS_NETWORK || { type: "FeatureCollection", features: [] };
-  const edgeFeatures = network.features.filter(f => f.properties.kind === "edge");
-  const junctionFeatures = network.features.filter(f => f.properties.kind === "junction");
-
-  const map = L.map("map", { zoomControl: true });
-
-  // Real basemap tiles -- this is what makes it "a real map of your city"
-  // rather than just our own reconstructed road-network vectors floating in
-  // empty space. Needs whatever internet connection the browser already has;
-  // no API key. If tiles fail to load (offline use), the vector road network
-  // and vehicles below still render fine on their own.
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    maxZoom: 19,
-  }).addTo(map);
-
-  const roadLayer = L.geoJSON(edgeFeatures, {
-    style: () => ({ color: "#3d5568", weight: 3, opacity: 0.9 }),
-  }).addTo(map);
-
-  // keyed by edge_id, so ApproachState updates can restyle the right line
-  const edgeLayers = {};
-  roadLayer.eachLayer(layer => {
-    edgeLayers[layer.feature.properties.edge_id] = layer;
+  var eEl = edges.map(function(e){
+    var A=nodes[e.a],B=nodes[e.b];
+    var l=E('line',{x1:A.x,y1:A.y,x2:B.x,y2:B.y,stroke:'#2B3B42','stroke-width':6,'stroke-linecap':'round'});
+    svg.appendChild(l); return l;
+  });
+  var vEl = veh.map(function(){ var c=E('circle',{r:2.3,fill:'#93AAB4'}); svg.appendChild(c); return c; });
+  var nEl = nodes.map(function(n){
+    var g=E('g',{});
+    var box=E('rect',{x:n.x-9.5,y:n.y-9.5,width:19,height:19,rx:3,fill:'#0B0F11',stroke:'#2E383C','stroke-width':1});
+    var bar=E('rect',{x:n.x-1.5,y:n.y-6.5,width:3,height:13,rx:1.5,fill:'#57C97B'});
+    g.appendChild(box); g.appendChild(bar); svg.appendChild(g);
+    return {bar:bar};
   });
 
-  L.geoJSON(junctionFeatures, {
-    filter: f => f.properties.is_traffic_light,
-    pointToLayer: (f, latlng) =>
-      L.circleMarker(latlng, {
-        radius: 5, color: "#ffb020", weight: 1, fillColor: "#ffb020", fillOpacity: 0.85,
-      }).bindTooltip(f.properties.junction_id, { className: "veh-tip" }),
+  function need(e){ return e.ori==='H' ? 'EW' : 'NS'; }
+  var last=performance.now();
+  function frame(now){
+    var dt=Math.min(.05,(now-last)/1000); last=now;
+    var groups={};
+    veh.forEach(function(vv,ix){ var k=vv.e+':'+(vv.dir>0?1:0); (groups[k]=groups[k]||[]).push(ix); });
+
+    Object.keys(groups).forEach(function(k){
+      var p=k.split(':'), ei=+p[0], fwd=p[1]==='1', e=edges[ei];
+      var head=nodes[fwd?e.b:e.a];
+      var green = head.phase===need(e);
+      var g=groups[k].slice().sort(function(x,y){
+        var a=fwd?veh[x].u:1-veh[x].u, b=fwd?veh[y].u:1-veh[y].u; return b-a;
+      });
+      var slot=0;
+      g.forEach(function(ix){
+        var vv=veh[ix], prog=fwd?vv.u:1-vv.u, line=.95-slot*.03;
+        if(!green && prog>line-.02){
+          vv.stop=true; slot++;
+          var tgt=fwd?line:1-line; vv.u += (tgt-vv.u)*.2;
+        } else { vv.stop=false; vv.u += (vv.dir*vv.sp*dt)/e.len; }
+      });
+    });
+
+    veh.forEach(function(vv){
+      if(vv.u>1||vv.u<0){
+        var e=edges[vv.e], at=vv.u>1?e.b:e.a;
+        var outs=adj[at].filter(function(o){return o.e!==vv.e;});
+        var p=outs.length?outs[Math.floor(Math.random()*outs.length)]:adj[at][0];
+        var ne=edges[p.e];
+        vv.e=p.e; vv.dir= ne.a===at?1:-1; vv.u= ne.a===at?.006:.994;
+      }
+    });
+
+    nodes.forEach(function(n){
+      n.t+=dt;
+      if(n.t > 5.5 + (n.c*0.8+n.r*1.3)%4){ n.phase = n.phase==='NS'?'EW':'NS'; n.t=0; }
+    });
+
+    edges.forEach(function(e,ix){
+      var g1=groups[ix+':1']||[], g0=groups[ix+':0']||[];
+      var st=g1.concat(g0).filter(function(k){return veh[k].stop;}).length;
+      var b=Math.min(1, st/4.5);
+      eEl[ix].setAttribute('stroke', b>.7?'#C8384A': b>.42?'#E2703A': b>.16?'#E8B23A':'#2C6B49');
+      eEl[ix].setAttribute('opacity', 0.4+b*0.52);
+    });
+    nodes.forEach(function(n,ix){
+      var o=nEl[ix];
+      var col = '#57C97B';
+      if(n.phase==='NS'){ o.bar.setAttribute('x',n.x-1.5); o.bar.setAttribute('y',n.y-6.5);
+        o.bar.setAttribute('width',3); o.bar.setAttribute('height',13); }
+      else { o.bar.setAttribute('x',n.x-6.5); o.bar.setAttribute('y',n.y-1.5);
+        o.bar.setAttribute('width',13); o.bar.setAttribute('height',3); }
+      o.bar.setAttribute('fill',col);
+    });
+    veh.forEach(function(vv,ix){
+      var e=edges[vv.e],A=nodes[e.a],B=nodes[e.b];
+      var u=Math.max(0,Math.min(1,vv.u)), L=Math.hypot(B.x-A.x,B.y-A.y);
+      var off=vv.dir>0?3:-3, nx=(B.y-A.y)/L, ny=-(B.x-A.x)/L;
+      vEl[ix].setAttribute('cx', A.x+(B.x-A.x)*u + nx*off);
+      vEl[ix].setAttribute('cy', A.y+(B.y-A.y)*u + ny*off);
+      vEl[ix].setAttribute('fill', vv.stop?'#5F7480':'#9FB6C0');
+    });
+    if(!RM) requestAnimationFrame(frame);
+  }
+  if(RM) frame(performance.now()); else requestAnimationFrame(frame);
+}
+
+/* ================= LIVE CONSOLE -- the real thing ================= */
+(function(){
+  var WS_URL = (window.ITMS_WS_URL) || "ws://localhost:8000/v1/stream";
+  var statusWrap = document.getElementById("constatus");
+  var statusText = document.getElementById("constatusText");
+  var logEl = document.getElementById("conlog");
+  var vehCountEl = document.getElementById("conVeh");
+  var evtCountEl = document.getElementById("conEvt");
+  var evtCount = 0;
+  var STALE_MS = 5000;
+
+  function setStatus(state, label){
+    statusWrap.className = "constatus " + state;
+    statusText.textContent = label;
+  }
+
+  function appendRow(envelope){
+    var div = document.createElement("div");
+    div.className = "row";
+    var payload = JSON.stringify(envelope.payload);
+    div.innerHTML = '<span class="ts">' + envelope.occurred_at + '</span> ' +
+      '<b>' + envelope.event_type + '</b> ' + payload;
+    logEl.prepend(div);
+    while (logEl.childElementCount > 300) logEl.removeChild(logEl.lastChild);
+  }
+
+  var mapEl = document.getElementById("conmap");
+  if (!mapEl || typeof L === "undefined") return;
+
+  var network = window.ITMS_NETWORK || { type: "FeatureCollection", features: [] };
+  var edgeFeatures = network.features.filter(function(f){ return f.properties.kind === "edge"; });
+  var junctionFeatures = network.features.filter(function(f){ return f.properties.kind === "junction"; });
+
+  var map = L.map(mapEl, { zoomControl: true });
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: '&copy; OpenStreetMap contributors', maxZoom: 19,
   }).addTo(map);
 
-  if (edgeFeatures.length) {
-    map.fitBounds(roadLayer.getBounds(), { padding: [20, 20] });
-  } else {
-    map.setView([16.506, 80.633], 15); // MG Road corridor fallback center
+  var roadLayer = L.geoJSON(edgeFeatures, {
+    style: function(){ return { color: "#3d5568", weight: 3, opacity: 0.9 }; },
+  }).addTo(map);
+
+  var edgeLayers = {};
+  roadLayer.eachLayer(function(layer){ edgeLayers[layer.feature.properties.edge_id] = layer; });
+
+  L.geoJSON(junctionFeatures, {
+    filter: function(f){ return f.properties.is_traffic_light; },
+    pointToLayer: function(f, latlng){
+      return L.circleMarker(latlng, { radius: 5, color: "#ffb020", weight: 1, fillColor: "#ffb020", fillOpacity: 0.85 })
+        .bindTooltip(f.properties.junction_id);
+    },
+  }).addTo(map);
+
+  if (edgeFeatures.length) { map.fitBounds(roadLayer.getBounds(), { padding: [16, 16] }); }
+  else { map.setView([16.506, 80.633], 15); }
+
+  function occupancyColor(occupancy){
+    var t = Math.max(0, Math.min(1, occupancy));
+    var rr = Math.round(61 + t * (220 - 61));
+    var gg = Math.round(85 + t * (60 - 85));
+    var bb = Math.round(104 + t * (60 - 104));
+    return "rgb(" + rr + "," + gg + "," + bb + ")";
   }
 
-  // occupancy 0..1 -> a color from muted cyan (empty) to red (jammed)
-  function occupancyColor(occupancy) {
-    const t = Math.max(0, Math.min(1, occupancy));
-    const r = Math.round(61 + t * (220 - 61));
-    const g = Math.round(85 + t * (60 - 85));
-    const b = Math.round(104 + t * (60 - 104));
-    return `rgb(${r},${g},${b})`;
-  }
-
-  // ---- vehicle markers -------------------------------------------------
-
-  const vehicles = new Map(); // vehicle_id -> { marker, lastSeen }
-
-  function upsertVehicle(payload) {
-    const id = payload.vehicle_id;
-    const latlng = [payload.lat, payload.lon];
-    let entry = vehicles.get(id);
+  var vehicles = new Map();
+  function upsertVehicle(payload){
+    var id = payload.vehicle_id;
+    var latlng = [payload.lat, payload.lon];
+    var entry = vehicles.get(id);
     if (!entry) {
-      const marker = L.circleMarker(latlng, {
-        radius: 4, color: "#7fd1ff", weight: 1, fillColor: "#7fd1ff", fillOpacity: 0.9,
-      }).bindTooltip(id, { className: "veh-tip", direction: "top" });
+      var marker = L.circleMarker(latlng, { radius: 4, color: "#7fd1ff", weight: 1, fillColor: "#7fd1ff", fillOpacity: 0.9 })
+        .bindTooltip(id, { direction: "top" });
       marker.addTo(map);
-      entry = { marker, lastSeen: Date.now() };
-      vehicles.set(id, entry);
+      vehicles.set(id, { marker: marker, lastSeen: Date.now() });
     } else {
       entry.marker.setLatLng(latlng);
       entry.lastSeen = Date.now();
     }
   }
-
-  function sweepStaleVehicles() {
-    const now = Date.now();
-    for (const [id, entry] of vehicles) {
-      if (now - entry.lastSeen > STALE_MS) {
-        map.removeLayer(entry.marker);
-        vehicles.delete(id);
-      }
-    }
+  function sweepStaleVehicles(){
+    var now = Date.now();
+    vehicles.forEach(function(entry, id){
+      if (now - entry.lastSeen > STALE_MS) { map.removeLayer(entry.marker); vehicles.delete(id); }
+    });
     vehCountEl.textContent = String(vehicles.size);
   }
   setInterval(sweepStaleVehicles, 1000);
 
-  function applyApproachState(payload) {
-    // M1: movement_id holds a raw SUMO edge_id (see contracts/events/approach_state.avsc) --
-    // a real movement-group id lands with CA-MP (M4), at which point this lookup changes.
-    const layer = edgeLayers[payload.movement_id];
-    if (layer) {
-      layer.setStyle({ color: occupancyColor(payload.occupancy), weight: 4, opacity: 0.95 });
-    }
+  function applyApproachState(payload){
+    var layer = edgeLayers[payload.movement_id];
+    if (layer) layer.setStyle({ color: occupancyColor(payload.occupancy), weight: 4, opacity: 0.95 });
   }
 
-  // ---- websocket -------------------------------------------------------
-
-  function connect() {
+  function connect(){
     setStatus("connecting", "connecting…");
-    const ws = new WebSocket(WS_URL);
-    ws.onopen = () => setStatus("open", "connected");
-    ws.onclose = () => {
-      setStatus("closed", "disconnected — retrying in 2s");
-      setTimeout(connect, 2000);
-    };
-    ws.onerror = () => ws.close();
-    ws.onmessage = (evt) => {
-      let envelope;
-      try {
-        envelope = JSON.parse(evt.data);
-      } catch (e) {
-        console.error("bad message", e, evt.data);
-        return;
-      }
+    var ws;
+    try { ws = new WebSocket(WS_URL); } catch (e) { setStatus("closed", "no backend running"); return; }
+    ws.onopen = function(){ setStatus("open", "connected"); };
+    ws.onclose = function(){ setStatus("closed", "disconnected — retrying in 3s"); setTimeout(connect, 3000); };
+    ws.onerror = function(){ ws.close(); };
+    ws.onmessage = function(evt){
+      var envelope;
+      try { envelope = JSON.parse(evt.data); } catch (e) { return; }
       evtCount += 1;
       evtCountEl.textContent = String(evtCount);
       appendRow(envelope);
@@ -206,8 +1132,10 @@
       }
     };
   }
-
   connect();
+})();
+
+})();
 </script>
 </body>
 </html>

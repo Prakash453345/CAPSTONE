@@ -54,6 +54,19 @@ class Decision:
     mode: str
     plan: SignalPlan | None
     events: list[dict] = field(default_factory=list)
+    violated_movements: frozenset[str] = frozenset()
+    """Populated only for `mode == "failsafe_interlock_rejected"`: the union
+    of every rejected `Violation.movements`. Deliberately NOT folded into
+    `events` -- those dicts are schema-constrained (`signal_faulted.avsc`,
+    see this class's own docstring), and this is Python-side routing
+    information for whoever recovers from the fault (`control/runner.py`'s
+    `_recover_from_fault`), not part of the wire event contract. Added
+    alongside the starvation-override fix in `camp.py` (see PROGRESS.md's
+    "Real saturation-flow calibration" section): recovery previously had no
+    way to know *which* movement an I5 rejection was actually about, so it
+    could only ever reset to the ring's first phase -- functionally
+    correct (all-red is always safe) but blind to whether that phase was
+    anywhere close to fixing the thing that got rejected."""
 
 
 def _faulted_event(intersection_id: str, fault_type: str, detail: str) -> dict:
@@ -157,6 +170,7 @@ def tick(
                     "; ".join(f"{v.rule}: {v.message}" for v in violations),
                 )
             ],
+            violated_movements=frozenset().union(*(v.movements for v in violations)),
         )
 
     acked = cabinet.command(plan.steps[0].phase_id)

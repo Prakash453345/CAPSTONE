@@ -71,3 +71,57 @@ def test_recover_from_fault_clears_stale_demand_and_queue_fields():
     assert js.ctx.has_demand == {}
     assert js.ctx.wait_times_s == {}
     assert js.ctx.queue_pcu == {}
+
+
+def test_recover_from_fault_routes_to_the_phase_that_serves_the_violated_movement():
+    # The fix for the gap this function's own docstring now describes in
+    # its second half (PROGRESS.md's "Real saturation-flow calibration"
+    # finding): resetting to ring_order[0] unconditionally, regardless of
+    # which movement an I5 rejection actually named, can strand recovery on
+    # a phase that doesn't serve that movement either -- the same rejection
+    # then fires again next tick, forever. Given violated_movements, resume
+    # into whichever phase actually serves one instead.
+    cfg = _cfg()
+    cabinet = FakeCabinet()
+    stale_ctx = JunctionContext(
+        intersection_id="J", current_phase_id="P0", current_phase_elapsed_s=452.0
+    )
+    js = _JunctionState(cfg=cfg, cabinet=cabinet, ctx=stale_ctx)
+
+    _recover_from_fault(js, "J", frozenset({"L1"}))
+
+    assert cabinet.read_state().phase_id == "P1"
+    assert js.ctx.current_phase_id == "P1"
+    assert js.ctx.current_phase_elapsed_s == 0.0
+
+
+def test_recover_from_fault_falls_back_to_rings_first_phase_when_no_phase_serves_it():
+    # A violation naming a movement no live phase actually serves (or an
+    # empty violated_movements, every non-I5 fault mode's default) must
+    # still resolve to *something* -- ring_order[0], exactly as before this
+    # fix, rather than raising or leaving the junction uncommanded.
+    cfg = _cfg()
+    cabinet = FakeCabinet()
+    stale_ctx = JunctionContext(
+        intersection_id="J", current_phase_id="P1", current_phase_elapsed_s=10.0
+    )
+    js = _JunctionState(cfg=cfg, cabinet=cabinet, ctx=stale_ctx)
+
+    _recover_from_fault(js, "J", frozenset({"L99_no_such_movement"}))
+
+    assert cabinet.read_state().phase_id == "P0"
+    assert js.ctx.current_phase_id == "P0"
+
+
+def test_recover_from_fault_defaults_to_rings_first_phase_with_no_violated_movements():
+    cfg = _cfg()
+    cabinet = FakeCabinet()
+    cabinet.command_all_red()
+    stale_ctx = JunctionContext(
+        intersection_id="J", current_phase_id="P1", current_phase_elapsed_s=987.0
+    )
+    js = _JunctionState(cfg=cfg, cabinet=cabinet, ctx=stale_ctx)
+
+    _recover_from_fault(js, "J")  # no third arg -- exercises the default
+
+    assert js.ctx.current_phase_id == "P0"

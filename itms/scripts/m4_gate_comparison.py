@@ -70,7 +70,7 @@ from measure_flows import compute_link_flows  # noqa: E402
 
 _NET_PATH = _ROOT / "scenarios" / "networks" / "vijayawada" / "vijayawada_corridor.net.xml"
 _DEMAND_DIR = _ROOT / "scenarios" / "demand" / "vijayawada"
-_RESULTS_PATH = Path(__file__).resolve().parent / "m4_gate_results.json"
+_RESULTS_PATH = Path(__file__).resolve().parent / "results" / "m4_gate_results.json"
 
 # Same N as the M3 gate (`scripts/bench.py`) -- see that script's own
 # docstring for why 10 (matches the build guide's own example N; small

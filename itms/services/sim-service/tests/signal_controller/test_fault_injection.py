@@ -8,7 +8,7 @@ resume into an assumed phase.
 
 from __future__ import annotations
 
-from itms_domain import JunctionContext, Phase, Tier0Config
+from itms_domain import JunctionContext, Phase, PlanStep, SignalPlan, Tier0Config
 from sim_service.signal_controller import arbiter
 from sim_service.signal_controller.cabinet import FakeCabinet
 
@@ -185,3 +185,45 @@ def test_C5_no_false_positive_when_readback_matches():
     decision = arbiter.tick(cfg, ctx, cabinet)
 
     assert decision.mode != "failsafe_divergence"
+
+
+def test_interlock_rejection_reports_which_movements_were_violated():
+    # `Decision.violated_movements` (added alongside camp.py's starvation
+    # override -- PROGRESS.md's "Real saturation-flow calibration" finding)
+    # is what lets `_recover_from_fault` resume into a phase that actually
+    # serves the movement I5 flagged, instead of unconditionally resetting
+    # to ring_order[0] and risking the exact same rejection next tick.
+    cfg = _cfg()
+    ctx = JunctionContext(
+        intersection_id="J", current_phase_id="NS", current_phase_elapsed_s=0.0,
+        has_demand={"E": True}, wait_times_s={"E": cfg.max_wait_s},
+    )
+    cabinet = FakeCabinet()
+
+    def bad_strategy(cfg: Tier0Config, ctx: JunctionContext) -> SignalPlan:
+        # Proposes NS again -- legal on its own, but doesn't serve "E",
+        # which has already hit the I5 bound with real demand.
+        return SignalPlan(
+            intersection_id="J", steps=(PlanStep(phase_id="NS", green_s=1.0),), source="test"
+        )
+
+    decision = arbiter.tick(cfg, ctx, cabinet, strategy=bad_strategy)
+
+    assert decision.mode == "failsafe_interlock_rejected"
+    assert "E" in decision.violated_movements
+
+
+def test_non_interlock_faults_report_no_violated_movements():
+    # Every other fault branch (comms loss, hardware override, etc.) has no
+    # Violation objects to draw from -- violated_movements must stay empty,
+    # not raise or guess, so _recover_from_fault's fallback to
+    # ring_order[0] is exercised exactly as it always was for these modes.
+    cfg = _cfg()
+    ctx = JunctionContext(intersection_id="J", current_phase_id="NS", current_phase_elapsed_s=5.0)
+    cabinet = FakeCabinet()
+    cabinet.drop_comms()
+
+    decision = arbiter.tick(cfg, ctx, cabinet)
+
+    assert decision.mode == "degraded_comms_lost"
+    assert decision.violated_movements == frozenset()

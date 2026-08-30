@@ -103,7 +103,44 @@ class CampConfig:
     eps: float = 0.05
     lambda_f: float = 0.6
     gamma: float = 3.0
-    lambda_s: float = 1.0
+    lambda_s: float = 0.143
+    """§3.9's own tabulated default is `1.0` -- this is a corridor-
+    calibrated override of it, not a silent substitution: derived from
+    real measured data, flagged here exactly like `_switch`'s own
+    deviation, not slipped in unnoted.
+
+    `m4_camp_pressure_gap_diagnostics.py` measured, per tick at all three
+    demand levels (light/medium/heavy, real per-lane sat_flow
+    calibration, both starvation-deadlock fixes in place), the actual raw
+    pressure gap `S(p)` was overriding: on 56-73% of every extend-eligible
+    tick, some other live phase's flow/block/fairness signal already
+    exceeded `current`'s -- `S(p)` (mean ≈1.6 corridor-wide, driven almost
+    entirely by geometry: yellow/all-red/startup lost time and mean
+    sat_flow, not by demand) was what pulled the decision back to
+    "stay," even though the genuine raw gaps it was beating were
+    overwhelmingly small (pooled across all three demand levels, n=28992:
+    p50=0.011, p75=0.033, **p90=0.228**, p95=0.397, max=1.17) -- `S(p)`
+    at `λ_s=1.0` was 7-14x larger than even the top-decile genuine
+    signal, not just the median noise.
+
+    The calibration: set `S(p)`'s typical corridor-wide magnitude to the
+    pooled **90th percentile** of that measured raw-gap distribution
+    (`0.228`) -- large enough that only a genuinely substantial pressure
+    difference (not top-half noise) can justify paying the real
+    clearance-time cost of switching, small enough that CA-MP can
+    actually act on that difference instead of always losing to a fixed
+    ~1.6 tax regardless of what the traffic is doing. `0.228 / 1.6 ≈
+    0.143`. The 90th-percentile threshold is itself a judgment call, not
+    a uniquely correct answer -- p75 (0.033, more reactive) and p95
+    (0.397, more conservative) were both measured and are both on record
+    in PROGRESS.md if this value needs revisiting; p90 was chosen as
+    the conventional "meaningfully large, not noise" cutoff rather than
+    picked to make any specific benchmark outcome look better -- this
+    value was fixed *before* the post-recalibration gate comparison was
+    ever re-run. See PROGRESS.md's "Recalibrating λ_s from the corridor's
+    own measured pressure-gap distribution" section for the full
+    derivation and the re-run results, including if this made things
+    worse -- reported either way."""
     startup_lost_s: float = 2.0
     """Not in §3.9's table by name -- `L_i = yellow_s + all_red_s +
     start-up lost time` [§3.1's notation table] needs a start-up-lost
@@ -183,10 +220,77 @@ def _fairness(camp_cfg: CampConfig, cfg: Tier0Config, ctx: JunctionContext, phas
 
 
 def _switch(camp_cfg: CampConfig, cfg: Tier0Config, current: str, phase_id: str) -> float:
+    """§3.4 Term 6, `S(p)` -- fixed post-diagnostic (see `m4_camp_diagnostics.py`
+    and PROGRESS.md's "Root cause confirmed" section). The original
+    implementation returned a bare `lost_time_s / t_dec_s` -- real seconds,
+    un-scaled by `sat_flow_pcu_s` -- while every *other* term in `pressure()`
+    (`_flow_pressure`, `_block_pressure`, `_fairness`) is a `sat_flow_pcu_s`-
+    weighted quantity. That made `S(p)` the only term on a different numeric
+    scale from the rest of 𝒫(p), and at this corridor's real (placeholder
+    0.5 pcu/s) saturation flow and light/medium-demand queue sizes, the
+    unscaled constant (~9.86) came out 22-61x the typical flow pressure it
+    was being subtracted from -- confirmed by `m4_camp_diagnostics.py`:
+    100% of phase changes at every demand level were `max_green_s` timeouts,
+    never a genuine pressure comparison, because the current phase's own
+    (switch-cost-free) pressure was the outright max on every single tick.
+
+    The fix: price the lost green time the same way `_flow_pressure` prices
+    a real queue. `sat_flow_pcu_s[m] * (lost_time_s / t_dec_s)` is a
+    phantom "queue" of the vehicles movement `m` could have discharged
+    during the lost time (units: pcu/s * s = pcu, same as `queue_pcu`);
+    weighting that phantom queue by `sat_flow_pcu_s[m]` again -- exactly
+    the way `_flow_pressure` turns a real `queue_pcu[m]` into a pressure
+    term -- brings `S(p)` onto the same `sat_flow^2`-ish scale as Term 1
+    instead of a bare seconds count. `t_dec_s` keeps its existing role
+    (§3.9's tunable) inside that phantom-queue computation rather than
+    being dropped.
+
+    Deliberately the *mean* over `phase_id`'s green movements, not the sum
+    `_flow_pressure` itself uses. First cut of this fix summed (matching
+    `_flow_pressure` literally), and re-running `m4_camp_diagnostics.py`
+    against the real corridor exposed why that was wrong: with a uniform
+    corridor-wide `sat_flow_pcu_s`, summing makes `S(p)` scale with how
+    many green movements `phase_id` happens to bundle, so multi-movement
+    phases got penalized more than single-movement ones purely for their
+    ring geometry, with no basis in real switching cost (the yellow/all-red/
+    startup clearance interval doesn't get longer because more movements
+    share the next phase). That skew biased CA-MP away from switching into
+    multi-movement phases specifically, and materialized as new
+    `failsafe_interlock_rejected` events (I5, max-wait) on the real
+    corridor that the unfixed build never produced -- the safety net caught
+    every one (0 unsafe plans ever reached the simulated cabinet), but a
+    fix that makes the safety net fire *more* than the pre-fix build is a
+    real regression worth fixing at the source, not something to leave for
+    the interlock layer to keep absorbing. The mean keeps `S(p)` on the
+    correct sat_flow-weighted scale (fixing the diagnosed bug) without
+    making it depend on `phase_id`'s own movement count (avoiding the new
+    one). Re-run of `m4_camp_diagnostics.py` after this correction: see
+    PROGRESS.md's "Root cause confirmed" section for the before/after
+    numbers.
+
+    This is a deviation from the guide's literal `λ_s · lost_time_s /
+    t_dec_s` shape (which has no `sat_flow_pcu_s` factor) -- flagged here
+    exactly as Term 2's ambiguity is flagged in the module docstring,
+    rather than silently changed. It was necessary because the guide's
+    default `t_dec_s=1.0` implicitly assumes a pressure scale the guide's
+    own generic worked example lives at, not this corridor's actual
+    measured queue/sat_flow scale -- and no single constant `t_dec_s`
+    override could fix that across all three demand levels at once,
+    because the mismatch itself grows and shrinks with `sat_flow_pcu_s`,
+    the same quantity every other term already scales by. When `sat_flow_
+    pcu_s[m] == 1.0` (every existing unit test's default) and `phase_id`
+    has a single green movement (also true of every existing unit test),
+    this reduces to exactly the old formula, so it changes no previously-
+    asserted numeric result written against that default.
+    """
     if phase_id == current:
         return 0.0
-    lost_time_s = cfg.yellow_s + cfg.all_red_s + camp_cfg.startup_lost_s
-    return camp_cfg.lambda_s * (lost_time_s / camp_cfg.t_dec_s)
+    lost_time_s = (cfg.yellow_s + cfg.all_red_s + camp_cfg.startup_lost_s) / camp_cfg.t_dec_s
+    movements = cfg.phases[phase_id].green_movements
+    if not movements:
+        return 0.0
+    mean_sat_flow = sum(cfg.sat_flow_pcu_s.get(m, 0.0) for m in movements) / len(movements)
+    return camp_cfg.lambda_s * mean_sat_flow * (mean_sat_flow * lost_time_s)
 
 
 def pressure(
@@ -236,6 +340,50 @@ def _skippable(cfg: Tier0Config, ctx: JunctionContext, phase_id: str) -> bool:
         return False
     w = max((ctx.wait_times_s.get(m, 0.0) for m in phase.green_movements), default=0.0)
     return w < cfg.max_wait_s - _SKIP_WAIT_MARGIN_S
+
+
+def _critical_phases(
+    cfg: Tier0Config, ctx: JunctionContext, live_phases: list[str]
+) -> list[str]:
+    """Phases serving a movement within `_SKIP_WAIT_MARGIN_S` of I5's
+    `max_wait_s` bound, with real demand -- most-urgent-first (smallest
+    margin to the bound). Exists because `pressure()` alone cannot be
+    trusted to reach a starved movement in time: confirmed on the real
+    corridor once real per-lane saturation-flow calibration (see
+    `measure_saturation_flow.py`, PROGRESS.md's "Real saturation-flow
+    calibration" section) let a run last long enough to exercise it for
+    the first time. The mechanism, worth restating here since it's the
+    reason this function exists at all: at zero receiving-link occupancy
+    (this module's own documented zero-occupancy cancellation of
+    `P_flow`/`P_block`), a phase's pressure reduces to fairness minus
+    switching cost. Fairness's own ceiling for a movement is bounded by
+    `camp_cfg.lambda_f * sat_flow_pcu_s[m]` (capped at `wait_ratio == 1.0`
+    -- it cannot grow any further once a movement has already waited the
+    full `max_wait_s`), but `_switch`'s fix prices switching cost from
+    that *same* `sat_flow_pcu_s` scale, and for a multi-movement phase at
+    this corridor's real measured saturation flows that switching cost
+    routinely comes out several times larger than fairness's ceiling --
+    meaning a starved movement's own phase can be *structurally* incapable
+    of ever outranking a phase that costs less to switch into, including
+    one with no real demand of its own, no matter how long the wait grows.
+    That is a gap in `pressure()`'s own design, not a tuning problem this
+    function's threshold papers over -- it exists specifically so no
+    single tick's ranking decision is trusted past the point where I5
+    would otherwise be forced to reject the plan outright."""
+    urgency: list[tuple[float, str]] = []
+    for p in live_phases:
+        margins = [
+            cfg.max_wait_s - ctx.wait_times_s.get(m, 0.0)
+            for m in cfg.phases[p].green_movements
+            if ctx.has_demand.get(m, False)
+        ]
+        if not margins:
+            continue
+        margin = min(margins)
+        if margin <= _SKIP_WAIT_MARGIN_S:
+            urgency.append((margin, p))
+    urgency.sort(key=lambda pair: pair[0])
+    return [p for _, p in urgency]
 
 
 def _exit_step(
@@ -310,6 +458,31 @@ def propose(
                 steps=(PlanStep(phase_id=current, green_s=tick_s),),
                 source="camp",
             )
+
+    # Starvation override -- see _critical_phases' own docstring for the
+    # full mechanism. Checked here, before the ordinary pressure-based
+    # extend decision below, not only inside the advance branch further
+    # down: pressure() can otherwise judge `current` (even a completely
+    # idle phase) the outright best candidate and "extend" it indefinitely,
+    # in which case the advance branch is never reached at all -- this is
+    # exactly the failure mode PROGRESS.md's calibration finding traced.
+    # Only reachable once current's own min-green floor (I3) is already
+    # satisfied (the branch above returns unconditionally before this
+    # point), so this can never cut a phase short of its safety floor.
+    critical = _critical_phases(cfg, ctx, live_phases)
+    if critical and current not in critical:
+        next_phase = critical[0]
+        green_s = _allocate_green(cfg, next_phase, pressures, nominal_cycle_s)
+        return SignalPlan(
+            intersection_id=cfg.intersection_id,
+            steps=(
+                _exit_step(cfg, ctx, current, min_g, tick_s),
+                PlanStep(phase_id=next_phase, green_s=green_s),
+            ),
+            source="camp",
+        )
+
+    if not current_is_faulted:
         if elapsed < max_g:
             best_pressure = max(pressures.values())
             # §3.9: "5% of max 𝒫" -- scaled by abs() rather than

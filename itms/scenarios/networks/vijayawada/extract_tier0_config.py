@@ -67,9 +67,16 @@ relationship a real deployment tunes these two parameters by, rather than
 an arbitrary global default disconnected from how many phases a specific
 ring actually has to cycle through.
 
-`sat_flow_pcu_s` is populated too, for M4 -- every movement gets the same
-conventional per-lane placeholder value (`_SAT_FLOW_PCU_S` below), not a
-measured one; see that constant's own comment for why.
+`sat_flow_pcu_s` is populated too, for M4. As of `measure_saturation_flow.py`
+(see its own module docstring and PROGRESS.md's CA-MP section), most
+movements now get a *real* measured value -- loaded from
+`sat_flow_calibration.json` if present next to this network file -- rather
+than the uniform placeholder every movement used before. A movement missing
+from that file (either the calibration script was never run, or that
+specific movement couldn't collect enough clean discharges in its
+measurement window -- see the calibration script's own skip criteria)
+falls back to `_SAT_FLOW_PCU_S`, the original conventional placeholder;
+see that constant's own comment for why it exists at all.
 
 What's NOT modeled: pedestrian phases. This network has no crossing
 infrastructure (a plain netconvert import with no explicit pedestrian
@@ -101,6 +108,7 @@ SUMO traffic-light id (== `Tier0Config.intersection_id`).
 
 from __future__ import annotations
 
+import json
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -109,6 +117,7 @@ from itms_domain import Phase, Tier0Config
 
 _HERE = Path(__file__).resolve().parent
 _DEFAULT_NET = _HERE / "vijayawada_corridor.net.xml"
+_SAT_FLOW_CALIBRATION_FILENAME = "sat_flow_calibration.json"
 
 # Not read off the network -- see module docstring for why each exists.
 _ALL_RED_S = 2.0
@@ -143,7 +152,12 @@ def _is_green_phase(state: str) -> bool:
     return any(c in "Gg" for c in state)
 
 
-def _extract_one(tls_id: str, tl_logic: ET.Element, junction: ET.Element) -> Tier0Config:
+def _extract_one(
+    tls_id: str,
+    tl_logic: ET.Element,
+    junction: ET.Element,
+    measured_sat_flow: dict[str, float] | None = None,
+) -> Tier0Config:
     # Conflict matrix from this junction's own <request> elements, keyed by
     # link-index labels ("L0", "L1", ...) matching the tlLogic state string
     # character positions.
@@ -183,12 +197,17 @@ def _extract_one(tls_id: str, tl_logic: ET.Element, junction: ET.Element) -> Tie
         max_green_s[phase_id] = _MAX_GREEN_S
         green_phase_count += 1
 
-    # Every movement that is ever green in some phase gets the same
-    # conventional placeholder saturation flow -- see _SAT_FLOW_PCU_S.
+    # Every movement that is ever green in some phase gets a real measured
+    # saturation flow if `measure_saturation_flow.py` produced one for it;
+    # otherwise the original conventional placeholder -- see
+    # _SAT_FLOW_PCU_S and this module's own docstring.
     all_green_links: set[str] = set()
     for phase in phases.values():
         all_green_links.update(phase.green_movements)
-    sat_flow_pcu_s = dict.fromkeys(all_green_links, _SAT_FLOW_PCU_S)
+    measured_sat_flow = measured_sat_flow or {}
+    sat_flow_pcu_s = {
+        link: measured_sat_flow.get(link, _SAT_FLOW_PCU_S) for link in all_green_links
+    }
 
     # max_wait_s sized off this ring's own worst-case full rotation (every
     # phase maxing out once, plus clearance overhead), not left at
@@ -212,9 +231,22 @@ def _extract_one(tls_id: str, tl_logic: ET.Element, junction: ET.Element) -> Tie
     )
 
 
+def _load_sat_flow_calibration(net_path: Path) -> dict[str, dict[str, float]]:
+    """`{tls_id: {"L{i}": pcu_per_s}}`, from `measure_saturation_flow.py`'s
+    output if it's been run for this network; `{}` (every movement falls
+    back to the placeholder) if not -- calibration is optional, additive
+    data, never required for this loader to work."""
+    calibration_path = net_path.parent / _SAT_FLOW_CALIBRATION_FILENAME
+    if not calibration_path.exists():
+        return {}
+    return json.loads(calibration_path.read_text())
+
+
 def load_configs(net_path: str | Path) -> dict[str, Tier0Config]:
+    net_path = Path(net_path)
     tree = ET.parse(net_path)
     root = tree.getroot()
+    calibration = _load_sat_flow_calibration(net_path)
 
     junctions_by_id = {j.get("id"): j for j in root.findall("junction")}
     configs: dict[str, Tier0Config] = {}
@@ -225,7 +257,7 @@ def load_configs(net_path: str | Path) -> dict[str, Tier0Config]:
         junction = junctions_by_id.get(tls_id)
         if junction is None:
             raise ValueError(f"tlLogic {tls_id!r} has no matching <junction> element")
-        configs[tls_id] = _extract_one(tls_id, tl_logic, junction)
+        configs[tls_id] = _extract_one(tls_id, tl_logic, junction, calibration.get(tls_id))
     return configs
 
 

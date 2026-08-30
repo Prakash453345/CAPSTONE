@@ -52,7 +52,7 @@ from measure_flows import compute_link_flows  # noqa: E402
 _NET_PATH = _ROOT / "scenarios" / "networks" / "vijayawada" / "vijayawada_corridor.net.xml"
 _SUMOCFG_PATH = _ROOT / "scenarios" / "demand" / "vijayawada" / "vijayawada_corridor.sumocfg"
 _ROUTE_PATH = _ROOT / "scenarios" / "demand" / "vijayawada" / "vijayawada_corridor.rou.xml"
-_RESULTS_PATH = Path(__file__).resolve().parent / "bench_results.json"
+_RESULTS_PATH = Path(__file__).resolve().parent / "results" / "bench_results.json"
 
 # The fixed workload manifest [§8.2] -- 10 seeds, the same set for every
 # controller (paired comparisons), checked into the repo via this file.
