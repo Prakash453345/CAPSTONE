@@ -783,3 +783,233 @@ def test_relative_load_is_scale_invariant_across_junction_size():
         f"relative_load should read alike across junction scale, got "
         f"small={small.relative_load:.3f} big={big.relative_load:.3f}"
     )
+
+
+def _warm_congestion(controller: acamp.AdaptiveCamp, cfg: Tier0Config, ticks: int = 1800, q: float = 30.0) -> None:
+    """Push `controller`'s smoothed load past the congestion gate's ~0.5
+    midpoint before a `protect_allocated_green` test exercises it -- that
+    gate reads `_load_ewma`, which starts at 0 and only warms through
+    `_update_load`, itself called unconditionally on every tick regardless
+    of which branch of `__call__` a tick takes. Ticks are pinned at
+    `elapsed=1.0` on the ring's first phase (below every test's
+    `min_green_s` of 2.0), so each one takes the cheap I3 extend branch
+    and touches nothing but the load EWMA -- 1800 ticks is 6 half-lives of
+    the default 300s `load_halflife_s`, close enough to the asymptote
+    (`1 - 0.5**6 ~= 0.984`) that the exact test scale chosen elsewhere
+    isn't sensitive to it."""
+    warm_ctx = JunctionContext("J", "P0", 1.0, queue_pcu={"m0": q, "m1": q})
+    for _ in range(ticks):
+        controller(cfg, warm_ctx)
+
+
+def test_protect_allocated_green_holds_a_phase_for_its_own_promised_share():
+    """The measured heavy-demand defect, stated as a property:
+    `scripts/m5_heavy_diagnostics.py` found mean green *served* running at
+    less than half of mean green *allocated* at heavy demand (23.3s vs
+    59.4s) while light demand's gap was much smaller (29.4s vs 33.8s) --
+    the controller re-litigates its own pressure comparison every tick and
+    can abandon a phase well before the allocation it computed for that
+    very phase is used up. `protect_allocated_green` makes the switch test
+    defer until that self-granted allocation is actually served.
+
+    Set up so a controller that ignored the stored allocation would fail:
+    P1 is switched into with a large, meaningful allocation; immediately
+    afterward P0 receives a *much* larger competing queue, engineered
+    (near-zero `kappa_switch`/`lost_time_weight`) so nothing else would
+    hold P1 against it. Unprotected, that switches back on the very next
+    tick -- protected, it must not, until the stored allocation elapses."""
+    cfg = _ring_config(2, min_greens=[2.0, 2.0], max_greens=[200.0, 200.0])
+    acfg = acamp.AcampConfig(protect_allocated_green=True, kappa_switch=0.01, lost_time_weight=0.0)
+    controller = acamp.AdaptiveCamp(acfg, nominal_cycle_s=60.0, tick_s=1.0)
+    _warm_congestion(controller, _ring_config(2, min_greens=[2.0, 2.0], max_greens=[200.0, 200.0]))
+
+    # P0 is current (cold start), well past its own min_green, empty; P1
+    # has a real queue -- this should switch into P1 with a sizeable
+    # allocation.
+    ctx0 = JunctionContext("J", "P0", 10.0, queue_pcu={"m0": 0.0, "m1": 60.0})
+    plan0 = controller(cfg, ctx0)
+    assert len(plan0.steps) == 2 and plan0.steps[1].phase_id == "P1"
+    allocation = plan0.steps[1].green_s
+    assert allocation > 10.0, "test setup needs a real, sizeable allocation to be meaningful"
+
+    # Shortly into P1 (past its own min_green of 2.0s), a much larger
+    # competing queue appears on P0.
+    ctx1 = JunctionContext("J", "P1", 3.0, queue_pcu={"m0": 500.0, "m1": 60.0})
+    plan1 = controller(cfg, ctx1)
+    assert len(plan1.steps) == 1 and plan1.steps[0].phase_id == "P1", (
+        "protect_allocated_green should hold P1 despite a much larger "
+        "competing pressure, since P1's own allocation is not yet served"
+    )
+
+    # Past the stored allocation, protection lifts and the genuinely
+    # larger, still-present pressure wins.
+    ctx2 = JunctionContext("J", "P1", allocation + 1.0, queue_pcu={"m0": 500.0, "m1": 60.0})
+    plan2 = controller(cfg, ctx2)
+    assert len(plan2.steps) == 2 and plan2.steps[1].phase_id == "P0", (
+        "once its own allocation is served, protection must lift"
+    )
+
+
+def test_protect_allocated_green_lifts_once_the_phase_clears_its_own_queue():
+    """The demand guard, as a property: a purely time-based version of
+    this mechanism was tried first and measured to make light and medium
+    demand substantially *worse* (see `AcampConfig.protect_allocated_
+    green`'s docstring) because it forced an already-emptied phase to sit
+    out the rest of an allocation it no longer needed. Protection must
+    therefore lift the moment the current phase's own queue and
+    approaching count both reach zero, even if its allocated time has
+    not elapsed yet -- a legitimate "I'm done" signal is never overridden,
+    only a *reversal driven by a competing phase's rising pressure* is."""
+    cfg = _ring_config(2, min_greens=[2.0, 2.0], max_greens=[200.0, 200.0])
+    acfg = acamp.AcampConfig(protect_allocated_green=True, kappa_switch=0.01, lost_time_weight=0.0)
+    controller = acamp.AdaptiveCamp(acfg, nominal_cycle_s=60.0, tick_s=1.0)
+    _warm_congestion(controller, cfg)
+
+    ctx0 = JunctionContext("J", "P0", 10.0, queue_pcu={"m0": 0.0, "m1": 60.0})
+    plan0 = controller(cfg, ctx0)
+    assert plan0.steps[1].phase_id == "P1"
+    allocation = plan0.steps[1].green_s
+    assert allocation > 10.0
+
+    # Still within the allocation window, but P1's own queue has cleared
+    # entirely and P0 now has a modest (not overwhelming) queue.
+    ctx1 = JunctionContext("J", "P1", 3.0, queue_pcu={"m0": 5.0, "m1": 0.0})
+    plan1 = controller(cfg, ctx1)
+    assert len(plan1.steps) == 2 and plan1.steps[1].phase_id == "P0", (
+        "an emptied phase's own legitimate 'nothing left to serve' signal "
+        "must not be overridden by allocation protection"
+    )
+
+
+def test_protect_allocated_green_disabled_reproduces_old_eager_switching():
+    """Explicitly disabled, the exact same scenario switches back
+    immediately -- the pre-existing eager-switching behaviour is still
+    reachable and untouched, even though it is no longer the shipped
+    default (see `test_protect_allocated_green_is_now_the_shipped_default`
+    and `AcampConfig.protect_allocated_green`'s docstring for the verified
+    result that changed the default)."""
+    cfg = _ring_config(2, min_greens=[2.0, 2.0], max_greens=[200.0, 200.0])
+    acfg = acamp.AcampConfig(
+        protect_allocated_green=False, kappa_switch=0.01, lost_time_weight=0.0
+    )
+    controller = acamp.AdaptiveCamp(acfg, nominal_cycle_s=60.0, tick_s=1.0)
+
+    ctx0 = JunctionContext("J", "P0", 10.0, queue_pcu={"m0": 0.0, "m1": 60.0})
+    plan0 = controller(cfg, ctx0)
+    assert plan0.steps[1].phase_id == "P1"
+
+    ctx1 = JunctionContext("J", "P1", 3.0, queue_pcu={"m0": 500.0, "m1": 60.0})
+    plan1 = controller(cfg, ctx1)
+    assert len(plan1.steps) == 2 and plan1.steps[1].phase_id == "P0", (
+        "with the flag off, the controller must still switch back on the "
+        "very next tick, exactly as it always has"
+    )
+
+
+def test_protect_allocated_green_is_now_the_shipped_default():
+    """`scripts/m5_protect_allocated_green_verify.py` held out the full
+    10-seed `EVAL_SEEDS` gate and found light and medium demand bit-for-bit
+    unaffected (0.0% change, every single seed -- a true no-op below the
+    congestion gate's threshold) while heavy demand improved 12.1% in
+    aggregate with all 10 seeds individually improving and non-overlapping
+    95% CIs (1,454,395 -> 1,277,791) and zero interlock violations in
+    either arm. Unlike `use_relative_congestion_gate`'s "promising, not
+    proven" medium result, this is a clean, verified win with no
+    downside measured anywhere -- so, unlike that mechanism, this one
+    ships on by default rather than staying an opt-in."""
+    assert acamp.AcampConfig().protect_allocated_green is True
+
+
+def test_cold_start_allocation_protection_does_not_freeze_the_handed_in_phase():
+    """`_current_phase_allocation_s` starts at 0.0 -- the phase a
+    controller is handed at cold start was never chosen by its own
+    `allocate_green`, so there must be nothing to protect yet. If cold
+    start somehow protected it anyway, a freshly-constructed controller
+    facing a starved current phase and a genuinely needier one would
+    refuse to switch, which would be a new, unrelated safety regression."""
+    cfg = _ring_config(2, min_greens=[2.0, 2.0], max_greens=[200.0, 200.0])
+    acfg = acamp.AcampConfig(protect_allocated_green=True, kappa_switch=0.01, lost_time_weight=0.0)
+    controller = acamp.AdaptiveCamp(acfg, nominal_cycle_s=60.0, tick_s=1.0)
+    assert controller._current_phase_allocation_s == 0.0
+
+    ctx = JunctionContext("J", "P0", 10.0, queue_pcu={"m0": 0.0, "m1": 60.0})
+    plan = controller(cfg, ctx)
+    assert len(plan.steps) == 2 and plan.steps[1].phase_id == "P1", (
+        "cold start must not fabricate a protection period for a phase "
+        "this controller never actually allocated"
+    )
+
+
+def test_initial_baseline_load_seeds_the_slow_ewma_without_a_tick():
+    """`initial_baseline_load` must take effect immediately, before
+    `_update_load` ever runs -- it is the value `m5_harness.build_acamp`
+    reads out of a persisted `memory_mod.LoadBaseline`, and a controller
+    that ignored it until the first tick would still exhibit one tick's
+    worth of the exact cold-start artefact this parameter exists to
+    remove."""
+    cold = acamp.AdaptiveCamp()
+    warm = acamp.AdaptiveCamp(initial_baseline_load=12.5)
+    assert cold.baseline_load == 0.0
+    assert warm.baseline_load == 12.5
+    # relative_load is well-defined immediately too, using the seeded
+    # baseline rather than the guard for an unwarmed (<=1e-9) one.
+    assert warm.relative_load == 0.0  # smoothed_load is still 0 pre-tick
+
+
+def test_warmed_baseline_avoids_the_cold_start_bias_a_short_run_cannot_correct():
+    """The structural problem `AcampConfig.use_relative_congestion_gate`'s
+    docstring names, stated as a property: a demand-level run here lasts a
+    few thousand simulated seconds, far too short for a `baseline_halflife_s`
+    of 3600s to climb from a cold `0.0` to this junction's real long-run
+    normal within one run. Persisting the baseline across runs
+    (`memory_mod.LoadBaseline`, harvested by `m5_harness.run_one` and fed
+    back in as `initial_baseline_load`) is supposed to fix exactly this:
+    a controller seeded with its own genuine long-run normal should read
+    a *stable, moderate* `relative_load` under a step-up in demand, while
+    a cold-started one -- still dragging its baseline up from zero over
+    the same short window -- reads an inflated, cold-start-inflated ratio
+    for the same traffic.
+
+    Set up so a controller that ignored `initial_baseline_load` entirely
+    would fail this test: `warm` is seeded with the true converged
+    baseline for this load level (established by running a separate
+    instance to convergence first), `cold` starts at 0.0, and both then
+    see the identical short tick history."""
+    cfg = _ring_config(2, sat_flows=[1.0, 1.0])
+    acamp_cfg = acamp.AcampConfig(load_halflife_s=300.0, baseline_halflife_s=3600.0)
+    ctx = lambda q: JunctionContext(  # noqa: E731
+        "J", "P0", 10.0, queue_pcu={"m0": q / 2, "m1": q / 2}
+    )
+
+    # Establish this junction's true converged baseline at a moderate,
+    # steady load of scale 10.0 -- long enough (~14 half-lives of the
+    # *slow* EWMA, the one that actually needs to converge here) that it
+    # has settled within a fraction of a percent of the constant.
+    reference = acamp.AdaptiveCamp(acamp_cfg, tick_s=1.0)
+    for _ in range(50_000):
+        reference(cfg, ctx(10.0))
+    true_normal = reference.baseline_load
+    assert true_normal > 9.5, "reference run did not converge; test setup is broken"
+
+    cold = acamp.AdaptiveCamp(acamp_cfg, tick_s=1.0)
+    warm = acamp.AdaptiveCamp(acamp_cfg, tick_s=1.0, initial_baseline_load=true_normal)
+
+    # A short run -- the length an actual demand-level scenario runs for,
+    # per PROGRESS.md's own recorded step counts -- at the same moderate
+    # load `true_normal` was established at. Nothing has changed about
+    # the traffic; only the starting baseline differs.
+    for _ in range(1800):
+        cold(cfg, ctx(10.0))
+        warm(cfg, ctx(10.0))
+
+    assert cold.relative_load > warm.relative_load, (
+        f"cold-started baseline should still be under-warmed relative to a "
+        f"persisted one on a short run: cold={cold.relative_load:.3f} "
+        f"warm={warm.relative_load:.3f}"
+    )
+    # The warmed controller reads its own normal load as approximately
+    # "normal" (ratio near 1); the cold one reads the identical traffic as
+    # meaningfully more congested than it is, purely as a cold-start
+    # artefact of its baseline not having caught up yet.
+    assert 0.85 < warm.relative_load < 1.15
+    assert cold.relative_load > warm.relative_load * 1.2

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import json
 
-from sim_service.control.memory import DemandMemory, blend
+from sim_service.control.memory import DemandMemory, LoadBaseline, blend
 
 
 def _run(mem: DemandMemory, junction: str, queue: float, ticks: int = 10, t0: float = 0.0) -> None:
@@ -150,6 +150,71 @@ def test_coverage_reports_usable_versus_total():
     _run(mem, "J", 4.0)
     usable, total = mem.coverage()
     assert usable == total > 0
+
+
+# ---- LoadBaseline ------------------------------------------------------
+
+
+def test_load_baseline_unseen_junction_reads_as_cold_start():
+    """A junction this store has never seen must behave exactly as it did
+    before this class existed -- `0.0`, the same default
+    `AdaptiveCamp.__init__` always used."""
+    store = LoadBaseline()
+    assert store.get("J") == 0.0
+    assert store.runs("J") == 0
+
+
+def test_load_baseline_update_overwrites_not_blends():
+    """The value handed to `update` is already a continuously-decaying
+    EWMA's own current state, not a fresh independent sample -- so the
+    next run must start from exactly that value, not from some further
+    blend of it with the previous stored value (which would double-
+    discount every tick's contribution)."""
+    store = LoadBaseline()
+    store.update("J", 3.0)
+    assert store.get("J") == 3.0
+    store.update("J", 7.0)
+    assert store.get("J") == 7.0, "update must overwrite, not average, across runs"
+    assert store.runs("J") == 2
+
+
+def test_load_baseline_tracks_junctions_independently():
+    store = LoadBaseline()
+    store.update("J1", 5.0)
+    store.update("J2", 50.0)
+    assert store.get("J1") == 5.0
+    assert store.get("J2") == 50.0
+
+
+def test_load_baseline_save_load_round_trip(tmp_path):
+    store = LoadBaseline()
+    store.update("J1", 4.2)
+    store.update("J1", 6.6)
+    store.update("J2", 1.1)
+    path = tmp_path / "load_baseline.json"
+    store.save(path)
+
+    restored = LoadBaseline.load(path)
+    assert restored.get("J1") == 6.6
+    assert restored.runs("J1") == 2
+    assert restored.get("J2") == 1.1
+    assert restored.runs("J2") == 1
+
+
+def test_load_baseline_missing_file_is_a_cold_start_not_an_error(tmp_path):
+    store = LoadBaseline.load(tmp_path / "does-not-exist.json")
+    assert store.get("J") == 0.0
+    assert store.runs("J") == 0
+
+
+def test_load_baseline_save_is_atomic(tmp_path):
+    store = LoadBaseline()
+    store.update("J", 9.0)
+    path = tmp_path / "nested" / "load_baseline.json"
+    store.save(path)
+    assert path.exists()
+    assert not list(path.parent.glob("*.tmp"))
+    json.loads(path.read_text())
 
 
 # ---- blend -----------------------------------------------------------

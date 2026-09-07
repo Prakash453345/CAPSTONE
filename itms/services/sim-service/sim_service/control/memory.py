@@ -260,6 +260,110 @@ class DemandMemory:
         return memory
 
 
+@dataclass
+class LoadBaseline:
+    """Cross-run persistence for `AdaptiveCamp`'s slow load EWMA -- the
+    piece `AcampConfig.use_relative_congestion_gate`'s docstring names as
+    missing: "`DemandMemory` already solves exactly this shape of problem
+    for queues... but has no equivalent for this load signal yet."
+
+    **Why a single float per junction is the right shape, unlike
+    `DemandMemory`'s per-time-of-day bins.** `_baseline_load_ewma` is not
+    a time-of-day profile -- it is one long-half-life running average
+    meant to answer "what does loaded normally look like here", the same
+    question a real deployed controller never gets to re-ask from zero
+    just because a shift changed. Binning it by time of day would need
+    exactly the sample-count guard `DemandMemory` carries (`min_runs`)
+    before any bin could be trusted, and would also need enough runs per
+    bin to warm each one separately -- the corridor's demand files give
+    three day-*types* (light/medium/heavy), not enough distinct
+    times-of-day to bin meaningfully. A single scalar that keeps
+    accumulating across every run this junction has ever seen, light and
+    heavy days both, is the model that matches what `baseline_halflife_s`
+    (1 hour) was already sized to smooth over: individual busy periods,
+    not individual day-types.
+
+    **Why this stores the raw ending value rather than an across-run
+    EWMA of endings, unlike `DemandMemory.commit`.** `DemandMemory` blends
+    each run's *summary statistic* into history with an explicit decay,
+    because each run contributes one independent sample of "what this bin
+    looks like". `_baseline_load_ewma` is already itself a continuously-
+    decaying average; the value handed to `update()` is that average's
+    own current state, not a fresh sample of something else. Applying a
+    second decayed blend on top would double-discount every tick's
+    contribution -- once inside the run's own EWMA, again across runs --
+    which is not what "the same EWMA, uninterrupted by where one SUMO
+    process happened to stop" means. So `update()` overwrites: the state
+    the next run starts from is exactly the state the previous run ended
+    at, which is what "the controller kept running, only the clock inside
+    one simulated process reset" is supposed to model.
+
+    **Why this needs its runs sequential, not parallel, unlike
+    `DemandMemory.build_memory`.** `DemandMemory` merges independent
+    parallel runs because each contributes an interchangeable sample of a
+    stationary quantity (a bin's typical queue), so processing order only
+    mildly biases the decay weighting -- documented and accepted there.
+    Here the entire point is that run N's *starting* state must be run
+    N-1's *ending* state; running two seeds in parallel from the same
+    starting baseline and keeping whichever happens to finish last would
+    silently throw away one of the two runs' contribution rather than
+    chaining them. `scripts/m5_warm_load_baseline.py` runs its warm-up
+    seeds one at a time for exactly this reason, at the cost of the
+    parallelism `train_acamp.py`'s memory phase can use freely."""
+
+    _values: dict[str, float] = field(default_factory=dict)
+    _runs: dict[str, int] = field(default_factory=dict)
+
+    def get(self, intersection_id: str) -> float:
+        """This junction's persisted baseline, or `0.0` -- the same
+        cold-start value `AdaptiveCamp.__init__` already defaults to, so a
+        junction this store has never seen behaves exactly as it did
+        before this class existed."""
+        return self._values.get(intersection_id, 0.0)
+
+    def runs(self, intersection_id: str) -> int:
+        """How many runs have contributed to this junction's persisted
+        value -- exposed so a caller can report warm-up progress, the same
+        role `DemandMemory.coverage()` plays."""
+        return self._runs.get(intersection_id, 0)
+
+    def update(self, intersection_id: str, ending_baseline: float) -> None:
+        """Record one run's ending `baseline_load` as the value the next
+        run for this junction starts from. Overwrites rather than blends
+        -- see this class's docstring for why a second decay here would
+        double-discount."""
+        self._values[intersection_id] = ending_baseline
+        self._runs[intersection_id] = self._runs.get(intersection_id, 0) + 1
+
+    # ---- persistence -------------------------------------------------
+
+    def save(self, path: str | Path) -> None:
+        payload = {
+            "values": self._values,
+            "runs": self._runs,
+        }
+        target = Path(path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        tmp = target.with_suffix(target.suffix + ".tmp")
+        tmp.write_text(json.dumps(payload, indent=2, sort_keys=True))
+        tmp.replace(target)
+
+    @classmethod
+    def load(cls, path: str | Path) -> LoadBaseline:
+        """Load a saved baseline store, or return an empty one (every
+        junction reads as cold, `0.0`) if the file does not exist yet --
+        the same "cold start is the normal first run" contract
+        `DemandMemory.load` makes."""
+        source = Path(path)
+        if not source.exists():
+            return cls()
+        payload = json.loads(source.read_text())
+        store = cls()
+        store._values = dict(payload.get("values", {}))
+        store._runs = dict(payload.get("runs", {}))
+        return store
+
+
 def blend(live: float, historical: float | None, confidence: float) -> float:
     """§3.8's "camp_blended" rung, made real: trust live state in
     proportion to its own confidence, fall back on history for the rest.

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Interactive (sumo-gui) view of the M1 corridor. Same network and demand as
+     vijayawada_corridor.sumocfg; the only addition is the <gui_only> block
+     that loads vijayawada_corridor.view.xml so the four vehicle classes are
+     drawn with distinct shapes and colours.
+
+         sumo-gui -c vijayawada_corridor_gui.sumocfg
+
+     Headless / TraCI runs (sim-service) keep using vijayawada_corridor.sumocfg:
+     the non-GUI sumo binary does not accept the gui_only section and would
+     reject this file. -->
+<configuration>
+    <input>
+        <net-file value="../../networks/vijayawada/vijayawada_corridor.net.xml"/>
+        <route-files value="vijayawada_corridor.rou.xml"/>
+    </input>
+    <time>
+        <begin value="0"/>
+        <end value="1800"/>
+        <step-length value="1"/>
+    </time>
+    <processing>
+        <time-to-teleport value="300"/>
+    </processing>
+    <gui_only>
+        <gui-settings-file value="vijayawada_corridor.view.xml"/>
+        <start value="true"/>
+    </gui_only>
+</configuration>

@@ -110,6 +110,18 @@ def run(
     step = 0
     dropped_ticks = 0
 
+    # A vehicle's vType never changes over its life, so `getTypeID` is looked
+    # up once per vehicle and reused every tick after -- the same reasoning
+    # (and the measured cost) that `signal_controller/lane_cache.py` documents
+    # for the identical call on the control path.
+    vtype_cache: dict[str, str] = {}
+
+    def vtype_of(veh_id: str) -> str:
+        cached = vtype_cache.get(veh_id)
+        if cached is None:
+            cached = vtype_cache[veh_id] = traci.vehicle.getTypeID(veh_id)
+        return cached
+
     try:
         while traci.simulation.getMinExpectedNumber() > 0:
             tick_start = time.monotonic()
@@ -126,6 +138,7 @@ def run(
                     source="sim-service",
                     payload={
                         "vehicle_id": veh_id,
+                        "vehicle_type": vtype_of(veh_id),
                         "lat": lat,
                         "lon": lon,
                         "speed_mps": traci.vehicle.getSpeed(veh_id),

@@ -28,14 +28,51 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from typing import Protocol
 
-from itms_domain import JunctionContext, SignalPlan, Tier0Config
+from itms_domain import JunctionContext, SignalPlan, Tier0Config, Violation
 
 from sim_service.control.safety import interlocks
 from sim_service.control.strategies import fixed_time
 from sim_service.signal_controller.cabinet import CabinetPort
 
 Strategy = Callable[[Tier0Config, JunctionContext], SignalPlan]
+
+
+class CorridorPort(Protocol):
+    """Rung 3's requester interface, shaped like `CabinetPort`: this
+    module depends on the protocol, not on `control/corridor/`, so the
+    arbitration ladder stays ignorant of how preemption decides anything.
+
+    `propose` returns None whenever no preemption applies, which is most
+    ticks. That is the difference between this and a `Strategy`, which
+    must always produce a plan.
+
+    `begin_tick` and `preempt_seconds_last_hour` are corridor-scoped and
+    are called by `control/runner.py`, not by this module -- see that
+    function's docstring for why arbitration must be decided once per
+    corridor rather than once per junction."""
+
+    def propose(self, cfg: Tier0Config, ctx: JunctionContext) -> SignalPlan | None: ...
+
+    def denied(
+        self, cfg: Tier0Config, ctx: JunctionContext, violations: list[Violation]
+    ) -> None: ...
+
+    def begin_tick(self, now_s: float) -> None: ...
+
+    def preempt_seconds_last_hour(self, junction_id: str, now_s: float) -> float: ...
+
+
+SUCCESS_MODES = frozenset({"fixed_time", "corridor_preemption"})
+"""Modes in which a plan was actually commanded.
+
+Named here rather than left as a literal at the call site, which is where
+`control/runner.py` had it (`if decision.mode not in ("fixed_time",)`).
+That literal duplicated knowledge this module owns, and adding a second
+success mode without it would have made every successful preemption look
+to the runner like a fault -- logged as one, and "recovered" from by
+resetting the junction's context out from under a live preemption."""
 
 
 @dataclass(frozen=True)
@@ -91,6 +128,7 @@ def tick(
     cabinet: CabinetPort,
     *,
     strategy: Strategy = fixed_time.propose,
+    corridor: CorridorPort | None = None,
 ) -> Decision:
     """Run one arbitration cycle for one intersection. Reconciles cabinet
     state first (I7), only proposes and commands a plan if that reconciles
@@ -146,15 +184,62 @@ def tick(
             ],
         )
 
-    # Rungs 2-4 have no requester in M2 (see module docstring) -- proceed
-    # straight to rung 5.
+    # Rung 3: green corridor preemption. Rung 2 (manual operator
+    # override) still has no requester -- deliberately absent, per this
+    # module's docstring, rather than stubbed.
+    #
+    # The asymmetry below is the whole point of putting preemption on its
+    # own rung instead of inside a strategy. A plan from rung 5 that
+    # fails the interlocks is a *fault*: nothing sits below fixed-time, so
+    # the junction has no legal option left and all-red is the correct
+    # answer. A plan from rung 3 that fails is a *denial*: a perfectly
+    # good adaptive controller is sitting one rung down, ready to run the
+    # junction normally, and commanding all-red instead would strand the
+    # emergency vehicle at a dark-red intersection with the cross street
+    # stopped too -- the exact opposite of what the request was for.
+    #
+    # H1 in the hazard catalogue insists a denied emergency request must
+    # never be silent ("alarm and log instead"), so the denial raises a
+    # `SignalFaulted` event and calls back into the requester, and then
+    # control falls through as if no request had been made.
+    denial_events: list[dict] = []
+    if corridor is not None:
+        preempt_plan = corridor.propose(cfg, ctx)
+        if preempt_plan is not None and preempt_plan.steps:
+            preempt_violations = interlocks.check(preempt_plan, ctx, cfg)
+            if not preempt_violations:
+                if not cabinet.command(preempt_plan.steps[0].phase_id):
+                    return Decision(
+                        mode="degraded_comms_lost",
+                        plan=None,
+                        events=[
+                            _faulted_event(iid, "comms_lost", "command was not acknowledged")
+                        ],
+                    )
+                return Decision(
+                    mode="corridor_preemption",
+                    plan=preempt_plan,
+                    events=[_changed_event(iid, preempt_plan)],
+                )
+            corridor.denied(cfg, ctx, preempt_violations)
+            denial_events.append(
+                _faulted_event(
+                    iid,
+                    "preempt_denied",
+                    "; ".join(f"{v.rule}: {v.message}" for v in preempt_violations),
+                )
+            )
+
+    # Rung 4/5: whatever `strategy` is -- the adaptive optimizer when one
+    # is wired, the fixed-timer fallback otherwise.
     plan = strategy(cfg, ctx)
     if not plan.steps:
         cabinet.command_all_red()
         return Decision(
             mode="failsafe_no_legal_plan",
             plan=None,
-            events=[_faulted_event(iid, "no_legal_plan", "every phase in the ring is unusable")],
+            events=denial_events
+            + [_faulted_event(iid, "no_legal_plan", "every phase in the ring is unusable")],
         )
 
     violations = interlocks.check(plan, ctx, cfg)
@@ -163,7 +248,8 @@ def tick(
         return Decision(
             mode="failsafe_interlock_rejected",
             plan=None,
-            events=[
+            events=denial_events
+            + [
                 _faulted_event(
                     iid,
                     "interlock_rejected",
@@ -178,7 +264,10 @@ def tick(
         return Decision(
             mode="degraded_comms_lost",
             plan=None,
-            events=[_faulted_event(iid, "comms_lost", "command was not acknowledged")],
+            events=denial_events
+            + [_faulted_event(iid, "comms_lost", "command was not acknowledged")],
         )
 
-    return Decision(mode="fixed_time", plan=plan, events=[_changed_event(iid, plan)])
+    return Decision(
+        mode="fixed_time", plan=plan, events=denial_events + [_changed_event(iid, plan)]
+    )

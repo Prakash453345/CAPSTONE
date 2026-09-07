@@ -37,7 +37,7 @@ import os
 import shutil
 import sys
 from collections.abc import Callable, Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import traci
@@ -64,22 +64,31 @@ _SIGNAL_FAULTED_TOPIC = "signal.faulted"
 
 
 def _publish_decision_events(bus: RedisStreamsSyncBus, decision: arbiter.Decision) -> None:
-    """`decision.mode == "fixed_time"` is arbiter.tick()'s only success
-    branch (see its own docstring's priority list) -- every other mode is
-    a fault/degraded branch. `_changed_event`/`_faulted_event` (private to
-    arbiter.py) already build these dicts to match
-    `contracts/events/signal_changed.avsc` / `signal_faulted.avsc` field-
-    for-field, so this is a straight encode-and-publish, not a reshape."""
-    event_type = "SignalChanged" if decision.mode == "fixed_time" else "SignalFaulted"
-    topic = _SIGNAL_CHANGED_TOPIC if event_type == "SignalChanged" else _SIGNAL_FAULTED_TOPIC
+    """`_changed_event`/`_faulted_event` (private to arbiter.py) already
+    build these dicts to match `contracts/events/signal_changed.avsc` /
+    `signal_faulted.avsc` field-for-field, so this is a straight
+    encode-and-publish, not a reshape.
+
+    Routed per event rather than per decision, which it was not before
+    M7. The old form read the *mode* and typed every event in the
+    decision the same way, which was exact while a decision could only
+    ever carry one event. Rung 3 broke that: a denied preemption
+    (`preempt_denied`) rides along with whatever the strategy below it
+    then produced, so one successful decision can carry a fault event.
+    Typing that pair by mode would have published a `SignalFaulted`
+    payload onto `signal.changed` under a `SignalChanged` header -- a
+    schema mismatch that a consumer would decode as garbage rather than
+    reject. The payloads are distinguishable by shape, so they are
+    distinguished by shape."""
     for payload in decision.events:
+        faulted = "fault_type" in payload
         raw = encode_envelope(
-            event_type=event_type,
+            event_type="SignalFaulted" if faulted else "SignalChanged",
             source="sim-service",
             payload=payload,
             partition_key=payload["intersection_id"],
         )
-        bus.publish(topic, raw)
+        bus.publish(_SIGNAL_FAULTED_TOPIC if faulted else _SIGNAL_CHANGED_TOPIC, raw)
 
 Strategy = Callable[[Tier0Config, JunctionContext], SignalPlan]
 # A single Strategy applies uniformly to every junction (fine for
@@ -230,6 +239,10 @@ def run_controlled_scenario(
     incident_injector: IncidentInjector | None = None,
     anomaly_graph: AnomalyGraph | None = None,
     anomaly_feature_sink: Callable[[int, float, list[list[float]]], None] | None = None,
+    corridor: arbiter.CorridorPort | None = None,
+    ev_reporter: Callable[[float], None] | None = None,
+    extra_sumo_args: Iterable[str] | None = None,
+    traci_retries: int | None = None,
 ) -> dict:
     """Run one full scenario with `strategy` governing every junction in
     `configs`. Returns run stats: step count, how many times the arbiter
@@ -309,6 +322,30 @@ def run_controlled_scenario(
     `scripts/m6_record_features.py` (recording normal traffic to train on) and
     the live detector (Phase 5) consume. Either left `None` and no feature
     sampling happens.
+
+    `corridor` (M7), if given, wires the Green Corridor Engine as rung 3
+    of the arbitration ladder. Two things happen here that the arbiter
+    cannot do for itself, because both are about the corridor rather than
+    about one junction:
+
+    - `begin_tick` is called once per simulation step, before any
+      junction is arbitrated, so "which vehicle holds which junction" is
+      decided from one consistent view. Deciding it per junction as each
+      is reached is exactly how D11 happens -- neighbouring junctions
+      granting conflicting emergency vehicles, each correct on its own
+      information.
+    - `JunctionContext.preempt_seconds_last_hour` is populated from the
+      engine's rolling-hour ledger. That field has existed since M2 and
+      has been zero in every run ever made, so `interlocks.
+      preempt_budget_ok` -- written specifically for this requester --
+      was correct and structurally unable to fire. It fires now.
+
+    `ev_reporter` is called once per step with the simulation time,
+    before `begin_tick`, and is how emergency-vehicle observations reach
+    the engine. A callback rather than something the engine does itself,
+    so this function stays ignorant of how vehicles are detected: the
+    benchmark's TraCI-derived reporter and a real detection feed are the
+    same shape from here.
     """
     _ensure_sumo_home()
     sumo_binary = _resolve_sumo_binary()
@@ -329,8 +366,22 @@ def run_controlled_scenario(
         args += ["--random"]
     if tripinfo_output is not None:
         args += ["--tripinfo-output", tripinfo_output]
+    if extra_sumo_args is not None:
+        # Appended last so a caller can override any default above --
+        # SUMO takes the final occurrence of a repeated option. Exists for
+        # `scripts/m7_demo.py`, which needs sumo-gui's `--start`,
+        # `--delay` and `--gui-settings-file`; every other caller leaves
+        # it None and gets exactly the argument list it always had.
+        args += list(extra_sumo_args)
 
-    traci.start(args)
+    # `traci.start` defaults to 60 retries, one per second, and its
+    # failure message names only the port it could not reach -- the
+    # simulator's own complaint is discarded. That is a reasonable
+    # default for a batch run on a machine where SUMO is known good, and
+    # a bad one for an interactive session where the binary may simply
+    # not start: a minute of "Connection refused" says nothing about why.
+    # Callers that would rather fail fast pass a smaller count.
+    traci.start(args, **({} if traci_retries is None else {"numRetries": traci_retries}))
     if bottleneck_lane_speeds_mps is not None:
         for lane_id, speed_mps in bottleneck_lane_speeds_mps.items():
             traci.lane.setMaxSpeed(lane_id, speed_mps)
@@ -412,6 +463,21 @@ def run_controlled_scenario(
             if spillback is not None:
                 spillback.sample()
 
+            # `ev_reporter` runs whether or not a corridor engine is
+            # wired, and that independence is load-bearing for the
+            # benchmark rather than incidental: the control arm has to
+            # put the *same* emergency vehicles into the *same* traffic
+            # and simply not preempt for them. Gating the reporter on
+            # `corridor is not None`, as this first did, silently gave
+            # the no-preemption arm no emergency vehicles at all and an
+            # emergency travel time of zero -- a comparison against
+            # nothing, reported as if it were a comparison against
+            # something.
+            if ev_reporter is not None:
+                ev_reporter(traci.simulation.getTime())
+            if corridor is not None:
+                corridor.begin_tick(traci.simulation.getTime())
+
             for tls_id, js in junctions.items():
                 if js.transition is not None:
                     _advance_transition(js, step_length)
@@ -464,6 +530,7 @@ def run_controlled_scenario(
                         receiving_occupancy=receiving_occupancy,
                         receiving_queue_pcu=receiving_queue_pcu,
                         approaching_pcu=approaching_pcu,
+                        preempt_seconds_last_hour=js.ctx.preempt_seconds_last_hour,
                     )
                     if js.discharge is not None and calibration is not None:
                         # Driven from the *live* sample, and only for a
@@ -501,10 +568,28 @@ def run_controlled_scenario(
                             tls_id, traci.simulation.getTime(), queue_pcu, approaching_pcu
                         )
 
-                decision = arbiter.tick(js.cfg, js.ctx, js.cabinet, strategy=junction_strategy)
+                if corridor is not None:
+                    # Set on the context the interlocks will actually be
+                    # checked against, immediately before the check, so
+                    # the budget the plan is measured against is the one
+                    # that is true at the moment of the decision. Written
+                    # via `replace` rather than by threading another
+                    # argument through both context-construction paths
+                    # above -- there are two of them (sampled and
+                    # unsampled) and only one is on the M4/M5 hot path.
+                    js.ctx = replace(
+                        js.ctx,
+                        preempt_seconds_last_hour=corridor.preempt_seconds_last_hour(
+                            tls_id, traci.simulation.getTime()
+                        ),
+                    )
+
+                decision = arbiter.tick(
+                    js.cfg, js.ctx, js.cabinet, strategy=junction_strategy, corridor=corridor
+                )
                 if bus is not None:
                     _publish_decision_events(bus, decision)
-                if decision.mode not in ("fixed_time",):
+                if decision.mode not in arbiter.SUCCESS_MODES:
                     fault_events.append((tls_id, step, decision.mode))
                     log.warning("junction %s took %s at step %d", tls_id, decision.mode, step)
                     _recover_from_fault(js, tls_id, decision.violated_movements)
@@ -574,6 +659,7 @@ def run_controlled_scenario(
         "interlock_violations": interlock_violations,
         "fault_events": fault_events,
         "spillback_events": spillback.episode_count if spillback is not None else None,
+        "corridor": corridor.stats() if corridor is not None else None,
     }
 
 
