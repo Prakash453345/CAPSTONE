@@ -17,15 +17,19 @@ once there's more than one event type to break compatibility with.
 | `approach_state.avsc` | Per-edge traffic state — **M1-simplified**, see the schema's own `doc` field for exactly what's a placeholder and what breaks when M4/M8 land | M1 |
 | `signal_changed.avsc` | Emitted whenever the arbiter successfully commands a phase | M2 |
 | `signal_faulted.avsc` | Emitted whenever the arbiter takes a failsafe/degraded branch (C1-C5) instead | M2 |
+| `incident_candidate.avsc` | Anomaly stream raises this the first tick a link's fused score crosses the conformal threshold — not an incident until an operator confirms it | M6 |
+| `incident_detected.avsc` | An operator confirmed a candidate into a real incident (ADR-006 human gate) — carries the confirming identity | M6 |
+| `incident_updated.avsc` | Any later transition — reject / auto-expire / score refresh / clear. A rejection is the feedback signal the conformal calibrator consumes | M6 |
 
 Both M2 schemas are defined and their payload shape is real (matches `signal_controller/arbiter.py`'s `Decision.events` exactly) but **not yet published onto the bus** — M2 built and property-tested the safety kernel and arbitration ladder in isolation, against a fake cabinet; wiring a real producer into the running simulation is scoped to M3 (see `arbiter.py`'s module docstring for why).
+
+The three M6 incident schemas are defined and roundtrip-tested (`packages/common/tests/test_incident_events.py`); their producer in `sim_service/control/anomaly/` and the bus wiring land with M6b (fusion), the same "schema first, producer when the milestone needs it" order the M2 pair followed. The incident lifecycle they describe is the state machine in `packages/domain/itms_domain/incident.py`.
 
 More arrive as the milestone that needs them lands:
 
 - M1 (remaining): `sensor_reading.avsc` (not needed yet — no IoT/loop-detector adapter exists)
 - M2 (remaining): `signal_plan_proposed.avsc`, `signal_override_*.avsc` — no real proposer (M4 CA-MP) or overrider (M6) exists yet, same reasoning as M1's deferred `sensor_reading.avsc`
 - M5: `traffic_updated.avsc`
-- M6: `incident_candidate.avsc`, `incident_detected.avsc`, `incident_updated.avsc`
 - M6: `emergency_dispatched.avsc`, `unit_reserved.avsc`, `route_calculated.avsc`
 - M7: `corridor_reservation_*.avsc`, `fleet_position_updated.avsc`
 

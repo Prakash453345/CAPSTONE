@@ -1,0 +1,19 @@
+{
+  "type": "record",
+  "name": "IncidentCandidate",
+  "namespace": "itms.contracts",
+  "doc": "Raised by the M6 anomaly-detection stream the first tick a link's fused anomaly probability crosses the conformal alert threshold tau. A candidate is NOT an incident: per ADR-006's human-in-the-loop gate it dispatches nothing on its own -- an operator confirms it into an IncidentDetected, or rejects it (which becomes a confirmed-normal calibration point, plan 4.4). Produced by services/sim-service/sim_service/control/anomaly/ and published on the `incident.candidate` topic. `incident.candidate`/`incident.detected`/`incident.updated` are this module's topic-naming choice, following the same `<noun>.<verb>` convention `signal.changed`/`signal.faulted` already use; ARCH 6.2's topic table reserves the event *names* for M6 but does not spell the topics out.",
+  "fields": [
+    { "name": "incident_id", "type": "string", "doc": "UUID, stable across this incident's whole lifecycle -- the same id appears on the later IncidentDetected / IncidentUpdated events." },
+    { "name": "detected_at", "type": { "type": "long", "logicalType": "timestamp-millis" }, "doc": "Wall-clock time the candidate was raised. For humans and retention only -- NEVER used for detection-latency arithmetic (see envelope.avsc occurred_at); the gate uses sim_tick for that." },
+    { "name": "sim_tick", "type": ["null", "long"], "default": null, "doc": "Simulation step index when raised, set only when the producer is the SUMO pattern stream. Gives the injection-tick -> detection-tick latency an exact integer basis in scripts/m6_incident_injection_gate.py. null for any real-time producer." },
+    { "name": "intersection_id", "type": "string", "doc": "The signal-controlled junction that owns the flagged link (tls_id, matching Tier0Config.intersection_id and the SignalChanged events on the bus)." },
+    { "name": "link_id", "type": "string", "doc": "Movement/link id -- `L{index}`, matching link_lanes' labels and the graph detector's own node ids. The single localized node whose reconstruction error crossed threshold; carried so a later camera (M8) can be aligned to the same node (plan 6.1)." },
+    { "name": "graph_score", "type": "double", "doc": "Per-node score from the spatiotemporal graph autoencoder: this node's reconstruction error, z-scored against its own rolling normal-traffic error history. Higher is more anomalous; unbounded above." },
+    { "name": "vision_score", "type": ["null", "double"], "default": null, "doc": "Deterministic phase-aware vision-rule score for the same link, present only once Stream 2 (M8) exists. null before M8 -- the fusion layer runs graph-only and this stays null (plan 5, 'degrades gracefully when vision_score does not exist yet')." },
+    { "name": "fused_probability", "type": "double", "doc": "Output of the interpretable fusion layer over graph_score (and vision_score when present), in [0,1]. With vision absent this is a fixed monotone map of graph_score alone, so `fused_probability >= threshold_tau` is exactly the raise condition." },
+    { "name": "threshold_tau", "type": "double", "doc": "The conformal alert threshold in force when this candidate was raised, in the same [0,1] scale as fused_probability. Recorded per-candidate because the adaptive calibrator (plan 10) moves it as demand and time-of-day shift." },
+    { "name": "false_alarm_budget", "type": "double", "default": 0.05, "doc": "The conformal target false-positive rate alpha the threshold was calibrated to. Carried for audit: a reviewer can see the error budget this alert was issued under, the same way a validated safety constant is recorded." },
+    { "name": "detector_version", "type": "string", "doc": "Identifier of the trained detector + calibration snapshot that raised this, e.g. 'graph-ae@<sha>/conformal@<sha>'. Lets a candidate be traced to exactly the model and threshold that produced it." }
+  ]
+}

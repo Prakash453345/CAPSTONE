@@ -26,5 +26,16 @@ dependencies = [
     "pyproj>=3.6",
 ]
 
+[project.optional-dependencies]
+# M6 anomaly detector only. The spatiotemporal graph autoencoder (plan 6.1)
+# is the one trained-neural-net component in this repo; everything on the
+# control path stays pure-stdlib and is unaffected by whether this is
+# installed. `pip install -e 'services/sim-service[anomaly]'` (CPU wheels are
+# enough -- the model is tens of thousands of parameters).
+anomaly = [
+    "torch>=2.2",
+    "numpy>=1.26",
+]
+
 [tool.setuptools.packages.find]
 include = ["sim_service*"]

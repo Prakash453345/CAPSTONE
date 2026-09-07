@@ -25,3 +25,13 @@ dump.rdb
 # Regenerable raw OSM downloads (large; scenarios/networks/*/build.sh recreates
 # them). The filtered/converted outputs ARE committed -- see each network's README.
 scenarios/networks/*/raw_osm.xml
+
+# M6 detector artifacts -- large regenerable binaries: the recorded feature
+# arrays (*.npy, ~6 MB each), trained weights (model.pt), and training logs.
+# Recreate with scripts/m6_record_features.py + scripts/m6_train_detector.py.
+# The gate's JSON output under scripts/results/ IS committed, per that dir's
+# convention.
+scripts/results/m6_artifacts/
+
+# Office lock/temp files
+~$*

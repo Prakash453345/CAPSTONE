@@ -14,3 +14,13 @@ python_version = "3.11"
 ignore_missing_imports = true
 namespace_packages = true
 explicit_package_bases = true
+
+# numpy>=2.3 / torch ship .pyi stubs that use 3.12+ `type` statement syntax,
+# which trips mypy pinned at python_version 3.11. These are the M6 anomaly
+# detector's deps (the `[anomaly]` extra) and nothing on the control path
+# imports them -- skip following into their stubs rather than unpin the whole
+# project's target version.
+[[tool.mypy.overrides]]
+module = ["numpy", "numpy.*", "torch", "torch.*"]
+follow_imports = "skip"
+follow_imports_for_stubs = true

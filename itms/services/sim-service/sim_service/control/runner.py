@@ -45,12 +45,14 @@ from itms_common.bus import RedisStreamsSyncBus
 from itms_common.events import encode_envelope
 from itms_domain import JunctionContext, SignalPlan, Tier0Config
 
+from sim_service.control.anomaly.graph_features import AnomalyGraph, LinkFeatureSampler
+from sim_service.control.anomaly.injector import IncidentInjector
 from sim_service.control.memory import DemandMemory
 from sim_service.control.online_calibration import OnlineCalibration
 from sim_service.signal_controller import arbiter
+from sim_service.signal_controller.detectors import ActuationDetector
 from sim_service.signal_controller.discharge_observer import DischargeObserver
 from sim_service.signal_controller.lane_cache import LaneCache
-from sim_service.signal_controller.detectors import ActuationDetector
 from sim_service.signal_controller.queue_state import QueueStateSampler
 from sim_service.signal_controller.spillback import SpillbackTracker
 from sim_service.signal_controller.traci_cabinet import TraCICabinet
@@ -225,6 +227,9 @@ def run_controlled_scenario(
     bottleneck_lane_speeds_mps: Mapping[str, float] | None = None,
     demand_memory: DemandMemory | None = None,
     calibration: OnlineCalibration | None = None,
+    incident_injector: IncidentInjector | None = None,
+    anomaly_graph: AnomalyGraph | None = None,
+    anomaly_feature_sink: Callable[[int, float, list[list[float]]], None] | None = None,
 ) -> dict:
     """Run one full scenario with `strategy` governing every junction in
     `configs`. Returns run stats: step count, how many times the arbiter
@@ -285,6 +290,25 @@ def run_controlled_scenario(
     strategy *uses* memory: a training run records without blending, and
     an evaluation run against a frozen profile blends without recording,
     depending on what the caller passes where.
+
+    `incident_injector` (M6), if given, has `tick(step)` called once per
+    simulation step -- right after the step advances, before any sampler
+    reads -- and `finalize(step)` called once the loop ends, so a scheduled
+    stall / lane-block is applied, maintained and cleanly reversed inside the
+    run, with the exact tick window recorded for
+    `scripts/m6_incident_injection_gate.py` to score recall and detection
+    latency against. Left `None` (the default), no incident is injected and
+    every existing caller is unaffected -- the same additive pattern as every
+    parameter above it.
+
+    `anomaly_graph` + `anomaly_feature_sink` (M6), given together, wire a
+    `LinkFeatureSampler` over the anomaly graph and call
+    `anomaly_feature_sink(step, sim_time, feature_matrix)` once per tick,
+    after every junction's decision, where `feature_matrix` is the
+    `[num_nodes][N_FEATURES]` list for that tick. This is the one stream both
+    `scripts/m6_record_features.py` (recording normal traffic to train on) and
+    the live detector (Phase 5) consume. Either left `None` and no feature
+    sampling happens.
     """
     _ensure_sumo_home()
     sumo_binary = _resolve_sumo_binary()
@@ -316,6 +340,14 @@ def run_controlled_scenario(
     # `lane_cache.LaneCache` for the profile that made this necessary --
     # 972 TraCI round-trips per simulation step, 90% of run wall-clock.
     lane_cache = LaneCache(vtype_pcu or {})
+    # M6 feature stream: built only when a caller wants the per-link anomaly
+    # feature matrix recorded/scored, and only if `vtype_pcu` is available for
+    # the PCU terms. Shares `lane_cache` so it adds almost no TraCI traffic.
+    feature_sampler: LinkFeatureSampler | None = None
+    if anomaly_graph is not None and anomaly_feature_sink is not None and vtype_pcu:
+        feature_sampler = LinkFeatureSampler(
+            anomaly_graph, configs, vtype_pcu, lane_cache=lane_cache
+        )
     spillback = SpillbackTracker(spillback_lane_ids) if spillback_lane_ids is not None else None
     try:
         for tls_id, cfg in configs.items():
@@ -368,6 +400,14 @@ def run_controlled_scenario(
             # Invalidate the per-tick memo exactly once, right after the
             # simulation advances and before any sampler reads.
             lane_cache.advance(float(step))
+
+            if incident_injector is not None:
+                # Applied right after the step advances and before any
+                # sampler/detector reads, so an injected stall/lane-block is
+                # visible to the same tick's feature vector -- the injection
+                # tick and the detection tick share one clock, which is what
+                # makes the M6 gate's latency figure exact.
+                incident_injector.tick(step)
 
             if spillback is not None:
                 spillback.sample()
@@ -489,8 +529,31 @@ def run_controlled_scenario(
                         stage="yellow",
                     )
 
+            if feature_sampler is not None:
+                # Sampled after every junction's decision for the tick, so the
+                # phase state the detector sees is the one now commanded --
+                # exactly what a live consumer of the signal.changed stream
+                # would have. `assert` narrows the Optional for the type
+                # checker; the outer guard already established it is not None.
+                assert anomaly_feature_sink is not None
+                sim_time = traci.simulation.getTime()
+                phase_by_tls = {
+                    tls_id: (js.ctx.current_phase_id, js.ctx.current_phase_elapsed_s)
+                    for tls_id, js in junctions.items()
+                }
+                anomaly_feature_sink(
+                    step, sim_time, feature_sampler.sample(sim_time, phase_by_tls)
+                )
+
             if max_steps is not None and step >= max_steps:
                 break
+
+        if incident_injector is not None:
+            # Inside the `try`, before `traci.close()`: `finalize` restores
+            # any lane still throttled and releases any vehicle still frozen,
+            # which needs the TraCI connection live. A run that raised mid-
+            # loop skips this and closes with SUMO about to exit anyway.
+            incident_injector.finalize(step)
     finally:
         traci.close()
 
