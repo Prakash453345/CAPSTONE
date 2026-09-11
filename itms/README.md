@@ -52,6 +52,16 @@ README.
   proof-of-training only, so live incident detection is real code with
   nothing to detect yet).
 
+- **Interactive layer, on top of the above:** operator-driven anomaly
+  injection that affects the SUMO simulation, a dynamic anomaly-aware
+  emergency router, and continuous re-routing of a moving vehicle --
+  `SIM_MODE=live` (`sim_service.live.service.run_live`), independent of the
+  benchmarked M7 corridor engine above (both propose through the same
+  arbiter + interlocks; see `arbiter.tick`'s docstring for why there are
+  two rung-3 requesters). Full description, cost formula, config
+  reference, event contracts, lifecycles, and a run/demo guide:
+  **[`docs/interactive-emergency-response.md`](docs/interactive-emergency-response.md)**.
+
 See `PROGRESS.md` for the full history, every number, and every negative
 result, with dates.
 

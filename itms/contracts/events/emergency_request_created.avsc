@@ -1,0 +1,16 @@
+{
+  "type": "record",
+  "name": "EmergencyRequestCreated",
+  "namespace": "itms.contracts",
+  "doc": "An operator dispatches an emergency vehicle from source to destination. Published by api-service on `commands.operator`; sim-service (SIM_MODE=live) creates the EmergencyRequest, runs the dynamic emergency router against the current traffic + active anomalies, and streams the result on `emergency.request-updated`. Creating the request also starts routing (CREATED -> ROUTING -> ROUTE_READY | CANCELLED).",
+  "fields": [
+    { "name": "request_id", "type": "string", "doc": "Client-generated UUID; the same id is on every EmergencyRequestUpdated and on follow-up commands." },
+    { "name": "vehicle_id", "type": "string", "doc": "The responding unit's id (a simulated entity for the prototype)." },
+    { "name": "vehicle_kind", "type": { "type": "enum", "name": "EmergencyVehicleKind", "symbols": ["AMBULANCE", "FIRE_TRUCK", "POLICE"] }, "default": "AMBULANCE" },
+    { "name": "source_edge", "type": "string", "doc": "SUMO edge id the vehicle starts from (resolved from the map click)." },
+    { "name": "destination_edge", "type": "string", "doc": "SUMO edge id of the destination." },
+    { "name": "priority", "type": "int", "default": 1, "doc": "Higher outranks -- only used to arbitrate two green corridors wanting the same junction." },
+    { "name": "operator", "type": "string", "default": "operator:console" },
+    { "name": "requested_at", "type": { "type": "long", "logicalType": "timestamp-millis" } }
+  ]
+}

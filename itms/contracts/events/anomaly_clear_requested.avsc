@@ -1,0 +1,13 @@
+{
+  "type": "record",
+  "name": "AnomalyClearRequested",
+  "namespace": "itms.contracts",
+  "doc": "An operator clears or cancels an anomaly they created. Published by api-service on `commands.operator`; sim-service restores the affected lane(s) to their original max speed and emits AnomalyUpdated with the terminal status. CANCELLED = created by mistake (nothing about the road actually changed); RESOLVED = the disruption is genuinely over.",
+  "fields": [
+    { "name": "anomaly_id", "type": "string", "doc": "The id from the originating AnomalyCreateRequested." },
+    { "name": "resolution", "type": { "type": "enum", "name": "AnomalyResolution", "symbols": ["RESOLVED", "CANCELLED"] }, "default": "RESOLVED" },
+    { "name": "reason", "type": "string", "default": "", "doc": "Free-text operator note for the audit trail." },
+    { "name": "operator", "type": "string", "default": "operator:console" },
+    { "name": "requested_at", "type": { "type": "long", "logicalType": "timestamp-millis" } }
+  ]
+}

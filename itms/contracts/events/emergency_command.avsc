@@ -1,0 +1,13 @@
+{
+  "type": "record",
+  "name": "EmergencyCommand",
+  "namespace": "itms.contracts",
+  "doc": "A follow-up operator action on an existing EmergencyRequest, on `commands.operator`. RECALCULATE re-runs the router (manual reroute); CANCEL abandons the request and restores anything it reserved; ACTIVATE_CORRIDOR asks for a green corridor along the current route (handled from M7). One schema for all of them so the api-service command surface stays small.",
+  "fields": [
+    { "name": "request_id", "type": "string" },
+    { "name": "action", "type": { "type": "enum", "name": "EmergencyCommandAction", "symbols": ["RECALCULATE", "CANCEL", "ACTIVATE_CORRIDOR"] } },
+    { "name": "reason", "type": "string", "default": "" },
+    { "name": "operator", "type": "string", "default": "operator:console" },
+    { "name": "requested_at", "type": { "type": "long", "logicalType": "timestamp-millis" } }
+  ]
+}
