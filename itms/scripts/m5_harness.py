@@ -102,7 +102,9 @@ def build_camp(configs: Mapping[str, Tier0Config], flows, **_):
     for tls_id, cfg in configs.items():
         timing = webster.compute_timing(cfg, flows.get(tls_id, {}))
         strategy[tls_id] = partial(
-            camp.propose, camp_cfg=camp.CampConfig(enable_blocking=True), nominal_cycle_s=timing.cycle_s
+            camp.propose,
+            camp_cfg=camp.CampConfig(enable_blocking=True),
+            nominal_cycle_s=timing.cycle_s,
         )
     return strategy
 

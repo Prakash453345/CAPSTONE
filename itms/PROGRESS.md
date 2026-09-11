@@ -3643,3 +3643,128 @@ of them `passed`.** Zero `stale_report`, zero `max_dwell`, zero
 `route_changed`, zero `budget`, zero `max_wait_headroom`, zero
 `superseded`. The pre-fix gate recorded 41 `stale_report` and 2
 `max_dwell` over the same ten seeds.
+
+---
+
+## M4/M5 re-measured under the fixed cabinet — the headline inverts, and the cause is found
+
+Requested as "fix M4 and M5". Re-measurement came first, on the argument
+that every M4 and M5 number in this file was produced while
+`TraCICabinet` wrote `'G'` for nine movements the network marks `'g'` —
+removing the yield obligation and, with it, handing those movements
+capacity they were never entitled to. That is a *capacity* defect, not
+only a safety one, so any diagnosis resting on those numbers was resting
+on an inflated network.
+
+It was resting on an inflated network. The headline inverts.
+
+### The corrected gate (10 `EVAL_SEEDS`, paired, `preserve_permissive` on)
+
+| level | Webster | A-CA-MP | paired difference | before the fix |
+|---|---|---|---|---|
+| light | 69,573 ± 2,111 | 99,791 ± 13,005 | **+43.4%** [+17,031, +43,404], 9/10 seeds worse | −16.7%, "a clear, proven win" |
+| medium | 193,354 ± 12,664 | 243,015 ± 9,785 | **+25.7%** [+33,819, +65,503], 10/10 seeds worse | +15.9%, "a statistical tie" |
+| heavy | 1,601,950 ± 47,059 | 1,534,346 ± 72,158 | **−4.2%** [−111,173, −24,034], 1/10 seeds worse | −6.7%, "narrow lean-win" |
+
+Artefacts: `scripts/m5_artifacts/m5_gate_medium_postfix.json`,
+`m5_gate_lightheavy_postfix.json`.
+
+**Light demand — this milestone's proudest result — was an artefact of
+the safety defect.** A −16.7% win is now a +43.4% loss, significant, on
+9 of 10 seeds. Medium was never a tie: it is a clean 25.7% loss on 10
+seeds out of 10. Heavy is the only level where A-CA-MP beats Webster,
+and it is now *better* established than before (significant, 9/10 seeds
+improving) rather than a narrow lean.
+
+M4's `camp`, measured in the same run at medium: **+148.6%** against
+Webster [+264,609, +310,180], 10/10 seeds. A-CA-MP beats it by **−49.5%**,
+so M5's work over M4 was a large and real improvement — just not enough
+to reach the baseline anywhere except heavy demand.
+
+**Two interlock violations at light and three at heavy** appeared in the
+A-CA-MP arm (Webster: zero at every level). New, and not previously
+recorded at these levels.
+
+### The hypothesis that looked obvious, and was wrong
+
+The post-fix decision counters showed `extend_allocation_protected`
+firing **330 times per run** at medium — which the record says is
+impossible: the mechanism is gated at `congestion_weight >= 0.5` and
+`m5_congestion_profile.py` measured medium peaking at 0.339. The cabinet
+fix explains it. Removing nine movements' unearned capacity lengthens the
+queues they feed, which raises the smoothed load, which pushes medium
+over a gate it previously sat below. **A safety fix moved medium demand
+into a regime whose mechanism had only ever been verified at heavy
+demand** — and `m5_protect_threshold_sweep.py` had separately measured
+that forcing it to fire at medium made delay monotonically worse.
+
+So: turn it off and re-measure. `scripts/m5_medium_ablation.py`, paired,
+10 seeds.
+
+**It is not the cause.** Turning protection off changed medium delay by
+**+2.8% [−20,478, +33,951] — not significant**, 6/10 seeds worse, and it
+*introduced two interlock violations* (seeds 2 and 6) at
+`cluster_1880441740_4393296791` where the shipped arm had none. That is
+the same junction PROGRESS.md records as the original starvation-deadlock
+site, and the same one that produced the lone violation in the M7 medium
+gate. `protect_allocated_green` appears to be suppressing a failure mode
+at that junction that nobody designed it for. Kept on; hypothesis dead.
+
+### The cause, found by following the signature instead of the mechanism
+
+The corrected numbers carry a signature that is not ambiguous. At medium,
+A-CA-MP stops vehicles **less** often than Webster (2.78 vs 3.09 per
+vehicle) and delays them **more** (+25.7%). Fewer stops with more total
+delay means longer waits per stop — vehicles sitting through one long red
+instead of being released and re-stopped. Short cycles give the opposite
+signature. So the suspect is **cycle length**, not switching logic.
+
+Webster's entire method is a closed-form delay-minimising cycle computed
+from measured flows. **A-CA-MP has no cycle concept at all.** Its
+effective cycle is whatever emerges from tick-by-tick extend/switch
+decisions, and nothing constrains that emergent value to be anywhere near
+the delay optimum. `scripts/m5_medium_cycle_diagnostic.py` measures both,
+with no simulation of its own — Webster's from `compute_timing` on the
+same flows, A-CA-MP's from the decision counters the gate already
+recorded:
+
+| level | Webster optimum | A-CA-MP emergent | ratio | result vs Webster |
+|---|---|---|---|---|
+| light | 40.0 s | 70.8 s | **1.77×** | **+43.4% worse** |
+| medium | 42.1 s | 59.1 s | **1.40×** | **+25.7% worse** |
+| heavy | 104.1 s | 76.7 s | **0.74×** | **−4.2% better** |
+
+**Monotonic, across all three demand levels, every comparison
+significant.** The further A-CA-MP's emergent cycle sits above Webster's
+optimum, the worse it does; in the single regime where it runs *shorter*
+than the optimum, it wins. Webster's delay curve is flat-bottomed but
+asymmetric — overrunning the optimum costs far more than underrunning it
+by the same margin — which is exactly the asymmetry this table shows.
+
+This also explains, retrospectively, why heavy demand was the only level
+A-CA-MP ever won at, and why every mechanism aimed at heavy demand
+generalised so badly: heavy is not where the controller is cleverest, it
+is where its uncontrolled emergent cycle happens to land in the right
+place.
+
+**This is the fourth instance of the same defect family.** M4's `S(p)`,
+M5's `lost_time_weight`, M7's `D(p)`, and now the emergent cycle: each
+time, a quantity compared against something it has no scale relationship
+to. Here there is no explicit term at fault at all — the missing thing is
+the comparison itself. `max_green_s` is not binding (`switch_max_green`
+is 0.3% of ticks) and the hold bias `F(scale)` resists switching with no
+reference to what cycle length that produces.
+
+### Status
+
+M4 and M5 are now **honestly measured** rather than fixed. The corrected
+position is that A-CA-MP beats a well-tuned Webster baseline at heavy
+demand only, loses substantially at light and medium, and the reason is
+identified and measured rather than hypothesised.
+
+**The direction a fix would take** — not implemented here: give the
+controller a cycle reference it currently lacks, by bounding the emergent
+cycle toward the junction's own Webster optimum computed from the same
+measured flows the baseline uses. That is a change to `acamp.py` and
+requires a full three-level re-gate, so it is left as a decision rather
+than taken.

@@ -1,17 +1,32 @@
-"""api-service, M1 slice.
+"""api-service.
 
-Eventually: incidents, dispatch, routing, corridor, notification, analytics,
-config, audit, and the viewport-filtered WebSocket fan-out [ARCH ADR-007].
-Today: three topics (heartbeat + M1's vehicle positions and edge state), no
-viewport filtering, no auth. Viewport filtering is real architecture, not
-gold-plating -- ARCH §7.2's whole point is that a client shouldn't receive
-2 million vehicles when it can see 200 -- but this milestone's network has
-16 junctions and low triple-digit vehicle counts at most, so broadcasting
-every event to every client is still cheap enough not to be worth the
-complexity yet. Add it when the network is big enough that it isn't -- there
-will be an obvious moment (the dashboard visibly falling behind, or a much
-larger network landing) rather than guessing preemptively. Auth arrives in
-M6/M7 alongside dispatch.
+Eventually: dispatch, routing, corridor, notification, analytics, config,
+audit, and the viewport-filtered WebSocket fan-out [ARCH ADR-007]. Today:
+M1's three traffic topics (heartbeat, vehicle positions, edge state) plus
+M6's incident lifecycle -- consuming `incident.candidate`/`.detected`/
+`.updated`, broadcasting them over the same WebSocket, and exposing the one
+piece of M6 that belongs in this service rather than sim-service: ADR-006's
+human-in-the-loop gate. sim-service's `LiveIncidentDetector` may only ever
+*raise* a candidate; only an operator, through `POST /v1/incidents/{id}
+/confirm|reject` here, may turn one into a real incident or dismiss it. See
+`api_service/incidents.py` for the registry that makes this possible without
+api-service depending on sim-service.
+
+No viewport filtering yet. Real architecture, not gold-plating -- ARCH
+§7.2's whole point is that a client shouldn't receive 2 million vehicles
+when it can see 200 -- but this milestone's network has 16 junctions and
+low triple-digit vehicle counts at most, so broadcasting every event to
+every client is still cheap enough not to be worth the complexity yet. Add
+it when the network is big enough that it isn't -- there will be an obvious
+moment (the dashboard visibly falling behind, or a much larger network
+landing) rather than guessing preemptively.
+
+Auth is a single shared-secret header (`X-API-Key`), checked only on the two
+mutating incident endpoints -- everything else (the traffic/incident stream,
+reading incident state) stays open, matching this milestone's actual threat
+model (a local demo, not a multi-tenant deployment) rather than building a
+user/session system nothing here needs yet. See `API_KEY`'s own comment for
+what happens when it isn't set.
 """
 
 from __future__ import annotations
@@ -21,18 +36,73 @@ import contextlib
 import datetime as dt
 import logging
 import os
+import secrets
+import time
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, Header, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from itms_common import RedisStreamsBus, decode_envelope
+from itms_domain.incident import IllegalTransition, IncidentClass
+from pydantic import BaseModel
+
+from api_service.incidents import (
+    IncidentRegistry,
+    incident_to_json,
+    publish_detected,
+    publish_updated,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s api-service %(message)s")
 log = logging.getLogger("api-service")
 
 REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
-TOPICS = ["system.heartbeat", "traffic.vehicle-positions", "traffic.updated"]
+TOPICS = [
+    "system.heartbeat",
+    "traffic.vehicle-positions",
+    "traffic.updated",
+    "incident.candidate",
+    "incident.detected",
+    "incident.updated",
+]
+_INCIDENT_EVENT_TYPES = {"IncidentCandidate", "IncidentDetected", "IncidentUpdated"}
 CONSUMER_GROUP = "api-service"
+
+# A simple shared secret, not a user/session system -- see this module's
+# docstring for why that's the right depth for what this service actually
+# needs to protect right now (two mutating endpoints, one operator role).
+# Left unset, a fresh one is generated per process start so `make dev` never
+# needs extra setup and the endpoints are never silently unprotected -- but
+# that also means it changes on every restart, so anything beyond local dev
+# should set API_KEY explicitly.
+_env_api_key = os.environ.get("API_KEY")
+API_KEY: str = _env_api_key or secrets.token_urlsafe(24)
+if not _env_api_key:
+    log.warning(
+        "API_KEY not set -- generated one for this process so incident confirm/reject "
+        "stay protected without extra setup (X-API-Key: %s). It changes every restart; "
+        "set API_KEY yourself for anything beyond local dev.",
+        API_KEY,
+    )
+
+
+def require_api_key(x_api_key: str = Header(default="")) -> None:
+    if not secrets.compare_digest(x_api_key, API_KEY):
+        raise HTTPException(status_code=401, detail="missing or invalid X-API-Key header")
+
+
+class ConfirmRequest(BaseModel):
+    actor: str
+    classification: str = IncidentClass.UNKNOWN.value
+    detail: str = ""
+
+
+class RejectRequest(BaseModel):
+    actor: str
+    detail: str = ""
+
+
+registry = IncidentRegistry()
 
 
 class ConnectionManager:
@@ -78,6 +148,13 @@ async def consume_forever(bus: RedisStreamsBus) -> None:
     ):
         try:
             envelope = decode_envelope(msg.raw)
+            event_type = envelope["event_type"]
+            if event_type in _INCIDENT_EVENT_TYPES:
+                # Builds/updates the registry from the stream -- see
+                # api_service/incidents.py's module docstring for why this
+                # is safe to do even for events this same process just
+                # published itself (the chain_hash-based idempotency check).
+                registry.apply_event(event_type, envelope["payload"])
             await manager.broadcast(_json_safe(envelope))
         except Exception:
             log.exception("failed to handle message %s on %s", msg.message_id, msg.topic)
@@ -126,3 +203,69 @@ async def stream(ws: WebSocket) -> None:
             await ws.receive_text()
     except WebSocketDisconnect:
         manager.disconnect(ws)
+
+
+@app.get("/v1/incidents")
+async def list_incidents() -> list[dict]:
+    """Every incident this process has seen since it started (the registry
+    is in-memory, rebuilt from the bus on each restart -- see
+    `api_service/incidents.py`), newest first."""
+    return [incident_to_json(inc) for inc in sorted(
+        registry.all(), key=lambda inc: inc.first_seen_ms, reverse=True
+    )]
+
+
+@app.get("/v1/incidents/{incident_id}")
+async def get_incident(incident_id: str) -> dict:
+    inc = registry.get(incident_id)
+    if inc is None:
+        raise HTTPException(status_code=404, detail="unknown incident_id")
+    return incident_to_json(inc)
+
+
+@app.post("/v1/incidents/{incident_id}/confirm", dependencies=[Depends(require_api_key)])
+async def confirm_incident(incident_id: str, body: ConfirmRequest) -> dict:
+    """ADR-006's human gate, the affirmative half: turn a raised CANDIDATE
+    into a real, dispatch-worthy incident. Requires `X-API-Key`."""
+    try:
+        classification = IncidentClass(body.classification)
+    except ValueError:
+        raise HTTPException(
+            status_code=422, detail=f"unknown classification {body.classification!r}"
+        ) from None
+
+    at_ms = int(time.time() * 1000)
+    try:
+        inc = registry.confirm(
+            incident_id,
+            at_ms=at_ms,
+            actor=body.actor,
+            classification=classification,
+            detail=body.detail,
+        )
+    except KeyError:
+        raise HTTPException(status_code=404, detail="unknown incident_id") from None
+    except IllegalTransition as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from None
+
+    await publish_detected(app.state.bus, inc, confirmed_at_ms=at_ms)
+    return incident_to_json(inc)
+
+
+@app.post("/v1/incidents/{incident_id}/reject", dependencies=[Depends(require_api_key)])
+async def reject_incident(incident_id: str, body: RejectRequest) -> dict:
+    """ADR-006's human gate, the negative half: dismiss a raised CANDIDATE
+    as a false alarm -- plan 4.4's feedback signal for the conformal
+    calibrator, once something consumes `incident.updated` to fold it back
+    in (not yet wired; see contracts/events/README.md). Requires
+    `X-API-Key`."""
+    at_ms = int(time.time() * 1000)
+    try:
+        inc = registry.reject(incident_id, at_ms=at_ms, actor=body.actor, detail=body.detail)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="unknown incident_id") from None
+    except IllegalTransition as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from None
+
+    await publish_updated(app.state.bus, inc)
+    return incident_to_json(inc)

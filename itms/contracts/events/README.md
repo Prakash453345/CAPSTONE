@@ -23,15 +23,18 @@ once there's more than one event type to break compatibility with.
 
 Both M2 schemas are defined and their payload shape is real (matches `signal_controller/arbiter.py`'s `Decision.events` exactly) but **not yet published onto the bus** — M2 built and property-tested the safety kernel and arbitration ladder in isolation, against a fake cabinet; wiring a real producer into the running simulation is scoped to M3 (see `arbiter.py`'s module docstring for why).
 
-The three M6 incident schemas are defined and roundtrip-tested (`packages/common/tests/test_incident_events.py`); their producer in `sim_service/control/anomaly/` and the bus wiring land with M6b (fusion), the same "schema first, producer when the milestone needs it" order the M2 pair followed. The incident lifecycle they describe is the state machine in `packages/domain/itms_domain/incident.py`.
+The three M6 incident schemas are defined and roundtrip-tested (`packages/common/tests/test_incident_events.py`). The payload builders (`candidate_payload`/`detected_payload`/`updated_payload`) live in `itms_common/incident_events.py` — shared, not owned by either producer — because two independent services now publish these events: `sim_service/control/anomaly/live.py`'s `LiveIncidentDetector` publishes `IncidentCandidate` from the live simulation loop (via `sim_service/control/anomaly/events.py`'s `IncidentPublisher`, a thin sync-bus wrapper that re-exports the shared payload builders), and `api-service`'s `POST /v1/incidents/{id}/confirm|reject` endpoints publish `IncidentDetected`/`IncidentUpdated` (ADR-006's human gate — only an operator, through those endpoints, may confirm or reject a candidate). `api-service` also now consumes and broadcasts all three topics, and keeps an in-memory registry built by replaying them (`api_service/incidents.py`) — see PROGRESS.md's "Closing the integration gap" section for what was verified end to end against a real Redis instance.
+
+The M6 gate script (`scripts/m6_incident_injection_gate.py`) still scores detections in-process via `scripts/m6_harness.py`'s `_Scorer` and never constructs a `LiveIncidentDetector` or publishes anything — that's deliberate, it's an offline accuracy measurement, not a live run. So: schema ✅, producer code ✅ and unit-tested, wired into a live run ✅ (though with no trained model shipped in this checkout, live detection is real code with nothing to detect yet — see README's "Current milestone"). The incident lifecycle these events describe is the state machine in `packages/domain/itms_domain/incident.py`.
 
 More arrive as the milestone that needs them lands:
 
 - M1 (remaining): `sensor_reading.avsc` (not needed yet — no IoT/loop-detector adapter exists)
 - M2 (remaining): `signal_plan_proposed.avsc`, `signal_override_*.avsc` — no real proposer (M4 CA-MP) or overrider (M6) exists yet, same reasoning as M1's deferred `sensor_reading.avsc`
-- M5: `traffic_updated.avsc`
 - M6: `emergency_dispatched.avsc`, `unit_reserved.avsc`, `route_calculated.avsc`
-- M7: `corridor_reservation_*.avsc`, `fleet_position_updated.avsc`
+- M7: `corridor_reservation_*.avsc`, `fleet_position_updated.avsc` — still true even though M7 itself is done: the corridor engine and dispatcher (`control/corridor/`, `control/dispatch/`) are pure in-process simulation logic with zero bus involvement. Nothing about M7's verified benchmark result depends on these schemas existing; they'd only matter for a real multi-service deployment.
+
+(The M1 `approach_state.avsc` already covers the `traffic.updated` topic — no separate M5 schema was ever needed; an earlier version of this list said otherwise.)
 
 Full topic list with keys and retention: architecture doc §6.2.
 

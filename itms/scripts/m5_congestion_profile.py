@@ -33,7 +33,6 @@ from sim_service.control import memory as memory_mod  # noqa: E402
 from sim_service.control.runner import run_controlled_scenario  # noqa: E402
 from sim_service.control.strategies import acamp  # noqa: E402
 from sim_service.control.tuning import load_config  # noqa: E402
-from sim_service.signal_controller.queue_state import load_vtype_pcu  # noqa: E402
 
 
 class CongestionProbe:
@@ -93,18 +92,18 @@ def run(level: str, seed: int, tuned_path: str) -> None:
     print(f"  mean congestion                {statistics.mean(all_samples):>8.3f}")
     print(f"  median congestion               {statistics.median(all_samples):>8.3f}")
     print(f"  max congestion                  {max(all_samples):>8.3f}")
-    print(f"  % ticks >= 0.5 (gate threshold) {100.0 * sum(1 for s in all_samples if s >= 0.5) / len(all_samples):>7.1f}%")
+    pct_over = 100.0 * sum(1 for s in all_samples if s >= 0.5) / len(all_samples)
+    print(f"  % ticks >= 0.5 (gate threshold) {pct_over:>7.1f}%")
     print("  per-junction max congestion:")
     for tls, p in sorted(probes.items(), key=lambda kv: -max(kv[1].samples, default=0.0)):
-        print(f"    {tls:45s} max={max(p.samples, default=0.0):.3f}  mean={statistics.mean(p.samples) if p.samples else 0.0:.3f}")
+        mean_congestion = statistics.mean(p.samples) if p.samples else 0.0
+        print(f"    {tls:45s} max={max(p.samples, default=0.0):.3f}  mean={mean_congestion:.3f}")
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--seed", type=int, default=1)
-    ap.add_argument(
-        "--tuned-config", default=str(H.ARTIFACT_DIR / "acamp_tuned.json")
-    )
+    ap.add_argument("--tuned-config", default=str(H.ARTIFACT_DIR / "acamp_tuned.json"))
     args = ap.parse_args()
     for level in ["light", "medium", "heavy"]:
         run(level, args.seed, args.tuned_config)

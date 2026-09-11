@@ -107,9 +107,7 @@ def _job(args) -> dict:
     H.CONTROLLERS["acamp"] = lambda *a, **k: strategy
     try:
         started = time.time()
-        record = H.run_one(
-            "acamp", level, seed, tripinfo_dir=Path("/tmp/m5_degr"), inputs=inputs
-        )
+        record = H.run_one("acamp", level, seed, tripinfo_dir=Path("/tmp/m5_degr"), inputs=inputs)
     finally:
         H.CONTROLLERS["acamp"] = original
     record["arm"] = arm
@@ -122,8 +120,9 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--memory", default=str(H.ARTIFACT_DIR / "demand_memory.json"))
     parser.add_argument("--tuned-config", default=None)
-    parser.add_argument("--confidence", type=float, default=0.6,
-                        help="0.5..0.8 lands on the camp_blended rung")
+    parser.add_argument(
+        "--confidence", type=float, default=0.6, help="0.5..0.8 lands on the camp_blended rung"
+    )
     parser.add_argument("--levels", default="light,medium")
     parser.add_argument("--seeds", type=int, default=5)
     parser.add_argument("--workers", type=int, default=max(1, os.cpu_count() or 2))
@@ -177,7 +176,9 @@ def main() -> None:
     for level in levels:
         on = summary[level]["memory_on"]
         off = summary[level]["memory_off"]
-        delta = (off["person_delay_mean_s"] - on["person_delay_mean_s"]) / off["person_delay_mean_s"]
+        delta = (off["person_delay_mean_s"] - on["person_delay_mean_s"]) / off[
+            "person_delay_mean_s"
+        ]
         print(
             f"{level:8s} memory ON {on['person_delay_mean_s']:>12,.0f} +/- "
             f"{on['person_delay_ci95_half_s']:>8,.0f}   OFF "

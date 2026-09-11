@@ -106,7 +106,12 @@ def main() -> None:
 
     Path(_OUT).write_text(
         json.dumps(
-            {"search_seeds": SEARCH_SEEDS, "candidates": CANDIDATES, "summary": summary, "runs": records},
+            {
+                "search_seeds": SEARCH_SEEDS,
+                "candidates": CANDIDATES,
+                "summary": summary,
+                "runs": records,
+            },
             indent=2,
         )
     )
@@ -116,7 +121,10 @@ def main() -> None:
         print(f"\n{level}:")
         for ref in CANDIDATES:
             s = summary[level][str(ref)]
-            print(f"  ref={ref:5.2f}  {s['mean']:>12,.0f} +/- {s['ci95_half']:>8,.0f}  viol={s['violations']}")
+            print(
+                f"  ref={ref:5.2f}  {s['mean']:>12,.0f} +/- {s['ci95_half']:>8,.0f}  "
+                f"viol={s['violations']}"
+            )
     print(f"\ntotal wall {(time.time() - started) / 60:.1f} min, wrote {_OUT}")
 
 

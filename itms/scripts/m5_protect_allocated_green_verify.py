@@ -100,13 +100,26 @@ def main() -> None:
                 for r in records
                 if r["label"] == label and r["demand_level"] == level
             )
-            summary[label][level] = {"mean": ci.mean, "ci95_half": ci.half_width_95, "violations": viol, "n": len(delays)}
+            summary[label][level] = {
+                "mean": ci.mean,
+                "ci95_half": ci.half_width_95,
+                "violations": viol,
+                "n": len(delays),
+            }
 
     # Paired per-seed deltas -- the comparison the probe's signal actually lives in.
     paired = {}
     for level in LEVELS:
-        by_seed_default = {r["seed"]: r["person_delay_s"] for r in records if r["label"] == "default" and r["demand_level"] == level}
-        by_seed_protected = {r["seed"]: r["person_delay_s"] for r in records if r["label"] == "protected" and r["demand_level"] == level}
+        by_seed_default = {
+            r["seed"]: r["person_delay_s"]
+            for r in records
+            if r["label"] == "default" and r["demand_level"] == level
+        }
+        by_seed_protected = {
+            r["seed"]: r["person_delay_s"]
+            for r in records
+            if r["label"] == "protected" and r["demand_level"] == level
+        }
         deltas = []
         for seed in H.EVAL_SEEDS:
             d, p = by_seed_default[seed], by_seed_protected[seed]
@@ -116,7 +129,10 @@ def main() -> None:
         paired[level] = {"deltas": deltas, "n_improved": n_improved, "n": len(deltas)}
 
     Path(_OUT).write_text(
-        json.dumps({"eval_seeds": H.EVAL_SEEDS, "summary": summary, "paired": paired, "runs": records}, indent=2)
+        json.dumps(
+            {"eval_seeds": H.EVAL_SEEDS, "summary": summary, "paired": paired, "runs": records},
+            indent=2,
+        )
     )
 
     print("\n" + "=" * 78)
@@ -128,10 +144,11 @@ def main() -> None:
         w_lo, w_hi = w["mean"] - w["ci95_half"], w["mean"] + w["ci95_half"]
         overlap = not (w_hi < d_lo or d_hi < w_lo)
         pct = (w["mean"] - d["mean"]) / d["mean"] * 100 if d["mean"] else 0.0
+        overlap_label = "OVERLAP" if overlap else "NO OVERLAP"
         print(
             f"{level:8s} {d['mean']:>14,.0f} +/- {d['ci95_half']:>9,.0f}   "
             f"{w['mean']:>14,.0f} +/- {w['ci95_half']:>9,.0f}   "
-            f"{'OVERLAP' if overlap else 'NO OVERLAP'} ({pct:+.1f}%)  viol d={d['violations']} p={w['violations']}"
+            f"{overlap_label} ({pct:+.1f}%)  viol d={d['violations']} p={w['violations']}"
         )
 
     print("\npaired per-seed (protected vs default, negative = improvement):")
@@ -139,7 +156,10 @@ def main() -> None:
         p = paired[level]
         print(f"  {level:6s} improved {p['n_improved']}/{p['n']} seeds")
         for x in p["deltas"]:
-            print(f"    seed={x['seed']:3d} default={x['default']:>12,.0f} protected={x['protected']:>12,.0f} ({x['pct']:+.1f}%)")
+            print(
+                f"    seed={x['seed']:3d} default={x['default']:>12,.0f} "
+                f"protected={x['protected']:>12,.0f} ({x['pct']:+.1f}%)"
+            )
 
     print(f"\ntotal wall {(time.time() - started) / 60:.1f} min, wrote {_OUT}")
 

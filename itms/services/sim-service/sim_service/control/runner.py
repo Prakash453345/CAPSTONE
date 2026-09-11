@@ -36,6 +36,7 @@ import logging
 import os
 import shutil
 import sys
+import time
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -45,6 +46,7 @@ from itms_common.bus import RedisStreamsSyncBus
 from itms_common.events import encode_envelope
 from itms_domain import JunctionContext, SignalPlan, Tier0Config
 
+from sim_service.adapters.sumo.traci_loop import publish_traffic_state as _publish_traffic_state
 from sim_service.control.anomaly.graph_features import AnomalyGraph, LinkFeatureSampler
 from sim_service.control.anomaly.injector import IncidentInjector
 from sim_service.control.memory import DemandMemory
@@ -243,6 +245,8 @@ def run_controlled_scenario(
     ev_reporter: Callable[[float], None] | None = None,
     extra_sumo_args: Iterable[str] | None = None,
     traci_retries: int | None = None,
+    publish_traffic_state: bool = False,
+    realtime_factor: float | None = None,
 ) -> dict:
     """Run one full scenario with `strategy` governing every junction in
     `configs`. Returns run stats: step count, how many times the arbiter
@@ -346,6 +350,22 @@ def run_controlled_scenario(
     so this function stays ignorant of how vehicles are detected: the
     benchmark's TraCI-derived reporter and a real detection feed are the
     same shape from here.
+
+    `publish_traffic_state`, given together with `bus`, additionally
+    publishes `VehiclePositionUpdated`/`ApproachState` every tick --
+    `traci_loop.publish_traffic_state`, the same function and the same
+    event shapes `traci_loop.run` (the M1-only, no-control live loop) has
+    always published. This is what lets `sim_service/main.py`'s live demo
+    call this function instead of `traci_loop.run` and keep the live map
+    working while *also* getting real signal control, `bus`'s
+    `SignalChanged`/`SignalFaulted` events, and (via `anomaly_feature_sink`)
+    live incident detection -- one stepping loop owning the TraCI
+    connection, not two competing for it. `False` by default because every
+    gate/bench script publishes tripinfo-scored KPIs instead and has no use
+    for a live map. `realtime_factor` paces the loop the same way
+    `traci_loop.run`'s does (1.0 = roughly real time); `None` (the default)
+    runs as fast as TraCI allows, which is what every gate/bench script
+    wants and a live demo does not.
     """
     _ensure_sumo_home()
     sumo_binary = _resolve_sumo_binary()
@@ -444,8 +464,13 @@ def run_controlled_scenario(
 
         step = 0
         fault_events: list[tuple[str, int, str]] = []
+        # Only ever populated when publish_traffic_state is set -- see that
+        # parameter's docstring. A vehicle's vType never changes over its
+        # life, so this is one getTypeID call per vehicle for the whole run.
+        vtype_cache: dict[str, str] = {}
 
         while traci.simulation.getMinExpectedNumber() > 0:
+            tick_start = time.monotonic()
             traci.simulationStep()
             step += 1
             # Invalidate the per-tick memo exactly once, right after the
@@ -493,7 +518,9 @@ def run_controlled_scenario(
                 # the pairing wrong.
                 time_aware = hasattr(junction_strategy, "set_sim_time")
                 if time_aware:
-                    junction_strategy.set_sim_time(traci.simulation.getTime())
+                    junction_strategy.set_sim_time(  # type: ignore[attr-defined]
+                        traci.simulation.getTime()
+                    )
 
                 if js.detector is not None or js.queue_sampler is not None:
                     has_demand: Mapping[str, bool] = {}
@@ -629,6 +656,29 @@ def run_controlled_scenario(
                 anomaly_feature_sink(
                     step, sim_time, feature_sampler.sample(sim_time, phase_by_tls)
                 )
+
+            if publish_traffic_state and bus is not None:
+                _publish_traffic_state(bus, step_length=step_length, vtype_cache=vtype_cache)
+
+            if realtime_factor is not None:
+                # Same pacing traci_loop.run uses: sleep off whatever's left
+                # of this tick's wall-clock budget, or log a dropped tick if
+                # the tick's own work (control decisions, publishing) already
+                # ran over it. No-op cost when unset (every gate/bench
+                # script), which is why this isn't the default.
+                target_wall_s = step_length / realtime_factor if realtime_factor else 0.0
+                elapsed = time.monotonic() - tick_start
+                if elapsed > target_wall_s:
+                    log.warning(
+                        "step %d took %.3fs, budget was %.3fs at %.1fx real time -- "
+                        "dropped tick",
+                        step,
+                        elapsed,
+                        target_wall_s,
+                        realtime_factor,
+                    )
+                elif target_wall_s > 0:
+                    time.sleep(target_wall_s - elapsed)
 
             if max_steps is not None and step >= max_steps:
                 break

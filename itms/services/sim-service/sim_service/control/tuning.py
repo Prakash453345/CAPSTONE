@@ -264,9 +264,7 @@ class TuningHistory:
     def save(self, path: str | Path) -> None:
         target = Path(path)
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(
-            json.dumps({"entries": self.entries, "best": self.best()}, indent=2)
-        )
+        target.write_text(json.dumps({"entries": self.entries, "best": self.best()}, indent=2))
 
 
 def optimize(
@@ -302,7 +300,10 @@ def optimize(
     highs = [PARAM_SPACE[n][1] for n in names]
 
     def denorm(unit: Sequence[float]) -> AcampConfig:
-        raw = [lo + min(1.0, max(0.0, u)) * (hi - lo) for u, lo, hi in zip(unit, lows, highs, strict=True)]
+        raw = [
+            lo + min(1.0, max(0.0, u)) * (hi - lo)
+            for u, lo, hi in zip(unit, lows, highs, strict=True)
+        ]
         return from_vector(raw, base)
 
     def norm(cfg: AcampConfig) -> list[float]:

@@ -83,10 +83,16 @@ _link_lanes = link_to_lane_map(_NET_PATH)
 _receiving_lanes = link_to_receiving_lane_map(_NET_PATH)
 
 
-def _raw_pressure(camp_cfg: camp.CampConfig, cfg: Tier0Config, ctx: JunctionContext, phase_id: str) -> float:
+def _raw_pressure(
+    camp_cfg: camp.CampConfig, cfg: Tier0Config, ctx: JunctionContext, phase_id: str
+) -> float:
     """§3.4's flow/block/fairness terms only -- `pressure()` minus S(p)."""
     block = camp._block_pressure(camp_cfg, cfg, ctx, phase_id) if camp_cfg.enable_blocking else 0.0
-    return camp._flow_pressure(cfg, ctx, phase_id) - block + camp._fairness(camp_cfg, cfg, ctx, phase_id)
+    return (
+        camp._flow_pressure(cfg, ctx, phase_id)
+        - block
+        + camp._fairness(camp_cfg, cfg, ctx, phase_id)
+    )
 
 
 class _GapInstrumented:

@@ -515,9 +515,9 @@ class AcampConfig:
     same shape reproduced exactly:
 
         level    default (unprotected)      protect_allocated_green
-        light      57,928 +/-  2,631           57,928 +/-  2,631  (+0.0%, all 10 seeds identical)
-        medium    212,741 +/- 35,358          212,741 +/- 35,358  (+0.0%, all 10 seeds identical)
-        heavy   1,454,395 +/- 61,600        1,277,791 +/- 53,763  (-12.1%, NO OVERLAP, 10/10 seeds improved)
+        light      57,928 +/-  2,631           57,928 +/-  2,631  (+0.0%, all seeds identical)
+        medium    212,741 +/- 35,358          212,741 +/- 35,358  (+0.0%, all seeds identical)
+        heavy   1,454,395 +/- 61,600        1,277,791 +/- 53,763  (-12.1%, all 10 improved)
 
     Zero interlock violations in either arm, at every demand level, on
     every seed. The light/medium identity is not a fluke or a rounding
@@ -633,7 +633,9 @@ def q_hat(ctx: JunctionContext, cfg: AcampConfig, movement: str) -> float:
     )
 
 
-def press_pressure(cfg_t0: Tier0Config, ctx: JunctionContext, cfg: AcampConfig, phase_id: str) -> float:
+def press_pressure(
+    cfg_t0: Tier0Config, ctx: JunctionContext, cfg: AcampConfig, phase_id: str
+) -> float:
     """`Σ_m s_m · (q̂_m · gate(ρ_m) − r_m)` -- Defect 1's fix."""
     total = 0.0
     for m in cfg_t0.phases[phase_id].green_movements:
@@ -881,7 +883,9 @@ def _critical_phases(cfg_t0: Tier0Config, ctx: JunctionContext, live: list[str])
 def _exit_step(
     cfg_t0: Tier0Config, ctx: JunctionContext, current: str, min_g: float, tick_s: float
 ) -> PlanStep:
-    green_s = 0.0 if current in ctx.faulted_phases else max(tick_s, min_g - ctx.current_phase_elapsed_s)
+    green_s = (
+        0.0 if current in ctx.faulted_phases else max(tick_s, min_g - ctx.current_phase_elapsed_s)
+    )
     return PlanStep(
         phase_id=current, green_s=green_s, yellow_s=cfg_t0.yellow_s, all_red_s=cfg_t0.all_red_s
     )
@@ -1062,7 +1066,9 @@ class AdaptiveCamp:
 
         slow_half_life = max(1e-6, self.cfg.baseline_halflife_s)
         slow_decay = 0.5 ** (self.tick_s / slow_half_life)
-        self._baseline_load_ewma = slow_decay * self._baseline_load_ewma + (1.0 - slow_decay) * scale
+        self._baseline_load_ewma = (
+            slow_decay * self._baseline_load_ewma + (1.0 - slow_decay) * scale
+        )
 
     @property
     def smoothed_load(self) -> float:
@@ -1139,9 +1145,7 @@ class AdaptiveCamp:
         other bad plan."""
         if self.calibration is None:
             return cfg_t0, ctx
-        learned = self.calibration.sat_flow_overrides(
-            cfg_t0.intersection_id, cfg_t0.sat_flow_pcu_s
-        )
+        learned = self.calibration.sat_flow_overrides(cfg_t0.intersection_id, cfg_t0.sat_flow_pcu_s)
         discounted = {
             m: v * self.calibration.arrival_reliability_for(cfg_t0.intersection_id, m)
             for m, v in ctx.approaching_pcu.items()
@@ -1151,9 +1155,7 @@ class AdaptiveCamp:
             replace(ctx, approaching_pcu=discounted),
         )
 
-    def _corridor_state(
-        self, cfg_t0: Tier0Config
-    ) -> tuple[dict[str, float], dict[str, float]]:
+    def _corridor_state(self, cfg_t0: Tier0Config) -> tuple[dict[str, float], dict[str, float]]:
         """Terms 4 and 5's inputs, or two empty mappings.
 
         Read fresh every tick rather than cached, and read from the engine
@@ -1172,8 +1174,7 @@ class AdaptiveCamp:
             return {}, {}
         urgency = dict(self.corridor.anticipation(cfg_t0.intersection_id))
         owed = {
-            m: self.corridor.debt.owed(cfg_t0.intersection_id, m)
-            for m in _all_movements(cfg_t0)
+            m: self.corridor.debt.owed(cfg_t0.intersection_id, m) for m in _all_movements(cfg_t0)
         }
         owed = {m: d for m, d in owed.items() if d > 0.0}
         if urgency:
@@ -1214,9 +1215,7 @@ class AdaptiveCamp:
 
         urgency, owed = self._corridor_state(cfg_t0)
         horizon = self._phase_horizon_s(cfg_t0)
-        pressures = {
-            p: pressure(cfg_t0, ctx, cfg, p, urgency, owed, horizon) for p in live
-        }
+        pressures = {p: pressure(cfg_t0, ctx, cfg, p, urgency, owed, horizon) for p in live}
         min_g = cfg_t0.min_green_s.get(current, 0.0)
         max_g = cfg_t0.max_green_s.get(current, min_g)
 
@@ -1302,7 +1301,9 @@ class AdaptiveCamp:
             # field's docstring for the measured reason (a documented
             # negative result, not a placeholder). Default path is exactly
             # v2's validated behaviour, byte-for-byte.
-            congestion_scale = self.relative_load if cfg.use_relative_congestion_gate else self._load_ewma
+            congestion_scale = (
+                self.relative_load if cfg.use_relative_congestion_gate else self._load_ewma
+            )
             congestion = memory_mod.congestion_weight(
                 congestion_scale, cfg.switch_scale_ref, cfg.switch_scale_exponent
             )
@@ -1325,7 +1326,11 @@ class AdaptiveCamp:
         elif not current_faulted:
             self.stats["switch_max_green"] += 1
 
-        ring = [p for p in _ring_candidates(cfg_t0.ring_order, current, cfg.k) if p not in ctx.faulted_phases]
+        ring = [
+            p
+            for p in _ring_candidates(cfg_t0.ring_order, current, cfg.k)
+            if p not in ctx.faulted_phases
+        ]
         candidates = ring or live
         filtered = [p for p in candidates if not _skippable(cfg_t0, ctx, p)]
         if filtered:

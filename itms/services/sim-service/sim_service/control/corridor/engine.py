@@ -423,12 +423,12 @@ class CorridorEngine:
             held = jp.reservation.vehicle_id
             if winner == held:
                 continue
-            track = self._tracks.get(held)
-            if track is None:
+            held_track = self._tracks.get(held)
+            if held_track is None:
                 jp.release(ReleaseReason.STALE_REPORT)
-            elif junction_id in track.dropped_by_passing():
+            elif junction_id in held_track.dropped_by_passing():
                 jp.release(ReleaseReason.PASSED)
-            elif junction_id not in track.report.route:
+            elif junction_id not in held_track.report.route:
                 jp.release(ReleaseReason.ROUTE_CHANGED)
             elif winner is not None:
                 jp.release(ReleaseReason.SUPERSEDED)

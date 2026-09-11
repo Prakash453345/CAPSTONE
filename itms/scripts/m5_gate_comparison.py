@@ -82,7 +82,9 @@ def main() -> None:
         for arm in arms
         for seed in seeds
     ]
-    print(f"M5 gate: {len(jobs)} runs ({len(arms)} arms x {len(levels)} levels x {len(seeds)} seeds)")
+    print(
+        f"M5 gate: {len(jobs)} runs ({len(arms)} arms x {len(levels)} levels x {len(seeds)} seeds)"
+    )
     print(f"eval seeds {seeds}  (train seeds {H.TRAIN_SEEDS} are disjoint)")
     print(f"tuned config: {args.tuned_config or '(defaults)'}")
     print(f"demand memory: {args.memory or '(none)'}")
@@ -140,7 +142,9 @@ def main() -> None:
     )
 
     print("\n" + "=" * 78)
-    print(f"{'level':8s} {'arm':9s} {'person-delay (mean +/- 95% CI)':36s} {'viol':>6s} {'stops':>7s}")
+    print(
+        f"{'level':8s} {'arm':9s} {'person-delay (mean +/- 95% CI)':36s} {'viol':>6s} {'stops':>7s}"
+    )
     print("=" * 78)
     for level in levels:
         for arm in arms:

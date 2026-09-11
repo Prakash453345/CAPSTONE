@@ -89,11 +89,15 @@ def main() -> None:
         summary[level] = {
             "mean": ci.mean,
             "ci95_half": ci.half_width_95,
-            "violations": sum(r["interlock_violations"] for r in records if r["demand_level"] == level),
+            "violations": sum(
+                r["interlock_violations"] for r in records if r["demand_level"] == level
+            ),
             "n": len(delays),
         }
 
-    Path(_OUT).write_text(json.dumps({"eval_seeds": H.EVAL_SEEDS, "summary": summary, "runs": records}, indent=2))
+    Path(_OUT).write_text(
+        json.dumps({"eval_seeds": H.EVAL_SEEDS, "summary": summary, "runs": records}, indent=2)
+    )
 
     # The comparison that actually matters: this arm against the recorded
     # default-arm (`use_relative_congestion_gate=False`) 10-seed gate.
@@ -106,14 +110,19 @@ def main() -> None:
     for level in LEVELS:
         d = default[level]["acamp"]
         w = summary[level]
-        d_lo, d_hi = d["person_delay_mean_s"] - d["person_delay_ci95_half_s"], d["person_delay_mean_s"] + d["person_delay_ci95_half_s"]
+        d_lo, d_hi = (
+            d["person_delay_mean_s"] - d["person_delay_ci95_half_s"],
+            d["person_delay_mean_s"] + d["person_delay_ci95_half_s"],
+        )
         w_lo, w_hi = w["mean"] - w["ci95_half"], w["mean"] + w["ci95_half"]
         overlap = not (w_hi < d_lo or d_hi < w_lo)
         pct = (w["mean"] - d["person_delay_mean_s"]) / d["person_delay_mean_s"] * 100
+        overlap_label = "OVERLAP" if overlap else "NO OVERLAP"
         print(
-            f"{level:8s} {d['person_delay_mean_s']:>14,.0f} +/- {d['person_delay_ci95_half_s']:>9,.0f}   "
+            f"{level:8s} {d['person_delay_mean_s']:>14,.0f} "
+            f"+/- {d['person_delay_ci95_half_s']:>9,.0f}   "
             f"{w['mean']:>14,.0f} +/- {w['ci95_half']:>9,.0f}   "
-            f"{'OVERLAP' if overlap else 'NO OVERLAP'} ({pct:+.1f}%)"
+            f"{overlap_label} ({pct:+.1f}%)"
         )
     print(f"\ntotal wall {(time.time() - started) / 60:.1f} min, wrote {_OUT}")
 

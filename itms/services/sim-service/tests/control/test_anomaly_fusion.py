@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-import numpy as np
 import pytest
-from sim_service.control.anomaly.fusion import (
+
+np = pytest.importorskip("numpy")
+
+from sim_service.control.anomaly.fusion import (  # noqa: E402
     FUSION_FEATURES,
     N_FUSION_FEATURES,
     CandidateRaiser,

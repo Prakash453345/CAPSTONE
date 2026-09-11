@@ -57,11 +57,16 @@ def main() -> None:
         for level in LEVELS:
             for seed in SEEDS:
                 r = H.run_one(
-                    "acamp", level, seed, tripinfo_dir=Path("/tmp/m5_protect_threshold_sweep"), acamp_cfg=cfg
+                    "acamp",
+                    level,
+                    seed,
+                    tripinfo_dir=Path("/tmp/m5_protect_threshold_sweep"),
+                    acamp_cfg=cfg,
                 )
                 rows.append(r)
                 print(
-                    f"[thr={threshold:.2f}] {level:6s} seed={seed:3d} delay={r['person_delay_s']:>12,.0f} "
+                    f"[thr={threshold:.2f}] {level:6s} seed={seed:3d} "
+                    f"delay={r['person_delay_s']:>12,.0f} "
                     f"viol={r['interlock_violations']:<3d}",
                     flush=True,
                 )

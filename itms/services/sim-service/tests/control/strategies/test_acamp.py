@@ -43,7 +43,9 @@ def _ring_config(
 ) -> Tier0Config:
     phase_ids = [f"P{i}" for i in range(n_phases)]
     movements = [f"m{i}" for i in range(n_phases)]
-    phases = {pid: Phase(pid, frozenset({mv})) for pid, mv in zip(phase_ids, movements, strict=True)}
+    phases = {
+        pid: Phase(pid, frozenset({mv})) for pid, mv in zip(phase_ids, movements, strict=True)
+    }
     conflict_matrix = {mv: frozenset(m2 for m2 in movements if m2 != mv) for mv in movements}
     kwargs = {} if max_wait_s is None else {"max_wait_s": max_wait_s}
     return Tier0Config(
@@ -652,9 +654,7 @@ def test_switch_cost_bias_holds_its_proportion_as_pressure_grows():
     term grew 1.3x while the pressure spread it competes with grew 5.1x;
     this one is linear in pressure, so the threshold it sets stays a fixed
     fraction at every demand level."""
-    ratios = [
-        memory_mod.switch_cost_bias(p, 7.0, 60.0, 1.0) / p for p in (0.5, 5.0, 50.0, 500.0)
-    ]
+    ratios = [memory_mod.switch_cost_bias(p, 7.0, 60.0, 1.0) / p for p in (0.5, 5.0, 50.0, 500.0)]
     assert all(abs(r - ratios[0]) < 1e-12 for r in ratios)
 
 
@@ -785,7 +785,9 @@ def test_relative_load_is_scale_invariant_across_junction_size():
     )
 
 
-def _warm_congestion(controller: acamp.AdaptiveCamp, cfg: Tier0Config, ticks: int = 1800, q: float = 30.0) -> None:
+def _warm_congestion(
+    controller: acamp.AdaptiveCamp, cfg: Tier0Config, ticks: int = 1800, q: float = 30.0
+) -> None:
     """Push `controller`'s smoothed load past the congestion gate's ~0.5
     midpoint before a `protect_allocated_green` test exercises it -- that
     gate reads `_load_ewma`, which starts at 0 and only warms through
@@ -889,9 +891,7 @@ def test_protect_allocated_green_disabled_reproduces_old_eager_switching():
     and `AcampConfig.protect_allocated_green`'s docstring for the verified
     result that changed the default)."""
     cfg = _ring_config(2, min_greens=[2.0, 2.0], max_greens=[200.0, 200.0])
-    acfg = acamp.AcampConfig(
-        protect_allocated_green=False, kappa_switch=0.01, lost_time_weight=0.0
-    )
+    acfg = acamp.AcampConfig(protect_allocated_green=False, kappa_switch=0.01, lost_time_weight=0.0)
     controller = acamp.AdaptiveCamp(acfg, nominal_cycle_s=60.0, tick_s=1.0)
 
     ctx0 = JunctionContext("J", "P0", 10.0, queue_pcu={"m0": 0.0, "m1": 60.0})

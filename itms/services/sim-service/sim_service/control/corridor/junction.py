@@ -514,7 +514,7 @@ class JunctionPreemption:
             if self.state is not PreemptState.DWELL:
                 self.state = PreemptState.DWELL
                 self.dwell_started_at_s = now_s
-            steps = (PlanStep(phase_id=target, green_s=tick_s),)
+            steps: tuple[PlanStep, ...] = (PlanStep(phase_id=target, green_s=tick_s),)
             defer = DeferReason.NONE
         elif transfer.blocked:
             #                                                 ENTRY_HOLD
@@ -605,9 +605,9 @@ class JunctionPreemption:
     def stats(self) -> dict[str, float]:
         assert self.releases is not None and self.defers is not None
         out: dict[str, float] = {"preempted_s": self.preempted_s}
-        for reason, count in self.releases.items():
-            out[f"release_{reason.value}"] = count
-        for reason, count in self.defers.items():
-            if reason is not DeferReason.NONE:
-                out[f"defer_{reason.value}"] = count
+        for release_reason, count in self.releases.items():
+            out[f"release_{release_reason.value}"] = count
+        for defer_reason, count in self.defers.items():
+            if defer_reason is not DeferReason.NONE:
+                out[f"defer_{defer_reason.value}"] = count
         return out

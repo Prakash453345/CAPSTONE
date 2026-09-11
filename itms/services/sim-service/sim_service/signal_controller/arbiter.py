@@ -63,6 +63,8 @@ class CorridorPort(Protocol):
 
     def preempt_seconds_last_hour(self, junction_id: str, now_s: float) -> float: ...
 
+    def stats(self) -> dict[str, float]: ...
+
 
 SUCCESS_MODES = frozenset({"fixed_time", "corridor_preemption"})
 """Modes in which a plan was actually commanded.

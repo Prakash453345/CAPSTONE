@@ -1,11 +1,24 @@
-"""Turn an `itms_domain.incident.Incident` transition into a bus event that
-matches `contracts/events/incident_*.avsc` field-for-field, and publish it --
-the same encode-and-publish shape `runner._publish_decision_events` uses for
-signal events.
+"""Publish an `itms_domain.incident.Incident` transition onto the bus as a
+real event -- the same encode-and-publish shape `runner._publish_decision_events`
+uses for signal events.
 
-The domain layer owns the incident rules and the hash chain; this module is
-the (thin) bridge from a transition to the wire. Kept out of the domain
-package because that package has no dependency on `contracts/`.
+The payload field mapping itself (`candidate_payload`/`detected_payload`/
+`updated_payload`, matching `contracts/events/incident_*.avsc`) now lives in
+`itms_common.incident_events`, re-exported here unchanged: `api-service`
+needs the exact same mapping to publish `IncidentDetected`/`IncidentUpdated`
+from its own confirm/reject endpoints (ADR-006's human gate), and sim-service
+can't be a dependency of api-service, so the shared logic moved to the one
+package both already depend on rather than being hand-copied a second time.
+See that module's docstring for the full reasoning. `IncidentPublisher`
+itself stays here: it's a synchronous convenience wrapper around
+`RedisStreamsSyncBus`, the transport sim-service's per-tick loop uses --
+api-service's async bus needs its own await-based publish call, which is
+`api_service/incidents.py`'s business, not this module's.
+
+The domain layer owns the incident rules and the hash chain; this module (and
+`itms_common.incident_events`) is the (thin) bridge from a transition to the
+wire. Kept out of the domain package because that package has no dependency
+on `contracts/`.
 """
 
 from __future__ import annotations
@@ -14,78 +27,25 @@ from collections.abc import Iterable
 
 from itms_common.bus import RedisStreamsSyncBus
 from itms_common.events import encode_envelope
-from itms_domain.incident import Incident, IncidentAction, IncidentState
+from itms_common.incident_events import (
+    CANDIDATE_TOPIC,
+    DETECTED_TOPIC,
+    UPDATED_TOPIC,
+    candidate_payload,
+    detected_payload,
+    updated_payload,
+)
+from itms_domain.incident import Incident
 
-CANDIDATE_TOPIC = "incident.candidate"
-DETECTED_TOPIC = "incident.detected"
-UPDATED_TOPIC = "incident.updated"
-
-_STATE_TO_SYMBOL = {
-    IncidentState.CANDIDATE: "CANDIDATE",
-    IncidentState.CONFIRMED: "CONFIRMED",
-    IncidentState.REJECTED: "REJECTED",
-    IncidentState.EXPIRED: "EXPIRED",
-    IncidentState.CLEARED: "CLEARED",
-}
-
-
-
-
-def candidate_payload(inc: Incident, *, sim_tick: int | None = None) -> dict:
-    """Matches incident_candidate.avsc. Call on a freshly raised CANDIDATE."""
-    return {
-        "incident_id": inc.incident_id,
-        "detected_at": inc.first_seen_ms,
-        "sim_tick": sim_tick,
-        "intersection_id": inc.intersection_id,
-        "link_id": inc.link_id,
-        "graph_score": float(inc.graph_score),
-        "vision_score": None if inc.vision_score is None else float(inc.vision_score),
-        "fused_probability": float(inc.fused_probability),
-        "threshold_tau": float(inc.threshold_tau),
-        "false_alarm_budget": float(inc.false_alarm_budget),
-        "detector_version": inc.detector_version,
-    }
-
-
-def detected_payload(inc: Incident, *, confirmed_at_ms: int | None = None) -> dict:
-    """Matches incident_detected.avsc. Call after a CONFIRM transition."""
-    confirm = next(
-        (t for t in reversed(inc.history) if t.action is IncidentAction.CONFIRM), None
-    )
-    if confirm is None:
-        raise ValueError("detected_payload called on an incident that was never confirmed")
-    return {
-        "incident_id": inc.incident_id,
-        "confirmed_at": confirmed_at_ms if confirmed_at_ms is not None else confirm.at_ms,
-        "candidate_detected_at": inc.first_seen_ms,
-        "confirmed_by": confirm.actor,
-        "intersection_id": inc.intersection_id,
-        "link_id": inc.link_id,
-        "classification": inc.classification.name,
-        "graph_score": float(inc.graph_score),
-        "vision_score": None if inc.vision_score is None else float(inc.vision_score),
-        "fused_probability": float(inc.fused_probability),
-        "chain_hash": inc.chain_head,
-    }
-
-
-def updated_payload(inc: Incident, *, sim_tick: int | None = None) -> dict:
-    """Matches incident_updated.avsc. Call after any non-first, non-confirm
-    transition (reject / expire / refresh / clear); reads the last history
-    entry for the actor and detail."""
-    last = inc.history[-1]
-    refreshed = last.action is IncidentAction.REFRESH
-    return {
-        "incident_id": inc.incident_id,
-        "updated_at": last.at_ms,
-        "sim_tick": sim_tick,
-        "new_state": _STATE_TO_SYMBOL[inc.state],
-        "actor": last.actor,
-        "detail": last.detail,
-        "fused_probability": float(inc.fused_probability) if refreshed else None,
-        "chain_hash": inc.chain_head,
-    }
+__all__ = [
+    "CANDIDATE_TOPIC",
+    "DETECTED_TOPIC",
+    "UPDATED_TOPIC",
+    "candidate_payload",
+    "detected_payload",
+    "updated_payload",
+    "IncidentPublisher",
+]
 
 
 class IncidentPublisher:
