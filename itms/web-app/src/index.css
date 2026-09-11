@@ -1,0 +1,103 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * TRAFFIX design tokens — dark-first control-room palette.
+ * Values are HSL channels (no hsl() wrapper) so Tailwind can compose them with
+ * alpha via `hsl(var(--token) / <alpha>)`.
+ */
+:root {
+  --background: 213 33% 6%;
+  --surface: 214 26% 9%;
+  --surface-raised: 214 24% 12%;
+  --surface-sunken: 216 34% 5%;
+
+  --border: 213 18% 20%;
+  --input: 213 18% 22%;
+  --ring: 190 95% 55%;
+
+  --foreground: 210 30% 92%;
+  --muted: 214 20% 16%;
+  --muted-foreground: 214 12% 62%;
+
+  --primary: 190 95% 55%;
+  --primary-foreground: 213 40% 6%;
+  --primary-muted: 190 60% 22%;
+
+  --status-ok: 152 58% 46%;
+  --status-ok-muted: 152 44% 16%;
+  --status-warn: 38 92% 55%;
+  --status-warn-muted: 38 60% 16%;
+  --status-critical: 358 70% 57%;
+  --status-critical-muted: 358 54% 18%;
+  --status-info: 212 88% 62%;
+  --status-info-muted: 212 60% 18%;
+
+  --radius: 12px;
+
+  color-scheme: dark;
+}
+
+* {
+  border-color: hsl(var(--border));
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: theme("fontFamily.sans");
+  font-feature-settings: "cv05", "ss01";
+  letter-spacing: -0.011em;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Numeric telemetry should never jitter as digits change. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Focus: always visible, always the accent ring. */
+:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Restrained scrollbars for dense operational panels. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--border)) transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.5);
+  background-clip: content-box;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
