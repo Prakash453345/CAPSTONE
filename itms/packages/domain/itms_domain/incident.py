@@ -28,15 +28,22 @@ sim-service/anomaly -- the domain layer has no dependency on `contracts/`.
 
 from __future__ import annotations
 
-import hashlib
-import json
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from enum import StrEnum
 
-# 64 hex zeros -- the prev_hash of the genesis entry, so "is this the start of a
-# real chain" is a value check, not a None check.
-GENESIS_HASH = "0" * 64
+from itms_domain.audit import GENESIS_HASH, entry_hash
+
+__all__ = [
+    "GENESIS_HASH",
+    "IllegalTransition",
+    "Incident",
+    "IncidentAction",
+    "IncidentClass",
+    "IncidentState",
+    "IncidentTransition",
+    "TERMINAL_STATES",
+]
 
 
 class IncidentState(StrEnum):
@@ -102,12 +109,6 @@ class IllegalTransition(Exception):
     the interlocks, whose rejections are an expected control-flow outcome)."""
 
 
-def _canonical(obj: object) -> bytes:
-    """Deterministic bytes for hashing: sorted keys, no insignificant
-    whitespace, `NaN`/`Infinity` rejected (json default)."""
-    return json.dumps(obj, sort_keys=True, separators=(",", ":")).encode("utf-8")
-
-
 def _hash_entry(
     *,
     action: IncidentAction,
@@ -123,27 +124,27 @@ def _hash_entry(
     classification: IncidentClass | None,
     prev_hash: str,
 ) -> str:
-    """SHA-256 over every field of a transition plus the previous entry's hash.
-    Any edit to any recorded field, or any reordering of the log, changes this
-    and every hash after it -- which is what `verify_chain` detects."""
-    return hashlib.sha256(
-        _canonical(
-            {
-                "action": action.value,
-                "from_state": from_state.value if from_state is not None else None,
-                "to_state": to_state.value,
-                "at_ms": at_ms,
-                "actor": actor,
-                "detail": detail,
-                "graph_score": graph_score,
-                "vision_score": vision_score,
-                "fused_probability": fused_probability,
-                "threshold_tau": threshold_tau,
-                "classification": classification.value if classification is not None else None,
-                "prev_hash": prev_hash,
-            }
-        )
-    ).hexdigest()
+    """SHA-256 over every field of a transition plus the previous entry's hash
+    (via `itms_domain.audit`). Any edit to any recorded field, or any
+    reordering of the log, changes this and every hash after it -- which is
+    what `verify_chain` detects. The field set / ordering is unchanged from
+    before `audit` was factored out, so recorded chains still verify."""
+    return entry_hash(
+        {
+            "action": action.value,
+            "from_state": from_state.value if from_state is not None else None,
+            "to_state": to_state.value,
+            "at_ms": at_ms,
+            "actor": actor,
+            "detail": detail,
+            "graph_score": graph_score,
+            "vision_score": vision_score,
+            "fused_probability": fused_probability,
+            "threshold_tau": threshold_tau,
+            "classification": classification.value if classification is not None else None,
+        },
+        prev_hash,
+    )
 
 
 @dataclass(frozen=True)

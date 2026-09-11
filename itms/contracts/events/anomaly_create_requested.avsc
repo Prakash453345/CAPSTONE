@@ -1,0 +1,17 @@
+{
+  "type": "record",
+  "name": "AnomalyCreateRequested",
+  "namespace": "itms.contracts",
+  "doc": "An operator asks for an anomaly to be placed on a SUMO edge from the Command Center's Create Anomaly panel. Published by api-service on `commands.operator`; sim-service (SIM_MODE=live) drains it and applies the effect to the running simulation via TraCI, then emits AnomalyUpdated with status ACTIVE. This is the human-controlled counterpart to the automated M6 incident injector -- both mutate SUMO, they are kept as separate code paths (project direction: interactive path vs automated evaluation path).",
+  "fields": [
+    { "name": "anomaly_id", "type": "string", "doc": "Client-generated UUID; the same id appears on every later AnomalyUpdated and on the clear command." },
+    { "name": "edge_id", "type": "string", "doc": "SUMO edge id the operator clicked (resolved from the map click by the frontend)." },
+    { "name": "lane_id", "type": ["null", "string"], "default": null, "doc": "A specific lane on the edge, or null to affect the whole edge." },
+    { "name": "anomaly_type", "type": { "type": "enum", "name": "OperatorAnomalyType", "symbols": ["ACCIDENT", "VEHICLE_BREAKDOWN", "LANE_BLOCKAGE", "ROAD_OBSTRUCTION", "HEAVY_CONGESTION"] }, "doc": "The five types the Create Anomaly panel offers. Maps onto itms_domain.anomaly.AnomalyType." },
+    { "name": "severity", "type": { "type": "enum", "name": "OperatorAnomalySeverity", "symbols": ["LOW", "MEDIUM", "HIGH", "BLOCKED"] }, "doc": "LOW/MEDIUM/HIGH scale the edge-speed reduction; BLOCKED makes the edge effectively impassable (edgeCost = INF for routing)." },
+    { "name": "duration_s", "type": ["null", "double"], "default": null, "doc": "Seconds the anomaly should persist before auto-clearing. null = until an operator clears it explicitly." },
+    { "name": "position_m", "type": ["null", "double"], "default": null, "doc": "Metres along the edge, for marker placement. Optional; the effect is applied to the whole lane regardless." },
+    { "name": "operator", "type": "string", "default": "operator:console", "doc": "Who created it -- recorded in the audit trail." },
+    { "name": "requested_at", "type": { "type": "long", "logicalType": "timestamp-millis" }, "doc": "Wall-clock time the operator confirmed. Humans/retention only." }
+  ]
+}

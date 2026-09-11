@@ -1,0 +1,19 @@
+{
+  "type": "record",
+  "name": "EmergencyVehicleUpdated",
+  "namespace": "itms.contracts",
+  "doc": "Position + status of one emergency vehicle, published by sim-service while it is in transit (M7 onward, once the vehicle actually moves through SUMO). Separate from VehiclePositionUpdated so the frontend can style and track it distinctly without scanning the whole vehicle stream.",
+  "fields": [
+    { "name": "vehicle_id", "type": "string" },
+    { "name": "request_id", "type": ["null", "string"], "default": null },
+    { "name": "vehicle_kind", "type": "string" },
+    { "name": "status", "type": { "type": "enum", "name": "EmergencyVehicleLifecycle", "symbols": ["IDLE", "ASSIGNED", "EN_ROUTE", "ARRIVED"] } },
+    { "name": "lat", "type": ["null", "double"], "default": null },
+    { "name": "lon", "type": ["null", "double"], "default": null },
+    { "name": "edge_id", "type": ["null", "string"], "default": null },
+    { "name": "speed_mps", "type": "double", "default": 0.0 },
+    { "name": "eta_s", "type": ["null", "double"], "default": null },
+    { "name": "route_progress", "type": "double", "default": 0.0, "doc": "0..1 fraction of the route covered." },
+    { "name": "sim_tick", "type": ["null", "long"], "default": null }
+  ]
+}

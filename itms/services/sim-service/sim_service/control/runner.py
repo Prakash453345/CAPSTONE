@@ -36,6 +36,7 @@ import logging
 import os
 import shutil
 import sys
+import time
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -45,6 +46,7 @@ from itms_common.bus import RedisStreamsSyncBus
 from itms_common.events import encode_envelope
 from itms_domain import JunctionContext, SignalPlan, Tier0Config
 
+from sim_service.adapters.sumo.state_publish import publish_traffic_state as _publish_traffic_state
 from sim_service.control.anomaly.graph_features import AnomalyGraph, LinkFeatureSampler
 from sim_service.control.anomaly.injector import IncidentInjector
 from sim_service.control.memory import DemandMemory
@@ -62,6 +64,11 @@ log = logging.getLogger("sim-service.control.runner")
 _SIGNAL_CHANGED_TOPIC = "signal.changed"
 _SIGNAL_FAULTED_TOPIC = "signal.faulted"
 
+# arbiter.tick() modes that actually commanded a phase this tick (as opposed to
+# a fault/degraded branch). Both publish `SignalChanged`, not `SignalFaulted`,
+# and neither counts as a fault event.
+_COMMANDING_MODES = ("fixed_time", "corridor_preemption")
+
 
 def _publish_decision_events(bus: RedisStreamsSyncBus, decision: arbiter.Decision) -> None:
     """`decision.mode == "fixed_time"` is arbiter.tick()'s only success
@@ -70,7 +77,9 @@ def _publish_decision_events(bus: RedisStreamsSyncBus, decision: arbiter.Decisio
     arbiter.py) already build these dicts to match
     `contracts/events/signal_changed.avsc` / `signal_faulted.avsc` field-
     for-field, so this is a straight encode-and-publish, not a reshape."""
-    event_type = "SignalChanged" if decision.mode == "fixed_time" else "SignalFaulted"
+    event_type = (
+        "SignalChanged" if decision.mode in _COMMANDING_MODES else "SignalFaulted"
+    )
     topic = _SIGNAL_CHANGED_TOPIC if event_type == "SignalChanged" else _SIGNAL_FAULTED_TOPIC
     for payload in decision.events:
         raw = encode_envelope(
@@ -230,6 +239,10 @@ def run_controlled_scenario(
     incident_injector: IncidentInjector | None = None,
     anomaly_graph: AnomalyGraph | None = None,
     anomaly_feature_sink: Callable[[int, float, list[list[float]]], None] | None = None,
+    publish_traffic_state: bool = False,
+    on_tick: Callable[[int, float], None] | None = None,
+    pace_realtime_factor: float | None = None,
+    preempt_source: arbiter.PreemptSource | None = None,
 ) -> dict:
     """Run one full scenario with `strategy` governing every junction in
     `configs`. Returns run stats: step count, how many times the arbiter
@@ -309,6 +322,28 @@ def run_controlled_scenario(
     `scripts/m6_record_features.py` (recording normal traffic to train on) and
     the live detector (Phase 5) consume. Either left `None` and no feature
     sampling happens.
+
+    `publish_traffic_state` + `on_tick` are what promote this loop into the
+    live command-driven simulation service (`sim_service.live`), alongside the
+    M1 `adapters/sumo/traci_loop.run` which stays the pure streaming path.
+    With `publish_traffic_state=True` and a `bus`, every tick publishes the M1
+    `VehiclePositionUpdated` / `ApproachState` stream (identical events, so the
+    api-service fan-out is source-agnostic). `on_tick(step, sim_time)`, if
+    given, is called once per step after any injector tick and before this
+    tick's sampling -- the live service drains its `commands.*` topic and
+    applies operator actions there. `pace_realtime_factor`, if set, holds each
+    tick to `step_length / pace_realtime_factor` wall-seconds so a human can
+    watch it (same idea as `traci_loop.run`'s pacing). All three default off;
+    no batch caller passes them and none is affected.
+
+    `preempt_source` (M7), if given, is passed straight to `arbiter.tick` as its
+    rung-3 corridor-preemption proposal source -- one callable applied at every
+    junction, returning a `SignalPlan(source="corridor_preemption")` or None.
+    The green corridor's `CorridorController.preemption_plan` is what the live
+    service wires here. Left `None`, rung 3 is absent exactly as before. A
+    commanded preemption is `mode == "corridor_preemption"` (a success branch,
+    not a fault); an interlock-rejected one shows up in `Decision.notes` while
+    the junction keeps running its normal strategy.
     """
     _ensure_sumo_home()
     sumo_binary = _resolve_sumo_binary()
@@ -394,7 +429,14 @@ def run_controlled_scenario(
         step = 0
         fault_events: list[tuple[str, int, str]] = []
 
+        pace_budget_s = (
+            step_length / pace_realtime_factor
+            if pace_realtime_factor and pace_realtime_factor > 0
+            else 0.0
+        )
+
         while traci.simulation.getMinExpectedNumber() > 0:
+            tick_wall_start = time.monotonic() if pace_budget_s else 0.0
             traci.simulationStep()
             step += 1
             # Invalidate the per-tick memo exactly once, right after the
@@ -408,6 +450,24 @@ def run_controlled_scenario(
                 # tick and the detection tick share one clock, which is what
                 # makes the M6 gate's latency figure exact.
                 incident_injector.tick(step)
+
+            if on_tick is not None:
+                # The live command hook: the command-driven service drains its
+                # `commands.*` topic here and applies operator actions
+                # (anomaly create/clear, emergency vehicle, green corridor)
+                # against the live TraCI connection, before this tick's
+                # sampling and before the state is published downstream. Left
+                # `None` for every batch caller (gates, smoke scripts), so
+                # this is additive exactly like every parameter above it.
+                on_tick(step, traci.simulation.getTime())
+
+            if publish_traffic_state and bus is not None:
+                # Emit the M1 stream (VehiclePositionUpdated / ApproachState)
+                # so this controlled loop is a drop-in producer for the
+                # api-service fan-out -- byte-for-byte the same events
+                # `adapters/sumo/traci_loop.run` publishes. Only paid when a
+                # caller explicitly asks (the live service does; no gate does).
+                _publish_traffic_state(bus, step_length=step_length)
 
             if spillback is not None:
                 spillback.sample()
@@ -501,15 +561,20 @@ def run_controlled_scenario(
                             tls_id, traci.simulation.getTime(), queue_pcu, approaching_pcu
                         )
 
-                decision = arbiter.tick(js.cfg, js.ctx, js.cabinet, strategy=junction_strategy)
+                decision = arbiter.tick(
+                    js.cfg, js.ctx, js.cabinet,
+                    strategy=junction_strategy, preempt=preempt_source,
+                )
                 if bus is not None:
                     _publish_decision_events(bus, decision)
-                if decision.mode not in ("fixed_time",):
+                for note in decision.notes:
+                    log.info("junction %s at step %d: %s", tls_id, step, note)
+                if decision.mode not in _COMMANDING_MODES:
                     fault_events.append((tls_id, step, decision.mode))
                     log.warning("junction %s took %s at step %d", tls_id, decision.mode, step)
                     _recover_from_fault(js, tls_id, decision.violated_movements)
                     continue
-                assert decision.plan is not None  # "fixed_time" mode always carries a plan
+                assert decision.plan is not None  # a commanding mode always carries a plan
 
                 if len(decision.plan.steps) == 1:
                     step0 = decision.plan.steps[0]
@@ -544,6 +609,16 @@ def run_controlled_scenario(
                 anomaly_feature_sink(
                     step, sim_time, feature_sampler.sample(sim_time, phase_by_tls)
                 )
+
+            if pace_budget_s:
+                # Live-service pacing only: hold each tick to roughly
+                # step_length / pace_realtime_factor seconds of wall clock so
+                # the operator watches it unfold. A tick that already ran over
+                # budget is simply not slept on (never sped up). No batch
+                # caller sets this, so gate/smoke throughput is unchanged.
+                slack = pace_budget_s - (time.monotonic() - tick_wall_start)
+                if slack > 0:
+                    time.sleep(slack)
 
             if max_steps is not None and step >= max_steps:
                 break

@@ -8,14 +8,21 @@ README.
 
 ## Current milestone
 
-**M5 — A-CA-MP (adaptive signal control) — done, one known open item.**
-It beats the tuned Webster baseline at light demand, ties it at medium,
-and is a modest (~7%) loss at heavy demand -- the corridor's one
-remaining weak spot, and the obvious next thing to fix (see PROGRESS.md's
-"Fixing heavy demand" and "Reconciling two concurrent sessions" sections).
-M6 (incident detection) and M7 (green corridor) are intentionally not
-started yet -- traffic management first, by design.
-See `PROGRESS.md` for the full history of what's built and what's next.
+**M1–M6 done. Interactive emergency-response layer (routing, green corridor,
+continuous re-routing) built on top.**
+
+- M2–M5: safety kernel + arbitration ladder + adaptive signal control (A-CA-MP);
+  beats tuned Webster at light demand, ties at medium, ~7% loss at heavy (still
+  open — see `PROGRESS.md`).
+- M6: graph-autoencoder anomaly detection with conformal alerting.
+- **Interactive layer:** operator-driven anomaly injection that affects the SUMO
+  simulation, a dynamic anomaly-aware emergency router, a green corridor that
+  proposes signal preemptions through the existing arbiter + interlocks (never
+  commanding a signal directly), and continuous re-routing of a moving vehicle.
+  Full description, cost formula, config reference, event contracts, lifecycles,
+  and a run/demo guide: **[`docs/interactive-emergency-response.md`](docs/interactive-emergency-response.md)**.
+
+See `PROGRESS.md` for the milestone-by-milestone history.
 
 ## Quick start
 

@@ -23,15 +23,26 @@ import logging
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from itms_common import RedisStreamsBus, decode_envelope
+from itms_common import RedisStreamsBus, decode_envelope, encode_envelope
+from pydantic import BaseModel, Field
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s api-service %(message)s")
 log = logging.getLogger("api-service")
 
 REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
-TOPICS = ["system.heartbeat", "traffic.vehicle-positions", "traffic.updated"]
+TOPICS = [
+    "system.heartbeat",
+    "traffic.vehicle-positions",
+    "traffic.updated",
+    "signal.changed",  # from SIM_MODE=live's arbitration ladder
+    "signal.faulted",
+    "anomaly.updated",  # operator / detector anomalies (SIM_MODE=live)
+    "emergency.request-updated",  # emergency dispatch + routing (SIM_MODE=live)
+    "emergency.vehicle-updated",  # live EV position while in transit (SIM_MODE=live)
+    "emergency.corridor-updated",  # green corridor lifecycle (SIM_MODE=live)
+]
 CONSUMER_GROUP = "api-service"
 
 
@@ -62,14 +73,24 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 
-def _json_safe(envelope: dict) -> dict:
-    """fastavro decodes the envelope's timestamp-millis field into a datetime;
-    make the whole envelope plain-JSON-serializable before it hits the socket."""
-    out = dict(envelope)
-    occurred_at = out.get("occurred_at")
-    if isinstance(occurred_at, dt.datetime):
-        out["occurred_at"] = occurred_at.isoformat()
-    return out
+def _json_safe(value):
+    """fastavro decodes every timestamp-millis field (envelope `occurred_at`
+    and any in a payload -- e.g. AnomalyUpdated's `start_time_ms`) into a
+    datetime. Walk the structure and isoformat them so the whole thing is
+    plain-JSON-serializable before it hits the socket."""
+    if isinstance(value, dt.datetime):
+        return value.isoformat()
+    if isinstance(value, dict):
+        return {k: _json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(v) for v in value]
+    return value
+
+
+def _json_safe_envelope(envelope: dict) -> dict:
+    safe = _json_safe(envelope)
+    assert isinstance(safe, dict)  # a dict in always yields a dict out
+    return safe
 
 
 async def consume_forever(bus: RedisStreamsBus) -> None:
@@ -78,7 +99,7 @@ async def consume_forever(bus: RedisStreamsBus) -> None:
     ):
         try:
             envelope = decode_envelope(msg.raw)
-            await manager.broadcast(_json_safe(envelope))
+            await manager.broadcast(_json_safe_envelope(envelope))
         except Exception:
             log.exception("failed to handle message %s on %s", msg.message_id, msg.topic)
         else:
@@ -113,6 +134,53 @@ app.add_middleware(
 @app.get("/health")
 async def health() -> dict:
     return {"status": "ok", "connected_clients": len(manager._sockets)}
+
+
+COMMANDS_TOPIC = "commands.operator"
+
+
+class CommandRequest(BaseModel):
+    """An operator action to run against the live simulation. `event_type`
+    selects the payload schema in `contracts/events/`; `payload` must match
+    it. The command is wrapped in the standard EventEnvelope and published on
+    `commands.operator`, which `sim-service` (SIM_MODE=live) drains each tick.
+
+    Deliberately thin: the api-service does no business logic here -- it is
+    the adapter that gets an operator intent onto the bus. sim-service owns
+    applying it to SUMO, and the Signal Controller stays the only thing that
+    can command a signal."""
+
+    event_type: str = Field(min_length=1)
+    payload: dict = Field(default_factory=dict)
+    operator: str = Field(default="operator:console", min_length=1)
+
+
+@app.post("/v1/commands")
+async def post_command(cmd: CommandRequest, request: Request) -> dict:
+    payload = {**cmd.payload, "operator": cmd.payload.get("operator", cmd.operator)}
+    try:
+        raw = encode_envelope(
+            event_type=cmd.event_type,
+            source="api-service",
+            payload=payload,
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"unknown command event_type {cmd.event_type!r} -- "
+                "no schema in contracts/events/"
+            ),
+        ) from exc
+    except (ValueError, KeyError, TypeError) as exc:
+        raise HTTPException(
+            status_code=422, detail=f"payload does not match schema: {exc}"
+        ) from exc
+
+    bus: RedisStreamsBus = request.app.state.bus
+    message_id = await bus.publish(COMMANDS_TOPIC, raw)
+    log.info("command %s published to %s (%s)", cmd.event_type, COMMANDS_TOPIC, message_id)
+    return {"published": True, "topic": COMMANDS_TOPIC, "message_id": message_id}
 
 
 @app.websocket("/v1/stream")

@@ -20,6 +20,14 @@ once there's more than one event type to break compatibility with.
 | `incident_candidate.avsc` | Anomaly stream raises this the first tick a link's fused score crosses the conformal threshold — not an incident until an operator confirms it | M6 |
 | `incident_detected.avsc` | An operator confirmed a candidate into a real incident (ADR-006 human gate) — carries the confirming identity | M6 |
 | `incident_updated.avsc` | Any later transition — reject / auto-expire / score refresh / clear. A rejection is the feedback signal the conformal calibrator consumes | M6 |
+| `anomaly_create_requested.avsc` | Operator asks (via `commands.operator`) for an anomaly to be placed on a SUMO edge — the interactive counterpart to the automated injector | M6+ |
+| `anomaly_clear_requested.avsc` | Operator clears / cancels an anomaly they created | M6+ |
+| `anomaly_updated.avsc` | Live state of one anomaly on the network (ACTIVE / RESOLVED / CANCELLED), published on `anomaly.updated`. The normalised `itms_domain.anomaly.Anomaly` on the wire — operator and (later) graph/vision sources emit this same shape, distinguished by `source` | M6+ |
+| `emergency_request_created.avsc` | Operator dispatches an emergency vehicle from a source to a destination (via `commands.operator`) — the router picks an anomaly-aware route | M7 |
+| `emergency_command.avsc` | Follow-up operator action on a live request — RECALCULATE / CANCEL / ACTIVATE_CORRIDOR | M7 |
+| `emergency_request_updated.avsc` | Live state of one `EmergencyRequest` (7-state lifecycle) on `emergency.request-updated`, carrying the chosen route + alternatives with their full cost breakdown | M7 |
+| `emergency_vehicle_updated.avsc` | Position + status of one emergency vehicle while it drives through SUMO, on `emergency.vehicle-updated` | M7 |
+| `green_corridor_updated.avsc` | Green corridor lifecycle on `emergency.corridor-updated` — the time-boxed movement reservations the Signal Controller turns into `corridor_preemption` proposals (it never commands a signal itself) | M7 |
 
 Both M2 schemas are defined and their payload shape is real (matches `signal_controller/arbiter.py`'s `Decision.events` exactly) but **not yet published onto the bus** — M2 built and property-tested the safety kernel and arbitration ladder in isolation, against a fake cabinet; wiring a real producer into the running simulation is scoped to M3 (see `arbiter.py`'s module docstring for why).
 
@@ -30,8 +38,7 @@ More arrive as the milestone that needs them lands:
 - M1 (remaining): `sensor_reading.avsc` (not needed yet — no IoT/loop-detector adapter exists)
 - M2 (remaining): `signal_plan_proposed.avsc`, `signal_override_*.avsc` — no real proposer (M4 CA-MP) or overrider (M6) exists yet, same reasoning as M1's deferred `sensor_reading.avsc`
 - M5: `traffic_updated.avsc`
-- M6: `emergency_dispatched.avsc`, `unit_reserved.avsc`, `route_calculated.avsc`
-- M7: `corridor_reservation_*.avsc`, `fleet_position_updated.avsc`
+- M8: YOLO / vision detections feeding the same `anomaly_updated.avsc` shape
 
 Full topic list with keys and retention: architecture doc §6.2.
 

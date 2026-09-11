@@ -36,6 +36,13 @@ from sim_service.control.strategies import fixed_time
 from sim_service.signal_controller.cabinet import CabinetPort
 
 Strategy = Callable[[Tier0Config, JunctionContext], SignalPlan]
+# Rung 3 of the ladder: a corridor-preemption proposal source. Returns a
+# `SignalPlan(source="corridor_preemption")` when an emergency vehicle needs
+# this junction held right now, or None when it doesn't. The green corridor
+# engine (`sim_service.live.green_corridor.CorridorController.preemption_plan`)
+# is the first real implementation; before M7 this stayed `None` (rung absent,
+# see module docstring).
+PreemptSource = Callable[[Tier0Config, JunctionContext], "SignalPlan | None"]
 
 
 @dataclass(frozen=True)
@@ -54,6 +61,12 @@ class Decision:
     mode: str
     plan: SignalPlan | None
     events: list[dict] = field(default_factory=list)
+    notes: tuple[str, ...] = ()
+    """Non-fatal observations about this tick that aren't wire events -- used so
+    far only to record that a rung-3 corridor-preemption proposal was rejected
+    by the interlocks and the ladder fell through to the normal strategy. The
+    junction is safe either way; this is just so `control/runner.py` can log and
+    count corridor rejections without them looking like a fault."""
     violated_movements: frozenset[str] = frozenset()
     """Populated only for `mode == "failsafe_interlock_rejected"`: the union
     of every rejected `Violation.movements`. Deliberately NOT folded into
@@ -91,12 +104,22 @@ def tick(
     cabinet: CabinetPort,
     *,
     strategy: Strategy = fixed_time.propose,
+    preempt: PreemptSource | None = None,
 ) -> Decision:
     """Run one arbitration cycle for one intersection. Reconciles cabinet
     state first (I7), only proposes and commands a plan if that reconciles
-    clean."""
+    clean.
+
+    `preempt`, if given, is consulted at rung 3 -- ahead of `strategy` -- once
+    the cabinet has reconciled clean. If it returns a plan and that plan passes
+    `interlocks.check`, it is commanded (mode ``"corridor_preemption"``). If it
+    returns a plan the interlocks reject, the rejection is recorded in
+    `Decision.notes` and the ladder falls through to `strategy` unchanged --
+    a corridor request never forces a junction to all-red.
+    """
     readback = cabinet.read_state()
     iid = cfg.intersection_id
+    notes: tuple[str, ...] = ()
 
     # C3: comms didn't reach the cabinet at all -- treat state as unknown,
     # stop commanding. (I7: "or commanding stops.")
@@ -146,8 +169,36 @@ def tick(
             ],
         )
 
-    # Rungs 2-4 have no requester in M2 (see module docstring) -- proceed
-    # straight to rung 5.
+    # Rung 3: corridor preemption. A real requester as of M7 (the green
+    # corridor); before that `preempt` was always None and the ladder went
+    # straight to rung 5. A preemption plan is checked by the *same*
+    # interlocks as any strategy plan -- rejected ones fall through, they
+    # never force all-red.
+    if preempt is not None:
+        pre_plan = preempt(cfg, ctx)
+        if pre_plan is not None and pre_plan.steps:
+            pre_violations = interlocks.check(pre_plan, ctx, cfg)
+            if pre_violations:
+                notes = (
+                    "corridor_preemption_rejected: "
+                    + "; ".join(f"{v.rule}: {v.message}" for v in pre_violations),
+                )
+            else:
+                acked = cabinet.command(pre_plan.steps[0].phase_id)
+                if not acked:
+                    return Decision(
+                        mode="degraded_comms_lost",
+                        plan=None,
+                        events=[_faulted_event(iid, "comms_lost", "command was not acknowledged")],
+                    )
+                return Decision(
+                    mode="corridor_preemption",
+                    plan=pre_plan,
+                    events=[_changed_event(iid, pre_plan)],
+                )
+
+    # Rungs 2 and 4 have no requester yet (see module docstring) -- proceed
+    # to rung 5.
     plan = strategy(cfg, ctx)
     if not plan.steps:
         cabinet.command_all_red()
@@ -155,6 +206,7 @@ def tick(
             mode="failsafe_no_legal_plan",
             plan=None,
             events=[_faulted_event(iid, "no_legal_plan", "every phase in the ring is unusable")],
+            notes=notes,
         )
 
     violations = interlocks.check(plan, ctx, cfg)
@@ -170,6 +222,7 @@ def tick(
                     "; ".join(f"{v.rule}: {v.message}" for v in violations),
                 )
             ],
+            notes=notes,
             violated_movements=frozenset().union(*(v.movements for v in violations)),
         )
 
@@ -179,6 +232,9 @@ def tick(
             mode="degraded_comms_lost",
             plan=None,
             events=[_faulted_event(iid, "comms_lost", "command was not acknowledged")],
+            notes=notes,
         )
 
-    return Decision(mode="fixed_time", plan=plan, events=[_changed_event(iid, plan)])
+    return Decision(
+        mode="fixed_time", plan=plan, events=[_changed_event(iid, plan)], notes=notes
+    )

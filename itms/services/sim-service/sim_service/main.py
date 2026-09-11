@@ -8,9 +8,16 @@ M0's heartbeat as the default -- the heartbeat loop still exists
 shows real simulated traffic, which is the actual point of M1.
 
 Env vars:
-  SIM_MODE           "sumo" (default) | "heartbeat"
-  SUMOCFG_PATH        path to a .sumocfg (default: the Vijayawada corridor scenario)
-  SIM_REALTIME_FACTOR  pacing for the demo loop (default 1.0 -- see traci_loop.run)
+  SIM_MODE           "sumo" (default, M1) | "live" | "heartbeat"
+                       sumo:  adapters/sumo/traci_loop.run -- one-way SUMO -> Redis
+                              stream, no controller, no commands. The M1-gate path.
+                       live:  sim_service.live.run_live -- the arbitration ladder
+                              governs every junction, the SAME M1 stream is
+                              published, and a `commands.*` topic is drained each
+                              tick so an operator can act on the running sim.
+  SUMOCFG_PATH        path to a .sumocfg (default: the Vijayawada corridor scenario) -- sumo mode
+  SIM_DEMAND          "light" | "medium" (default) | "heavy" -- live mode's demand level
+  SIM_REALTIME_FACTOR  pacing for the demo loop (default 1.0 -- see traci_loop.run / run_live)
   SIM_STEP_LENGTH      seconds of sim time per step (default 1.0, matches the M1 gate's "1 Hz")
   SIM_MAX_STEPS         stop after N steps (unset = run to scenario end); mainly for tests
   REDIS_URL
@@ -66,6 +73,25 @@ def _run_sumo() -> None:
         bus.close()
 
 
+def _run_live() -> None:
+    from sim_service.live.service import run_live
+
+    demand = os.environ.get("SIM_DEMAND", "medium")
+    realtime_factor = float(os.environ.get("SIM_REALTIME_FACTOR", "1.0"))
+    step_length = float(os.environ.get("SIM_STEP_LENGTH", "1.0"))
+    max_steps_env = os.environ.get("SIM_MAX_STEPS")
+    max_steps = int(max_steps_env) if max_steps_env else None
+
+    log.info("starting LIVE corridor (demand=%s) via %s", demand, REDIS_URL)
+    run_live(
+        redis_url=REDIS_URL,
+        demand=demand,
+        realtime_factor=realtime_factor,
+        step_length=step_length,
+        max_steps=max_steps,
+    )
+
+
 def _run_heartbeat() -> None:
     from sim_service import heartbeat
 
@@ -77,6 +103,8 @@ def main() -> None:
     try:
         if mode == "heartbeat":
             _run_heartbeat()
+        elif mode == "live":
+            _run_live()
         else:
             _run_sumo()
     except KeyboardInterrupt:
