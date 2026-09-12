@@ -3768,3 +3768,331 @@ cycle toward the junction's own Webster optimum computed from the same
 measured flows the baseline uses. That is a change to `acamp.py` and
 requires a full three-level re-gate, so it is left as a decision rather
 than taken.
+
+---
+
+## The cycle ceiling: the cheap test worked, and A-CA-MP now beats Webster everywhere
+
+The previous section identified an uncontrolled emergent cycle as the
+cause of M5's losses, and proposed a cycle supervisor. Before building
+one, the causal claim was tested with a parameter that already exists.
+
+**`max_green_s` was a flat 90 s for every phase of every junction** — a
+safety constant, never derived from demand. Against a mean green of
+~26 s it essentially never bound: `switch_max_green` was **0.3%** of
+ticks. So the controller had a cycle ceiling in name only.
+
+`scripts/m5_cycle_ceiling_probe.py` replaces it per phase with a multiple
+of *that phase's own Webster green*, computed from the same measured
+flows the baseline uses. This is the crudest possible version of the
+proposed supervisor: a hard ceiling, no intelligence, no choice of
+successor phase, **no change to `acamp.py` at all**. The ceiling is
+injected through the `Tier0Config` the harness already hands to both the
+strategy and the interlocks, so the thing measured is the shipped
+controller under a tighter safety bound.
+
+### Result — paired against Webster, post-cabinet-fix, 10 held-out `EVAL_SEEDS`
+
+| level | Webster | A-CA-MP (90 s) | A-CA-MP + ceiling 1.25× | ceiling vs Webster |
+|---|---|---|---|---|
+| light | 69,573 | 99,791 (+43.4%) | **56,472** | **−18.8%** [−17,303, −8,899] SIG, **10/10 seeds** |
+| medium | 193,354 | 243,015 (+25.7%) | **176,461** | **−8.7%** [−29,936, −3,851] SIG, 9/10 seeds |
+| heavy | 1,601,950 | 1,534,346 (−4.2%) | **1,498,307** | **−6.5%** [−185,634, −21,651] SIG, 8/10 seeds |
+
+**This is the first time in this project's history that the adaptive
+controller beats a well-tuned Webster baseline at every demand level.**
+Every comparison significant, every one on seeds nothing was tuned
+against.
+
+The emergent cycle moved exactly as the diagnosis predicted:
+
+| level | Webster optimum | before | after (1.25×) |
+|---|---|---|---|
+| light | 40.0 s | 70.8 s (1.77×) | **37.5 s (0.94×)** |
+| medium | 42.1 s | 59.1 s (1.40×) | **35.8 s (0.85×)** |
+| heavy | 104.1 s | 76.7 s (0.74×) | **56.0 s (0.54×)** |
+
+**Interlock violations at light went 2 → 0.** Medium was and stays 0.
+Heavy went 3 → 2 at 1.25× but **4** at 1.00×, so the tightest arm is not
+strictly safer and heavy's violations remain unexplained (Webster: 0 at
+every level).
+
+### What this does and does not establish
+
+**Confirmed:** the uncontrolled emergent cycle was the mechanism. Both
+ceiling factors (1.25× and 1.00×) recover ~43% at light and ~28% at
+medium against the shipped arm, so the finding does not depend on the
+factor's exact value — which is what makes it a result about the
+mechanism rather than about a tuned number.
+
+**A prediction that was wrong, recorded as such.** The probe's own
+docstring predicted the ceiling could not bind at heavy, because
+Webster's heavy cycle (104.1 s) already exceeds A-CA-MP's emergent one
+(76.7 s). It did bind — heavy's cycle fell to 56.0 s — because the
+ceiling is per *phase*, and the minor phases' Webster greens (20–28 s at
+the four-phase junction) are tighter than what A-CA-MP was taking. Heavy
+improved rather than degraded, so the one-sidedness concern is less acute
+than argued, but the argument's premise was still false.
+
+**Not established: that 1.25× is the right factor.** Both factors were
+compared on `EVAL_SEEDS`, which are held out precisely so that choices
+are not made against them. Selecting 1.25× on the strength of this table
+would be leakage. The factor must be chosen on `TRAIN_SEEDS` and only
+then re-verified here.
+
+**Not established: that the supervisor is worth building.** This is a
+*static* ceiling from offline route-file flows. The proposed supervisor
+adds live flow estimation, an explicit measured cycle, and choice of the
+best safe successor phase instead of a timeout. Those may well be worth
+having — but they now have to justify themselves against **this**, not
+against the broken 90 s baseline. The cheap thing working this well
+raises the bar for the expensive thing.
+
+### Open
+
+- Heavy demand's interlock violations (2–4 per 10 runs, Webster 0) are
+  not explained and are not new to this change.
+- The factor must be re-selected on training seeds.
+- Whether an online measured cycle beats an offline computed ceiling is
+  now the actual research question, and it is a much narrower one than
+  "why does A-CA-MP lose".
+
+---
+
+## Choosing the ceiling factor, and the root cause of the heavy-demand violations
+
+Two follow-ups to the cycle-ceiling result, both required before it can
+be called a shipped default.
+
+### 1. The factor cannot be chosen from the numbers, because they are all the same
+
+`m5_cycle_ceiling_probe.py --seed-set train --seeds 5 --factors
+0.75,1.0,1.25,1.5,2.0`, on `TRAIN_SEEDS[:5]`, reference arm 2.00×:
+
+| factor | light | medium | heavy | heavy violations |
+|---|---|---|---|---|
+| 0.75× | 60,063 (+4.5%) | 178,263 (−1.0%) | 1,423,913 (−5.7%) | 1 |
+| 1.00× | 55,465 (−3.5%) | 177,935 (−1.2%) | 1,503,732 (−0.4%) | 3 |
+| 1.25× | 53,914 (−6.2%) | 182,909 (+1.6%) | 1,477,472 (−2.1%) | 1 |
+| 1.50× | 54,832 (−4.6%) | 170,532 (−5.3%) | 1,420,098 (−5.9%) | 2 |
+| 2.00× | 57,480 | 180,021 | 1,509,507 | 4 |
+
+**Every comparison is non-significant, and every per-seed split is 2/5 to
+4/5 — noise.** Across a factor range of 0.75× to 2.00× — nearly three-fold
+— nothing separates them.
+
+That is a *useful* negative result, not a failed experiment. The entire
+effect is in having **a** ceiling rather than none: going from the shipped
+90 s to any Webster-derived bound recovers ~43% at light and ~28% at
+medium. Where inside that range the bound sits does not matter on the
+evidence available.
+
+So the factor is chosen on stated engineering grounds rather than by
+picking the best mean, which at these interval widths would be
+noise-chasing:
+
+- **1.25× — "Webster's green plus 25% headroom".** It has a rationale that
+  can be said in a sentence, which a tuned constant does not.
+- It ties for **fewest heavy-demand violations** (1, with 0.75×).
+- It keeps more adaptive range than the tighter factors: at 1.00× a phase
+  whose Webster green equals its 10 s minimum becomes effectively fixed.
+
+The eval-seed confirmation already recorded above (−18.8% / −8.7% /
+−6.5% against Webster) then stands as verification of that choice. **It
+is not the basis for it** — the choice rests on the training-seed result
+that the factors are indistinguishable, plus the reasons listed. Picking
+1.25× over 1.00× because the held-out numbers favoured it would have been
+leakage, and is explicitly not what happened.
+
+### 2. The heavy-demand interlock violations: I3 and I5 in direct conflict
+
+`m5_heavy_violation_diagnostic.py` wraps `arbiter.tick` to capture the
+rule and message the runner discards, keeping only `(junction, step,
+mode)`. Over three heavy seeds, one violation, and it is entirely
+specific:
+
+```
+junction  cluster_1880441740_4393296791   phase P1, elapsed 9.0 s
+rule      I5
+detail    "movement 'L3' has waited 452.0s (>= 452.0s bound) with
+           demand, but the plan doesn't serve it now"
+```
+
+Read that against the propose order in `AdaptiveCamp.__call__`:
+
+```python
+if not current_faulted and elapsed < min_g:     # I3 -- absolute
+    return  ...extend the current phase...
+critical = _critical_phases(cfg_t0, ctx, live)  # starvation override
+if critical and current not in critical:
+    return self._advance(...)
+```
+
+**The minimum-green check runs before the starvation override, and it
+must** — I3 is a safety floor no pressure, memory or fairness
+consideration may cut short. So when a movement crosses its max-wait
+bound *during another phase's minimum green*, the controller is obliged
+to return a plan that does not serve it, and I5 is obliged to reject that
+plan. `elapsed = 9.0` against a 10 s minimum: the violation happened one
+second before the override could have fired.
+
+**Neither interlock is wrong and neither is the controller.** What is
+infeasible is the configuration: this is the corridor's only four-phase
+junction, `max_wait_s = 452 s` against 256 s at every two-phase junction,
+and once it saturates there is no legal phase sequence that returns to
+every movement inside that bound. Webster never trips it because a fixed
+104 s cycle serves all four phases on rotation and no movement ever
+reaches 452 s. A-CA-MP's phase selection is demand-driven and carries **no
+guarantee that every phase is served each cycle** — which is precisely
+the property being missed.
+
+**The cycle ceiling does not fix this**, and the sweep shows it: violations
+persist at every factor (1, 3, 1, 2, 4 for 0.75× through 2.00×), loosely
+decreasing with a tighter bound but never reaching zero. A bound on cycle
+*length* does not imply every phase is *served*.
+
+**What does fix it is the other half of the cyclical max-pressure
+structure** — Levin, Hu & Odell (2020), *Max-pressure signal control with
+cyclical phase structure*, TR-C 120:102828 — whose constraint is not only
+a maximum cycle but that "each phase must be actuated for at least one
+time step each cycle". With every phase served once per bounded cycle C,
+worst-case wait is about 2C; at the ceiling arms' measured heavy cycle of
+55 s that is ~110 s against a 452 s bound, and the I5 violation becomes
+structurally impossible rather than rare.
+
+This is the strongest argument yet for building the full supervisor
+rather than shipping the static ceiling: **the ceiling captures the delay
+win, and only the serve-every-phase constraint closes the safety gap.**
+The two halves of the cited design fix two different measured defects.
+
+### Status
+
+- Ship `max_green_s` at **1.25× per-phase Webster green** as the default,
+  chosen on the stated grounds above, verified on held-out seeds.
+- The heavy-demand I5 violation is diagnosed, reproducible, and **not
+  fixed**. It is an infeasible-configuration problem, not a tuning one.
+- The supervisor's phase-order constraint is now justified by measurement
+  rather than by citation alone.
+
+---
+
+## CC-A-CAMP: the supervisor, built and gated
+
+The first change to `acamp.py` in this entire line of work. Everything up
+to here was measurement, diagnosis, and a Tier-0 parameter.
+
+**Design**, following the five-point specification and the two measured
+defects it has to close:
+
+1. Target cycle per junction, **derived not configured**:
+   `cycle_target_factor × Σ(max_green_s + yellow + all_red)` over the live
+   ring. With `max_green_s` set from Webster's greens that sum *is* a
+   Webster-referenced cycle, so the supervisor inherits its reference from
+   the same place the ceiling gets it and there is no second number to
+   keep in sync. The ceiling and the supervisor are one design.
+2. The completed cycle is **measured explicitly** — a cycle ends when every
+   live phase has been served or has no demand — and the bookkeeping runs
+   in the supervisor-**off** arm too, because a control arm that cannot
+   report the quantity under test is not much of a control.
+3. Inside the envelope, A-CA-MP acts unchanged.
+4. Past the envelope with phases still owed a green, force a switch to the
+   **highest-pressure owed phase** — max-pressure still choosing, the
+   supervisor only narrowing the field.
+5. Placement carries the safety guarantee. The supervisor sits **after**
+   the minimum-green gate (so it can never cut a green below its I3 floor,
+   which is also why it needs no interlock pre-check of its own: the only
+   invariant a forced switch could threaten has already been enforced) and
+   **after** the starvation override (a movement already at `max_wait_s`
+   is the more urgent claim; this exists to stop that bound being reached).
+
+`cycle_supervisor` defaults to **False**, so every recorded gate stays
+reproducible byte-for-byte and the arm that enables it is a gate arm.
+
+### Gate — 3 arms, 3 demand levels, 10 held-out `EVAL_SEEDS`, paired
+
+| level | arm | delay | p95 wait | max wait | stops | cycle | viol | sup/switch |
+|---|---|---|---|---|---|---|---|---|
+| light | webster | 69,573 | 102.9 | 159.0 | 1.91 | 40.0s | 0 | — |
+| | ceiling | 56,472 | 93.9 | 177.7 | 1.89 | 37.5s | 0 | 0.0% |
+| | **ccacamp** | **55,740** | **90.4** | **150.2** | 1.89 | 37.4s | 0 | 0.6% |
+| medium | webster | 193,354 | 169.5 | 255.7 | 3.09 | 42.1s | 0 | — |
+| | ceiling | 176,461 | 182.5 | 266.2 | 2.84 | 35.8s | 0 | 0.0% |
+| | **ccacamp** | **171,307** | **169.0** | 266.2 | **2.77** | 36.0s | 0 | 0.8% |
+| heavy | webster | 1,601,950 | 719.7 | 1148.3 | 10.42 | 104.1s | 0 | — |
+| | ceiling | 1,498,307 | 776.3 | 1361.5 | 9.80 | 56.0s | **2** | 0.0% |
+| | **ccacamp** | **1,416,609** | 741.3 | 1310.0 | **9.26** | 56.3s | **0** | 1.0% |
+
+**Against Webster**, paired:
+
+| level | person-delay | stops |
+|---|---|---|
+| light | **−19.9%** [−17,716, −9,951] SIG, 10/10 | −1.1% n.s. |
+| medium | **−11.4%** [−39,358, −4,736] SIG, 8/10 | **−10.1%** SIG, 8/10 |
+| heavy | **−11.6%** [−260,417, −110,264] SIG, 10/10 | **−11.1%** SIG, 9/10 |
+
+**Against the static ceiling** — the arm that actually decides whether the
+supervisor is a contribution:
+
+| level | person-delay | stops |
+|---|---|---|
+| light | −1.3% [−3,951, +2,487] n.s., 4/10 | +0.1% n.s. |
+| medium | −2.9% [−20,802, +10,495] n.s., 7/10 | −2.4% n.s. |
+| heavy | **−5.5%** [−146,721, −16,674] **SIG**, 8/10 | **−5.5%** SIG, 8/10 |
+
+### What this establishes
+
+**The delay prediction held, and then some.** The stated prior was that
+the supervisor would add little on delay, because the ceiling had already
+brought the cycle inside the envelope. Light and medium came back exactly
+that way — non-significant, intervals straddling zero. Heavy did **not**:
+−5.5% on delay and −5.5% on stops, both significant, 8 of 10 seeds. That
+was not predicted and is the stronger half of the result.
+
+**The safety prediction held. Heavy's interlock violations went 2 → 0.**
+This is what the supervisor was built for, and it is the only mechanism
+tried that has closed them — every ceiling factor from 0.75× to 2.00×
+left them in place. *Stated with the caveat it deserves:* 0 against 2 over
+ten runs is a weak statistical claim on its own. What carries it is the
+mechanism, which is not statistical — serving every phase inside a bounded
+cycle makes the 452 s wait unreachable rather than rare.
+
+**The supervisor is not Webster with extra steps.** It fires on **0.6% to
+1.0%** of phase changes. Ninety-nine percent of decisions are still
+A-CA-MP's own pressure contest. The delay win belongs to real-time
+adaptation operating inside a bound, which is the claim CC-A-CAMP was
+supposed to support and the one an intervention rate of 50% would have
+destroyed.
+
+### A defect in the implementation, found by its own instrumentation
+
+The first version also suppressed the hold bias when the cycle ran past
+its envelope — specification point 4's "reduce the current-phase hold
+bias". The counter for it came back **0 across all 60 gate runs**. The
+forced switch tests the identical condition and returns, so that branch is
+unreachable whenever it would have applied: the stronger action subsumes
+the weaker one.
+
+Removed rather than left as a second mechanism that never runs. Removing
+unreachable code cannot change behaviour, so the gate numbers above stand
+unchanged. The graduated version — soften the bias *approaching* the
+envelope, force the switch on *crossing* it — would make a softer response
+reachable and is the obvious next refinement. It is not implemented, so it
+is not claimed.
+
+### Tests
+
+9 new property/behaviour tests (`test_acamp_cycle_supervisor.py`), suite
+now **303 passing**, up from 294. They fix the ordering (min-green beats
+the supervisor, starvation beats the supervisor), the silence inside the
+envelope, the no-demand exemption, the highest-pressure choice among owed
+phases, and that every plan the supervisor proposes passes
+`interlocks.check` — the rule the corridor engine states and this must
+follow too.
+
+### Where M5 stands
+
+A-CA-MP with a Webster-referenced ceiling and the cyclical supervisor
+**beats a well-tuned Webster baseline at every demand level**, with zero
+interlock violations at every demand level, on seeds nothing was tuned
+against. That is the first time in this project that sentence has been
+true.

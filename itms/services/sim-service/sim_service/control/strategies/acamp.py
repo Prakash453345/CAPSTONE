@@ -515,9 +515,9 @@ class AcampConfig:
     same shape reproduced exactly:
 
         level    default (unprotected)      protect_allocated_green
-        light      57,928 +/-  2,631           57,928 +/-  2,631  (+0.0%, all seeds identical)
-        medium    212,741 +/- 35,358          212,741 +/- 35,358  (+0.0%, all seeds identical)
-        heavy   1,454,395 +/- 61,600        1,277,791 +/- 53,763  (-12.1%, all 10 improved)
+        light      57,928 +/-  2,631           57,928 +/-  2,631  (+0.0%, all 10 seeds identical)
+        medium    212,741 +/- 35,358          212,741 +/- 35,358  (+0.0%, all 10 seeds identical)
+        heavy   1,454,395 +/- 61,600        1,277,791 +/- 53,763  (-12.1%, NO OVERLAP, 10/10 seeds improved)
 
     Zero interlock violations in either arm, at every demand level, on
     every seed. The light/medium identity is not a fluke or a rounding
@@ -593,6 +593,65 @@ class AcampConfig:
     `protect_allocated_green`'s own docstring for the full measurement
     and PROGRESS.md for the complete writeup."""
 
+    # -- cycle supervisor (CC-A-CAMP) --
+    cycle_supervisor: bool = False
+    """Whether the cyclical-structure supervisor is active. **Off by
+    default**, so every recorded gate in this project stays reproducible
+    byte-for-byte; the arm that turns it on is a gate arm, not a silent
+    change of behaviour.
+
+    **What it is for, and what it is not.** M5's losses were traced to an
+    emergent cycle nothing bounded: A-CA-MP's effective cycle ran 1.77x
+    Webster's delay-minimising optimum at light demand and 1.40x at
+    medium, and delay tracked that ratio monotonically across all three
+    demand levels. `max_green_s` set per phase from Webster's own greens
+    fixes the *length* half of that and is measured doing so -- the
+    controller goes from +43.4% worse than Webster at light to -18.8%
+    better (`scripts/m5_cycle_ceiling_probe.py`).
+
+    This supervisor is the *other* half, and it exists because a bound on
+    cycle length does not imply every phase is served. Heavy demand's
+    interlock violations survive every ceiling factor tried, and
+    `m5_heavy_violation_diagnostic.py` shows why: at the corridor's only
+    four-phase junction a movement reached its 452 s `max_wait_s` bound
+    **9.0 s into another phase's 10 s minimum green**. I3 (minimum green)
+    is absolute and is checked first -- correctly -- so the controller is
+    obliged to return a plan that does not serve the starved movement,
+    and I5 is obliged to reject it. Neither rule is wrong; the situation
+    is unreachable only if the wait never gets that far.
+
+    The remedy is the phase-order constraint of cyclical max-pressure
+    (Levin, Hu & Odell, *Max-pressure signal control with cyclical phase
+    structure*, Transportation Research Part C 120:102828, 2020), whose
+    requirement is that each phase be actuated at least once per bounded
+    cycle. Note their empirical result honestly: the constraint made
+    max-pressure *worse* in their setting (~3 min more average travel
+    time, a reduced stability region). It is cited for the structure and
+    its stability proof, not as evidence that the constraint improves
+    delay. The situations differ -- their unconstrained baseline worked,
+    and here the absence of the constraint is the defect.
+
+    **One deliberate departure from Levin.** Their rule actuates every
+    phase unconditionally. This one exempts phases with no demand, which
+    this corridor needs (`_skippable` exists for the same reason) and
+    which weakens the guarantee: a movement whose demand is intermittent
+    can still be passed over while it reads empty. `max_wait_s` remains
+    the backstop for that case, and this supervisor does not replace it."""
+
+    cycle_target_factor: float = 1.0
+    """Multiplier on the derived cycle envelope, `sum(max_green_s +
+    yellow + all_red)` over the live ring.
+
+    The envelope is *derived rather than configured* on purpose: with
+    `max_green_s` set from Webster's greens, that sum already is a
+    Webster-referenced cycle, so the supervisor inherits its reference
+    from the same place the ceiling gets it and there is no second number
+    to keep in sync. The consequence is worth stating plainly -- with the
+    shipped flat 90 s ceiling the envelope is enormous and the length
+    trigger effectively never fires. **The ceiling and the supervisor are
+    one design**; the ceiling supplies the reference the supervisor
+    measures against."""
+
     # -- degradation ladder --
     use_memory_blend: bool = True
     """Whether the "camp_blended" rung actually blends against
@@ -633,9 +692,7 @@ def q_hat(ctx: JunctionContext, cfg: AcampConfig, movement: str) -> float:
     )
 
 
-def press_pressure(
-    cfg_t0: Tier0Config, ctx: JunctionContext, cfg: AcampConfig, phase_id: str
-) -> float:
+def press_pressure(cfg_t0: Tier0Config, ctx: JunctionContext, cfg: AcampConfig, phase_id: str) -> float:
     """`Σ_m s_m · (q̂_m · gate(ρ_m) − r_m)` -- Defect 1's fix."""
     total = 0.0
     for m in cfg_t0.phases[phase_id].green_movements:
@@ -883,9 +940,7 @@ def _critical_phases(cfg_t0: Tier0Config, ctx: JunctionContext, live: list[str])
 def _exit_step(
     cfg_t0: Tier0Config, ctx: JunctionContext, current: str, min_g: float, tick_s: float
 ) -> PlanStep:
-    green_s = (
-        0.0 if current in ctx.faulted_phases else max(tick_s, min_g - ctx.current_phase_elapsed_s)
-    )
+    green_s = 0.0 if current in ctx.faulted_phases else max(tick_s, min_g - ctx.current_phase_elapsed_s)
     return PlanStep(
         phase_id=current, green_s=green_s, yellow_s=cfg_t0.yellow_s, all_red_s=cfg_t0.all_red_s
     )
@@ -1020,8 +1075,23 @@ class AdaptiveCamp:
         0.0` is never true -- cold start correctly falls through to the
         ordinary pressure test rather than inventing a protection period
         for a decision this instance never made."""
+        self._cycle_started_s = 0.0
+        self._served_this_cycle: set[str] = set()
+        """Phases actuated since the current cycle began. A cycle is
+        *complete* when every live phase has either been served or has no
+        demand to serve -- see `AcampConfig.cycle_supervisor` for why the
+        no-demand exemption is a departure from Levin's rule rather than
+        an implementation of it.
+
+        Deliberately not seeded with the phase the controller starts in:
+        at cold start that phase was handed over rather than chosen here,
+        and counting it as served would let the first cycle complete
+        without this controller having actuated anything -- the same
+        reasoning `_current_phase_allocation_s` starts at 0.0 for."""
         self.stats: dict[str, int] = {
             "ticks": 0,
+            "switch_cycle_supervisor": 0,
+            "cycles_completed": 0,
             "extend": 0,
             "extend_allocation_protected": 0,
             "switch_pressure": 0,
@@ -1066,9 +1136,7 @@ class AdaptiveCamp:
 
         slow_half_life = max(1e-6, self.cfg.baseline_halflife_s)
         slow_decay = 0.5 ** (self.tick_s / slow_half_life)
-        self._baseline_load_ewma = (
-            slow_decay * self._baseline_load_ewma + (1.0 - slow_decay) * scale
-        )
+        self._baseline_load_ewma = slow_decay * self._baseline_load_ewma + (1.0 - slow_decay) * scale
 
     @property
     def smoothed_load(self) -> float:
@@ -1145,7 +1213,9 @@ class AdaptiveCamp:
         other bad plan."""
         if self.calibration is None:
             return cfg_t0, ctx
-        learned = self.calibration.sat_flow_overrides(cfg_t0.intersection_id, cfg_t0.sat_flow_pcu_s)
+        learned = self.calibration.sat_flow_overrides(
+            cfg_t0.intersection_id, cfg_t0.sat_flow_pcu_s
+        )
         discounted = {
             m: v * self.calibration.arrival_reliability_for(cfg_t0.intersection_id, m)
             for m, v in ctx.approaching_pcu.items()
@@ -1155,7 +1225,9 @@ class AdaptiveCamp:
             replace(ctx, approaching_pcu=discounted),
         )
 
-    def _corridor_state(self, cfg_t0: Tier0Config) -> tuple[dict[str, float], dict[str, float]]:
+    def _corridor_state(
+        self, cfg_t0: Tier0Config
+    ) -> tuple[dict[str, float], dict[str, float]]:
         """Terms 4 and 5's inputs, or two empty mappings.
 
         Read fresh every tick rather than cached, and read from the engine
@@ -1174,7 +1246,8 @@ class AdaptiveCamp:
             return {}, {}
         urgency = dict(self.corridor.anticipation(cfg_t0.intersection_id))
         owed = {
-            m: self.corridor.debt.owed(cfg_t0.intersection_id, m) for m in _all_movements(cfg_t0)
+            m: self.corridor.debt.owed(cfg_t0.intersection_id, m)
+            for m in _all_movements(cfg_t0)
         }
         owed = {m: d for m, d in owed.items() if d > 0.0}
         if urgency:
@@ -1215,7 +1288,9 @@ class AdaptiveCamp:
 
         urgency, owed = self._corridor_state(cfg_t0)
         horizon = self._phase_horizon_s(cfg_t0)
-        pressures = {p: pressure(cfg_t0, ctx, cfg, p, urgency, owed, horizon) for p in live}
+        pressures = {
+            p: pressure(cfg_t0, ctx, cfg, p, urgency, owed, horizon) for p in live
+        }
         min_g = cfg_t0.min_green_s.get(current, 0.0)
         max_g = cfg_t0.max_green_s.get(current, min_g)
 
@@ -1234,6 +1309,28 @@ class AdaptiveCamp:
         if critical and current not in critical:
             self.stats["switch_starvation"] += 1
             return self._advance(cfg_t0, ctx, current, critical[0], pressures, min_g)
+
+        # Cycle bookkeeping runs unconditionally (instrumentation in the
+        # supervisor-off arm too); only the *action* below is gated.
+        cycle_elapsed_s, owed = self._cycle_state(cfg_t0, ctx, live, current)
+        if self.cfg.cycle_supervisor and owed and cycle_elapsed_s > self._cycle_envelope_s(
+            cfg_t0, live
+        ):
+            # The phase-order constraint, and the reason it sits exactly
+            # here. Placed **after** the minimum-green gate, so it can
+            # never cut a green below its I3 floor -- which is also why
+            # this needs no interlock pre-check of its own: the only
+            # invariant a forced switch could threaten is the one the
+            # branch above has already enforced, and `_advance` builds
+            # the same yellow/all-red transition every other switch uses.
+            # Placed **after** the starvation override, because a
+            # movement already at its `max_wait_s` bound is the more
+            # urgent claim and this supervisor exists precisely to stop
+            # that bound ever being reached.
+            self.stats["switch_cycle_supervisor"] += 1
+            return self._advance(
+                cfg_t0, ctx, current, max(owed, key=lambda p: pressures[p]), pressures, min_g
+            )
 
         if not current_faulted and elapsed < max_g:
             # `protect_allocated_green` -- see that field's docstring.
@@ -1301,9 +1398,7 @@ class AdaptiveCamp:
             # field's docstring for the measured reason (a documented
             # negative result, not a placeholder). Default path is exactly
             # v2's validated behaviour, byte-for-byte.
-            congestion_scale = (
-                self.relative_load if cfg.use_relative_congestion_gate else self._load_ewma
-            )
+            congestion_scale = self.relative_load if cfg.use_relative_congestion_gate else self._load_ewma
             congestion = memory_mod.congestion_weight(
                 congestion_scale, cfg.switch_scale_ref, cfg.switch_scale_exponent
             )
@@ -1315,6 +1410,28 @@ class AdaptiveCamp:
                 self._phase_horizon_s(cfg_t0),
                 cfg.lost_time_weight * congestion,
             )
+            # No hold-bias suppression here, and the absence is
+            # deliberate. A branch that zeroed `hold_bias` under "cycle
+            # over envelope and phases owed" was written first and
+            # measured **never to fire**: `hold_bias_suppressed` came
+            # back 0 across all 60 gate runs, because the forced switch
+            # above tests the identical condition and returns, so this
+            # point is unreachable whenever it would have applied. The
+            # stronger action subsumes the weaker one; keeping both
+            # leaves dead code that reads like a second mechanism.
+            #
+            # The bias itself stays, and should. Hsieh et al.
+            # (*Throughput-Optimal Scheduling for Multi-Hop Networked
+            # Transportation Systems With Switch-Over Delay*, 2017)
+            # introduce exactly this kind of current-schedule bias as the
+            # *remedy* for switch-over loss and prove throughput-
+            # optimality with it. What it lacked was a delay-side bound,
+            # which the envelope above now supplies.
+            #
+            # A graduated version -- soften the bias approaching the
+            # envelope, force the switch on crossing it -- would make a
+            # softer response reachable and is the obvious next
+            # refinement. It is not implemented, so it is not claimed.
             if pressures[current] + hold_bias >= best:
                 self.stats["extend"] += 1
                 return SignalPlan(
@@ -1326,11 +1443,7 @@ class AdaptiveCamp:
         elif not current_faulted:
             self.stats["switch_max_green"] += 1
 
-        ring = [
-            p
-            for p in _ring_candidates(cfg_t0.ring_order, current, cfg.k)
-            if p not in ctx.faulted_phases
-        ]
+        ring = [p for p in _ring_candidates(cfg_t0.ring_order, current, cfg.k) if p not in ctx.faulted_phases]
         candidates = ring or live
         filtered = [p for p in candidates if not _skippable(cfg_t0, ctx, p)]
         if filtered:
@@ -1338,6 +1451,54 @@ class AdaptiveCamp:
 
         next_phase = max(candidates, key=lambda p: pressures[p])
         return self._advance(cfg_t0, ctx, current, next_phase, pressures, min_g)
+
+    # -- cycle supervisor -------------------------------------------------
+
+    def _cycle_envelope_s(self, cfg_t0: Tier0Config, live: list[str]) -> float:
+        """The cycle this junction's own Tier-0 bounds already imply.
+
+        `sum(max_green_s + yellow + all_red)` over the live ring: the
+        duration of a cycle in which every phase runs to its ceiling. No
+        new parameter and no second source of truth -- when `max_green_s`
+        is Webster-derived this *is* a Webster-referenced cycle, and when
+        it is the flat 90 s default the envelope is correspondingly
+        enormous and the length trigger stays silent, which is the honest
+        behaviour rather than a failure."""
+        lost = cfg_t0.yellow_s + cfg_t0.all_red_s
+        return self.cfg.cycle_target_factor * sum(
+            cfg_t0.max_green_s.get(p, 0.0) + lost for p in live
+        )
+
+    def _cycle_state(
+        self, cfg_t0: Tier0Config, ctx: JunctionContext, live: list[str], current: str
+    ) -> tuple[float, list[str]]:
+        """Advance the cycle bookkeeping one tick. Returns
+        `(seconds elapsed in this cycle, phases still owed a green)`.
+
+        Called on every tick regardless of whether the supervisor is
+        enabled, so `cycles_completed` and the measured cycle are
+        available as instrumentation in the arm that has the supervisor
+        *off* too -- a control arm that cannot report the quantity under
+        test is not much of a control."""
+        self._served_this_cycle.add(current)
+        owed = [
+            p
+            for p in live
+            if p not in self._served_this_cycle
+            and any(
+                ctx.queue_pcu.get(m, 0.0) > 0.0 or ctx.approaching_pcu.get(m, 0.0) > 0.0
+                for m in cfg_t0.phases[p].green_movements
+            )
+        ]
+        if not owed:
+            # Every live phase served or genuinely empty: the cycle is
+            # complete. Reset from *now* rather than from the last tick a
+            # phase was served, so the measured cycle is wall-clock and
+            # comparable with Webster's, not a sum of green times.
+            self.stats["cycles_completed"] += 1
+            self._served_this_cycle = {current}
+            self._cycle_started_s = self._sim_time_s
+        return max(0.0, self._sim_time_s - self._cycle_started_s), owed
 
     def _advance(
         self,
