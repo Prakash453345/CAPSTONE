@@ -1,4 +1,4 @@
-.PHONY: dev setup infra-up infra-down test lint bench down clean
+.PHONY: dev setup infra-up infra-down test lint bench down clean m6-graph m6-data m6-train m6-gate
 
 VENV := .venv
 PY := $(VENV)/bin/python
@@ -14,7 +14,8 @@ setup: $(VENV)/bin/activate
 	$(PIP) install -e packages/domain -q
 	$(PIP) install -e services/sim-service -q
 	$(PIP) install -e services/api-service -q
-
+	$(PIP) install -e packages/anomaly -q
+	$(PIP) install -e services/incident-service -q
 infra-up:
 	docker compose up -d postgres redis minio
 	./scripts/wait-for-healthy.sh
@@ -42,3 +43,29 @@ down:
 
 clean: down
 	rm -rf $(VENV)
+
+# ---- M6: Anomaly detection & incident pipeline ----
+
+m6-graph: setup
+	$(VENV)/bin/python scripts/build_graph.py \
+		--net scenarios/networks/vijayawada/vijayawada_corridor.net.xml \
+		--output scenarios/networks/vijayawada/adjacency.json \
+		--network-name vijayawada_corridor
+
+m6-data: setup
+	$(VENV)/bin/python scripts/generate_training_data.py \
+		--output-dir data/m6 --seeds 5 --demand-levels light,medium,heavy
+
+m6-train: setup
+	$(VENV)/bin/python scripts/train_anomaly_detector.py \
+		--data-dir data/m6/normal \
+		--graph scenarios/networks/vijayawada/adjacency.json \
+		--output-dir models --epochs 50
+
+m6-gate: setup
+	$(VENV)/bin/python scripts/m6_gate.py \
+		--data-dir data/m6 \
+		--model models/anomaly_detector.pt \
+		--graph scenarios/networks/vijayawada/adjacency.json \
+		--scaler models/scaler.json \
+		--conformal models/conformal.json

@@ -26,12 +26,13 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from itms_common import RedisStreamsBus, decode_envelope
+from api_service.incidents import router as incidents_router
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s api-service %(message)s")
 log = logging.getLogger("api-service")
 
 REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
-TOPICS = ["system.heartbeat", "traffic.vehicle-positions", "traffic.updated"]
+TOPICS = ["system.heartbeat", "traffic.vehicle-positions", "traffic.updated", "incident.candidate"]
 CONSUMER_GROUP = "api-service"
 
 
@@ -108,6 +109,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(incidents_router)
 
 
 @app.get("/health")

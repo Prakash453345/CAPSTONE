@@ -1,0 +1,12 @@
+{
+  "type": "record",
+  "name": "IncidentUpdated",
+  "namespace": "itms.contracts",
+  "doc": "Published when an incident's lifecycle state changes: rejected (candidate was a false alarm — feeds back into conformal calibration set), resolved (incident cleared), or escalated.",
+  "fields": [
+    { "name": "incident_id", "type": "string" },
+    { "name": "candidate_id", "type": "string" },
+    { "name": "new_status", "type": "string", "doc": "'rejected' | 'resolved' | 'escalated'" },
+    { "name": "reason", "type": ["null", "string"], "default": null }
+  ]
+}

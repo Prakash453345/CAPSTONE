@@ -1,0 +1,14 @@
+{
+  "type": "record",
+  "name": "IncidentDetected",
+  "namespace": "itms.contracts",
+  "doc": "Published when an incident_candidate is confirmed by an operator or automated rule. This is the event that downstream services (dispatch, routing, corridor engine) consume.",
+  "fields": [
+    { "name": "incident_id", "type": "string", "doc": "UUID, unique per confirmed incident." },
+    { "name": "candidate_id", "type": "string", "doc": "The candidate this confirmation is for." },
+    { "name": "link_id", "type": "string" },
+    { "name": "intersection_id", "type": ["null", "string"], "default": null },
+    { "name": "confirmed_by", "type": "string", "doc": "'operator' or 'auto_vision' (M8)." },
+    { "name": "severity", "type": "string", "default": "unknown", "doc": "Operator-assigned or auto-inferred severity." }
+  ]
+}

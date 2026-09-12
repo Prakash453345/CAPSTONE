@@ -73,6 +73,20 @@ main{flex:1 1 auto;padding:var(--gut);min-height:0;display:flex;}
   .congrid{grid-template-columns:1fr;}
   #conmap{height:340px;}
 }
+/* ---- M6 incident UI ---- */
+@keyframes incident-pulse{0%{box-shadow:0 0 0 0 rgba(255,0,0,.5)} 70%{box-shadow:0 0 0 14px rgba(255,0,0,0)} 100%{box-shadow:0 0 0 0 rgba(255,0,0,0)}}
+.incident-pulse{animation:incident-pulse 1.4s infinite;}
+#incidents-panel{max-height:320px;overflow-y:auto;margin-top:8px;}
+.incident-card{background:#fff4f4;border:1px solid #fcc;border-radius:6px;padding:8px 10px;margin-bottom:6px;font-size:12px;}
+.incident-card h4{font-size:13px;color:#c00;margin-bottom:4px;}
+.incident-card table{width:100%;border-collapse:collapse;}
+.incident-card td{padding:1px 4px;}
+.incident-card td:first-child{color:#888;width:40%;}
+.incident-actions{display:flex;gap:6px;margin-top:6px;}
+.btn-confirm{background:#2d8;color:#fff;border:none;border-radius:4px;padding:4px 10px;cursor:pointer;font-size:11px;}
+.btn-reject{background:#d44;color:#fff;border:none;border-radius:4px;padding:4px 10px;cursor:pointer;font-size:11px;}
+.incident-confirmed{opacity:.4;transition:opacity .5s;}
+.incident-rejected{opacity:.4;transition:opacity .5s;}
 </style>
 </head>
 <body>
@@ -97,6 +111,7 @@ main{flex:1 1 auto;padding:var(--gut);min-height:0;display:flex;}
             <div class="constat"><b id="conEvt">0</b><span>events received</span></div>
           </div>
           <div class="conlogwrap" id="conlog"></div>
+          <div id="incidents-panel"></div>
         </div>
       </div>
       <p class="connote">If the map looks idle, the simulation isn't running right now — it stays idle rather
@@ -223,12 +238,17 @@ function connect(){
       vehCountEl.textContent = String(vehicles.size);
     } else if (envelope.event_type === "ApproachState") {
       applyApproachState(envelope.payload);
+    } else if (envelope.event_type === "IncidentCandidate") {
+      if (typeof IncidentUI !== "undefined") IncidentUI.handleCandidate(envelope.payload);
     }
   };
 }
 connect();
 
+if (typeof IncidentUI !== "undefined") IncidentUI.init(map);
+
 })();
 </script>
+<script src="incidents.js"></script>
 </body>
 </html>

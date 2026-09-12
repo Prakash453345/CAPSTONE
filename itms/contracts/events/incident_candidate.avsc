@@ -1,0 +1,18 @@
+{
+  "type": "record",
+  "name": "IncidentCandidate",
+  "namespace": "itms.contracts",
+  "doc": "Raised by incident-service when a link's anomaly score exceeds the conformal-calibrated threshold. Represents a candidate, not a confirmed incident — operator confirmation (or automated confirmation from vision in M8) is required before incident_detected is published.",
+  "fields": [
+    { "name": "candidate_id", "type": "string", "doc": "UUID, unique per candidate." },
+    { "name": "link_id", "type": "string", "doc": "SUMO edge_id of the flagged link." },
+    { "name": "intersection_id", "type": ["null", "string"], "default": null, "doc": "Nearest signal-controlled junction, if identifiable." },
+    { "name": "graph_score", "type": "float", "doc": "Anomaly score from the graph detector (higher = more anomalous). Z-scored reconstruction error." },
+    { "name": "vision_score", "type": ["null", "float"], "default": null, "doc": "Anomaly score from the vision stream (M8). Null until vision exists." },
+    { "name": "fused_score", "type": "float", "doc": "Combined score from the fusion layer." },
+    { "name": "threshold", "type": "float", "doc": "The conformal threshold τ that was exceeded." },
+    { "name": "signal_phase", "type": ["null", "string"], "default": null, "doc": "Current signal phase at the nearest junction, if available." },
+    { "name": "features", "type": { "type": "map", "values": "float" }, "doc": "Interpretable feature snapshot at detection time (queue_pcu, occupancy, speed, etc.)." },
+    { "name": "confidence", "type": "float", "default": 1.0 }
+  ]
+}
