@@ -204,7 +204,32 @@ def _recover_from_fault(
     movements` (populated only for `failsafe_interlock_rejected`), resume
     into whichever ring phase actually serves one of those movements
     instead, falling back to `ring_order[0]` only when there isn't one
-    (every other fault mode, or a violation naming no specific movement)."""
+    (every other fault mode, or a violation naming no specific movement).
+
+    **Recovery now goes through the same yellow -> all-red -> green
+    sequence every nominal transition uses**, closing the "not maximally
+    rigorous" gap the paragraph above admitted to. The earlier version
+    called `cabinet.command(recovery_phase)` directly, in the same tick
+    in which `arbiter.tick` had just called `command_all_red()`. Both
+    writes landed before the next `simulationStep`, so the signal heads
+    never displayed either the yellow or the all-red: physically, the
+    junction jumped straight from the outgoing green to the recovery
+    green. When those two phases conflict -- the normal case, since the
+    recovery phase is chosen precisely because it serves a movement the
+    outgoing phase did not -- that is an I1/I2 violation on the road,
+    committed by the fail-safe path itself, on every single interlock
+    rejection. The safety kernel could not see it because it checks
+    *plans*, and no plan was involved.
+
+    So: if the recovery phase differs from the phase that was green,
+    re-assert that phase's yellow (overriding the arbiter's snap-to-red,
+    which is strictly less safe for a vehicle already committed to the
+    stop line) and schedule an ordinary `_Transition` carrying the
+    junction's full `yellow_s` + `all_red_s`; `_advance_transition` then
+    commands the recovery green and resets `elapsed` to 0.0 exactly as it
+    does for every other switch. Only when the recovery phase *is* the
+    phase that was already green -- nothing to clear from -- is the green
+    re-commanded immediately, as before."""
     recovery_phase = js.cfg.ring_order[0]
     if violated_movements:
         recovery_phase = next(
@@ -215,9 +240,102 @@ def _recover_from_fault(
             ),
             recovery_phase,
         )
+    outgoing = js.ctx.current_phase_id
+    if outgoing != recovery_phase and outgoing in js.cfg.phases:
+        js.cabinet.set_raw_state(js.cabinet.yellow_state_for(outgoing))
+        js.transition = _Transition(
+            outgoing_phase=outgoing,
+            incoming_phase=recovery_phase,
+            remaining_yellow_s=js.cfg.yellow_s,
+            remaining_all_red_s=js.cfg.all_red_s,
+            stage="yellow",
+        )
+        # The stale context is kept until `_advance_transition` rebuilds
+        # it: while mid-transition the runner does not arbitrate this
+        # junction, so nothing reads it, and the incoming phase must not
+        # be reported as "current" before the cabinet actually shows it.
+        js.ctx = JunctionContext(
+            intersection_id=tls_id, current_phase_id=outgoing, current_phase_elapsed_s=0.0
+        )
+        return
     js.cabinet.command(recovery_phase)
     js.ctx = JunctionContext(
         intersection_id=tls_id, current_phase_id=recovery_phase, current_phase_elapsed_s=0.0
+    )
+
+
+def _apply_decision(
+    js: _JunctionState, tls_id: str, plan: SignalPlan, step_length: float
+) -> None:
+    """Apply one commanded plan to the junction's bookkeeping: either
+    extend the current green by one tick, or begin the yellow -> all-red
+    -> next-green transition.
+
+    Factored out of the main loop so the *contract between a plan and
+    what the runner physically does with it* can be unit-tested without
+    SUMO. That contract was previously implicit, and two places relied on
+    it being something it was not:
+
+    1. **A one-step plan's `green_s` is not time that elapses.** The loop
+       used to advance `current_phase_elapsed_s` by `steps[0].green_s`.
+       Every strategy returns `green_s == tick_s` for an extend, so this
+       was invisible -- until `corridor/junction.py`'s ENTRY_HOLD branch
+       returned `green_s = max(tick_s, remaining_ped_s)` (a *commitment*
+       for the budget interlock to price, not a claim about the clock).
+       One tick then inflated `elapsed` by the whole remaining pedestrian
+       interval, and every later I3 check (`elapsed >= min_green`) was
+       made against a green the junction had not actually shown. Only
+       `step_length` of simulated time passes per tick, so only
+       `step_length` is added.
+
+    2. **A two-step plan whose first step asks for more green than one
+       tick is a request to hold, not to clear.** `interlocks.
+       min_green_satisfied` accepts a transition plan when
+       `elapsed + steps[0].green_s >= min_green` -- i.e. it reads
+       `steps[0].green_s` as "how much longer the current phase will be
+       held before the yellow starts". The loop ignored that number and
+       set the yellow immediately. `live/green_corridor.py`'s
+       `preemption_plan` builds exactly such a plan (`green_s =
+       min_green - elapsed`, documented as "a corridor can delay a green,
+       never truncate one"), the interlock passed it, and the runner then
+       truncated the green anyway -- an I3 violation that the plan-level
+       checker structurally cannot see, on the emergency-preemption path.
+       `tests/live/test_green_corridor.py::test_interlocks_reject_a_switch_
+       that_would_truncate_min_green` asserts the plan is legal, which it
+       is; nothing asserted the runner honoured it. Now it does: when
+       `steps[0].green_s` exceeds one tick, the current phase is held this
+       tick and the requester is asked again next tick, exactly as the
+       plan said.
+
+    Every strategy in `control/strategies/` already emits `green_s ==
+    tick_s` on extends and either `tick_s` or `0.0` (faulted exit) as the
+    first step of a transition, so their behaviour under this function is
+    identical to before."""
+    if len(plan.steps) == 1:
+        js.ctx = replace(
+            js.ctx,
+            current_phase_id=plan.steps[0].phase_id,
+            current_phase_elapsed_s=js.ctx.current_phase_elapsed_s + step_length,
+        )
+        return
+
+    step0, step1 = plan.steps[0], plan.steps[1]
+    if step0.green_s > step_length + 1e-9:
+        # The plan promised the interlocks this green would run longer
+        # before clearing. Keep that promise: hold, and let the requester
+        # re-propose next tick with a larger `elapsed`.
+        js.ctx = replace(
+            js.ctx, current_phase_elapsed_s=js.ctx.current_phase_elapsed_s + step_length
+        )
+        return
+
+    js.cabinet.set_raw_state(js.cabinet.yellow_state_for(step0.phase_id))
+    js.transition = _Transition(
+        outgoing_phase=step0.phase_id,
+        incoming_phase=step1.phase_id,
+        remaining_yellow_s=step0.yellow_s,
+        remaining_all_red_s=step0.all_red_s,
+        stage="yellow",
     )
 
 
@@ -670,24 +788,7 @@ def run_controlled_scenario(
                     _recover_from_fault(js, tls_id, decision.violated_movements)
                     continue
                 assert decision.plan is not None  # a commanding mode always carries a plan
-
-                if len(decision.plan.steps) == 1:
-                    step0 = decision.plan.steps[0]
-                    js.ctx = JunctionContext(
-                        intersection_id=tls_id,
-                        current_phase_id=step0.phase_id,
-                        current_phase_elapsed_s=js.ctx.current_phase_elapsed_s + step0.green_s,
-                    )
-                else:
-                    step0, step1 = decision.plan.steps
-                    js.cabinet.set_raw_state(js.cabinet.yellow_state_for(step0.phase_id))
-                    js.transition = _Transition(
-                        outgoing_phase=step0.phase_id,
-                        incoming_phase=step1.phase_id,
-                        remaining_yellow_s=step0.yellow_s,
-                        remaining_all_red_s=step0.all_red_s,
-                        stage="yellow",
-                    )
+                _apply_decision(js, tls_id, decision.plan, step_length)
 
             if feature_sampler is not None:
                 # Sampled after every junction's decision for the tick, so the
