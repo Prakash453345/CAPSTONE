@@ -499,8 +499,15 @@ $("mJct").textContent = signalled.length;
 $("maptagText").textContent = "Pilot zone · " + signalled.length + " signalled junctions";
 
 var map = L.map(mapEl, { zoomControl:true, attributionControl:true });
-L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-  attribution:'&copy; OpenStreetMap contributors', maxZoom:19,
+// OpenStreetMap's own tile servers were blocking this page's requests
+// ("Access blocked ... tile usage policy" watermark tiled across the map) --
+// swapped for CARTO's basemap, which needs a free API key (issued instantly,
+// no account, at https://carto.com/basemaps/apikey/) but doesn't rate-limit
+// a client like this one the way raw OSM tiles do.
+var CARTO_KEY = "cb1_3jf3_1_eebdaa5dfe6a7e754d932826";
+L.tileLayer("https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png?key=" + CARTO_KEY, {
+  attribution:'&copy; <a href="https://carto.com/">CARTO</a>, &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+  maxZoom:19,
 }).addTo(map);
 
 var roadLayer = L.geoJSON(edgeFeatures, {

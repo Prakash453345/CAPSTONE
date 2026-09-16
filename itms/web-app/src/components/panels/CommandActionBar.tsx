@@ -1,4 +1,5 @@
 import { useNavigate } from "react-router-dom";
+import { useShallow } from "zustand/react/shallow";
 import { AlertTriangle, Ambulance, ScanEye, Siren } from "lucide-react";
 import { useMapStore } from "@/store/mapStore";
 import { PRESET_UNITS, selectActiveRequests, useEmergencyStore } from "@/store/emergencyStore";
@@ -22,7 +23,7 @@ export function CommandActionBar() {
   const startDraft = useEmergencyStore((s) => s.startDraft);
   const clearDraft = useEmergencyStore((s) => s.clearDraft);
   const selectRequest = useEmergencyStore((s) => s.selectRequest);
-  const activeRequests = useEmergencyStore(selectActiveRequests);
+  const activeRequests = useEmergencyStore(useShallow(selectActiveRequests));
   const activeAnomalies = useIncidentStore(
     (s) => s.anomalies.filter((a) => a.status === "active").length,
   );

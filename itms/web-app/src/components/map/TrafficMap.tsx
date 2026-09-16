@@ -36,6 +36,8 @@ export function TrafficMap({ className }: { className?: string }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [map, setMap] = useState<MapLibreMap | null>(null);
   const [ready, setReady] = useState(false);
+  const [mapError, setMapError] = useState<string | null>(null);
+  const [tileError, setTileError] = useState(false);
 
   const activeLayers = useMapStore((s) => s.activeLayers);
   const focus = useMapStore((s) => s.focus);
@@ -59,6 +61,7 @@ export function TrafficMap({ className }: { className?: string }) {
 
     const create = () => {
       if (disposed || instance) return;
+      try {
       instance = new maplibregl.Map({
         container: el,
         style: BASE_STYLE,
@@ -70,11 +73,19 @@ export function TrafficMap({ className }: { className?: string }) {
         minZoom: 11,
         fadeDuration: 0,
       });
+      } catch {
+        disposed = true;
+        setMapError("The map could not initialize. Enable WebGL / hardware acceleration, then reload. Road and signal lists remain available in Traffic Management.");
+        return;
+      }
+      instance.on("error", () => { if (!disposed) setTileError(true); });
+      instance.getCanvas().setAttribute("aria-label", "Vijayawada traffic map. Use arrow keys to pan, plus and minus to zoom.");
       const markReady = () => {
         if (!disposed) setReady(true);
       };
-      if (instance.loaded()) markReady();
-      else instance.once("load", markReady);
+      // Style readiness does not wait on third-party raster tile requests.
+      if (instance.isStyleLoaded()) markReady();
+      else instance.once("style.load", markReady);
       setMap(instance);
     };
 
@@ -93,9 +104,11 @@ export function TrafficMap({ className }: { className?: string }) {
     return () => {
       disposed = true;
       ro.disconnect();
-      instance?.remove();
-      setMap(null);
-      setReady(false);
+      // React runs parent passive cleanup before descendant layer cleanup.
+      // Keep the style alive until those children have removed sources, listeners
+      // and animation frames; destroying it first crashes every route change.
+      const retiringMap = instance;
+      queueMicrotask(() => retiringMap?.remove());
     };
   }, []);
 
@@ -106,7 +119,7 @@ export function TrafficMap({ className }: { className?: string }) {
       center: [focus.center.longitude, focus.center.latitude],
       zoom: focus.zoom,
       duration: 900,
-      essential: true,
+      essential: false,
     });
   }, [map, ready, focus]);
 
@@ -160,7 +173,9 @@ export function TrafficMap({ className }: { className?: string }) {
     <div className={cn("absolute inset-0 overflow-hidden", className)}>
       <div ref={containerRef} className="absolute inset-0" />
 
-      {!ready && (
+      {mapError && <div className="absolute inset-0 z-20 grid place-items-center bg-background p-8"><p role="alert" className="max-w-sm text-center text-sm leading-relaxed text-muted-foreground">{mapError}</p></div>}
+      {tileError && ready && <div role="status" className="pointer-events-none absolute bottom-16 left-3 right-3 z-10 rounded-md bg-surface/95 p-2 text-[10px] text-status-warn">Some map resources are unavailable. Bundled road geometry and received telemetry remain visible.</div>}
+      {!ready && !mapError && (
         <div className="absolute inset-0 grid place-items-center bg-background">
           <div className="flex flex-col items-center gap-3">
             <Skeleton className="h-40 w-64" />
@@ -185,7 +200,7 @@ export function TrafficMap({ className }: { className?: string }) {
       )}
 
       {/* Create Anomaly toolbar + contextual panel (top-left) */}
-      <div className="pointer-events-none absolute left-3 top-3 flex flex-col items-start gap-2">
+      <div className="map-action-stack pointer-events-none absolute left-3 top-3 flex flex-col items-start gap-2">
         <button
           type="button"
           onClick={() =>

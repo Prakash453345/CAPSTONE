@@ -1,4 +1,5 @@
 import { Ambulance, Flame, Shield, ChevronRight } from "lucide-react";
+import { useShallow } from "zustand/react/shallow";
 import { TrafficMap } from "@/components/map/TrafficMap";
 import { cn } from "@/utils/cn";
 import {
@@ -36,11 +37,11 @@ const STATE_LABEL: Record<EmergencyRequest["state"], [string, string]> = {
  * mission and pans the map to it without hiding any of the others.
  */
 export function EmergencyPage() {
-  const requests = useEmergencyStore(selectVisibleRequests);
+  const requests = useEmergencyStore(useShallow(selectVisibleRequests));
   const selected = useEmergencyStore(selectSelectedRequest);
   const selectRequest = useEmergencyStore((s) => s.selectRequest);
   const focusOn = useMapStore((s) => s.focusOn);
-  const active = useEmergencyStore(selectActiveRequests);
+  const active = useEmergencyStore(useShallow(selectActiveRequests));
 
   // Selecting a mission from the roster brings the map to it — its live
   // position if it's already moving, else where it will depart from. This
@@ -60,8 +61,8 @@ export function EmergencyPage() {
   };
 
   return (
-    <div className="flex h-full">
-      <aside className="flex w-[300px] shrink-0 flex-col border-r border-border bg-surface">
+    <div className="operational-workspace flex h-full">
+      <aside className="workspace-roster flex w-[300px] shrink-0 flex-col border-r border-border bg-surface">
         <div className="border-b border-border px-4 py-3">
           <h2 className="text-sm font-semibold">Emergency requests</h2>
           <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">

@@ -15,6 +15,14 @@ Phase 6 adds the green corridor: `EmergencyCommand`'s `ACTIVATE_CORRIDOR` arms a
 `run_controlled_scenario` as the arbiter's rung-3 proposal source -- the arbiter
 still runs every preemption through `interlocks.check`, this module never
 commands a signal.
+
+`IncidentResponseOrchestrator` (`live/incident_response.py`) sits on top of
+`anomalies` and `emergency`: it watches for a newly-active, sufficiently
+severe anomaly and turns it into an `EmergencyDispatched` alert (type + GPS +
+which authorities) plus one `EmergencyRequest`/corridor per responding
+authority kind -- the same `handle_create` + `ACTIVATE_CORRIDOR` path an
+operator would drive by hand, just called automatically and once per
+authority instead of once per operator click.
 """
 
 from __future__ import annotations
@@ -30,6 +38,7 @@ from sim_service.live.anomaly_control import OperatorAnomalyController
 from sim_service.live.corridor import NET_PATH, load_corridor
 from sim_service.live.emergency_control import EmergencyController
 from sim_service.live.green_corridor import CorridorController
+from sim_service.live.incident_response import IncidentResponseOrchestrator
 from sim_service.routing import RoadGraph
 
 log = logging.getLogger("sim-service.live")
@@ -43,6 +52,7 @@ ANOMALY_TOPIC = "anomaly.updated"
 EMERGENCY_REQUEST_TOPIC = "emergency.request-updated"
 EMERGENCY_VEHICLE_TOPIC = "emergency.vehicle-updated"
 GREEN_CORRIDOR_TOPIC = "emergency.corridor-updated"
+INCIDENT_ALERT_TOPIC = "emergency.dispatched"
 
 
 def run_live(
@@ -74,6 +84,7 @@ def run_live(
     anomalies = OperatorAnomalyController()
     corridor = CorridorController(graph)
     emergency = EmergencyController(graph, anomalies, corridor_controller=corridor)
+    incident_response = IncidentResponseOrchestrator(anomalies, emergency)
     handler = command_handler or _build_dispatch(anomalies, emergency)
 
     drained = 0
@@ -106,6 +117,7 @@ def run_live(
                 drained += 1
         anomalies.tick(step, sim_time)
         emergency.tick(step, sim_time)
+        incident_response.tick(step, sim_time)
         for p in anomalies.drain_events():
             publish(ANOMALY_TOPIC, "AnomalyUpdated", p, p["edge_id"])
         for p in emergency.drain_events():
@@ -114,10 +126,12 @@ def run_live(
             publish(EMERGENCY_VEHICLE_TOPIC, "EmergencyVehicleUpdated", p, p["vehicle_id"])
         for p in corridor.drain_events():
             publish(GREEN_CORRIDOR_TOPIC, "GreenCorridorUpdated", p, p["request_id"])
+        for p in incident_response.drain_events():
+            publish(INCIDENT_ALERT_TOPIC, "EmergencyDispatched", p, p["anomaly_id"])
 
     log.info(
         "live corridor starting: demand=%s realtime_factor=%.1f, draining %s, publishing "
-        "traffic.vehicle-positions / traffic.updated / signal.changed / %s / %s / %s / %s",
+        "traffic.vehicle-positions / traffic.updated / signal.changed / %s / %s / %s / %s / %s",
         demand,
         realtime_factor,
         topics,
@@ -125,6 +139,7 @@ def run_live(
         EMERGENCY_REQUEST_TOPIC,
         EMERGENCY_VEHICLE_TOPIC,
         GREEN_CORRIDOR_TOPIC,
+        INCIDENT_ALERT_TOPIC,
     )
     try:
         summary = run_controlled_scenario(

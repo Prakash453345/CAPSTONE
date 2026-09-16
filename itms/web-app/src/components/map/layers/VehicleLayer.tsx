@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { prefersReducedMotion } from "@/utils/motion";
 import type { GeoJSONSource, MapMouseEvent } from "maplibre-gl";
 import type { Feature, FeatureCollection, Point } from "geojson";
 import { useMapInstance } from "@/components/map/MapContext";
@@ -187,7 +188,7 @@ export function VehicleLayer({ visible }: { visible: boolean }) {
     const tick = () => {
       const src = map.getSource(SRC) as GeoJSONSource | undefined;
       if (src) {
-        const f = Math.min(
+        const f = prefersReducedMotion() ? 1 : Math.min(
           1,
           (performance.now() - updatedAt.current) / interval.current,
         );

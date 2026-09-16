@@ -1,0 +1,38 @@
+{
+  "type": "record",
+  "name": "EmergencyDispatched",
+  "namespace": "itms.contracts",
+  "doc": "The alert raised the moment a sufficiently severe anomaly triggers an automatic emergency response: which anomaly, its type, its GPS location, and which authority units were dispatched (each as a fresh EmergencyRequest, one per responding EmergencyVehicleKind). This is the wire shape a dashboard subscribes to for 'notify the authorities' -- sim-service's IncidentResponseOrchestrator publishes it on `emergency.dispatched`; the per-unit routing/corridor detail follows on the existing emergency_request_updated / emergency_corridor_updated streams, keyed by each dispatch's own request_id.",
+  "fields": [
+    { "name": "anomaly_id", "type": "string" },
+    { "name": "anomaly_type", "type": "string", "doc": "Lower-case itms_domain.anomaly.AnomalyType value (accident, lane_blockage, ...)." },
+    { "name": "severity", "type": "string", "doc": "low | medium | high | blocked." },
+    { "name": "edge_id", "type": "string" },
+    { "name": "lat", "type": ["null", "double"], "default": null },
+    { "name": "lon", "type": ["null", "double"], "default": null },
+    {
+      "name": "dispatched",
+      "type": {
+        "type": "array",
+        "items": {
+          "type": "record",
+          "name": "DispatchedUnit",
+          "fields": [
+            { "name": "vehicle_kind", "type": { "type": "enum", "name": "EmergencyVehicleKind", "symbols": ["AMBULANCE", "FIRE_TRUCK", "POLICE"] } },
+            { "name": "vehicle_id", "type": "string" },
+            { "name": "request_id", "type": "string", "doc": "Correlates to the EmergencyRequestUpdated / GreenCorridorUpdated streams for this unit." }
+          ]
+        }
+      },
+      "default": []
+    },
+    {
+      "name": "undispatched_kinds",
+      "type": { "type": "array", "items": "string" },
+      "default": [],
+      "doc": "vehicle_kind values the response map called for but no depot vehicle was available/known for (e.g. fire_truck, until real fire-station data exists)."
+    },
+    { "name": "at_ms", "type": { "type": "long", "logicalType": "timestamp-millis" } },
+    { "name": "sim_tick", "type": ["null", "long"], "default": null }
+  ]
+}

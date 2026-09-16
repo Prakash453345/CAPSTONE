@@ -33,7 +33,7 @@ export function TopBar({ onOpenNav }: { onOpenNav: () => void }) {
   const label = useActiveWorkspaceLabel(viewMode);
 
   return (
-    <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border bg-surface/70 px-3 backdrop-blur-sm sm:px-4">
+    <header className="product-topbar flex min-h-16 shrink-0 flex-wrap items-center gap-3 border-b border-border bg-surface/70 px-3 py-2 backdrop-blur-sm sm:px-6">
       <Button
         variant="subtle"
         size="icon-sm"
@@ -55,7 +55,7 @@ export function TopBar({ onOpenNav }: { onOpenNav: () => void }) {
         >
           <StatusDot tone={operational ? "ok" : "critical"} pulse={operational} />
           <span className="font-mono text-[11px] tracking-wide text-muted-foreground">
-            {operational ? "OPERATIONAL" : "DEGRADED"}
+            {dataMode === "simulation" ? "DEMO SESSION" : operational ? "STREAM ACTIVE" : "AWAITING DATA"}
           </span>
         </div>
 
@@ -64,7 +64,7 @@ export function TopBar({ onOpenNav }: { onOpenNav: () => void }) {
           onChange={setDataMode}
           options={[
             { value: "live", label: "Live", icon: Radio },
-            { value: "simulation", label: "Sim", icon: FlaskConical },
+            { value: "simulation", label: "Demo", icon: FlaskConical },
           ]}
           ariaLabel="Data mode"
         />
@@ -125,6 +125,7 @@ function Segmented<T extends string>({
             type="button"
             role="radio"
             aria-checked={active}
+            aria-label={opt.label}
             onClick={() => onChange(opt.value)}
             className={cn(
               "flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors",

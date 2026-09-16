@@ -4,9 +4,11 @@
  * `commands.operator`; sim-service (SIM_MODE=live) drains that topic each tick.
  *
  * Kept separate from the data provider on purpose: reading traffic state and
- * issuing commands are different concerns, and commands always go to the real
- * backend regardless of which data mode the map is showing.
+ * issuing commands are different concerns. Mutations target the real backend
+ * only in connected Live mode; the browser Demo must never issue commands.
  */
+
+import { useSystemStore } from "@/store/systemStore";
 
 /** Matches api-service `CommandRequest`. `payload` must match the schema named
  *  by `event_type` in `contracts/events/`. */
@@ -36,12 +38,16 @@ export class CommandError extends Error {
 }
 
 export async function postCommand(cmd: OperatorCommand): Promise<CommandResult> {
+  const system = useSystemStore.getState();
+  if (system.dataMode !== "live") throw new CommandError(409, "Demo is read-only. Switch to Live to issue simulation commands.");
+  if (system.connectionStatus !== "online") throw new CommandError(409, "Live stream is not connected. Reconnect before issuing commands.");
   let res: Response;
   try {
     res = await fetch(`${API_BASE}/v1/commands`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(cmd),
+      signal: AbortSignal.timeout(10_000),
     });
   } catch (err) {
     throw new CommandError(0, `could not reach the command API: ${String(err)}`);

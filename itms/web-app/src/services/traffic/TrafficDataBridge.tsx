@@ -1,4 +1,6 @@
 import { useEffect } from "react";
+import { useAnalyticsStore } from "@/store/analyticsStore";
+import { useMapStore } from "@/store/mapStore";
 import { useSystemStore } from "@/store/systemStore";
 import { useTrafficStore } from "@/store/trafficStore";
 import { useIncidentStore } from "@/store/incidentStore";
@@ -23,7 +25,25 @@ export function TrafficDataBridge() {
     const { setConnectionStatus, applySummary } = useSystemStore.getState();
     const { push: pushNotifications } = useNotificationStore.getState();
 
+    // Never carry demo observations or an unfinished command into a live session.
+    reset();
+    setIncidents([]);
+    setAnomalies([]);
+    setIntersections([]);
+    setRequests([]);
+    useEmergencyStore.getState().clearDraft();
+    useEmergencyStore.getState().selectRequest(null);
+    useIncidentStore.getState().selectIncident(null);
+    useIncidentStore.getState().selectAnomaly(null);
+    useIncidentStore.getState().selectIntersection(null);
+    useMapStore.getState().setSelectedVehicle(null);
+    useMapStore.getState().setInteractionMode("idle");
+    useAnalyticsStore.getState().reset();
+    applySummary({ operational: false, vehicleCount: 0, congestion: 0,
+      signalsOnline: 0, signalsTotal: 0, lastUpdate: null });
+
     const offSnap = provider.subscribe((snap) => {
+      useAnalyticsStore.getState().ingest(snap);
       ingest({
         vehicles: snap.vehicles,
         roadCongestion: snap.roadCongestion,

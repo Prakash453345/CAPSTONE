@@ -1,10 +1,10 @@
 import type { StyleSpecification } from "maplibre-gl";
 
 /**
- * Dark, key-free basemap: OpenStreetMap raster tiles, dimmed and desaturated so
- * they sit quietly behind the operational overlays. Same tile source the existing
- * ITMS live page uses. No `glyphs` — every overlay uses circle / line / icon
- * layers, so nothing depends on a remote font endpoint.
+ * CARTO's dark raster basemap, with OSM/CARTO attribution. Operational overlays
+ * use the bundled SUMO geometry independently of tile availability. No glyphs
+ * endpoint is needed for circle / line / icon layers. Public deployments must
+ * review the tile provider's usage terms and capacity requirements.
  */
 export const BASE_STYLE: StyleSpecification = {
   version: 8,
@@ -12,12 +12,10 @@ export const BASE_STYLE: StyleSpecification = {
     basemap: {
       type: "raster",
       tiles: [
-        "https://a.tile.openstreetmap.org/{z}/{x}/{y}.png",
-        "https://b.tile.openstreetmap.org/{z}/{x}/{y}.png",
-        "https://c.tile.openstreetmap.org/{z}/{x}/{y}.png",
+        "https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
       ],
       tileSize: 256,
-      attribution: "&copy; OpenStreetMap contributors",
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
       maxzoom: 19,
     },
   },
@@ -32,10 +30,9 @@ export const BASE_STYLE: StyleSpecification = {
       type: "raster",
       source: "basemap",
       paint: {
-        "raster-opacity": 0.55,
-        "raster-saturation": -0.7,
-        "raster-contrast": -0.08,
-        "raster-brightness-max": 0.85,
+        "raster-opacity": 0.95,
+        "raster-saturation": -0.15,
+        "raster-contrast": 0.05,
       },
     },
   ],

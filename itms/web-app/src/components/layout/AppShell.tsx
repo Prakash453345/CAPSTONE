@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { SourceBanner } from "@/components/layout/SourceBanner";
 import { Outlet } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
@@ -29,6 +30,24 @@ export function AppShell() {
   const [collapsed, setCollapsed] = useState(readCollapsed);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const viewMode = useSystemStore((s) => s.viewMode);
+  const drawerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!drawerOpen) return;
+    const previous = document.activeElement as HTMLElement | null;
+    const drawer = drawerRef.current;
+    const focusable = () => Array.from(drawer?.querySelectorAll<HTMLElement>('a[href], button:not([disabled])') ?? []);
+    focusable()[0]?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { e.preventDefault(); setDrawerOpen(false); }
+      if (e.key !== "Tab") return;
+      const items = focusable(), first = items[0], last = items[items.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last?.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => { document.removeEventListener("keydown", onKey); previous?.focus(); };
+  }, [drawerOpen]);
 
   useEffect(() => {
     try {
@@ -48,6 +67,7 @@ export function AppShell() {
 
   return (
     <div className="flex h-full w-full overflow-hidden bg-background text-foreground">
+      <a href="#workspace" className="skip-link">Skip to workspace</a>
       <TrafficDataBridge />
       <Toaster />
       <div className="hidden lg:block">
@@ -68,6 +88,10 @@ export function AppShell() {
               onClick={() => setDrawerOpen(false)}
             />
             <motion.div
+              ref={drawerRef}
+              role="dialog"
+              aria-modal="true"
+              aria-label="Navigation"
               className="fixed inset-y-0 left-0 z-50 lg:hidden"
               initial={{ x: "-100%" }}
               animate={{ x: 0 }}
@@ -97,7 +121,8 @@ export function AppShell() {
 
       <div className="flex min-w-0 flex-1 flex-col">
         <TopBar onOpenNav={() => setDrawerOpen(true)} />
-        <main className="min-h-0 flex-1 overflow-auto">
+        <SourceBanner />
+        <main id="workspace" tabIndex={-1} className="min-h-0 flex-1 overflow-auto">
           {viewMode === "split" ? <SplitWorkspace /> : <Outlet />}
         </main>
       </div>

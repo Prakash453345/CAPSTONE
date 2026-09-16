@@ -95,6 +95,9 @@ export function MapControls() {
                 <button
                   key={id}
                   type="button"
+                  role="switch"
+                  aria-checked={on}
+                  aria-label={LAYER_LABELS[id]}
                   onClick={() => toggleLayer(id)}
                   className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-sm text-foreground transition-colors hover:bg-muted"
                 >

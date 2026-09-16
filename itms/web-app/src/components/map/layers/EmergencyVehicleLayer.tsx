@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { prefersReducedMotion } from "@/utils/motion";
 import type { GeoJSONSource } from "maplibre-gl";
 import type { Feature, FeatureCollection, Point } from "geojson";
 import { useMapInstance } from "@/components/map/MapContext";
@@ -65,7 +66,7 @@ export function EmergencyVehicleLayer({ visible }: { visible: boolean }) {
     const loop = () => {
       const src = map.getSource(SRC) as GeoJSONSource | undefined;
       if (src) {
-        const f = Math.min(1, (performance.now() - updatedAt.current) / interval.current);
+        const f = prefersReducedMotion() ? 1 : Math.min(1, (performance.now() - updatedAt.current) / interval.current);
         const features: Feature<Point>[] = [];
         for (const [id, t] of target.current) {
           const p = prev.current.get(id) ?? t;
@@ -82,7 +83,7 @@ export function EmergencyVehicleLayer({ visible }: { visible: boolean }) {
         src.setData({ type: "FeatureCollection", features });
         // gentle halo breathing, bigger for the selected mission's vehicle
         if (map.getLayer(HALO)) {
-          const phase = ((performance.now() - start) % 1400) / 1400;
+          const phase = prefersReducedMotion() ? 0 : ((performance.now() - start) % 1400) / 1400;
           map.setPaintProperty(HALO, "circle-radius", [
             "case", ["get", "selected"],
             ["interpolate", ["linear"], ["zoom"], 12, 8 + phase * 20, 17, 16 + phase * 26],

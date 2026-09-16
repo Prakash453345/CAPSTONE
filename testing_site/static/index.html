@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ITMS Test Lab</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='16' fill='%2314181A'/%3E%3Crect x='14.8' y='7' width='2.4' height='9' rx='1.2' fill='%233FE0FF'/%3E%3Crect x='7' y='14.8' width='9' height='2.4' rx='1.2' fill='%235C6B70'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
+<link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<!-- ═══════════════ top bar ═══════════════ -->
+<header class="topbar">
+  <div class="mark"><span class="glyph"></span> ITMS <b>Test Lab</b></div>
+  <span class="sep"></span>
+  <div class="pills" id="pills"></div>
+  <div class="right">
+    <div class="runclock" id="runclock" hidden>
+      <span class="rc-dot"></span>
+      <span class="rc-body">
+        <b id="rc-label">—</b>
+        <em id="rc-detail" class="mono">—</em>
+      </span>
+    </div>
+    <button class="btn danger sm" id="btn-stop-run" hidden>Stop run</button>
+    <button class="btn ghost sm" id="btn-help">Guide</button>
+  </div>
+</header>
+
+<div class="shell">
+  <!-- ═══════════════ nav ═══════════════ -->
+  <nav class="sidenav" id="sidenav" aria-label="Sections">
+    <div class="navgroup">
+      <h6>Run</h6>
+      <button data-go="control"><i>▶</i>Control room<span class="nhint">scenario + stack</span></button>
+      <button data-go="demos"><i>✦</i>Guided demos<span class="nhint">scripted walk-throughs</span></button>
+      <button data-go="gates"><i>⚑</i>Gates &amp; benchmarks<span class="nhint">the repo's own scripts</span></button>
+    </div>
+    <div class="navgroup">
+      <h6>Monitor</h6>
+      <button data-go="map"><i>◎</i>Live corridor<span class="nhint">map + overlays</span></button>
+      <button data-go="signals"><i>⊞</i>Signals &amp; safety<span class="nhint">arbitration + interlocks</span></button>
+      <button data-go="traffic"><i>≣</i>Traffic state<span class="nhint">per-edge queues</span></button>
+      <button data-go="log"><i>⌗</i>Event stream<span class="nhint">raw bus traffic</span></button>
+    </div>
+    <div class="navgroup">
+      <h6>Features</h6>
+      <button data-go="anomalies"><i>⚠</i>Anomaly injection<span class="nhint">operator path</span></button>
+      <button data-go="emergency"><i>✚</i>Emergency response<span class="nhint">route + green corridor</span></button>
+      <button data-go="incidents"><i>◈</i>Incident gate<span class="nhint">M6 human-in-the-loop</span></button>
+    </div>
+    <div class="navgroup">
+      <h6>Assess</h6>
+      <button data-go="kpis"><i>▤</i>KPIs &amp; runs<span class="nhint">compare + export</span></button>
+      <button data-go="milestones"><i>✓</i>Milestone check<span class="nhint">how far it has come</span></button>
+      <button data-go="settings"><i>⚙</i>Settings<span class="nhint">paths + keys</span></button>
+    </div>
+    <div class="navfoot mono" id="navfoot"></div>
+  </nav>
+
+  <!-- ═══════════════ main ═══════════════ -->
+  <main id="main">
+
+  <!-- ── Control room ─────────────────────────────────────── -->
+  <section class="view" data-view="control">
+    <div class="vhead">
+      <div>
+        <h1>Control room</h1>
+        <p>Bring the bus and the API up, describe the traffic you want, and start it. Everything on the other screens is driven by whatever is running here.</p>
+      </div>
+    </div>
+
+    <div class="banner" id="setup-banner" hidden></div>
+
+    <h5 class="sechead">1 · Stack</h5>
+    <div class="stackgrid" id="stackgrid"></div>
+
+    <h5 class="sechead">2 · Traffic</h5>
+    <div class="card">
+      <div class="seg" id="demand-seg" role="radiogroup" aria-label="Demand level"></div>
+      <div id="custom-od" hidden>
+        <div class="sub">
+          <p>The three presets above are the repo's own checked-in demand files. Custom builds a fresh SUMO route file for this run only: a set number of vehicles on one road, all heading for another, over the background level you pick.</p>
+        </div>
+        <div class="formgrid">
+          <label class="fld">
+            <span>Origin road<em>where the vehicles start</em></span>
+            <div class="pickrow">
+              <select id="od-origin"></select>
+              <button class="btn ghost sm" data-pick="origin" title="Click the road on the map">Pick on map</button>
+            </div>
+          </label>
+          <label class="fld">
+            <span>Destination road<em>where they should arrive</em></span>
+            <div class="pickrow">
+              <select id="od-dest"></select>
+              <button class="btn ghost sm" data-pick="destination">Pick on map</button>
+            </div>
+          </label>
+          <label class="fld">
+            <span>Vehicles released<em>total injected at the origin</em></span>
+            <input type="number" id="od-count" min="1" max="2000" value="60">
+          </label>
+          <label class="fld">
+            <span>Target arrivals<em>how many must reach the destination</em></span>
+            <input type="number" id="od-target" min="0" max="2000" value="60">
+          </label>
+          <label class="fld">
+            <span>Release window (s)<em>spread of departure times</em></span>
+            <input type="number" id="od-window" min="1" max="3600" value="240">
+          </label>
+          <label class="fld">
+            <span>Background traffic<em>the rest of the corridor</em></span>
+            <select id="od-background">
+              <option value="none">Empty roads</option>
+              <option value="light" selected>Light</option>
+              <option value="medium">Medium</option>
+              <option value="heavy">Heavy</option>
+            </select>
+          </label>
+        </div>
+        <div class="odcheck" id="od-check"></div>
+      </div>
+    </div>
+
+    <h5 class="sechead">3 · Controller &amp; engine</h5>
+    <div class="card">
+      <div class="optrow" id="controller-opts" role="radiogroup" aria-label="Controller"></div>
+      <details class="adv">
+        <summary>Engine, speed and reproducibility</summary>
+        <div class="optrow tight" id="engine-opts" role="radiogroup" aria-label="Engine"></div>
+        <div class="formgrid">
+          <label class="fld">
+            <span>Speed<em>simulated seconds per real second</em></span>
+            <select id="rt-factor">
+              <option value="1">1× — real time (best for watching)</option>
+              <option value="2">2×</option>
+              <option value="3" selected>3×</option>
+              <option value="5">5×</option>
+              <option value="10">10×</option>
+              <option value="0">Unpaced — as fast as it goes (best for KPIs)</option>
+            </select>
+          </label>
+          <label class="fld">
+            <span>Stop after<em>simulation steps; blank runs to the end</em></span>
+            <input type="number" id="max-steps" min="0" placeholder="run to completion">
+          </label>
+          <label class="fld">
+            <span>Seed<em>same seed = same run; blank randomises</em></span>
+            <input type="number" id="seed" placeholder="random" value="42">
+          </label>
+          <label class="fld">
+            <span>KPI warm-up (s)<em>departures before this are not scored</em></span>
+            <input type="number" id="warmup" min="0" value="600">
+          </label>
+          <label class="fld">
+            <span>Run label<em>how it appears in the comparison table</em></span>
+            <input type="text" id="run-label" placeholder="auto">
+          </label>
+        </div>
+      </details>
+    </div>
+
+    <h5 class="sechead">4 · Route-cost weights <span class="nhint">optional — off uses the repo's own defaults</span></h5>
+    <div class="card">
+      <label class="fld" style="max-width:420px">
+        <span><input type="checkbox" id="weights-enabled"> Use custom weights for this run</span>
+        <em>Only applies to the Test-lab runner engine above; changes how the emergency router scores a route.</em>
+      </label>
+      <div class="formgrid" id="weights-panel" hidden></div>
+    </div>
+
+    <div class="actionbar">
+      <button class="btn primary" id="btn-start-run">Start run</button>
+      <button class="btn danger" id="btn-stop-run2" disabled>Stop</button>
+      <span class="hint" id="start-hint"></span>
+    </div>
+
+    <h5 class="sechead">Live run</h5>
+    <div id="run-live"></div>
+
+    <h5 class="sechead">Simulation log</h5>
+    <pre class="logbox" id="log-sim" data-log="sim">waiting for a run…</pre>
+  </section>
+
+  <!-- ── Live corridor ────────────────────────────────────── -->
+  <section class="view" data-view="map">
+    <div class="maplayout">
+      <div class="mapwrap">
+        <div id="leaf"></div>
+        <div class="mapbar">
+          <div class="maptools" id="maptools"></div>
+          <div class="pickbanner" id="pickbanner" hidden></div>
+        </div>
+        <div class="maplegend" id="maplegend"></div>
+      </div>
+      <aside class="maprail" id="maprail"></aside>
+    </div>
+  </section>
+
+  <!-- ── Signals ──────────────────────────────────────────── -->
+  <section class="view" data-view="signals">
+    <div class="vhead">
+      <div>
+        <h1>Signals &amp; safety</h1>
+        <p>Every phase here was commanded through the arbitration ladder and passed the Layer-0 interlocks. The source column is the rung that won.</p>
+      </div>
+    </div>
+    <div class="tiles" id="signal-tiles"></div>
+    <div class="split">
+      <div class="card">
+        <h4>Junctions</h4>
+        <div class="tablewrap"><table class="tbl" id="signal-table"></table></div>
+      </div>
+      <div class="card">
+        <h4>Arbitration ladder</h4>
+        <div class="ladder" id="ladder"></div>
+        <h4 class="mt">Faults &amp; rejected plans</h4>
+        <div class="faultlist" id="faultlist"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Traffic ──────────────────────────────────────────── -->
+  <section class="view" data-view="traffic">
+    <div class="vhead">
+      <div>
+        <h1>Traffic state</h1>
+        <p>Per-edge occupancy and queues, from the simulation's own ground truth and from the <code>ApproachState</code> stream. Sort by whatever you are hunting.</p>
+      </div>
+    </div>
+    <div class="tiles" id="traffic-tiles"></div>
+    <div class="card">
+      <div class="tablewrap"><table class="tbl sortable" id="traffic-table"></table></div>
+    </div>
+  </section>
+
+  <!-- ── Event stream ─────────────────────────────────────── -->
+  <section class="view" data-view="log">
+    <div class="vhead">
+      <div>
+        <h1>Event stream</h1>
+        <p>Everything <code>api-service</code> relays over <code>/v1/stream</code>, decoded from the Avro envelope. This is the contract in motion.</p>
+      </div>
+    </div>
+    <div class="card">
+      <div class="filterbar" id="event-filters"></div>
+      <div class="eventlog" id="eventlog"></div>
+    </div>
+  </section>
+
+  <!-- ── Anomalies ────────────────────────────────────────── -->
+  <section class="view" data-view="anomalies">
+    <div class="vhead">
+      <div>
+        <h1>Anomaly injection</h1>
+        <p>An operator anomaly is not a marker on a map. It changes the lane's maximum speed in SUMO through TraCI, so downstream traffic really slows and the emergency router really sees it.</p>
+      </div>
+    </div>
+    <div class="split">
+      <div class="card">
+        <h4>Create</h4>
+        <div class="formgrid">
+          <label class="fld">
+            <span>Road<em>SUMO edge</em></span>
+            <div class="pickrow">
+              <select id="an-edge"></select>
+              <button class="btn ghost sm" data-pick="anomaly">Pick on map</button>
+            </div>
+          </label>
+          <label class="fld"><span>Type</span><select id="an-type"></select></label>
+          <label class="fld"><span>Severity<em>maps to a real speed reduction</em></span><select id="an-sev"></select></label>
+          <label class="fld"><span>Duration (s)<em>blank = until cleared</em></span><input type="number" id="an-dur" min="1" value="600"></label>
+        </div>
+        <div class="sevnote" id="an-note"></div>
+        <div class="actionbar tight">
+          <button class="btn primary" id="btn-create-anomaly">Inject anomaly</button>
+          <span class="hint" id="an-hint"></span>
+        </div>
+      </div>
+      <div class="card">
+        <h4>On the network</h4>
+        <div id="anomaly-list"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Emergency ────────────────────────────────────────── -->
+  <section class="view" data-view="emergency">
+    <div class="vhead">
+      <div>
+        <h1>Emergency response</h1>
+        <p>Dispatch a unit, read why the router chose that path, then arm the green corridor — which proposes preemptions at rung 3 and still gets checked by the same interlocks as everything else.</p>
+      </div>
+    </div>
+    <div class="split">
+      <div class="card">
+        <h4>Dispatch</h4>
+        <div class="formgrid">
+          <label class="fld"><span>Unit</span><select id="ev-kind"></select></label>
+          <label class="fld">
+            <span>From<em>road the unit starts on</em></span>
+            <div class="pickrow">
+              <select id="ev-src"></select>
+              <button class="btn ghost sm" data-pick="evsource">Pick on map</button>
+            </div>
+          </label>
+          <label class="fld">
+            <span>To<em>destination road</em></span>
+            <div class="pickrow">
+              <select id="ev-dst"></select>
+              <button class="btn ghost sm" data-pick="evdest">Pick on map</button>
+            </div>
+          </label>
+          <label class="fld">
+            <span>Or a facility<em>103 real hospitals/clinics from OSM</em></span>
+            <select id="ev-facility"></select>
+          </label>
+        </div>
+        <div class="actionbar tight">
+          <button class="btn primary" id="btn-dispatch">Calculate route</button>
+          <span class="hint" id="ev-hint"></span>
+        </div>
+      </div>
+      <div class="card">
+        <h4>Requests</h4>
+        <div id="request-list"></div>
+      </div>
+    </div>
+    <div id="route-detail"></div>
+  </section>
+
+  <!-- ── Incidents ────────────────────────────────────────── -->
+  <section class="view" data-view="incidents">
+    <div class="vhead">
+      <div>
+        <h1>Incident gate</h1>
+        <p>ADR-006's human-in-the-loop gate. The detector may only ever <em>raise</em> a candidate; nothing dispatches until a person confirms it here.</p>
+      </div>
+    </div>
+    <div class="banner" id="incident-banner"></div>
+    <div class="card">
+      <div class="actionbar tight">
+        <button class="btn ghost sm" id="btn-refresh-incidents">Refresh</button>
+        <span class="hint" id="incident-hint"></span>
+      </div>
+      <div id="incident-list"></div>
+    </div>
+  </section>
+
+  <!-- ── KPIs & runs ──────────────────────────────────────── -->
+  <section class="view" data-view="kpis">
+    <div class="vhead">
+      <div>
+        <h1>KPIs &amp; runs</h1>
+        <p>Every run is scored through the repo's own <code>control.metrics</code> — the same person-delay, throughput, wait distribution and stops the gate scripts report.</p>
+      </div>
+    </div>
+    <div class="tiles" id="kpi-tiles"></div>
+    <div class="card">
+      <div class="actionbar tight">
+        <button class="btn" id="btn-compare" disabled>Compare selected</button>
+        <button class="btn ghost sm" id="btn-export-json">Export JSON</button>
+        <button class="btn ghost sm" id="btn-export-csv">Export CSV</button>
+        <span class="hint">Tick two runs to compare them side by side.</span>
+      </div>
+      <div class="tablewrap"><table class="tbl" id="runs-table"></table></div>
+    </div>
+    <div id="compare-out"></div>
+  </section>
+
+  <!-- ── Milestones ───────────────────────────────────────── -->
+  <section class="view" data-view="milestones">
+    <div class="vhead">
+      <div>
+        <h1>Milestone check</h1>
+        <p>The repo's own milestone map, each row paired with the test you can run from this site. Your verdict is stored locally so you can come back to it.</p>
+      </div>
+    </div>
+    <div id="milestone-list"></div>
+  </section>
+
+  <!-- ── Demos ────────────────────────────────────────────── -->
+  <section class="view" data-view="demos">
+    <div class="vhead">
+      <div>
+        <h1>Guided demos</h1>
+        <p>Scripted sequences that click the same buttons you would. Useful for showing the system to someone without narrating it yourself.</p>
+      </div>
+    </div>
+    <div id="demo-list"></div>
+    <div class="card" id="demo-runner" hidden>
+      <h4>Running: <span id="demo-title">—</span></h4>
+      <div class="demosteps" id="demo-steps"></div>
+      <div class="actionbar tight">
+        <button class="btn danger sm" id="btn-demo-abort">Abort demo</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Gates ────────────────────────────────────────────── -->
+  <section class="view" data-view="gates">
+    <div class="vhead">
+      <div>
+        <h1>Gates &amp; benchmarks</h1>
+        <p>These are the repo's own scripts under <code>itms/scripts/</code>, run with the repo's own interpreter. Nothing here is a reimplementation — the output is the script's output.</p>
+      </div>
+    </div>
+    <div class="banner warn">
+      <b>These are slow on purpose.</b> A gate spawns many real SUMO processes and can run for minutes. One at a time, and a live simulation will compete with it for CPU.
+    </div>
+    <div id="gate-list"></div>
+    <h5 class="sechead">Script output</h5>
+    <pre class="logbox" id="log-gate" data-log="gate">no gate running…</pre>
+    <h5 class="sechead">Recorded results in the repo</h5>
+    <div class="card"><div id="results-list"></div></div>
+    <div id="result-view"></div>
+  </section>
+
+  <!-- ── Settings ─────────────────────────────────────────── -->
+  <section class="view" data-view="settings">
+    <div class="vhead">
+      <div>
+        <h1>Settings &amp; environment</h1>
+        <p>What this tool found on your machine, and the two knobs that matter when you started something yourself.</p>
+      </div>
+    </div>
+    <div class="card">
+      <h4>API key for the incident gate</h4>
+      <p class="sub">Confirm/reject are the only protected endpoints. If this tool started <code>api-service</code>, the key is already wired. If you started it yourself with no <code>API_KEY</code>, it generated one and logged it on startup — paste it here.</p>
+      <div class="pickrow">
+        <input type="text" id="api-key" placeholder="X-API-Key value" style="flex:1">
+        <button class="btn sm" id="btn-save-key">Save</button>
+        <button class="btn ghost sm" id="btn-restart-api">Restart api-service with this tool's key</button>
+      </div>
+      <span class="hint" id="key-hint"></span>
+    </div>
+    <div class="card">
+      <h4>Site self-test</h4>
+      <p class="sub">When a screen stays empty, the question is whether the fault is in your platform or in this page. This publishes a <b>synthetic</b> stream onto the real bus through the real schemas and answers operator commands the way the simulation would — so if the screens fill in, the page, the socket and <code>api-service</code> are all fine and the problem is in the simulation. It runs no SUMO and no control logic, it is not recorded as a run, and it produces no KPIs. <b>Never read a number off it.</b></p>
+      <div class="actionbar tight">
+        <button class="btn" id="btn-selftest">Run a 3-minute self-test</button>
+        <span class="hint" id="selftest-hint"></span>
+      </div>
+    </div>
+    <div class="card">
+      <h4>Environment</h4>
+      <div class="tablewrap"><table class="tbl" id="env-table"></table></div>
+    </div>
+    <div class="card">
+      <h4>api-service log</h4>
+      <pre class="logbox short" id="log-api" data-log="api">api-service not started from here…</pre>
+      <h4 class="mt">Redis / bus log</h4>
+      <pre class="logbox short" id="log-redis" data-log="redis">—</pre>
+    </div>
+  </section>
+
+  </main>
+</div>
+
+<!-- ═══════════════ guide overlay ═══════════════ -->
+<div class="sheet" id="help" hidden>
+  <div class="sheetinner">
+    <button class="sheetclose" id="help-close" aria-label="Close">✕</button>
+    <h2>What this is</h2>
+    <p>A test harness for the ITMS platform. It drives <em>your</em> code: the arbitration ladder, the safety interlocks, A-CA-MP, the operator-anomaly controller, the dynamic emergency router and the green corridor are all imported from <code>itms/</code>, not reimplemented here. Nothing inside <code>itms/</code> is written to.</p>
+    <h3>The short path</h3>
+    <ol>
+      <li><b>Control room → Stack →</b> Start bus, then Start API.</li>
+      <li>Pick <b>Light</b> traffic and controller <b>A-CA-MP</b>, press <b>Start run</b>.</li>
+      <li><b>Live corridor</b> — vehicles should move within a few seconds.</li>
+      <li><b>Anomaly injection</b> — drop a High lane blockage and watch that edge slow down in <b>Traffic state</b>.</li>
+      <li><b>Emergency response</b> — dispatch, calculate a route, activate the corridor, watch <code>corridor_preemption</code> show up in <b>Signals</b>.</li>
+      <li><b>KPIs &amp; runs</b> — run it again under Webster and compare.</li>
+    </ol>
+    <h3>If nothing starts</h3>
+    <p>The Control room banner says what is missing. Almost always it is one of two things: the repo has no <code>.venv</code> yet (<code>make setup</code> in <code>itms/</code>), or Redis is not up (Docker Desktop not running).</p>
+    <h3>Where the numbers come from</h3>
+    <p>Live counters are the simulation's own ground truth, read over TraCI each tick. End-of-run KPIs are scored from SUMO's <code>tripinfo</code> output through the repo's <code>control.metrics</code>, with the same 600 s warm-up the gate scripts use. Two runs are two samples, not a result — for a defensible number use <b>Gates</b>.</p>
+  </div>
+</div>
+
+<div class="toasts" id="toasts"></div>
+
+<script src="/vendor/leaflet/leaflet.js"></script>
+<script type="module" src="/static/app.js"></script>
+</body>
+</html>

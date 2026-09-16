@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { prefersReducedMotion } from "@/utils/motion";
 import type { GeoJSONSource, MapMouseEvent } from "maplibre-gl";
 import type { FeatureCollection, Point } from "geojson";
 import { useMapInstance } from "@/components/map/MapContext";
@@ -109,7 +110,7 @@ export function SignalLayer({ visible }: { visible: boolean }) {
     const start = performance.now();
     const pulse = () => {
       if (map.getLayer(PREEMPT_RING)) {
-        const phase = ((performance.now() - start) % 1200) / 1200;
+        const phase = prefersReducedMotion() ? 0 : ((performance.now() - start) % 1200) / 1200;
         map.setPaintProperty(PREEMPT_RING, "circle-radius", 10 + phase * 16);
         map.setPaintProperty(PREEMPT_RING, "circle-stroke-opacity", 0.9 * (1 - phase));
       }
@@ -117,7 +118,7 @@ export function SignalLayer({ visible }: { visible: boolean }) {
         // A sharp on/off blink (not a smooth expand-fade like the corridor
         // ring above) reads as "alert", not "calm coordination" -- faults are
         // more urgent than a routine preemption.
-        const on = Math.floor((performance.now() - start) / 350) % 2 === 0;
+        const on = prefersReducedMotion() || Math.floor((performance.now() - start) / 350) % 2 === 0;
         map.setPaintProperty(FAULT_RING, "circle-stroke-opacity", on ? 0.9 : 0.15);
       }
       raf.current = requestAnimationFrame(pulse);

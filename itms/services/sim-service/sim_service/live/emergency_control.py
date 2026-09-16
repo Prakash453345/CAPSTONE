@@ -23,7 +23,7 @@ oscillates or recomputes every tick.
 from __future__ import annotations
 
 import logging
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
 
 import traci
@@ -58,6 +58,8 @@ _KIND_MAP = {
     "POLICE": EmergencyKind.POLICE,
 }
 
+OnArrivalHook = Callable[[EmergencyRequest, EmergencyVehicle | None, int, float], None]
+
 
 @dataclass
 class _EvRun:
@@ -81,12 +83,19 @@ class EmergencyController:
         anomaly_controller: OperatorAnomalyController,
         config: EmergencyRoutingConfig | None = None,
         corridor_controller: CorridorController | None = None,
+        on_arrival: OnArrivalHook | None = None,
     ):
         self.graph = graph
         self.config = config or EmergencyRoutingConfig()
         self.planner = RoutePlanner(graph, self.config)
         self.anomalies = anomaly_controller
         self.corridor = corridor_controller
+        # Optional `(request, vehicle, step, sim_time_s) -> None`, called at the
+        # end of `_on_arrival` once the request is COMPLETED and the vehicle is
+        # released. `IncidentResponseOrchestrator` sets this (after construction,
+        # as a plain attribute) to chain an ambulance straight to a hospital
+        # instead of leaving it idle -- see `live/incident_response.py`.
+        self.on_arrival = on_arrival
         self._requests: dict[str, EmergencyRequest] = {}
         self._vehicles: dict[str, EmergencyVehicle] = {}
         self._alt_cache: dict[str, list[RouteResult]] = {}
@@ -201,10 +210,24 @@ class EmergencyController:
             step=step,
         )
         if corridor_id is None:
+            # No junction to preempt, but the vehicle still needs to actually
+            # drive there -- ROUTE_READY has no DEPART transition, so without
+            # this the request (and the vehicle) would sit forever and never
+            # reach _on_arrival. EmergencyRequestAction.DISPATCH exists in the
+            # domain state machine for exactly this (ROUTE_READY -> IN_TRANSIT,
+            # no corridor) and was never invoked anywhere before this.
+            self._requests[request_id] = req.apply(
+                EmergencyRequestAction.DISPATCH, at_ms=at_ms, actor=actor,
+            )
+            v = self._vehicles.get(req.vehicle_id)
+            if v is not None:
+                self._vehicles[req.vehicle_id] = replace(v, status=EmergencyVehicleStatus.EN_ROUTE)
+            self._spawn_ev(request_id)
             self._queue(
                 request_id, step=step, actor=actor,
                 detail="route crosses no signal-controlled junction -- no corridor needed",
             )
+            log.info("emergency request %s -> IN_TRANSIT (no corridor needed)", request_id)
             return
         self._requests[request_id] = req.apply(
             EmergencyRequestAction.ACTIVATE_CORRIDOR, at_ms=at_ms, actor=actor,
@@ -245,6 +268,9 @@ class EmergencyController:
 
     def active_requests(self) -> list[EmergencyRequest]:
         return [r for r in self._requests.values() if not r.is_terminal]
+
+    def get_request(self, request_id: str) -> EmergencyRequest | None:
+        return self._requests.get(request_id)
 
     # ---- live vehicle tracking -----------------------------------
 
@@ -342,6 +368,14 @@ class EmergencyController:
         )
         self._queue(request_id, step=step, actor="system:monitor")
         log.info("emergency request %s COMPLETED -- vehicle arrived", request_id)
+        if self.on_arrival is not None:
+            try:
+                self.on_arrival(
+                    self._requests[request_id], self._vehicles.get(req.vehicle_id),
+                    step, sim_time_s,
+                )
+            except Exception:  # noqa: BLE001 -- a hook failure must not break the tick loop
+                log.exception("on_arrival hook raised for request %s", request_id)
 
     # ---- SUMO vehicle spawn / teardown ------------------------
 
