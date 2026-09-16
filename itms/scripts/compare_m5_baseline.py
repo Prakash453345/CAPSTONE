@@ -19,6 +19,12 @@ T_CRIT = {2: 12.706, 3: 4.303, 4: 3.182, 5: 2.776, 6: 2.571, 7: 2.447, 8: 2.365,
           9: 2.306, 10: 2.262}
 KEYS = [("person_delay_s", -1), ("stops_per_vehicle", -1),
         ("person_throughput_per_hour", +1), ("p95_wait_s", -1), ("max_wait_s", -1)]
+# A paired mean difference smaller than this fraction of the baseline mean is
+# reported as "same" regardless of the CI. Metrics that are sums over many
+# trips (throughput especially) differ at the 1e-10 level between platforms /
+# Python versions purely from float summation order; without this floor a
+# bit-for-bit identical controller reads as a "significant regression".
+REL_TOL = 1e-9
 
 
 def val(r: dict, key: str) -> float:
@@ -53,15 +59,16 @@ def main() -> None:
             diffs = [y - x for x, y in zip(bv, nv, strict=True)]
             mb, mn, md = st.fmean(bv), st.fmean(nv), st.fmean(diffs)
             pct = 100 * md / mb if mb else 0.0
+            negligible = abs(md) <= REL_TOL * abs(mb)
             if len(diffs) > 1 and st.stdev(diffs) > 0:
                 half = T_CRIT.get(len(diffs), 2.0) * st.stdev(diffs) / len(diffs) ** 0.5
                 lo, hi = md - half, md + half
-                sig = lo * hi > 0
+                sig = lo * hi > 0 and not negligible
             else:
                 lo = hi = md
-                sig = md != 0
+                sig = not negligible
             if not sig:
-                verdict = "same" if md == 0 else "n.s."
+                verdict = "same" if negligible else "n.s."
             else:
                 verdict = "BETTER" if md * good > 0 else "WORSE"
                 regressions += verdict == "WORSE"
