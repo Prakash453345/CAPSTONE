@@ -369,16 +369,35 @@ class CorridorController:
     def _phase_serving(
         cfg: Tier0Config, wanted: frozenset[str], *, prefer: str
     ) -> str | None:
-        """The ring phase with the most overlap with `wanted`; `prefer`
-        (usually the live phase) wins ties so the corridor doesn't switch
-        needlessly."""
+        """The ring phase that serves the most of `wanted` *with
+        protection*; `prefer` (usually the live phase) wins ties so the
+        corridor doesn't switch needlessly.
+
+        Overlap is counted over `protected_movements`, not
+        `green_movements`. A movement that is only permissive in a phase
+        (SUMO's 'g' -- a turn whose safety depends on the driver yielding)
+        must not be what a preemption hands an emergency vehicle: the
+        crew is told they hold the junction when they have only been told
+        to proceed with caution (hazard D3/A5). `control/corridor/junction.
+        protected_phase_for` refuses exactly this on the benchmarked path;
+        the live path counted permissive greens as served and could
+        preempt onto one. Four of this corridor's seven junctions carry
+        such movements, each conflicting with a protected movement in its
+        own phase. Same `if not None` idiom as `protected_phase_for`, for
+        the reason given there: an empty protected set must read as
+        "nothing protected", not fall back to the full green set."""
         best_phase: str | None = None
         best_overlap = 0
         for phase_id in cfg.ring_order:
             phase = cfg.phases.get(phase_id)
             if phase is None:
                 continue
-            overlap = len(phase.green_movements & wanted)
+            protected = (
+                phase.protected_movements
+                if phase.protected_movements is not None
+                else phase.green_movements
+            )
+            overlap = len(protected & wanted)
             if overlap > best_overlap or (
                 overlap == best_overlap and overlap > 0 and phase_id == prefer
             ):
