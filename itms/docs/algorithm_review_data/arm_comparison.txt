@@ -1,0 +1,111 @@
+reference arm: ccacamp_instr   (delta = arm - reference, negative = better)
+
+arm                level     n   mean delay   vs ref        95% CI of paired diff   sig  better  viol  steps
+ccacamp_L8         light    10       58,401    +4.8% [    -1,901,    +7,223] False   4/10      0   2084
+ccacamp_L8         medium   10      182,163    +6.3% [    -8,882,   +30,594] False   4/10      0   2168
+ccacamp_L8         heavy    10    1,442,826    +1.9% [    -8,433,   +60,866] False   1/10      0   3436
+
+ccacamp_base       light    10       55,740    +0.0% [        +0,        +0] False   0/10      0   2071
+ccacamp_base       medium   10      171,307    +0.0% [        +0,        +0] False   0/10      0   2175
+ccacamp_base       heavy    10    1,416,609    +0.0% [        +0,        +0] False   0/10      0   3446
+
+ccacamp_instr      light    10       55,740    +0.0% [        +0,        +0] False   0/10      0   2071
+ccacamp_instr      medium   10      171,307    +0.0% [        +0,        +0] False   0/10      0   2175
+ccacamp_instr      heavy    10    1,416,609    +0.0% [        +0,        +0] False   0/10      0   3446
+
+ceiling_base       light    10       56,472    +1.3% [    -2,487,    +3,951] False   4/10      0   2088
+ceiling_base       medium   10      176,461    +3.0% [   -10,495,   +20,802] False   3/10      0   2168
+ceiling_base       heavy    10    1,499,099    +5.8% [   +17,317,  +147,662]  True   2/10      1   3538
+
+ctf_0.70           light    10       56,716    +1.8% [    -2,724,    +4,676] False   4/10      0   2082
+ctf_0.70           medium   10      177,557    +3.6% [   -13,786,   +26,285] False   5/10      0   2233
+ctf_0.70           heavy    10    1,507,595    +6.4% [    -2,873,  +184,845] False   2/10      0   3473
+
+eta_0.25           light    10       58,102    +4.2% [    -1,040,    +5,764] False   1/10      0   2080
+eta_0.25           medium   10      176,491    +3.0% [   -17,164,   +27,531] False   4/10      0   2176
+eta_0.25           heavy    10    1,455,137    +2.7% [   -47,047,  +124,102] False   4/10      0   3446
+
+eta_1.0            light    10       53,797    -3.5% [    -4,380,      +494] False   8/10      0   2094
+eta_1.0            medium   10      163,730    -4.4% [   -21,782,    +6,628] False   6/10      0   2169
+eta_1.0            heavy    10    1,423,247    +0.5% [   -79,506,   +92,780] False   4/10      0   3486
+
+gapout             light    10       57,886    +3.9% [    -2,452,    +6,745] False   4/10      0   2070
+gapout             medium   10      198,149   +15.7% [    +7,412,   +46,271]  True   2/10      0   2194
+gapout             heavy    10    1,459,982    +3.1% [   -21,416,  +108,161] False   4/10      1   3438
+
+gate_tight         light    10       55,740    +0.0% [        +0,        +0] False   0/10      0   2071
+gate_tight         medium   10      171,307    +0.0% [        +0,        +0] False   0/10      0   2175
+gate_tight         heavy    10    1,416,609    +0.0% [        +0,        +0] False   0/10      0   3446
+
+gate_unitfix       light    10       55,535    -0.4% [    -2,925,    +2,514] False   6/10      0   2079
+gate_unitfix       medium   10      175,467    +2.4% [   -16,937,   +25,256] False   5/10      0   2205
+gate_unitfix       heavy    10    1,442,055    +1.8% [   -33,277,   +84,169] False   2/10      0   3407
+
+gate_unitfix_rho90 light    10       55,360    -0.7% [    -2,928,    +2,168] False   5/10      0   2077
+gate_unitfix_rho90 medium   10      181,264    +5.8% [    -5,001,   +24,914] False   2/10      0   2216
+gate_unitfix_rho90 heavy    10    1,493,655    +5.4% [   +10,596,  +143,496]  True   2/10      0   3492
+
+k_all              light     6       53,113    -5.0% [    -9,579,    +3,993] False   3/6       0   2072
+k_all              medium    6      176,646    +5.9% [   -18,549,   +38,339] False   2/6       0   2188
+k_all              heavy     6    1,547,708    +9.6% [   +62,444,  +207,885]  True   0/6       0   3647
+
+lane_dedup         light    10       57,936    +3.9% [    -2,848,    +7,239] False   4/10      0   2108
+lane_dedup         medium   10      175,513    +2.5% [   -15,815,   +24,227] False   3/10      0   2193
+lane_dedup         heavy    10    1,510,325    +6.6% [   +10,797,  +176,634]  True   2/10      0   3521
+
+min7               light    10       54,383    -2.4% [    -6,398,    +3,684] False   7/10      0   2079
+min7               medium   10      183,965    +7.4% [    -7,553,   +32,869] False   4/10      0   2192
+min7               heavy    10    1,465,611    +3.5% [   -35,912,  +133,916] False   2/10      0   3448
+
+no_anticipation_   light     6       66,366   +18.7% [    +4,429,   +16,491]  True   0/6       0   2090
+no_anticipation_   medium    6      216,891   +30.1% [   +17,619,   +82,661]  True   0/6       0   2248
+no_anticipation_   heavy     6    1,519,253    +7.6% [   -16,498,  +229,918] False   1/6       0   3460
+
+no_ceiling         light     6      104,130   +86.3% [   +28,955,   +67,492]  True   0/6       0   2270
+no_ceiling         medium    6      236,347   +41.7% [   +42,316,   +96,876]  True   0/6       0   2344
+no_ceiling         heavy     6    1,519,683    +7.6% [   +29,922,  +184,358]  True   1/6       2   3363
+
+no_fairness        light     6       58,817    +5.2% [    -4,406,   +10,228] False   2/6       0   2083
+no_fairness        medium    6      175,496    +5.2% [    -3,747,   +21,237] False   2/6       0   2177
+no_fairness        heavy     6    1,381,641    -2.2% [  -121,273,   +59,470] False   3/6       0   3451
+
+no_gate            light     6       55,906    +0.0% [        +0,        +0] False   0/6       0   2071
+no_gate            medium    6      166,751    +0.0% [        +0,        +0] False   0/6       0   2156
+no_gate            heavy     6    1,412,543    +0.0% [        +0,        +0] False   0/6       0   3431
+
+no_hold_bias       light     6       58,693    +5.0% [      -759,    +6,334] False   1/6       0   2074
+no_hold_bias       medium    6      176,310    +5.7% [   -19,915,   +39,033] False   2/6       0   2169
+no_hold_bias       heavy     6    1,528,547    +8.2% [   +41,837,  +190,170]  True   0/6       0   3485
+
+no_lost_time       light     6       55,170    -1.3% [    -3,452,    +1,980] False   3/6       0   2093
+no_lost_time       medium    6      170,383    +2.2% [   -20,836,   +28,100] False   3/6       0   2173
+no_lost_time       heavy     6    1,425,494    +0.9% [   -65,831,   +91,732] False   2/6       0   3426
+
+no_protect         light    10       55,740    +0.0% [        +0,        +0] False   0/10      0   2071
+no_protect         medium   10      171,849    +0.3% [   -11,736,   +12,819] False   5/10      0   2177
+no_protect         heavy    10    1,716,989   +21.2% [  +233,583,  +367,176]  True   0/10      0   3798
+
+no_supervisor      light    10       56,472    +1.3% [    -2,487,    +3,951] False   4/10      0   2088
+no_supervisor      medium   10      176,461    +3.0% [   -10,495,   +20,802] False   3/10      0   2168
+no_supervisor      heavy    10    1,499,099    +5.8% [   +17,317,  +147,662]  True   2/10      1   3538
+
+webster_L8         light    10       69,145   +24.0% [   +11,182,   +15,628]  True   0/10      0   2085
+webster_L8         medium   10      209,328   +22.2% [   +19,229,   +56,813]  True   1/10      0   2267
+webster_L8         heavy    10    1,527,403    +7.8% [   +56,454,  +165,134]  True   1/10      0   3401
+
+webster_base       light    10       69,573   +24.8% [    +9,951,   +17,716]  True   0/10      0   2117
+webster_base       medium   10      193,354   +12.9% [    +4,736,   +39,358]  True   2/10      0   2237
+webster_base       heavy    10    1,601,950   +13.1% [  +110,264,  +260,417]  True   0/10      0   3482
+
+webster_y3         light    10       59,597    +6.9% [    +1,382,    +6,333]  True   2/10      0   2102
+webster_y3         medium   10      153,456   -10.4% [   -32,810,    -2,892]  True   9/10      0   2143
+webster_y3         heavy    10    1,479,538    +4.4% [   -18,576,  +144,433] False   3/10      0   3404
+
+y3_min7            light    10       43,659   -21.7% [   -16,038,    -8,123]  True  10/10      0   2066
+y3_min7            medium   10      131,089   -23.5% [   -55,969,   -24,467]  True  10/10      0   2124
+y3_min7            heavy    10    1,342,966    -5.2% [  -116,275,   -31,012]  True   7/10      0   3424
+
+yellow3            light    10       45,192   -18.9% [   -14,377,    -6,718]  True  10/10      0   2068
+yellow3            medium   10      135,309   -21.0% [   -54,749,   -17,247]  True   9/10      0   2148
+yellow3            heavy    10    1,363,937    -3.7% [  -143,836,   +38,490] False   5/10      0   3404
+

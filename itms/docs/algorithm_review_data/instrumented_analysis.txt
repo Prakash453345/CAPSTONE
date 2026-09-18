@@ -1,0 +1,128 @@
+=== decision branches, corridor-wide, share of ticks and of switches ===
+
+light: decision ticks=97796, switches=6010 (6.15% of ticks)
+   extend_min_green                  60473  61.84% of ticks
+   extend                            31313  32.02% of ticks
+   switch_pressure                    3518   3.60% of ticks    58.5% of switches
+   switch_max_green                   2455   2.51% of ticks    40.8% of switches
+   switch_cycle_supervisor              37   0.04% of ticks     0.6% of switches
+
+medium: decision ticks=101321, switches=6488 (6.40% of ticks)
+   extend_min_green                  65228  64.38% of ticks
+   extend                            26629  26.28% of ticks
+   switch_pressure                    4146   4.09% of ticks    63.9% of switches
+   extend_allocation_protected        2976   2.94% of ticks
+   switch_max_green                   2288   2.26% of ticks    35.3% of switches
+   switch_cycle_supervisor              54   0.05% of ticks     0.8% of switches
+
+heavy: decision ticks=182739, switches=7491 (4.10% of ticks)
+   extend_min_green                  75442  41.28% of ticks
+   extend                            53240  29.13% of ticks
+   extend_allocation_protected       46566  25.48% of ticks
+   switch_pressure                    4615   2.53% of ticks    61.6% of switches
+   switch_max_green                   2802   1.53% of ticks    37.4% of switches
+   switch_cycle_supervisor              72   0.04% of ticks     1.0% of switches
+   switch_starvation                     2   0.00% of ticks     0.0% of switches
+
+=== cycle length vs Webster, and served vs allocated green (t>600s) ===
+
+--- light ---
+1880441505                 ph=2 WebsterC= 40.0 displayed= 51.8 | emergent med= 52.5 mean= 51.9 p90= 64.0 ratio_vs_displayed=1.00 | noDemandGreen=65.0% allNegP=48.5% gateClosed=40.93% loadEnd=  0.25
+    P0: webG= 10.0 ceil= 12.5 min=10.0 served mean= 12.6 med= 13.5 | alloc mean= 11.6 served/alloc=1.08 n=284
+    P1: webG= 25.8 ceil= 32.2 min=10.0 served mean= 23.4 med= 24.0 | alloc mean= 24.9 served/alloc=0.94 n=285
+    served by branch: pressure     14.3s(n=319)  max_green    22.6s(n=250)
+2833253632                 ph=2 WebsterC= 40.0 displayed= 50.3 | emergent med= 59.0 mean= 53.2 p90= 62.0 ratio_vs_displayed=1.06 | noDemandGreen=66.8% allNegP=45.4% gateClosed=43.04% loadEnd=  0.25
+    P0: webG= 10.0 ceil= 12.5 min=10.0 served mean= 12.4 med= 12.0 | alloc mean= 11.5 served/alloc=1.08 n=275
+    P1: webG= 24.3 ceil= 30.4 min=10.0 served mean= 24.8 med= 31.0 | alloc mean= 24.3 served/alloc=1.02 n=274
+    served by branch: pressure     14.6s(n=294)  max_green    23.2s(n=255)
+7871074777                 ph=2 WebsterC= 40.0 displayed= 47.8 | emergent med= 56.0 mean= 51.1 p90= 59.0 ratio_vs_displayed=1.07 | noDemandGreen=78.0% allNegP=59.5% gateClosed=24.64% loadEnd=  0.34
+    P0: webG= 10.0 ceil= 12.5 min=10.0 served mean= 12.4 med= 11.0 | alloc mean= 11.2 served/alloc=1.10 n=289
+    P1: webG= 23.8 ceil= 29.8 min=10.0 served mean= 24.9 med= 31.0 | alloc mean= 21.9 served/alloc=1.14 n=284
+    served by branch: max_green    23.9s(n=299)  pressure     12.7s(n=274)
+cluster_11608007559_188044 ph=2 WebsterC= 40.0 displayed= 48.0 | emergent med= 53.0 mean= 49.6 p90= 58.0 ratio_vs_displayed=1.03 | noDemandGreen=47.7% allNegP=35.9% gateClosed=33.04% loadEnd=  0.60
+    P0: webG= 19.6 ceil= 24.6 min=10.0 served mean= 21.4 med= 26.0 | alloc mean= 23.4 served/alloc=0.91 n=298
+    P1: webG= 12.4 ceil= 15.4 min=10.0 served mean= 12.4 med= 11.0 | alloc mean= 12.9 served/alloc=0.96 n=292
+    served by branch: pressure     13.2s(n=381)  max_green    23.8s(n=209)
+cluster_1880441532_4393295 ph=2 WebsterC= 40.0 displayed= 48.0 | emergent med= 47.0 mean= 47.4 p90= 58.0 ratio_vs_displayed=0.99 | noDemandGreen=50.1% allNegP=34.7% gateClosed=31.95% loadEnd=  0.57
+    P0: webG= 20.5 ceil= 25.6 min=10.0 served mean= 18.5 med= 18.0 | alloc mean= 23.3 served/alloc=0.79 n=310
+    P1: webG= 11.5 ceil= 14.4 min=10.0 served mean= 12.9 med= 11.0 | alloc mean= 13.4 served/alloc=0.96 n=311
+    served by branch: pressure     13.6s(n=444)  max_green    21.0s(n=177)
+cluster_1880441541_4393295 ph=2 WebsterC= 40.0 displayed= 51.5 | emergent med= 41.0 mean= 46.4 p90= 61.0 ratio_vs_displayed=0.90 | noDemandGreen=69.4% allNegP=64.0% gateClosed=29.34% loadEnd=  0.20
+    P0: webG= 25.5 ceil= 31.9 min=10.0 served mean= 18.1 med= 11.0 | alloc mean= 23.8 served/alloc=0.76 n=315
+    P1: webG= 10.0 ceil= 12.5 min=10.0 served mean= 12.7 med= 14.0 | alloc mean= 12.1 served/alloc=1.06 n=315
+    served by branch: pressure     12.9s(n=390)  max_green    19.4s(n=240)
+cluster_1880441740_4393296 ph=4 WebsterC= 40.0 displayed= 72.0 | emergent med= 63.0 mean= 79.1 p90=120.0 ratio_vs_displayed=1.10 | noDemandGreen=48.2% allNegP=12.2% gateClosed=22.14% loadEnd=  1.73
+    P0: webG= 10.0 ceil= 12.5 min=10.0 served mean= 12.9 med= 14.0 | alloc mean= 12.3 served/alloc=1.05 n=183
+    P1: webG= 10.0 ceil= 12.5 min=10.0 served mean= 13.3 med= 14.0 | alloc mean= 12.0 served/alloc=1.10 n=220
+    P2: webG= 10.0 ceil= 12.5 min=10.0 served mean= 11.7 med= 11.0 | alloc mean= 11.1 served/alloc=1.05 n=182
+    P3: webG= 10.0 ceil= 12.5 min=10.0 served mean= 11.5 med= 11.0 | alloc mean= 11.8 served/alloc=0.98 n=131
+    served by branch: pressure     11.1s(n=358)  max_green    14.0s(n=338)  cycle_supervisor 11.2s(n=20)
+
+--- medium ---
+1880441505                 ph=2 WebsterC= 40.0 displayed= 52.2 | emergent med= 48.0 mean= 50.1 p90= 64.0 ratio_vs_displayed=0.96 | noDemandGreen=46.0% allNegP=31.7% gateClosed=56.41% loadEnd=  0.50
+    P0: webG= 10.0 ceil= 12.5 min=10.0 served mean= 12.1 med= 11.0 | alloc mean= 11.8 served/alloc=1.02 n=311
+    P1: webG= 26.2 ceil= 32.8 min=10.0 served mean= 22.3 med= 21.0 | alloc mean= 28.3 served/alloc=0.79 n=313
+    served by branch: pressure     14.0s(n=421)  max_green    24.0s(n=203)
+2833253632                 ph=2 WebsterC= 40.0 displayed= 49.3 | emergent med= 50.0 mean= 49.9 p90= 61.0 ratio_vs_displayed=1.01 | noDemandGreen=42.9% allNegP=25.0% gateClosed=62.57% loadEnd=  0.46
+    P0: webG= 10.0 ceil= 12.5 min=10.0 served mean= 12.3 med= 11.0 | alloc mean= 11.8 served/alloc=1.04 n=316
+    P1: webG= 23.3 ceil= 29.1 min=10.0 served mean= 21.7 med= 21.0 | alloc mean= 25.1 served/alloc=0.87 n=314
+    served by branch: pressure     14.2s(n=401)  max_green    21.9s(n=229)
+7871074777                 ph=2 WebsterC= 40.0 displayed= 46.7 | emergent med= 52.0 mean= 48.3 p90= 58.0 ratio_vs_displayed=1.03 | noDemandGreen=64.7% allNegP=46.1% gateClosed=36.57% loadEnd=  0.48
+    P0: webG= 10.0 ceil= 12.5 min=10.0 served mean= 12.3 med= 11.0 | alloc mean= 11.7 served/alloc=1.05 n=324
+    P1: webG= 22.7 ceil= 28.3 min=10.0 served mean= 22.3 med= 26.0 | alloc mean= 22.6 served/alloc=0.99 n=324
+    served by branch: pressure     13.3s(n=377)  max_green    22.7s(n=271)
+cluster_11608007559_188044 ph=2 WebsterC= 40.0 displayed= 48.0 | emergent med= 52.0 mean= 48.9 p90= 57.0 ratio_vs_displayed=1.02 | noDemandGreen=30.2% allNegP=23.6% gateClosed=46.63% loadEnd=  1.05
+    P0: webG= 19.5 ceil= 24.4 min=10.0 served mean= 20.9 med= 24.0 | alloc mean= 22.7 served/alloc=0.92 n=321
+    P1: webG= 12.5 ceil= 15.6 min=10.0 served mean= 12.2 med= 11.0 | alloc mean= 13.3 served/alloc=0.91 n=320
+    served by branch: pressure     13.2s(n=438)  max_green    23.7s(n=203)
+cluster_1880441532_4393295 ph=2 WebsterC= 40.0 displayed= 48.0 | emergent med= 47.0 mean= 47.3 p90= 59.0 ratio_vs_displayed=0.99 | noDemandGreen=30.9% allNegP=24.0% gateClosed=46.63% loadEnd=  1.38
+    P0: webG= 21.0 ceil= 26.2 min=10.0 served mean= 19.4 med= 19.0 | alloc mean= 23.8 served/alloc=0.82 n=329
+    P1: webG= 11.0 ceil= 13.8 min=10.0 served mean= 11.9 med= 11.0 | alloc mean= 13.0 served/alloc=0.92 n=334
+    served by branch: pressure     13.7s(n=507)  max_green    22.0s(n=156)
+cluster_1880441541_4393295 ph=2 WebsterC= 40.0 displayed= 49.6 | emergent med= 41.0 mean= 40.9 p90= 43.0 ratio_vs_displayed=0.82 | noDemandGreen=58.2% allNegP=84.6% gateClosed=43.09% loadEnd=  0.56
+    P0: webG= 23.6 ceil= 29.6 min=10.0 served mean= 12.1 med= 11.0 | alloc mean= 20.0 served/alloc=0.60 n=381
+    P1: webG= 10.0 ceil= 12.5 min=10.0 served mean= 13.1 med= 14.0 | alloc mean= 12.5 served/alloc=1.05 n=382
+    served by branch: pressure     11.6s(n=504)  max_green    14.5s(n=259)
+cluster_1880441740_4393296 ph=4 WebsterC= 54.8 displayed= 80.2 | emergent med= 87.5 mean= 98.7 p90=132.0 ratio_vs_displayed=1.23 | noDemandGreen=16.9% allNegP= 2.7% gateClosed=32.06% loadEnd=  8.31
+    P0: webG= 14.1 ceil= 17.6 min=10.0 served mean= 18.7 med= 19.0 | alloc mean= 17.5 served/alloc=1.07 n=166
+    P1: webG= 14.1 ceil= 17.6 min=10.0 served mean= 18.2 med= 19.0 | alloc mean= 17.2 served/alloc=1.06 n=232
+    P2: webG= 10.0 ceil= 12.5 min=10.0 served mean= 12.2 med= 11.0 | alloc mean= 11.2 served/alloc=1.09 n=156
+    P3: webG= 10.0 ceil= 12.5 min=10.0 served mean= 12.1 med= 11.0 | alloc mean= 12.0 served/alloc=1.01 n=106
+    served by branch: max_green    18.0s(n=453)  pressure     11.3s(n=162)  cycle_supervisor 11.3s(n=45)
+
+--- heavy ---
+1880441505                 ph=2 WebsterC= 54.3 displayed= 63.5 | emergent med= 55.0 mean= 58.1 p90= 78.0 ratio_vs_displayed=0.91 | noDemandGreen=46.5% allNegP=39.3% gateClosed=54.16% loadEnd=  0.24
+    P0: webG= 10.0 ceil= 12.5 min=10.0 served mean= 12.2 med= 11.0 | alloc mean= 11.7 served/alloc=1.04 n=491
+    P1: webG= 37.5 ceil= 46.8 min=10.0 served mean= 29.7 med= 27.0 | alloc mean= 36.9 served/alloc=0.80 n=489
+    served by branch: pressure     15.8s(n=628)  max_green    30.1s(n=352)
+2833253632                 ph=2 WebsterC= 54.5 displayed= 62.5 | emergent med= 49.0 mean= 55.3 p90= 77.0 ratio_vs_displayed=0.89 | noDemandGreen=44.7% allNegP=38.5% gateClosed=57.40% loadEnd=  0.21
+    P0: webG= 13.4 ceil= 16.7 min=10.0 served mean= 13.9 med= 12.0 | alloc mean= 14.6 served/alloc=0.95 n=515
+    P1: webG= 33.1 ceil= 41.4 min=10.0 served mean= 25.3 med= 20.0 | alloc mean= 33.5 served/alloc=0.76 n=509
+    served by branch: pressure     14.3s(n=684)  max_green    30.1s(n=340)
+7871074777                 ph=2 WebsterC= 40.0 displayed= 46.0 | emergent med= 54.0 mean= 48.9 p90= 57.0 ratio_vs_displayed=1.06 | noDemandGreen=57.6% allNegP=53.7% gateClosed=32.87% loadEnd=  0.25
+    P0: webG= 10.1 ceil= 12.7 min=10.0 served mean= 12.6 med= 13.0 | alloc mean= 11.3 served/alloc=1.11 n=580
+    P1: webG= 21.9 ceil= 27.3 min=10.0 served mean= 22.4 med= 29.0 | alloc mean= 20.6 served/alloc=1.09 n=578
+    served by branch: max_green    21.8s(n=579)  pressure     13.1s(n=579)
+cluster_11608007559_188044 ph=2 WebsterC=180.0 displayed=177.5 | emergent med=118.0 mean=121.9 p90=198.0 ratio_vs_displayed=0.69 | noDemandGreen=37.1% allNegP=41.5% gateClosed=44.46% loadEnd=  0.73
+    P0: webG= 90.0 ceil= 90.0 min=10.0 served mean= 62.4 med= 82.0 | alloc mean= 86.5 served/alloc=0.72 n=235
+    P1: webG= 71.5 ceil= 89.4 min=10.0 served mean= 43.2 med= 27.0 | alloc mean= 68.1 served/alloc=0.63 n=231
+    served by branch: pressure     31.9s(n=301)  max_green    91.0s(n=165)
+cluster_1880441532_4393295 ph=2 WebsterC=180.0 displayed=165.6 | emergent med=119.0 mean=126.2 p90=183.0 ratio_vs_displayed=0.76 | noDemandGreen=31.9% allNegP=39.2% gateClosed=48.82% loadEnd=  1.47
+    P0: webG= 90.0 ceil= 90.0 min=10.0 served mean= 70.8 med= 91.0 | alloc mean= 80.3 served/alloc=0.88 n=223
+    P1: webG= 59.6 ceil= 74.5 min=10.0 served mean= 41.4 med= 34.0 | alloc mean= 58.0 served/alloc=0.71 n=223
+    served by branch: pressure     27.7s(n=228)  max_green    85.8s(n=218)
+cluster_1880441541_4393295 ph=2 WebsterC= 40.0 displayed= 49.5 | emergent med= 41.0 mean= 46.3 p90= 61.0 ratio_vs_displayed=0.94 | noDemandGreen=38.8% allNegP=89.2% gateClosed=57.06% loadEnd=  2.17
+    P0: webG= 23.5 ceil= 29.3 min=10.0 served mean= 17.2 med= 11.0 | alloc mean= 18.7 served/alloc=0.92 n=610
+    P1: webG= 10.0 ceil= 12.5 min=10.0 served mean= 13.1 med= 14.0 | alloc mean= 12.1 served/alloc=1.08 n=614
+    served by branch: pressure     11.5s(n=626)  max_green    19.0s(n=598)
+cluster_1880441740_4393296 ph=4 WebsterC=180.0 displayed=196.0 | emergent med=201.0 mean=231.9 p90=414.0 ratio_vs_displayed=1.18 | noDemandGreen= 5.6% allNegP= 4.3% gateClosed=30.65% loadEnd= 22.87
+    P0: webG= 60.2 ceil= 75.2 min=10.0 served mean= 56.8 med= 63.5 | alloc mean= 62.6 served/alloc=0.91 n=124
+    P1: webG= 60.2 ceil= 75.2 min=10.0 served mean= 71.3 med= 77.0 | alloc mean= 71.3 served/alloc=1.00 n=171
+    P2: webG= 22.9 ceil= 28.6 min=10.0 served mean= 26.9 med= 30.0 | alloc mean= 25.5 served/alloc=1.06 n=91
+    P3: webG= 20.8 ceil= 26.0 min=10.0 served mean= 20.5 med= 24.0 | alloc mean= 20.7 served/alloc=0.99 n=128
+    served by branch: max_green    55.7s(n=308)  pressure     36.1s(n=135)  cycle_supervisor 32.8s(n=69)  starvation   11.0s(n=2)
+
+=== switch test: how often does the hold bias, not pressure, decide? ===
+light: contest ticks=34831 extends=31313 switches=3518 | extends where a challenger led on raw pressure but the hold bias held: 4593 (14.7% of extends) | extends with no demand on the current phase: 18323 (58.5%) | hold bias med=0.158 p90=0.551 | |gap| med=0.000 | congestion med=0.000 p90=0.006
+medium: contest ticks=30775 extends=26629 switches=4146 | extends where a challenger led on raw pressure but the hold bias held: 4924 (18.5% of extends) | extends with no demand on the current phase: 11394 (42.8%) | hold bias med=0.330 p90=0.820 | |gap| med=0.000 | congestion med=0.004 p90=0.080
+heavy: contest ticks=57855 extends=53240 switches=4615 | extends where a challenger led on raw pressure but the hold bias held: 5592 (10.5% of extends) | extends with no demand on the current phase: 34597 (65.0%) | hold bias med=0.000 p90=1.006 | |gap| med=0.000 | congestion med=0.035 p90=0.752
