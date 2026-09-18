@@ -670,6 +670,49 @@ class AcampConfig:
     one design**; the ceiling supplies the reference the supervisor
     measures against."""
 
+    # -- gap-out --
+    gap_out_grace_s: float = 3.0
+    """Seconds a phase may sit with no queue and no approaching vehicle before
+    it yields to a phase that has one. `0.0` yields the instant it reads empty;
+    a negative value disables the rule.
+
+    This is the classic actuated gap-out, and it is here because the corridor's
+    clearance interval changed. Measured under the old 7-8 s change interval
+    (netconvert's inherited yellow), an instant gap-out was **+3.9% / +15.7%
+    SIG / +3.1%** person-delay -- each extra phase change cost more than the
+    empty green it saved. Under the corrected 5.5 s interval the trade is no
+    longer negative, and the instrumented runs say why it is worth making at
+    all: the controller extends a green whose own approaches are empty on
+    43-65% of its extend ticks, because the pressure gap it is weighed against
+    is 0.000 at the median decision tick.
+
+    Grace searched on `TRAIN_SEEDS[:5]` (0 s / 3 s / 5 s): 0 s is still worse at
+    light and heavy, 5 s wins medium (-7.3%) but costs heavy (+9.4%), 3 s is
+    within noise everywhere and best on the wait distribution. Held out on the
+    full 10-seed `EVAL_SEEDS` at 3 s, then on ten further unused seeds (11-20)
+    at medium and heavy to test whether the delay trend was real:
+
+        metric                     light        medium        heavy
+        person-delay (10 seeds)    -1.4% n.s.   +0.1% n.s.    -7.6% n.s.
+        person-delay (20 seeds)     --          -3.1% n.s.    -4.6% n.s.
+        p95 wait                  -10.9% SIG    -3.4% n.s.   -11.9% n.s.
+        stops per vehicle          -6.2% SIG    -0.5% n.s.    -2.9% n.s.
+
+    **This is not a delay improvement and must not be reported as one.** The
+    medium gain the training seeds showed did not reproduce; at twenty seeds
+    medium is -3.1% with 15/20 seeds better and an interval that still touches
+    zero. What is established is light demand's wait distribution and stop
+    count, with nothing significantly worse at any level and zero interlock
+    violations anywhere. It ships on for that reason and no other: the same
+    delay for a measurably smoother ride, which is the fairness half of
+    §8.2's metric set rather than the mean it warns against reading alone.
+
+    Safety: the rule fires only once `elapsed >= min_green_s` (so I3 is already
+    satisfied), is checked after the starvation override and the cycle
+    supervisor (both are stronger claims), and builds its plan through
+    `_advance`, so `interlocks.check` sees exactly the transition plan every
+    other switch produces."""
+
     # -- degradation ladder --
     use_memory_blend: bool = True
     """Whether the "camp_blended" rung actually blends against
@@ -1060,6 +1103,10 @@ class AdaptiveCamp:
         `.debt`), the same shape as the `set_sim_time` duck-typing
         `runner.py` already uses to detect a stateful strategy."""
         self._sim_time_s = 0.0
+        self._empty_for_s = 0.0
+        """How long the current phase has read "no queue, nothing approaching".
+        Reset on entry to a phase and on every tick that sees demand -- see
+        `AcampConfig.gap_out_grace_s`."""
         self._load_ewma = 0.0
         """Smoothed `pressure_scale` -- see `AcampConfig.load_halflife_s`
         for why the congestion gate reads this rather than the live value.
@@ -1109,6 +1156,7 @@ class AdaptiveCamp:
         self.stats: dict[str, int] = {
             "ticks": 0,
             "switch_cycle_supervisor": 0,
+            "switch_gap_out": 0,
             "cycles_completed": 0,
             "extend": 0,
             "extend_allocation_protected": 0,
@@ -1155,6 +1203,24 @@ class AdaptiveCamp:
         slow_half_life = max(1e-6, self.cfg.baseline_halflife_s)
         slow_decay = 0.5 ** (self.tick_s / slow_half_life)
         self._baseline_load_ewma = slow_decay * self._baseline_load_ewma + (1.0 - slow_decay) * scale
+
+    def _track_gap(self, cfg_t0: Tier0Config, ctx: JunctionContext) -> None:
+        """Maintain `_empty_for_s`, the gap-out clock -- see
+        `AcampConfig.gap_out_grace_s`. Runs before any branch can return, for
+        the same reason `_update_load` does: a clock that only advanced on the
+        ticks where a decision happened would measure decisions, not seconds."""
+        if ctx.current_phase_elapsed_s <= 0.0:
+            self._empty_for_s = 0.0
+            return
+        phase = cfg_t0.phases.get(ctx.current_phase_id)
+        if phase is None:
+            self._empty_for_s = 0.0
+            return
+        has_demand = any(
+            ctx.queue_pcu.get(m, 0.0) > 0.0 or ctx.approaching_pcu.get(m, 0.0) > 0.0
+            for m in phase.green_movements
+        )
+        self._empty_for_s = 0.0 if has_demand else self._empty_for_s + self.tick_s
 
     @property
     def smoothed_load(self) -> float:
@@ -1284,6 +1350,7 @@ class AdaptiveCamp:
         # controller switches, which is the quantity it is meant to
         # influence.
         self._update_load(cfg_t0, ctx)
+        self._track_gap(cfg_t0, ctx)
 
         mode = select_mode(ctx, _all_movements(cfg_t0))
         if mode == "camp_blended" and cfg.use_memory_blend and self.memory is not None:
@@ -1349,6 +1416,30 @@ class AdaptiveCamp:
             return self._advance(
                 cfg_t0, ctx, current, max(owed, key=lambda p: pressures[p]), pressures, min_g
             )
+
+        # Gap-out. Placed after the starvation override and the supervisor,
+        # both of which are stronger claims, and before the allocation
+        # protection below, which is about a phase that still *has* demand.
+        # `_empty_for_s` is maintained on every tick by `_track_gap`, so the
+        # grace period measures wall-clock emptiness rather than the number of
+        # ticks that happened to reach this branch.
+        if (
+            not current_faulted
+            and self.cfg.gap_out_grace_s >= 0.0
+            and self._empty_for_s > self.cfg.gap_out_grace_s
+        ):
+            waiting = [
+                p
+                for p in live
+                if p != current and not _skippable(cfg_t0, ctx, p)
+            ]
+            if waiting:
+                self.stats["switch_gap_out"] += 1
+                self._empty_for_s = 0.0
+                return self._advance(
+                    cfg_t0, ctx, current, max(waiting, key=lambda p: pressures[p]),
+                    pressures, min_g,
+                )
 
         if not current_faulted and elapsed < max_g:
             # `protect_allocated_green` -- see that field's docstring.
