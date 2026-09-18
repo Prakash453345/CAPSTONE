@@ -635,7 +635,10 @@ class EmergencyController:
         out: dict[str, EdgeConditions] = {}
         for edge_id, info in self.graph.edges.items():
             try:
-                occ = traci.edge.getLastStepOccupancy(edge_id) / 100.0
+                # TraCI returns the occupied fraction of the edge, not a
+                # percentage -- the `/ 100` this line used to apply pinned every
+                # `congestion` value under 0.01 (see queue_state.py's unit note).
+                occ = traci.edge.getLastStepOccupancy(edge_id)
                 mean_speed = traci.edge.getLastStepMeanSpeed(edge_id)
             except traci.TraCIException:
                 occ, mean_speed = 0.0, -1.0

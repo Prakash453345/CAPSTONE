@@ -30,7 +30,8 @@ def patched_traci(monkeypatch):
     monkeypatch.setattr(t.vehicle, "getRoadID", lambda v: {"v1": "E1", "v2": ":J3_0"}[v])
     monkeypatch.setattr(t.edge, "getIDList", lambda: ("E1", "E2", ":J3_0"))
     monkeypatch.setattr(t.edge, "getLastStepVehicleNumber", lambda e: {"E1": 3, "E2": 0}[e])
-    monkeypatch.setattr(t.edge, "getLastStepOccupancy", lambda e: {"E1": 25.0, "E2": 0.0}[e])
+    # TraCI returns the occupied fraction, not a percentage (unit fix 2026-09-18).
+    monkeypatch.setattr(t.edge, "getLastStepOccupancy", lambda e: {"E1": 0.25, "E2": 0.0}[e])
 
 
 def test_publishes_one_vehicle_event_per_vehicle_and_skips_internal_edges(patched_traci):

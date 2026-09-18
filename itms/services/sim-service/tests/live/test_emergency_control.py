@@ -109,7 +109,7 @@ def test_unreachable_destination_fails_the_request_and_releases_the_vehicle(patc
 
 def test_sample_conditions_reads_live_occupancy_and_mean_speed(patched_edges):
     occ, spd = patched_edges
-    occ["A"], spd["A"] = 60.0, 3.0   # 60% occupancy, 3 m/s on a 10 m/s edge
+    occ["A"], spd["A"] = 0.6, 3.0   # occupancy fraction 0.6, 3 m/s on a 10 m/s edge
     c = EmergencyController(_diamond(), _FakeAnomalies())
     cond = c.sample_conditions()
     assert cond["A"].congestion == pytest.approx(0.6)

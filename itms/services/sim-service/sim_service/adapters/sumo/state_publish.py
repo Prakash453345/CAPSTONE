@@ -59,7 +59,8 @@ def publish_traffic_state(bus: RedisStreamsSyncBus, *, step_length: float) -> No
                 payload={
                     "movement_id": edge_id,
                     "q_pcu": float(count),
-                    "occupancy": traci.edge.getLastStepOccupancy(edge_id) / 100.0,
+                    # Already a fraction in [0, 1] -- see queue_state.py's unit note.
+                    "occupancy": traci.edge.getLastStepOccupancy(edge_id),
                     "arrival_rate_pcu_s": count / step_length,
                     "queue_truncated": False,
                     "confidence": 1.0,
