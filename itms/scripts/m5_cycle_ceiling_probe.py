@@ -66,6 +66,9 @@ from itms_domain import Tier0Config  # noqa: E402
 from sim_service.control.strategies import webster  # noqa: E402
 
 ABSOLUTE_CEILING_S = 90.0
+MAX_WAIT_MARGIN_S = 60.0
+"""Same headroom `extract_tier0_config._MAX_WAIT_MARGIN_S` uses; kept here
+rather than imported because that module is a scenario script, not a package."""
 """The shipped `max_green_s`. Kept as the upper clamp so no arm can ever
 *raise* a ceiling above the value the safety configuration already
 sanctions -- this probe only ever tightens."""
@@ -95,16 +98,40 @@ def webster_ceilings(
     return out
 
 
+def max_wait_for(cfg: Tier0Config, max_green_s: dict[str, float]) -> float:
+    """`max_wait_s` for a ring whose ceilings are `max_green_s`: one full
+    worst-case rotation plus the same 60 s headroom
+    `extract_tier0_config` uses, recomputed rather than inherited.
+
+    Added 2026-09-18. `max_wait_s` is derived at extraction time from the
+    shipped flat 90 s ceiling (256 s at a 2-phase junction, 452 s at the
+    4-phase one), and replacing `max_green_s` here used to leave it at
+    that value -- so I5's starvation bound sat 5-9x above the rotation the
+    corridor actually ran (measured emergent cycles 46-232 s) and the
+    override fired twice in thirty heavy runs. Recomputing it keeps the
+    bound proportional to the ring it is protecting, which is what makes
+    it a starvation guard rather than a formality."""
+    lost = cfg.yellow_s + cfg.all_red_s
+    return (
+        sum(max_green_s.get(p, 0.0) for p in cfg.ring_order)
+        + len(cfg.ring_order) * lost
+        + MAX_WAIT_MARGIN_S
+    )
+
+
 def configs_with_ceiling(inputs, factor: float | None):
-    """`inputs` with every junction's `max_green_s` replaced. `factor`
-    None means the shipped configuration, untouched."""
+    """`inputs` with every junction's `max_green_s` replaced, and its
+    `max_wait_s` re-derived from the new ceiling (see `max_wait_for`).
+    `factor` None means the shipped configuration, untouched."""
     configs, flows, vtype_pcu, paths = inputs
     if factor is None:
         return inputs
-    tightened = {
-        tls_id: replace(cfg, max_green_s=webster_ceilings(cfg, flows.get(tls_id, {}), factor))
-        for tls_id, cfg in configs.items()
-    }
+    tightened = {}
+    for tls_id, cfg in configs.items():
+        ceilings = webster_ceilings(cfg, flows.get(tls_id, {}), factor)
+        tightened[tls_id] = replace(
+            cfg, max_green_s=ceilings, max_wait_s=max_wait_for(cfg, ceilings)
+        )
     return tightened, flows, vtype_pcu, paths
 
 

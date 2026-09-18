@@ -67,6 +67,33 @@ relationship a real deployment tunes these two parameters by, rather than
 an arbitrary global default disconnected from how many phases a specific
 ring actually has to cycle through.
 
+**Clearance intervals (`yellow_s`), computed rather than inherited --
+changed 2026-09-18.** This extraction used to take `yellow_s` from the
+duration of whatever yellow-only phase netconvert had guessed for the
+junction, which on this corridor is 5-6 s. With `all_red_s` at 2 s that
+made every phase change cost 7-8 s of dark time, and at light demand the
+4-phase junction spent 32 s of a 72 s cycle clearing. Measured
+consequence, 10 held-out seeds, paired: replacing that guess with the
+kinematic value below is worth -18.9% / -21.0% person-delay at light /
+medium demand for A-CA-MP and -14.3% / -20.6% for the Webster baseline --
+larger than any control-algorithm change this project has landed, and it
+is a modelling correction rather than a control improvement. The value
+now comes from the ITE/IRC change-interval rule,
+`y = t_r + v / (2a + 2gG)`, evaluated per junction at the fastest
+signal-controlled approach speed the network declares, with `t_r = 1.0 s`,
+`a = 3.0 m/s^2`, `G = 0`, clamped to [3 s, 5 s] and rounded to the half
+second. `all_red_s` stays the flat 2.0 s: sizing it properly needs each
+junction's real clearance distance, which this extract does not carry.
+
+`min_green_s` moved 10 s -> 7 s at the same time and for a related reason.
+With the M5 ceiling at 1.25x Webster's green, most phases at light and
+medium demand had a 12.5 s ceiling against a 10 s floor -- a 2.5 s band
+for the controller to act in, and 62-64% of all its decision ticks were
+spent inside the floor. 7 s is still above the usual 4-7 s practice floor
+for a through movement; any phase carrying a pedestrian call should get
+its own longer floor from `ped_walk_s`/`ped_clearance_s` rather than from
+this blanket constant, which is the obvious next refinement here.
+
 `sat_flow_pcu_s` is populated too, for M4. As of `measure_saturation_flow.py`
 (see its own module docstring and PROGRESS.md's CA-MP section), most
 movements now get a *real* measured value -- loaded from
@@ -121,9 +148,19 @@ _SAT_FLOW_CALIBRATION_FILENAME = "sat_flow_calibration.json"
 
 # Not read off the network -- see module docstring for why each exists.
 _ALL_RED_S = 2.0
-_MIN_GREEN_S = 10.0  # safety floor, not netconvert's guessed plan duration -- see module docstring
+_MIN_GREEN_S = 7.0  # safety floor, not netconvert's guessed plan duration -- see module docstring
 _MAX_GREEN_S = 90.0  # conventional urban-signal ceiling
 _MAX_WAIT_MARGIN_S = 60.0  # headroom above a ring's own worst-case full rotation
+
+# Change-interval (yellow) sizing, added 2026-09-18 -- see the module
+# docstring's "Clearance intervals" section for the measurement that forced
+# it. `y = t_r + v / (2a + 2gG)` is the ITE/IRC kinematic change-interval
+# rule; `G = 0` (this corridor is flat, and no grade data is available in
+# the OSM extract), so the denominator is `2a`.
+_DRIVER_REACTION_S = 1.0        # ITE's conventional perception-reaction allowance
+_COMFORTABLE_DECEL_MPS2 = 3.0   # ITE's conventional comfortable deceleration
+_MIN_YELLOW_S = 3.0             # practice floor: never less than 3 s
+_MAX_YELLOW_S = 5.0             # practice ceiling: above this, drivers treat it as red-running time
 
 # `s_lm` [build guide §3.9] -- 1800 PCU/h == 0.5 PCU/s per lane, the same
 # order of magnitude as HCM's "ideal" per-lane saturation flow and within
@@ -152,11 +189,37 @@ def _is_green_phase(state: str) -> bool:
     return any(c in "Gg" for c in state)
 
 
+def kinematic_yellow_s(approach_speed_mps: float) -> float:
+    """ITE/IRC change interval `y = t_r + v / (2a + 2gG)` with `G = 0`,
+    clamped to practice bounds and rounded to the half second.
+
+    Pure and exported so a test can pin the rule rather than the number:
+    50 km/h (13.9 m/s) -> 3.5 s, 60 km/h -> 4.0 s, a 25 km/h service road
+    -> the 3.0 s floor."""
+    raw = _DRIVER_REACTION_S + approach_speed_mps / (2.0 * _COMFORTABLE_DECEL_MPS2)
+    clamped = max(_MIN_YELLOW_S, min(_MAX_YELLOW_S, raw))
+    return round(clamped * 2.0) / 2.0
+
+
+def _approach_speed_mps(junction: ET.Element, lane_speeds: dict[str, float]) -> float:
+    """The fastest speed limit among this junction's incoming lanes -- the
+    approach a yellow has to be long enough for. Falls back to 13.9 m/s
+    (50 km/h) when the network declares nothing, which is this corridor's
+    own arterial limit."""
+    speeds = [
+        lane_speeds[lane]
+        for lane in (junction.get("incLanes") or "").split()
+        if lane in lane_speeds
+    ]
+    return max(speeds) if speeds else 13.9
+
+
 def _extract_one(
     tls_id: str,
     tl_logic: ET.Element,
     junction: ET.Element,
     measured_sat_flow: dict[str, float] | None = None,
+    lane_speeds: dict[str, float] | None = None,
 ) -> Tier0Config:
     # Conflict matrix from this junction's own <request> elements, keyed by
     # link-index labels ("L0", "L1", ...) matching the tlLogic state string
@@ -174,19 +237,21 @@ def _extract_one(
     ring_order: list[str] = []
     min_green_s: dict[str, float] = {}
     max_green_s: dict[str, float] = {}
-    yellow_s = 3.0  # overwritten below from the first yellow phase found, if any
+    # Computed from the approach speed, not inherited from netconvert's
+    # guessed yellow phase -- see the module docstring's clearance-interval
+    # section for the measurement that forced the change.
+    yellow_s = kinematic_yellow_s(_approach_speed_mps(junction, lane_speeds or {}))
 
     green_phase_count = 0
     all_phase_elements = tl_logic.findall("phase")
     for phase_el in all_phase_elements:
         state = phase_el.get("state", "")
-        duration = float(phase_el.get("duration", "0"))
         if not _is_green_phase(state):
             # A yellow-only clearance phase SUMO's default program inserted.
-            # Its duration is real per-junction data worth keeping (unlike
-            # all_red_s, which SUMO doesn't model at all here).
-            if all(c in "yY" for c in state if c not in "rR"):
-                yellow_s = duration
+            # Its duration used to seed `yellow_s`; it no longer does (the
+            # kinematic rule above is the source), because netconvert's
+            # guess is 5-6 s here and that cost more delay than any
+            # controller change recovered. Skipped, not read.
             continue
         phase_id = f"P{green_phase_count}"
         green_links = frozenset(f"L{i}" for i, c in enumerate(state) if c in "Gg")
@@ -249,6 +314,13 @@ def load_configs(net_path: str | Path) -> dict[str, Tier0Config]:
     calibration = _load_sat_flow_calibration(net_path)
 
     junctions_by_id = {j.get("id"): j for j in root.findall("junction")}
+    lane_speeds: dict[str, float] = {}
+    for edge in root.findall("edge"):
+        for lane in edge.findall("lane"):
+            lane_id = lane.get("id")
+            speed = lane.get("speed")
+            if lane_id is not None and speed is not None:
+                lane_speeds[lane_id] = float(speed)
     configs: dict[str, Tier0Config] = {}
     for tl_logic in root.findall("tlLogic"):
         tls_id = tl_logic.get("id")
@@ -257,7 +329,9 @@ def load_configs(net_path: str | Path) -> dict[str, Tier0Config]:
         junction = junctions_by_id.get(tls_id)
         if junction is None:
             raise ValueError(f"tlLogic {tls_id!r} has no matching <junction> element")
-        configs[tls_id] = _extract_one(tls_id, tl_logic, junction, calibration.get(tls_id))
+        configs[tls_id] = _extract_one(
+            tls_id, tl_logic, junction, calibration.get(tls_id), lane_speeds
+        )
     return configs
 
 
