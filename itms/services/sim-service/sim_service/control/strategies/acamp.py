@@ -196,19 +196,37 @@ class AcampConfig:
     ahead of it -- and weighting it equal to a vehicle already stopped at
     the line would overstate the phase's real claim."""
 
-    rho_jam: float = 0.75
+    rho_jam: float = 0.85
     """Receiving-link occupancy at which `gate` reaches zero and this
     movement's discharge benefit is fully withdrawn. Not 1.0: a link is
     functionally blocked well before it is bumper-to-bumper, and
     discharging into one at 0.9 occupancy is what creates the spillback
-    the gate exists to prevent."""
+    the gate exists to prevent.
 
-    beta_gate: float = 2.0
+    **Re-tuned 0.75 -> 0.85 on 2026-09-18, together with `beta_gate`, and
+    the reason is worth recording: until that date this parameter had
+    never done anything at all.** `queue_state.py` divided
+    `traci.lane.getLastStepOccupancy` (already a fraction) by 100, so every
+    `receiving_occupancy` this corridor ever produced was under 0.0067 and
+    `gate` never returned less than 0.99992 -- ablating the gate entirely
+    reproduced the shipped results bit-for-bit on all 30 runs. With the
+    unit fixed the shipped 0.75/2.0 pair discounts far too much
+    (occupancy 0.6 -> gate 0.36) and cost +9% person-delay at heavy demand.
+    Searched on `TRAIN_SEEDS[:5]` at medium and heavy
+    (`rho_jam` 0.75/0.85/0.90/0.99 x `beta_gate` 2/4): 0.85 with beta 4 is
+    -6.2% at heavy (5/5 seeds, CI excludes zero) and flat at medium, which
+    is also the setting with the defensible shape -- near-open until the
+    receiving link is genuinely close to jam, then a sharp knee."""
+
+    beta_gate: float = 4.0
     """Sharpness of the gate's rolloff. `1.0` is linear in occupancy;
     above 1.0 keeps the gate near-open through light downstream loading
     and closes it sharply near `rho_jam`, which matches how discharge
     capacity actually behaves against a filling link (roughly flat, then
-    a knee) better than a linear ramp does."""
+    a knee) better than a linear ramp does. Raised 2.0 -> 4.0 in the same
+    2026-09-18 re-tune -- see `rho_jam`. At these values a receiving lane
+    at 30% occupancy keeps 98.5% of its discharge benefit and one at 62%
+    keeps 72%, against 84% and 36% under the old pair."""
 
     # -- fairness --
     lambda_f: float = 0.6
