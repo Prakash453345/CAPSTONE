@@ -232,7 +232,12 @@ button:disabled {
   align-items: center;
   gap: 8px;
 }
-i {
+/* Separator dot. Scoped to the three places that ask for one: unscoped, this
+   also hits the landing page, whose line-reveal headings wrap each line in an
+   <i> — a 3px box clipped by the line mask, i.e. invisible headings. */
+.overview-context i,
+.overview-footer i,
+.data-freshness i {
   display: inline-block;
   width: 3px;
   height: 3px;
