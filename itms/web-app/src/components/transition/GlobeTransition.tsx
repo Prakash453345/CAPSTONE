@@ -291,7 +291,6 @@ export function GlobeTransition() {
   }, [active]);
 
   const copy = PHASE_COPY[phase];
-  const rotationLive = phase === "global" || phase === "regional" || phase === "local";
 
   return (
     <AnimatePresence>

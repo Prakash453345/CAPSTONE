@@ -161,7 +161,7 @@ def test_isolated_destination_raises_no_route():
     )
     with pytest.raises(NoRouteError) as ei:
         RoutePlanner(g).plan("E0", "ISL")
-    assert "isolated" in ei.value.reason or "no route" in ei.value.reason.lower()
+    assert "isolated" in ei.value.reason or "terminus" in ei.value.reason
 
 
 def test_blocked_source_edge_raises_a_clear_message():

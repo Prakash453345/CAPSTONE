@@ -16,9 +16,12 @@ actually forms and could spill back into the intersection behind it. Not
 every lane in the network; most mid-block lanes aren't queue-forming in
 the same load-bearing sense.
 
-"Full" is TraCI's own `getLastStepOccupancy` (percentage of the lane's
+"Full" is TraCI's own `getLastStepOccupancy` (the *fraction* of the lane's
 length physically covered by vehicles, already accounting for vehicle
-length + minGap) at or above `occupancy_threshold` -- a lane at ~90%+
+length + minGap -- it is a fraction in [0, 1], not a percentage, which is
+why the `/ 100` this module used to apply is gone as of 2026-09-18; with it,
+no lane on this corridor ever reached any usable threshold and the episode
+count was structurally always 0) at or above `occupancy_threshold` -- a lane at ~90%+
 occupancy is bumper-to-bumper for practical purposes. An "episode" is a
 *rising edge*: the transition from below-threshold to at-or-above-
 threshold. A lane stuck full for 60 consecutive seconds counts as one
@@ -57,7 +60,7 @@ class SpillbackTracker:
         gap-timeout memory to thread through time, only a level-crossing
         to detect on each lane independently."""
         for lane_id in self._lane_ids:
-            occupancy = traci.lane.getLastStepOccupancy(lane_id) / 100.0
+            occupancy = traci.lane.getLastStepOccupancy(lane_id)
             is_full = occupancy >= self._threshold
             was_full = lane_id in self._currently_full
             if is_full and not was_full:

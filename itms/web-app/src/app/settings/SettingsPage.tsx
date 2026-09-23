@@ -30,7 +30,7 @@ export function SettingsPage() {
       <header>
         <h2 className="text-base font-semibold tracking-tight">Settings</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Data source and map defaults. Applied immediately, stored in this browser.
+          Your workspace, your view. Changes apply immediately for this session.
         </p>
       </header>
 
@@ -99,6 +99,7 @@ export function SettingsPage() {
         </ul>
       </section>
 
+      <section className="product-panel p-5"><span className="eyebrow">PLATFORM CAPABILITIES</span><h3 className="mt-2 text-sm font-semibold">Know what is behind the numbers.</h3><dl className="mt-4 space-y-4 text-xs leading-relaxed"><div><dt className="font-medium text-primary">Live simulation & safety arbitration</dt><dd className="mt-1 text-muted-foreground">SUMO traffic, controller activity, disruption commands, emergency routes and green-corridor reservations. All signal proposals pass the backend safety interlocks.</dd></div><div><dt className="font-medium text-status-warn">Detection needs a trained model</dt><dd className="mt-1 text-muted-foreground">M6 graph/conformal detection is integrated, but model readiness and accuracy are not guaranteed. Incident candidates require human review. Camera / vision ingestion is not implemented.</dd></div><div><dt className="font-medium">Session analytics, not historical claims</dt><dd className="mt-1 text-muted-foreground">Charts contain up to 30 minutes of received observations. Refreshing or changing sources resets them. Benchmark comparisons remain in the backend harness.</dd></div></dl></section>
       <p className="text-[11px] text-muted-foreground">
         Detection thresholds, routing weights and signal timing (min-green, clearance,
         preemption budget) are server-side safety configuration and are not editable from

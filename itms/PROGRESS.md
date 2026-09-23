@@ -2094,6 +2094,74 @@ a real tradeoff rather than a free win.
 
 ---
 
+### Subscriptions: implemented, measured, and backed out
+
+The previous section named TraCI subscriptions as the next performance
+win -- "low effort, high value". Built and measured, that recommendation
+was wrong, and the reason is worth recording.
+
+A context subscription per lane (`subscribeContext`) has SUMO push every
+vehicle's position, speed and type after each step, retrieved by one
+`getAllContextSubscriptionResults()` call for the whole network. Measured:
+**14.3 ms/step against the lane cache's 23.4** -- a further 1.43x, 6.7x
+against the original.
+
+It is also wrong, silently. `subscribeContext(lane, ..., dist=0.0)` is a
+*geometric* query against the lane's shape, not the membership query
+`getLastStepVehicleIDs` answers. Compared directly over 16,000 lane-ticks
+on this corridor:
+
+| | |
+|---|---|
+| lane-ticks whose vehicle set differed | 2,527 (15.8%) |
+| vehicles the subscription **missed** | 3,588 |
+| vehicles the subscription added | 0 |
+
+A purely one-sided undercount: a vehicle partly onto a lane, or
+straddling its boundary, is simply absent. Queues would read low on
+roughly one lane-observation in six, in a controller whose pressure
+function *is* a queue difference and whose learning layer *is* a
+discharge measurement.
+
+Confirmed end-to-end rather than inferred: with subscriptions the same
+seed produced 2,735 steps and 248,842 person-delay against the cache's
+2,387 and 222,413. Runs are deterministic (verified by repetition), so
+that is a real behaviour change, not noise -- the controller was acting
+on different numbers. Reverting restored the pre-subscription result
+bit-identically.
+
+Backed out. 1.43x is not worth a 15.8% corruption rate in a system whose
+premise is measurement accuracy. A correct version is available -- lane-
+level `LAST_STEP_VEHICLE_ID_LIST` subscription for authoritative
+membership, context subscription for the per-vehicle attributes only,
+intersecting the two -- but that needs the context result to be a
+superset in practice, which is an assumption to verify rather than
+assert. Left undone with the measurement recorded.
+
+**Also fixed:** a dead `counting: bool` field on `_GreenWindow`, added
+with a docstring describing behaviour that was then implemented
+differently (via `elapsed_s >= startup_lost_s`). Never read, never
+written, and its docstring described the real logic's intent while
+sitting on a field that had nothing to do with it.
+
+**Degenerate-input sweep:** every division in the control path was
+exercised at its degenerate value -- `rho_jam=0`, `switch_scale_ref=0`,
+`horizon=0`, `scale=0`, `load_halflife_s=0`, and scale at `1e12`. All
+guards hold; no division by zero, no NaN, no overflow. `ruff` across the
+tree: 19 findings, all cosmetic, no correctness issues.
+
+**Performance, final:**
+
+| | wall (2,387 steps) | per step | behaviour |
+|---|---|---|---|
+| original | 261s | 109.2 ms | — |
+| **shared lane cache** | **50s** | **20.9 ms** | **bit-identical** |
+| context subscriptions | 39s | 14.3 ms | **corrupted — reverted** |
+
+**Tests:** 214 pass, 2 skipped.
+
+---
+
 ## Reconciling two concurrent sessions
 
 While the M5 work above was underway in a separate session, this session
@@ -2312,3 +2380,2063 @@ regime-conditioning attempt that didn't pan out, documented rather than
 either hidden or quietly shipped as an improvement it isn't.
 
 **Heavy demand's ~7% loss to Webster is still open.**
+
+---
+
+## Attempt 2: persisting the baseline across runs -- the diagnosed fix, done, verified, and still not enough
+
+The previous section's own diagnosis named the concrete next step: each
+`AdaptiveCamp` starts `_baseline_load_ewma` cold at 0 every simulated run,
+and a run here (~2,400-3,700 simulated seconds) is too short for a
+baseline half-life long enough to mean anything to actually warm up.
+`DemandMemory` solves exactly this shape of problem for queues by
+persisting across seeds on disk; this section builds and tests its
+equivalent for the load signal, then honestly reports what happened when
+it was pointed at the real problem.
+
+**What was built.**
+
+- `sim_service.control.memory.LoadBaseline` -- one persisted float per
+  junction plus a run count, `save`/`load` to JSON, the same
+  write-then-rename atomicity `DemandMemory` uses. Unlike `DemandMemory`'s
+  per-time-of-day bins, this is a single running value per junction: the
+  quantity it tracks (`_baseline_load_ewma`) is not a time-of-day profile,
+  it is "what does loaded normally look like here", and a single scalar
+  is what `baseline_halflife_s` (1 hour) was already sized to smooth over.
+  `update()` *overwrites* rather than blends across runs -- the value
+  handed in is already a continuously-decaying EWMA's own current state,
+  and a second decayed blend on top would double-discount every tick's
+  contribution. Full reasoning is in the class's own docstring.
+- `AdaptiveCamp.__init__` gained `initial_baseline_load: float = 0.0` --
+  unused by any existing call site, so every caller that doesn't pass it
+  is byte-for-byte unaffected. `m5_harness.build_acamp` gained a
+  `load_baseline` parameter that seeds each junction's `AdaptiveCamp` from
+  `load_baseline.get(tls_id)`, and `run_one` gained `record_baseline` to
+  harvest the ending value back into the store after a run -- the same
+  read/write split `demand_memory`/`record_memory` already use, for the
+  same reason: an evaluation run must score a *frozen* baseline, not one
+  it is still updating.
+- `scripts/m5_warm_load_baseline.py` -- the piece that actually chains
+  runs together. Sequential, not parallel, unlike every other training
+  script in this package: `LoadBaseline.update` overwrites, so run N+1
+  must start from run N's real ending state, and running seeds in
+  parallel from the same starting point would silently drop one run's
+  contribution. It chains all 10 `TRAIN_SEEDS`, light->medium->heavy per
+  seed (30 runs total, ~35 minutes), an explicit documented assumption
+  about what "this junction's long-run normal traffic mix" looks like --
+  not a measured fact about Vijayawada's real day-of-week pattern, which
+  this project has no data for.
+- Two new property tests
+  (`test_initial_baseline_load_seeds_the_slow_ewma_without_a_tick`,
+  `test_warmed_baseline_avoids_the_cold_start_bias_a_short_run_cannot_correct`)
+  plus six `LoadBaseline` unit tests mirroring `DemandMemory`'s own
+  (`test_memory.py`). Full suite: 222 passed, 1 skipped (up from 216).
+  Default path re-verified bit-for-bit against the same four spot-check
+  seeds recorded above -- this section changes nothing about what ships
+  today.
+
+**What warming the baseline actually changed, measured.** Warming
+converged this corridor's heaviest junction
+(`cluster_1880441740_4393296791`) to a baseline in the low-to-mid 20s,
+rising to ~32 after a heavy run and settling back into the low-to-mid 20s
+after a light one -- a real, stable "normal" rather than the near-zero a
+cold run would have. Re-running `m5_relative_congestion_sweep.py`'s exact
+search (`m5_relative_congestion_sweep_warmed.py`, same candidates, same
+`TRAIN_SEEDS[:3]`) against this warmed baseline changed the shape of the
+result completely: every `switch_scale_ref` from 1.3 to 7.10 came back
+statistically indistinguishable from every other at every demand level,
+including light (which the cold sweep never even tested, on the belief it
+would never engage). Attempt 1's central failure -- every value that
+helped heavy materially hurt medium -- is gone: nothing regressed medium
+this time, at any candidate value.
+
+**The held-out verdict.** Since the candidates no longer differentiate,
+`switch_scale_ref` was left at its already-tuned 7.10 and exactly one
+change was tested on the full 10-seed `EVAL_SEEDS` gate, untouched by any
+of this section's training: `use_relative_congestion_gate=True` fed the
+warmed baseline, against the recorded default arm
+(`m5_gate_results_reconciled_tuned.json`; new run recorded in
+`m5_warmed_relative_gate_verify.json`):
+
+```
+level    default (shipped)          warmed relative gate
+light      66,915 +/-  4,353           67,107 +/-  4,626   (+0.3%,  CIs overlap)
+medium    213,622 +/- 29,446          183,719 +/- 12,238   (-14.0%, CIs just overlap)
+heavy   1,491,441 +/- 52,477        1,468,934 +/- 54,001   (-1.5%,  CIs overlap)
+```
+
+Light: unaffected, as expected. Medium: a real-looking, run-to-run more
+consistent improvement (tighter CI too), but the two 95% intervals still
+overlap at 10 seeds, so this is "promising, not proven" rather than a
+claimed win. **Heavy -- the demand level this entire investigation exists
+to fix -- is statistically flat against the shipped default.**
+
+**The honest conclusion.** The cold-start defect this section set out to
+fix was real, and the fix is real: `LoadBaseline` correctly removes the
+cold-start bias (proven as a property, not just observed in aggregate
+numbers), and doing so also removed Attempt 1's medium-regression
+trade-off entirely. But closing that defect did not move heavy demand's
+delay relative to Webster. The right reading is not "the fix failed" --
+it did exactly what it was built to do -- it is "this was not heavy
+demand's bottleneck". Two genuine defects in the congestion-gate's scale
+handling have now been found and fixed in this investigation (the
+per-junction absolute-threshold problem, and the cross-run cold-start
+problem), and heavy demand's ~7% gap to Webster survived both. Whatever
+is actually limiting heavy demand here is something this section's two
+attempts were never positioned to find, and the honest thing to do next
+is look elsewhere rather than search this same parameter a third time.
+
+**Shipped as off by default, same as Attempt 1.**
+`use_relative_congestion_gate` still defaults `False` -- turning it on
+would ship a real operational dependency (a `LoadBaseline` file that has
+to be built once and kept warm) for a not-yet-statistically-proven
+medium-demand gain and zero heavy-demand gain, which is not a trade this
+corridor should take. `LoadBaseline`, the warm-up script and the
+verification script are kept, tested, and documented in full: not because
+this attempt won, but because they are now the correct foundation for
+whoever tests the next heavy-demand hypothesis, rather than something
+that needs rebuilding first.
+
+**Heavy demand's ~7% loss to Webster is still open, and this specific
+line of attack (congestion-gate scale handling) is now closed out rather
+than abandoned mid-way.** The three options from before this attempt are
+unchanged and still on the table: a materially different control idea for
+heavy demand specifically, accepting and documenting the ~7% gap as a
+known limitation of this milestone, or moving on to the corridor's other
+planned work (incident detection, green corridor) with this honestly
+recorded as an open item.
+
+## Attempt 3: protect_allocated_green -- a materially different idea, and this one actually closed part of the gap
+
+Attempt 2 fixed a real cold-start defect in the congestion-gate approach
+and confirmed heavy demand was never bottlenecked by it. Rather than
+search that same knob a third time, this attempt asked a different
+question entirely: `scripts/m5_heavy_diagnostics.py` (an instrumented
+run, not a guess) measured that at heavy demand, the controller's mean
+green *served* per phase (23.3s) runs at less than half of its own mean
+green *allocated* (59.4s) -- `allocate_green` computes a fair share from
+the pressures active at the moment of a switch, but nothing enforces that
+promise afterward; every subsequent tick is a fresh pressure contest that
+can dethrone a phase seconds after granting it a large share. Light
+demand's gap (29.4s served vs 33.8s allocated) is much smaller. Every
+early reversal pays a full clearance interval for green that was never
+used -- exactly backwards at the demand level where capacity is scarcest.
+
+**Iteration 1 (pure time-based protection) -- failed outright, honestly
+measured and reported.** `AdaptiveCamp` was made to remember the
+allocation it granted the current phase and hold it, full stop, until
+that time elapsed. `scripts/m5_protect_allocated_green_probe.py` on
+`TRAIN_SEEDS[:3]` found this made light demand ~35% *worse* (63,195 ->
+~85,600) and medium ~56% *worse* (209,860 -> ~328,000) before heavy was
+even reached -- forcing an already-emptied phase to sit out an allocation
+it no longer needs is pure wasted green, the exact fixed-time rigidity
+this controller exists to avoid.
+
+**Iteration 2 (demand-gated) -- fixed the wasted-green bug, reproduced a
+trade-off already ruled out.** Adding a guard -- only protect a phase
+still showing demand on its own movements, using the same `q > 0 or a >
+0` test `_skippable` already relies on -- fixed the rigidity. But the
+same probe then showed light still ~+24% worse (-> ~78,254) and medium
+still ~+23% worse (-> ~257,953), while heavy improved ~19% (on 2 of 3
+seeds; the probe was stopped once the shape was clear). That is the exact
+"helps heavy, hurts everywhere else" trade-off `use_relative_congestion_
+gate`'s cold-baseline attempt was ruled out for in Attempt 1 -- the
+demand guard says nothing about whether protection was worth trying in
+the first place at demand levels where reversals are rare and cheap.
+
+**Iteration 3 (congestion-gated) -- the clean win the two prior attempts
+were looking for.** Added one more condition: only protect while
+`congestion = memory.congestion_weight(load_ewma, switch_scale_ref,
+switch_scale_exponent) >= 0.5` -- the same tuned Hill-curve signal
+`switch_cost_bias` already uses to judge "is this junction actually
+busy", not a new invented threshold. The cheap 3-seed probe found
+something neither prior attempt had: light and medium came back
+*bit-for-bit identical* to the unprotected arm (not just statistically
+close -- the same `person_delay_s` to the digit, every seed), while heavy
+improved on all three seeds individually (6.5%, 13.0%, 9.1%).
+
+**The held-out verdict.** `scripts/m5_protect_allocated_green_verify.py`
+held this out on the full 10-seed `EVAL_SEEDS` gate these training seeds
+never touched, comparing the shipped tuned config against the identical
+config with only `protect_allocated_green=True` changed:
+
+```
+level    default (unprotected)      protect_allocated_green
+light      57,928 +/-  2,631           57,928 +/-  2,631   (+0.0%, all 10 seeds bit-identical)
+medium    212,741 +/- 35,358          212,741 +/- 35,358   (+0.0%, all 10 seeds bit-identical)
+heavy   1,454,395 +/- 61,600        1,277,791 +/- 53,763   (-12.1%, NO OVERLAP, 10/10 seeds improved)
+```
+
+Zero interlock violations in either arm, at every level, on every seed.
+The light/medium identity across all 10 seeds means the congestion gate
+genuinely never lets this mechanism intervene below its threshold on
+this corridor -- turning it on is measured to carry no downside anywhere
+this project has tested. Heavy demand's improvement is large (12.1%
+aggregate), individually consistent (every single held-out seed
+improved, not just the average, ranging 2.2% to 20.8%), and statistically
+real (the 95% confidence intervals do not overlap) -- a materially
+stronger and cleaner result than anything Attempt 2 produced.
+
+**Shipped on by default.** Unlike `use_relative_congestion_gate` (still
+off -- a real infrastructure dependency for an unproven medium gain and
+zero heavy gain), `protect_allocated_green` now defaults to `True` in
+`AcampConfig`: no operational dependency to keep warm (it is pure
+in-memory bookkeeping, no file, no warm-up run required), and the
+measured result is a clean win with no offsetting cost anywhere tested.
+`test_protect_allocated_green_is_now_the_shipped_default` pins this;
+`test_protect_allocated_green_disabled_reproduces_old_eager_switching`
+keeps the old behavior reachable and tested for anyone who needs to
+reproduce it. Full suite: 227 passed, 1 skipped (up from 226).
+
+**A caveat worth recording honestly.** Re-running the *unprotected* arm
+today did not reproduce `m5_gate_results_reconciled_tuned.json`'s
+recorded light-demand numbers seed-for-seed (that file's light mean is
+66,915; today's unprotected arm measured 57,928 on the identical 10
+seeds and, as far as this investigation can tell, the identical tuned
+config). Medium and heavy are much closer but not exact either. This
+predates and is unrelated to this attempt's own change -- the paired
+comparison above holds the config fixed except for the one flag being
+tested, so it is not affected by whatever produced the drift -- but it
+means `m5_gate_results_reconciled_tuned.json` is now a stale snapshot of
+the corridor's official three-arm (Webster/CA-MP/A-CA-MP) numbers and
+should be regenerated from scratch the next time an official milestone
+report is needed, rather than trusted as still current. Recorded here
+rather than quietly worked around, per this project's standing rule
+against papering over an unexplained number.
+
+**Where this leaves heavy demand.** Two heavy-demand-specific mechanisms
+have now been tried since Attempt 2 concluded the congestion-gate line of
+investigation: this one is the first to produce a real, verified
+improvement without an offsetting cost. It has not been shown to close
+the entire ~7% gap to Webster measured earlier in this project (that
+number itself needs re-measuring given the caveat above), but it is a
+genuine, honestly-verified step in that direction, achieved by fixing a
+different diagnosed mechanism (allocation-promise fidelity) than the one
+two earlier attempts already exhausted (congestion-scale handling).
+
+## Fresh three-arm gate re-run -- resolving the caveat above, current numbers
+
+The caveat above said the corridor's official three-arm scorecard was
+stale and the ~7% heavy-demand gap it quoted was no longer trustworthy.
+Rather than leave that open, `m5_gate_comparison.py` was re-run from
+scratch, all three arms in one script in one pass -- Webster, CA-MP (M4),
+and A-CA-MP (M5, tuned config, `protect_allocated_green` now on by
+default) -- on the same 10 `EVAL_SEEDS`, same tuned config file, no
+demand memory (matching exactly how the stale snapshot was produced).
+Raw output: `scripts/results/m5_gate_results_current.json`.
+
+```
+level    arm       person-delay (mean +/- 95% CI)    viol   stops
+light    webster      69,541 +/-  1,837                0    1.90
+light    camp        158,652 +/-  2,778                0    2.02
+light    acamp        57,928 +/-  2,631                0    1.65
+medium   webster     183,547 +/- 12,349                0    2.90
+medium   camp        338,728 +/- 24,521                0    2.90
+medium   acamp       212,741 +/- 35,358                0    2.53
+heavy    webster   1,368,839 +/- 43,105                0    8.72
+heavy    camp      1,362,217 +/- 80,612                0    7.76
+heavy    acamp     1,277,791 +/- 53,763                0    9.08
+```
+
+**Light: still a clear, decisive win.** A-CA-MP beats Webster by 16.7%
+(57,928 vs 69,541) with no CI overlap -- if anything a bigger margin than
+the stale snapshot's 66,915 vs 74,872 (-22.6% -- similar shape, different
+absolute numbers, same conclusion).
+
+**Medium: a statistical tie with A-CA-MP's mean on the higher (worse)
+side -- and, corrected from an error in this section's first draft, this
+is not new.** A-CA-MP's CI (177,383-248,099) and Webster's
+(171,198-195,896) overlap, so this remains a tie rather than a proven
+loss. But re-checking the stale snapshot's own numbers (74,872 /
+190,234 / 1,392,384 Webster vs 66,915 / 213,622 / 1,491,441 A-CA-MP):
+213,622 was already *above* 190,234 there too -- A-CA-MP's medium-demand
+mean has been the higher, worse-looking one in every recorded snapshot
+of this corridor, not just this one. This section's first draft claimed
+today's numbers were "a reversal from... below Webster's... mean" --
+that claim was simply arithmetically wrong (213,622 > 190,234, not
+<), caught on review and corrected here rather than left standing.
+The honest, unchanged-from-before reading is: medium demand has never
+been a demonstrated A-CA-MP win, only ever a statistical tie with a
+mean that leans the wrong way, and today's numbers do not change that
+verdict in either direction -- they simply confirm it again on freshly
+measured data.
+
+**Heavy -- the headline change.** The gap this entire investigation
+(Attempts 2 and 3) has been chasing is, on this fresh measurement, no
+longer a loss: A-CA-MP's mean (1,277,791) is 6.65% *below* Webster's
+(1,368,839), and the two 95% intervals (1,224,028-1,331,554 vs
+1,325,734-1,411,944) now barely overlap -- a razor-thin overlap of about
+6,000 out of a ~100,000-wide combined range, not the wide, comfortable
+overlap medium shows. This is not yet the fully-proven, no-overlap win
+light demand has, but it is a genuine reversal from every previous
+recorded measurement of this corridor, where A-CA-MP always lost to
+Webster at heavy demand by a real, measured margin. `protect_allocated_
+green` is the only change between this run and what an unprotected A-CA-MP
+would have measured -- Attempt 3's own paired comparison already showed
+its 12.1% heavy-demand improvement in isolation, and that improvement is
+what moved heavy demand from a ~7% loss into essentially a dead heat
+leaning in A-CA-MP's favor.
+
+**The honest summary of where the corridor's three signal strategies
+stand today:** A-CA-MP beats Webster decisively at light demand, remains
+statistically tied with it at medium (as it always has been -- not a
+newly-appeared weakness), and is statistically closer to a win than a
+loss at heavy demand for the first time in this project -- a large
+change from "clearly loses by ~7%". CA-MP (M4) remains worse than
+Webster at light and medium and roughly tied with both other arms at
+heavy. `m5_gate_results_current.json` is now the current reference;
+`m5_gate_results_reconciled_tuned.json` and `m5_gate_results_
+reconciled_untuned.json` are retained as historical snapshots of an
+earlier state of the code, not as current truth.
+
+**What's still open:** medium demand's tie-leaning-unfavorable reading
+is a legitimate open question this project has not chased yet (every
+mechanism tried so far targeted heavy demand specifically); heavy
+demand's win is directional and narrow rather than airtight at 10 seeds.
+Both are honestly recorded here rather than rounded up or down to fit a
+cleaner story.
+
+## Chasing medium demand: a diagnosis that made sense, and a fix that didn't work
+
+Medium demand's tie (mean on the worse side of Webster, always has been
+-- see the correction above) had never actually been investigated; every
+mechanism up to this point targeted heavy demand specifically. Ran the
+same instrumented diagnostic already built for heavy
+(`m5_heavy_diagnostics.py --level medium`) to check whether medium shares
+heavy's diagnosed defect: it does, proportionally -- medium wastes about
+38% of its own allocated green (35.9s allocated vs 22.2s served),
+between light's ~15% and heavy's ~61%. But `m5_protect_allocated_green_
+verify.py` already showed the mechanism built to fix exactly this
+defect fires *zero times* at medium demand. `scripts/
+m5_congestion_profile.py` (new: samples the real `congestion_weight`
+value the mechanism's gate checks, every tick, without touching
+`acamp.py`) explained why directly: light never exceeds 0.001, heavy's
+busiest junction saturates to 1.000, and medium's same junction peaks at
+only 0.339 -- the 0.5 gate threshold was tuned entirely on heavy-demand
+data and medium's own congestion never gets close.
+
+**The hypothesis: lower the threshold so it reaches medium too.** Pulled
+the previously hard-coded `0.5` out into its own field,
+`AcampConfig.protect_allocated_green_congestion_threshold` (still
+defaults to `0.5` -- the only verified value), and swept it down to 0.10
+on `TRAIN_SEEDS[:3]` across all three demand levels
+(`scripts/m5_protect_threshold_sweep.py`).
+
+```
+threshold   light            medium              heavy
+0.50        54,766 (unaff.)  187,244             1,334,727
+0.35        54,766 (unaff.)  188,311  (+0.6%)    1,337,815 (+0.2%)
+0.30        54,766 (unaff.)  188,311  (+0.6%)    1,336,385 (+0.1%)
+0.20        54,766 (unaff.)  188,373  (+0.6%)    1,353,051 (+1.4%)
+0.10        54,766 (unaff.)  194,820  (+4.0%)    1,250,833 (-6.3%, noisy)
+```
+
+**Light: unaffected at every value tested** -- confirms its own
+congestion genuinely never gets close, at any threshold down to 0.10, so
+there was never any risk of regressing it here.
+
+**Medium: the hypothesis was wrong.** Delay got *monotonically worse*,
+not better, as the threshold dropped and the mechanism fired more often
+(223 times at 0.5, up to 445 at 0.10) -- every step down added delay,
+never removed it. This is a clean, consistent, three-for-three signal
+across the training seeds, not overlapping-CI noise, so it was not
+chased further with a full 10-seed verification; there is nothing
+promising here to verify.
+
+**Heavy: looked better at 0.10, but the evidence doesn't support acting
+on it.** The aggregate improved (1,334,727 -> 1,250,833), but per-seed
+one of three seeds improved sharply (-18.5%) while another got *worse*
+(+4.4%) -- the opposite of the verified 0.5 default's clean
+all-seeds-agree signal. Read as three-seed noise from a single lucky
+seed, not a second genuine finding, and correctly not something to chase
+into a full verification cycle on a hunch.
+
+**Why this makes sense, read against the mechanism's own design.**
+`protect_allocated_green` fixes a specific failure mode: a phase gets a
+large allocation, then gets dethroned by a competing pressure spike
+before using it. Forcing more protection helps only when *that* is what
+is happening. Medium demand's 38% served-vs-allocated gap being real
+does not mean it has the same cause -- the sweep's own direction (more
+protection makes medium slightly worse) points instead to the opposite
+story: at medium demand, movements more often finish their own queue and
+stop needing the green *before* any competing phase forces them out, so
+the served-vs-allocated gap there is more plausibly `allocate_green`
+being generous relative to what medium demand actually consumes, not the
+switch test cutting phases short. `protect_allocated_green`'s own demand
+guard already prevents holding an emptied phase, and the numbers say
+it's still not the right lever here -- because the underlying problem
+being targeted isn't the one medium demand actually has.
+
+**Left as an open, honestly-unresolved item.** `protect_allocated_
+green_congestion_threshold` stays at its verified default of `0.5`, kept
+as a proper tunable field (not reverted to a hard-coded literal) because
+exposing it was the right call even though the value it enabled didn't
+pan out -- the next person investigating medium demand does not need to
+re-discover that this specific lever doesn't work, or re-plumb it to
+find out. Medium demand's tie against Webster remains open, and whatever
+actually explains its allocation gap is a different mechanism than the
+one two attempts have now spent on heavy and medium's shared symptom.
+Full suite after this investigation: 227 passed, 1 skipped (unchanged --
+no default behavior changed).
+
+## M5 wrap-up (2026-09-06): where traffic management stands, paused here by request
+
+M5 built A-CA-MP (Adaptive CA-MP): a signal controller that reacts to real
+queues and arrivals rather than a fixed timing plan, fixed a set of
+diagnosed defects in that reaction (a pressure function that could go
+unboundedly negative, a switching-cost term with no way to separate
+"genuinely busy" from "briefly busy", a green-allocation promise the
+switch test had no memory of), and was benchmarked against Webster's
+fixed-time baseline and M4's earlier CA-MP controller the same way every
+milestone in this project has been -- paired seeds, held-out evaluation
+seeds never touched by tuning, every raw run kept. This entry is the
+plain summary of where that stands, at the point this session's work on
+it was paused by explicit request rather than because the investigation
+ran out of ideas.
+
+**The current, freshly-measured headline (`m5_gate_results_current.json`,
+10 held-out `EVAL_SEEDS`, replaces the earlier stale snapshot flagged and
+corrected above):**
+
+```
+level    Webster (old-school timer)   A-CA-MP (this project's controller)
+light      69,541 +/-  1,837            57,928 +/-  2,631   (-16.7%, clear win)
+medium    183,547 +/- 12,349           212,741 +/- 35,358   (+15.9%, statistical tie)
+heavy   1,368,839 +/- 43,105         1,277,791 +/- 53,763   (-6.7%,  narrow-overlap lean-win)
+```
+
+In plain terms: at light traffic, the new controller is a clear,
+proven improvement -- about 17% less total waiting time than a
+well-tuned fixed-time light. At medium traffic, it's a wash -- neither
+controller is proven better than the other, though the new one's average
+happens to run a bit higher. At heavy traffic -- the case this entire
+milestone's later work (Attempts 2 and 3 above) focused on -- it has
+gone from a clear, measured loss (~7% worse than the fixed-time light)
+to essentially even, leaning in the new controller's favor, though not
+yet proven beyond statistical doubt at only 10 test runs per condition.
+Zero interlock (safety) violations in any of these three arms, at any
+demand level, on any seed -- the new controller has never been faster
+at the cost of being less safe.
+
+**What shipped, concretely, and is on by default today:**
+- The corrected pressure function (§ M5's opening sections) -- fixes M4's
+  unbounded-negative defect, proven as a property, not just observed.
+- `use_relative_congestion_gate` -- **off** by default (two honest
+  negative/inconclusive results: cold-start-biased and warmed-baseline
+  versions, neither closed heavy demand's gap; kept, tested, and
+  documented as infrastructure for whoever picks this up next).
+- `protect_allocated_green` -- **on** by default. Verified on the full
+  held-out gate: zero effect at light and medium demand (a true no-op,
+  not just "small"), and a 12.1% person-delay improvement at heavy
+  demand with every one of 10 held-out seeds improving individually.
+  This is the mechanism that moved heavy demand from a loss to a
+  near-tie-leaning-win above.
+- `protect_allocated_green_congestion_threshold` -- a tunable exposed
+  while investigating medium demand; stays at its verified default of
+  `0.5` because lowering it was tested and found to make medium worse,
+  not better (an honest negative result, not a placeholder).
+
+**What's still open, honestly, not rounded away:**
+- Medium demand has never been a demonstrated A-CA-MP win in this
+  project's own numbers, at any point -- only ever a statistical tie
+  with a mean that leans the wrong way. Two lines of investigation
+  (the congestion-gate scale-handling attempts, and this session's
+  threshold-lowering attempt) have now looked at pieces of this and
+  come back empty; whatever actually explains medium's ~38%
+  served-vs-allocated gap has not yet been found.
+- Heavy demand's improvement, while consistent (10/10 seeds), is not
+  yet a statistically airtight win at 10 seeds -- the confidence
+  intervals only narrowly stop overlapping. More seeds, or a further
+  mechanism, could firm this up but haven't been tried.
+- The M5 branch-reconciliation note (further up this section) flagged
+  that this corridor's absolute numbers have drifted at least once
+  before for reasons not fully traced (a saturation-flow recalibration,
+  most likely) -- worth keeping in mind before quoting any of these
+  numbers as permanent.
+
+**Status: paused here by explicit request, not concluded as finished.**
+Three genuine improvements were found and honestly verified this session
+(the cold-start baseline fix, the allocation-protection mechanism, and
+the fresh three-arm re-measurement that corrected a stale headline
+number); one hypothesis (lowering the protection threshold for medium)
+was tested and honestly ruled out. The next time work resumes on traffic
+management specifically, medium demand's tie and heavy demand's
+narrow-but-real lead are the two open threads to pick up; otherwise the
+project's other planned pieces (incident detection, green corridor) are
+next per the standing scope note.
+
+## M7 — Green Corridor Engine (emergency vehicle preemption)
+
+Rung 3 of the arbitration ladder, reserved and deliberately empty since
+M2 ("3. Green corridor preemption — no requester yet"), and the thing
+`camp.py` said would eventually fill it: "the Green Corridor Engine
+exists to publish real `Reservation`s". Plus pressure terms `A(p)` and
+`D(p)`, which are the project's stated Contribution 1.
+
+### Research first: 86 catalogued hazards
+
+Before any design, an agent worked the standards and incident literature
+— MUTCD 11th Ed. Part 4, NTCIP 1211, NEMA TS2, NCHRP Synthesis 507, ITE
+RP-025D, TTI 1439-9 and 0-4657-1, FHWA's cross-cutting study
+(FHWA-JPO-05-010) and FHWA-HOP-24-019, NTSB HAR-96/02 (Fox River Grove),
+and the academic EVP/EVTSP literature — and produced **86 catalogued edge
+cases in 8 categories**: signal-display and driver-expectancy hazards
+(A), pedestrian (B), rail and light-rail interaction (C), multi-request
+arbitration (D), detection and request-integrity failures (E), recovery
+and transition (F), network effects (G), operational and policy (H).
+
+Design proceeded from the catalogue rather than from an idea of what
+preemption should do, and the top-ranked hazards each map to a named
+mechanism in the code. Two findings shaped the architecture more than the
+rest:
+
+- **The standards are silent or contradictory exactly where the danger
+  is.** D7: the NEMA TS2 specification says low-numbered preemptors
+  override higher-numbered; Florida LTAP's course material says the
+  opposite. A designer who takes the wrong one inverts the whole safety
+  hierarchy, and ITS lessons-learned records that reaching deployment —
+  transit priority granted equal precedence to emergency preemption. D4:
+  NEMA TS2 "does not explicitly detail mid-sequence preemption
+  replacement scenarios" at all. The literature's own answer is to bench
+  test every pairwise combination rather than trust any document, so
+  `test_every_class_pair_has_a_stated_winner` enumerates all 30 ordered
+  pairs and asserts each winner.
+- **Preemption's cost is not paid by "the network".** It is paid by an
+  identifiable set of movements, and the same ones every time, because
+  preemption density is highest near fire stations and hospitals. Reno
+  found EVP worsens operations under *all five* of its exit strategies;
+  Plano measured 10–20 minutes to recover near hospitals at peak. The
+  much-quoted Route 7 figure of a 1.6% travel-time increase came with an
+  explicit caveat that it may not generalise to corridors with closer
+  spacing and shorter cycles — which describes this one. So this
+  milestone reports a distribution, never a combined score.
+
+### A real safety bug found on the way in, and fixed
+
+`TraCICabinet._build_state` wrote `'G'` for every member of a phase's
+`green_movements`, including the ones SUMO's network marks `'g'`.
+
+The two halves of the existing argument were each correct and their
+conjunction was not. `extract_tier0_config.py` reads SUMO's `'G'`/`'g'`
+distinction into `Phase.protected_movements` so that
+`interlocks.no_conflicting_greens` can *skip* permissive movements —
+`Phase`'s own docstring says why: "SUMO enforces a dynamic yield check
+for those at runtime". The cabinet then told SUMO not to. I1 skipped them
+because SUMO would handle them, and the cabinet withdrew SUMO's handling.
+
+Nine link indices across four of the seven junctions are permissive
+(`cluster_11608007559_1880441514` L8/L12/L13/L3,
+`cluster_1880441532_4393295467` the same, `cluster_1880441541_4393295474`
+L3, `cluster_1880441740_4393296791` L15/L6), and **every one conflicts
+with a protected movement in its own phase** — L12 against L4/L5/L6/L7,
+L15 against L3/L4/L5. Under the old state string those pairs ran
+simultaneously with neither yielding.
+
+Measured, identical net/demand/seeds, `--collision.check-junctions true`:
+
+| seed | SUMO's own program | this cabinet (`'G'`) | with `'g'` |
+|---|---|---|---|
+| 1 | 0 | 3 (2 at junctions) | 0 |
+| 2 | 0 | 1 | 0 |
+| 3 | 0 | 1 (1 at junction) | 1 |
+
+Fixed, and `yellow_state_for` now takes both green characters to yellow
+— with `'g'` emitted, a permissive movement would otherwise have dropped
+straight to red with no yellow change interval at all, which MUTCD
+§4F.18 forbids without qualification.
+
+One collision survives the fix, on an internal lane of the
+`cluster_1880441532` cluster at seed 3. Cause not established; recorded
+rather than rounded to zero.
+
+`preserve_permissive=False` reproduces the old string exactly. The
+M3/M4/M5 numbers in this file were all measured under it, and they have
+**not** been re-run. That is a known caveat on those tables, not a
+correction to them.
+
+### The design rule everything else follows from
+
+**Never propose a plan the interlocks will reject.**
+
+Forced by what rejection means here. `arbiter.tick` answers a failing
+`interlocks.check` by commanding all-red. For a fixed-time plan that is
+right — nothing sits below it. For a preemption plan it is the worst
+available outcome: the emergency vehicle arrives at a junction in solid
+all-red with the cross street stopped too, and the adaptive controller
+that could have run the junction perfectly well is never asked.
+
+So rung 3 treats a rejected preemption as a **denial, not a fault**: the
+arbiter raises a `preempt_denied` event, calls back into the requester,
+and falls through to the strategy below as if no request had been made.
+H1 requires that a denied emergency request never be silent, so the
+denial is logged and counted rather than swallowed.
+
+And the engine pre-computes every rejection reachable from its own
+proposals — remaining minimum green (I3), a pedestrian phase mid-interval
+(I4), a starved cross movement at its bound (I5), the preemption-hour
+budget — holding or releasing instead of proposing something that would
+bounce. `test_a_proposed_preemption_is_never_rejected_by_the_interlocks`
+is that claim as a Hypothesis property over the input domain.
+
+**It found four real bugs, none of which a worked example would have
+caught**, because each needs two hostile conditions at once:
+
+1. A one-tick hold of a pedestrian phase fifteen seconds from finishing
+   its clearance — I4 requires `steps[0].green_s` to *complete* the
+   interval, not merely to not leave it.
+2. The budget checked against `tick_s` while the plan then claimed the
+   remaining pedestrian clearance — needs a nearly-exhausted budget and a
+   pedestrian phase mid-clearance simultaneously.
+3. I5 judged against the *target* phase when during both entry states
+   `steps[0]` is the **current** phase — needs a movement at its bound
+   that the current phase does not serve and the target does.
+4. `protected_movements or green_movements`: an empty protected set is
+   falsy, so a phase with *nothing* protected reported as protecting
+   everything — inverting the one check that keeps an emergency vehicle
+   off a permissive path.
+
+### What makes it a corridor engine and not seven preemptors
+
+Three mechanisms, each answering a specific catalogued failure of the
+per-junction design the field deploys:
+
+- **Lead time, not detection range** (E1, G2, G4). The claim is made when
+  `eta ≤ transfer + discharge_ahead + downstream_clear + latency`, capped
+  at `max_lead_s`. `transfer` is how long *this* junction needs to legally
+  show the phase (zero to twenty-odd seconds depending where in the cycle
+  the call landed — the variability E1 is about). `discharge_ahead` is the
+  queue in front of the vehicle at saturation flow, which is G2's
+  requirement that preemption *dissipate* the queue rather than merely
+  hold a green. `downstream_clear` adds the receiving link's queue when it
+  is loaded past `rho_couple`, which is G3's short-link coupling —
+  structurally the Fox River Grove failure with a signal in place of a
+  railroad, handled by starting the upstream junction earlier rather than
+  by refusing to open it.
+- **One arbitration per corridor per tick** (D11). `begin_tick` decides
+  which vehicle holds each junction from one view of the tracks, before
+  any junction is arbitrated. Key `(priority, first_seen_s, vehicle_id)`
+  — total, so D1's two-vehicles-at-once has an answer that is arbitrary
+  but always the *same* arbitrary answer.
+- **Bounded everything** (E7, E9, E10, F9, H1). Seven named release
+  reasons, each counted: `PASSED`, `ROUTE_CHANGED`, `STALE_REPORT`,
+  `MAX_DWELL`, `BUDGET`, `MAX_WAIT_HEADROOM`, `SUPERSEDED`.
+
+`MAX_WAIT_HEADROOM` has no counterpart in the EVP literature, which is a
+comment on the literature rather than on the hazard: this build has a
+hard per-movement maximum-wait interlock, so an unbounded hold does not
+degrade the cross street gradually — it hits a wall and the junction
+fails safe into all-red with the vehicle still approaching.
+
+### A dormant interlock, made reachable
+
+`JunctionContext.preempt_seconds_last_hour` has existed since M2 and was
+**zero in every run ever made**, so `interlocks.preempt_budget_ok` —
+written in M2 specifically for this requester — was correct and
+structurally unable to fire. The engine's rolling-hour ledger populates
+it, and the runner sets it on the context immediately before the check.
+It fires now.
+
+### Terms 4 and 5 — Contribution 1
+
+    𝒫(p) = P_press(p) + F(p) + A(p) + D(p)
+
+    A(p) = λ_A · Σ_m s_m · u_m · q̂_m     u_m ∈ [0,1], arrival imminence
+    D(p) = λ_D · Σ_m s_m · d_m           d_m = decayed seconds held on red
+
+Both are identically zero when nothing is responding, so the controller
+is bit-for-bit its M5 self on every ordinary tick and the terms' effect
+is attributable rather than entangled.
+
+`A(p)` is the term that does most of the corridor's work, **and it is not
+preemption.** Preemption is expensive at a price fixed by physics; a bias
+inside ordinary max-pressure control clears the same queue at no cost to
+the budget and with no cross street held on red. Preemption is then only
+the last-metre guarantee. The form is a *multiplier on discharge
+benefit*, not an additive bonus: a movement with nothing waiting scores
+zero however imminent the arrival, which is what stops it reproducing
+M4's `S(p)` failure — a constant deciding a comparison that scales.
+
+`D(p)` is deliberately asymmetric with it, having no live-demand
+multiplier. A movement held on red long enough for its own arrivals to
+divert to parallel streets (G6) is still owed the service, precisely
+because the demand it lost is invisible to any live measurement. Unlike
+Reno's five exit strategies — all one-shot choices of which phase to
+return to, after which the controller forgets the preemption happened —
+the debt makes repayment continuous, proportional, and self-terminating.
+
+### What the benchmark measures, and what it cannot
+
+Three arms, paired on the same `EVAL_SEEDS` every prior gate used:
+`none` (no preemption), `reactive` (per-junction, fixed 300 m range, no
+corridor coordination, `A(p)`/`D(p)` zeroed — what the field deploys and
+the arm that actually has to be beaten), and `corridor`. The two
+preemption arms share identical safety machinery, so any difference is
+attributable to route-level coordination rather than to a safety kernel
+one arm has and the other does not.
+
+Stated limitations, none of them small:
+
+- **Detection is perfect.** TraCI gives exact position, speed and route,
+  so the reporter has none of the failure modes that dominate the real
+  literature — no occlusion (E4/E5), no light trespass (E6), no GPS
+  multipath (E14), no lens dirt or tree overgrowth (E15), no acoustic
+  reflection (E12). The engine is built to survive all of those, and this
+  benchmark cannot exercise any of them.
+- **No pedestrian phases exist in this network**, so B1–B8 are
+  implemented and unit-tested against synthetic junctions and cannot be
+  exercised by any corridor run.
+- **No railroad crossing**, so all of category C is out of reach here.
+  It is the most mature failure-mode literature in the field and this
+  build touches none of it.
+- **Six of seven junctions have two phases**, so D3's
+  same-approach-divergent-turns case barely arises and multi-phase
+  arbitration is thinly exercised.
+
+### M7 gate — measured
+
+Medium demand, `EVAL_SEEDS` 1–10, paired t-test (n=10, t=2.262). Five
+arms. `reactive` is per-junction preemption on a fixed 300 m range — what
+the field deploys, and the arm that has to be beaten. Beating
+no-preemption only shows preemption works, which has been known since the
+1970s.
+
+| arm | EV travel (s) | EV time loss (s) | EV stops | person-delay | interlock violations |
+|---|---|---|---|---|---|
+| none | 1034.2 | 420.7 | 11.7 | 250,516 | 0 |
+| reactive | 711.4 | 97.5 | 5.5 | 245,242 | **1** |
+| corridor *(v1)* | 837.1 | 223.0 | 11.8 | 313,992 | 0 |
+| corridor_noAD *(v1)* | 822.9 | 209.4 | 11.6 | 248,882 | 0 |
+| corridor_noD *(v1)* | 798.3 | 184.1 | 10.2 | 245,958 | 0 |
+| **corridor (v2)** | **683.2** | **69.3** | **3.7** | 247,735 | 0 |
+| corridor_noAD *(v2)* | 674.8 | 61.3 | 3.2 | 251,095 | 0 |
+
+#### The first version lost to reactive preemption on both axes at once
+
+EV slower *and* cross street paying more. The ablation arms exist to
+attribute that, and they split it into two independent failures.
+
+**Failure 1 — `D(p)` was not scale-free.** Paired against `reactive`,
+`corridor v1` costs **+68,750 person-delay [+44,892, +92,607]**,
+significant; `corridor_noD v1` costs **+716 [−12,422, +13,853]**, not
+significant. The entire 28% cross-street blow-up is the debt term.
+
+Confirmed analytically before the ablation finished. Debt accrued one
+second per tick for *every* movement a preemption held, so after a 20 s
+preemption at `cluster_11608007559_1880441514` — 10 movements, `Σ s_m` =
+4.49 — `D(P0)` reached `0.5 × 4.49 × 20 = 44.9`, against a
+`pressure_scale` whose median at decision ticks is 0.21 and p90 is 9.8
+(M5's own diagnostics, recorded above). Three to two-hundred times the
+entire pressure signal, at every junction on the route, for the two
+minutes its half-life takes to decay, four times a run.
+
+**This is the third time this project has hit the same shape**: M4's
+constant `S(p)`, M5's `lost_time_weight` sized against the full cycle
+instead of a phase's share, and now this. A term whose magnitude is set
+by something other than traffic, deciding a comparison whose magnitude is
+set by traffic. The original docstring argued from dimensional analysis —
+seconds × PCU/s is PCU, the same unit as `s·q` — which is true and
+irrelevant. **Dimensional agreement is not magnitude agreement.** It even
+named the wrong threshold ("above 1.0 would let debt outrank live
+queues") when the crossover was two orders of magnitude below 1.0.
+
+Fixed by clipping `d_m / T` the way `fairness` clips `wait / max_wait`,
+bounding `D(p)` by `λ_D · Σ_m s_m` however long anything has been held.
+`T` is one phase's share of the nominal cycle: debt saturates once a
+movement has lost a full green's worth of service.
+
+**Failure 2 — the lead-time trigger under-claimed.** With both pressure
+terms zeroed so only the trigger differed, `corridor_noAD v1` cost the EV
+**+111.5 s [+93.5, +129.5]** against a plain 300 m fixed range.
+
+`transfer + discharge + downstream + latency` is a *lower bound on
+sufficiency* — the least advance at which the junction could be ready —
+and triggering on a lower bound leaves zero margin for ETA error. It is
+also small in the common case: the dominant term collapses to yellow plus
+all-red once the current phase has served its minimum green, about 8 s,
+roughly 180 m at emergency speed — inside the 300 m baseline and far
+inside the 1,600–2,300 ft real installations use. Fixed with
+`base_lead_s = 20 s` as a floor; the computed terms still *raise* the
+lead where a queue must be dissipated (G2) or a short downstream link
+cleared (G3).
+
+#### After both fixes
+
+| comparison | EV travel | EV time loss | EV stops | person-delay |
+|---|---|---|---|---|
+| corridor vs none | **−351.0 s (−33.9%)** * | **−351.4 (−83.5%)** * | **−8.0 (−68.4%)** * | −2,780 (−1.1%) |
+| corridor vs reactive | **−28.2 s (−4.0%)** * | **−28.3 (−29.0%)** * | −1.8 (−32.7%) | +2,493 (+1.0%) |
+
+`*` = 95% CI excludes zero.
+
+**The headline: the corridor engine beats field-standard reactive
+preemption on emergency-vehicle travel time by 4.0% [0.4%, 7.5%], and the
+cross street pays no measurable price** (+1.0%, CI [−7.1%, +9.1%],
+contains zero). Zero interlock violations across all 30 corridor runs;
+the reactive arm had one. Zero `denied_by_interlock` — the "never propose
+a plan that will be rejected" invariant held in the simulator as well as
+in the property test.
+
+Release-reason distribution over 10 runs, 280 reservations (4 emergency
+vehicles × 7 junctions × 10 runs — every vehicle claimed every junction
+on its route exactly once): **239 `PASSED`**, 40 `STALE_REPORT`, 1
+`MAX_DWELL`. A corridor whose preemptions mostly end in `PASSED` is
+working. 735 ticks were spent in `ENTRY_HOLD` waiting out minimum green,
+which is hazard E1 in the measurements rather than in a docstring.
+Preemption spend: 440 s per run over 7 junctions and 4 responses, about
+15.7 s per junction-event against the literature's ~25 s average.
+
+#### The negative result: Contribution 1 does not pay for itself
+
+`corridor` against `corridor_noAD` — the same preemption policy, with
+`A(p)` and `D(p)` on versus off:
+
+| | mean diff | 95% CI |
+|---|---|---|
+| EV travel | +8.4 s | [−6.8, +23.6] |
+| EV stops | +0.5 | [−1.1, +2.1] |
+| person-delay | −3,360 | [−27,054, +20,334] |
+
+**Every interval contains zero.** The entire measured win comes from the
+lead-time trigger with its floor, and the two pressure terms — the
+project's stated Contribution 1 — contribute nothing detectable on this
+corridor at this demand level, in either direction.
+
+Stated plainly rather than buried, and not tuned until it looks better.
+Three readings are consistent with the data and this experiment cannot
+separate them: (a) the terms are genuinely worthless here; (b) `λ_A` and
+`λ_D` are simply untuned — every other parameter in `AcampConfig` went
+through CMA-ES and these two did not; (c) the corridor is too easy for
+them to matter, since at medium demand `A(p)`'s job of dissipating the
+queue ahead is mostly already done by the 20 s of lead time. The natural
+next experiment is to put both weights into `tuning.PARAM_SPACE` and let
+the optimizer decide, and to re-run at heavy demand where queues ahead of
+the vehicle actually persist. Until that is done, the honest claim for
+the milestone is the lead-time trigger and the safety machinery, not the
+pressure terms.
+
+**Tests:** 258 pass, 1 skipped (48 new). The safety invariant — no plan
+the engine proposes is ever rejected by the interlocks — holds at 6,000
+Hypothesis examples; it found five real bugs at 400.
+
+### M7 follow-up — a third defect, found by asking the right question
+
+The gate's honest reading was that `A(p)` and `D(p)` contributed nothing
+detectable, and the obvious next move was to put `λ_A` and `λ_D` into
+`tuning.PARAM_SPACE` and let CMA-ES decide. That would have been wrong,
+and cheap instrumentation said so before a single tuning run.
+
+The question worth asking first was not *what values* but **how often the
+terms are even live**. Both are identically zero when nothing is
+responding, and a run has four emergency vehicles in 1800 s; a term
+active on 2% of ticks cannot move a run-level average however well tuned,
+and tuning it would have been fitting noise.
+
+Measured on one seed by summing `AdaptiveCamp.stats` across junctions:
+
+| | ticks | share |
+|---|---|---|
+| total (7 junctions) | 11,458 | |
+| `A(p)` live | 1,273 | 11.1% |
+| **`D(p)` live** | **9,493** | **82.9%** |
+
+The opposite of the hypothesis, and worse. `D(p)` was not a rare,
+low-leverage term — it was on almost permanently.
+
+**Why: the ledger had `incur` and `decay_to` and nothing else.** Debt fell
+only with the clock; it never registered that the service had been given
+back. So a movement served ten times carried exactly the debt of one
+never served at all — destroying the single distinction `D(p)` exists to
+make — and with a 120 s half-life, debt from a preemption at t=300 takes
+about 2,900 s to fall under the cull threshold, longer than the scenario.
+The result was a persistent, phase-asymmetric bias sitting underneath
+every decision for the rest of the run.
+
+**That is M4's `S(p)` failure reached from the opposite direction**: not a
+constant that never scaled, but a decaying quantity that never cleared.
+Third and fourth instances of the same family in this project.
+
+Fixed by `DebtLedger.repay`, called from `CorridorEngine.propose` before
+any early return — deliberately not inside the preemption branches,
+because most of the seconds that settle a debt are ordinary green from
+the ordinary controller long after the preemption ended, and a hook that
+only fired while preempting would never settle anything. One second of
+green repays one second of lost green, so the unit is exact. Time-decay
+is kept alongside it for debt repayment cannot reach: a movement whose
+demand diverted to a parallel route (G6) may never present a queue, and
+its claim should lapse rather than wait forever.
+
+`D(p)` live on **9.6%** of ticks afterwards, from 82.9%.
+
+#### Re-measured, medium demand, 10 paired seeds
+
+| arm | EV travel | EV loss | EV stops | person-delay |
+|---|---|---|---|---|
+| reactive | 711.4 | 97.5 | 5.5 | 245,242 |
+| corridor v2 *(no repayment)* | 683.2 | 69.3 | 3.7 | 247,735 |
+| **corridor v3** | **680.6** | **67.1** | **3.0** | **235,029** |
+
+Against `reactive`:
+
+| | mean diff | 95% CI | |
+|---|---|---|---|
+| EV travel | **−30.8 s (−4.3%)** | [−54.0, −7.6] | significant |
+| EV time loss | **−30.4 s (−31.2%)** | [−53.5, −7.4] | significant |
+| **EV stops** | **−2.5 (−45.5%)** | [−4.2, −0.8] | **significant — was not before** |
+| person-delay | −10,213 (−4.2%) | [−23,472, +3,046] | not significant |
+
+Two things moved. EV stops became significant. And cross-street delay
+changed sign: +1.0% before the repayment fix, −4.2% after — still not
+significant, but no longer even directionally a cost.
+
+**The Contribution 1 verdict is unchanged at medium demand.** `corridor
+v3` against `corridor_noAD`: EV travel +5.8 s [−19.1, +30.7], stops −0.2
+[−1.9, +1.5], person-delay −16,066 [−44,116, +11,984]. Every interval
+still contains zero. The repayment fix made `D(p)` a well-formed term
+rather than a persistent bias; it did not make it a demonstrably useful
+one. Heavy demand — where the queue ahead of the vehicle actually
+persists, and `A(p)` has something to dissipate — is the remaining test.
+
+### M7 heavy demand, and the settled verdict on Contribution 1
+
+Heavy demand was the remaining test for `A(p)` and `D(p)`: at medium
+demand the queue ahead of an emergency vehicle is largely dissipated by
+the 20 s of lead time alone, so anticipation has little left to do. Heavy
+is where queues persist.
+
+#### Corridor engine vs field-standard reactive, heavy, n=10
+
+| arm | EV travel | EV loss | EV stops | person-delay | violations | denied |
+|---|---|---|---|---|---|---|
+| reactive | 1014.2 | 400.8 | 15.8 | 1,782,412 | 2 | 0 |
+| corridor_noAD | 989.0 | 375.0 | 12.7 | 1,783,130 | 5 | 0 |
+| corridor | 861.2 | 246.9 | 8.1 | 1,756,359 | 4 | 0 |
+
+corridor vs reactive: **EV stops −7.7 (−48.7%) [−15.2, −0.2]**,
+significant. EV travel −153.0 s (−15.1%) [−370.4, +64.4], not
+significant — heavy-demand variance swamps it, exactly as M5 found for
+person-delay.
+
+**The interlock violations are not the engine's.** `denied_by_interlock`
+is 0 on every run in every arm, so nothing the corridor rung proposed was
+ever rejected; these are A-CA-MP's own rejections under heavy load, a
+pre-existing M5 behaviour. Note the arm *without* the pressure terms has
+the most (5 against 4), which rules out the terms as the cause.
+
+#### The n=10 heavy result on Contribution 1 looked promising. It was noise.
+
+At n=10, `corridor` against `corridor_noAD` — same preemption policy,
+`A(p)` and `D(p)` on versus off — gave EV travel **−127.8 s (−12.9%)**,
+stops −4.6 (−36.2%), person-delay −1.5%: all three favourable and large,
+unlike medium demand where everything sat on zero. Every CI contained
+zero, so the responsible move was a power calculation rather than a
+claim: n≈23 for travel time, n≈18 for stops, n≈41 for delay.
+
+Twenty more seeds were run. The effect did not merely fail to confirm —
+**it changed sign.**
+
+| seeds | n | EV travel diff | 95% CI |
+|---|---|---|---|
+| 1–10 | 10 | **−127.8** | [−349.5, +93.9] |
+| 11–30 | 20 | **+83.2** | [−46.4, +212.7] |
+| **1–30** | **30** | **+12.8** | **[−99.3, +125.0]** |
+
+Stops behaved the same way: −4.60 [−11.59, +2.39] on the first ten,
++3.50 [−0.92, +7.92] on the next twenty.
+
+Final, heavy demand, n=30, paired (t = 2.045, df = 29):
+
+| | mean diff | 95% CI |
+|---|---|---|
+| EV travel | +12.8 s (+1.4%) | [−99.3, +125.0] |
+| EV time loss | +12.8 s (+3.8%) | [−99.4, +125.1] |
+| EV stops | +0.8 (+7.0%) | [−3.0, +4.6] |
+| person-delay | −1,862 (−0.1%) | [−45,103, +41,378] |
+
+**Verdict: `A(p)` and `D(p)` do not help.** Not at medium demand, not at
+heavy demand, on 30 paired seeds, on any of four metrics. The point
+estimates are indistinguishable from zero and two of the four are
+mildly adverse.
+
+Extending the evaluation set from 10 to 30 seeds is legitimate here
+precisely because nothing was tuned against it: `λ_A` and `λ_D` are
+hand-set defaults that never entered `tuning.PARAM_SPACE`, so seeds 11-30
+are as unseen as seeds 1-10. Had the terms been optimized, this would
+have been testing on the training set.
+
+The methodological lesson is the one worth keeping. A ten-seed paired
+comparison on this corridor at heavy demand cannot resolve a 13% effect,
+and a ten-seed result that *looks* like a 13% win is as likely to be
+noise as signal. The project already knew heavy-demand variance was
+large — M5 recorded a person-delay sd of 86,117 before online
+calibration halved it — and the honest reading of "large effect, CI
+contains zero" is "unresolved", never "promising".
+
+#### What the milestone actually claims
+
+The Green Corridor Engine's measured contribution is the **lead-time
+trigger and the safety machinery**, not the pressure terms:
+
+- medium demand vs reactive: EV travel −4.3%, time loss −31.2%, stops
+  −45.5%, all significant; cross-street delay −4.2%, not significant
+- heavy demand vs reactive: stops −48.7%, significant; travel −15.1%,
+  unresolved
+- **zero `denied_by_interlock` across 100 corridor runs** at both demand
+  levels — the "never propose a plan that will be rejected" invariant
+  held in the simulator as well as in the property test
+
+`A(p)` and `D(p)` remain in the code, default-on, and documented as
+unproven. Three honest options for them, in order of cost: put `λ_A` and
+`λ_D` into `tuning.PARAM_SPACE` and let CMA-ES decide (the terms were
+never optimized, so "worthless" and "badly parameterised" are still
+distinguishable); measure them against an EV-local metric rather than a
+run-level average, since a term active on 10% of ticks may be real and
+simply undetectable in an 1800 s mean; or delete them and claim only the
+trigger. The third is defensible today and the first is the one that
+would settle it.
+
+---
+
+## M7 dispatch — giving the ambulance somewhere to go
+
+M7 built a corridor engine that consumes a route. Nothing in the system
+produced one. `m7_corridor_benchmark.py` carried this:
+
+```python
+EV_ROUTE_EDGES = (
+    "219187869 350502993#0 350502993#1 350502993#2 350502993#4 "
+    "350502993#6 350502993#7 -343269496 220332271#0"
+).split()
+```
+
+Nine edges, pasted in — so "where is the ambulance going" had no answer
+anywhere in the codebase, and the honest description of the build was
+*signal control for a vehicle whose destination somebody typed in*. It
+was scope, not a missing input: a simulated ambulance can pick a
+hospital as easily as it can follow a fixed edge list.
+
+Full write-up in `docs/dispatch_and_destinations.md`. What follows is
+what was built, what was measured, and the two things the measurement
+changed.
+
+### The destinations were in the OSM file all along
+
+`scenarios/networks/vijayawada/extract_facilities.py` parses the
+corridor's own OSM extract into `facilities.json`: **103 facilities — 85
+hospitals, 18 clinics — with 11 normalised capabilities**, each snapped
+to the drivable edge an ambulance would approach it on.
+
+| capability | n | | capability | n |
+|---|---|---|---|---|
+| general | 48 | | neuro | 4 |
+| obstetric | 13 | | oncology | 4 |
+| ophthalmic | 12 | | orthopaedic | 4 |
+| dental | 5 | | cardiac | 3 |
+| paediatric | 5 | | ent | 3 |
+| | | | trauma | **1** |
+
+The facilities and their locations are real; the capability tags are a
+model, mostly keyword-matched from the facility's name. OSM's own
+`healthcare:speciality` is preferred where it exists. A deployment
+replaces the JSON with the health authority's register, which is a data
+change and not a code change.
+
+Three data bugs were found and fixed on the way, each by looking at the
+output rather than at the code:
+
+1. **Synonym vocabulary split.** The keyword pass produced `ophthalmic`
+   and the OSM tag produced `ophthalmology` — one capability under two
+   names, which is a lookup that fails silently. Folded through a
+   `_SYNONYMS` map, and there is now a test asserting no synonym pair
+   survives in the extract.
+2. **The `general` fallback was too generous.** "An unlabelled hospital
+   is general" is the right default, but `amenity=hospital` is applied
+   loosely in OSM — the live dispatch probe came back with a fertility
+   clinic as the nearest general facility, and a diagnostics centre
+   behind it. A negative keyword list fixed it; a stricter positive rule
+   would have dropped the genuinely unnamed district hospitals that *are*
+   the right destination.
+3. **Grid-cell de-duplication merged nothing.** OSM carries one building
+   as both a node and a way and the copies disagree. Keying on a 100 m
+   cell looked sufficient and was not: the duplicate pairs in this
+   extract sit **90–95 m apart**, and two points that close land in
+   different 100 m cells about as often as not. *A cell whose size merely
+   exceeds the distance does not co-locate anything — only the distance
+   itself does.* Replaced with an actual distance test against a 250 m
+   merge radius, plus name normalisation.
+
+Bug 3 mattered more than a double count: the duplicate pair *disagreed*,
+and the copy tagged `hospital` picked up the unlabelled-hospital
+fallback. That is how a fertility clinic became a general-emergency
+destination.
+
+### The decision
+
+```
+choose the facility minimising live travel time,
+  among those that can treat the incident,
+  from the shortlist of the k nearest by air
+```
+
+An `IncidentRequest` carries an origin and a `required_capability` and
+**no destination** — the vehicle does not tell the system where it
+intends to go, the system works it out. Routing is
+`traci.simulation.findRoute` against *current* edge travel times, for the
+emergency vehicle type specifically (an emergency vClass is permitted on
+edges a car is not; routing as a car would return a worse facility rather
+than an error).
+
+`choose` returns `None` rather than falling back to `general` when no
+capable facility is reachable. That fallback is a policy decision —
+"we could not reach an ophthalmic facility so we sent them to a general
+one" must be owned by a caller, not made silently in a routing function.
+
+`should_redispatch` re-evaluates a committed decision, requires a 30 s
+improvement rather than any improvement, and measures against the current
+facility's travel time **recomputed now** — never against the estimate
+made at dispatch, which is stale by construction and would re-route on
+nothing more than the original having been optimistic.
+
+`RouteFn` is injected rather than imported, so `choose` is tested against
+a dictionary of travel times instead of a simulator. 16 tests.
+
+### The measurement that changed the benchmark: nearest-hospital dispatch does not use the corridor
+
+The obvious scenario is a general emergency going to the nearest
+hospital. It was tried, measured, and is the wrong scenario for a
+corridor benchmark. Routing a `general` incident from **each of the 19
+approach edges** into the seven signalised junctions:
+
+| | result |
+|---|---|
+| best case | **2 of 7 junctions** |
+| median | **1 junction** |
+| origins reaching no junction at all | **7 of 19** |
+| travel times | **6–60 s** |
+
+That is not dispatch failing. It is what 48 general facilities inside a
+4 km box means — the nearest hospital is always a block away, and a green
+corridor is irrelevant to a 22-second trip.
+
+**Scarcity is what makes a corridor worth having**, here and in the
+field, where EVP is justified by long responses and specialist transfers
+rather than short ones. Best traversal over the same 19 origins, by
+capability: trauma (n=1) **7/7**; ent (n=3) 6/7; dental (n=5) 6/7;
+obstetric, ophthalmic, paediatric, oncology 5/7; cardiac, neuro,
+orthopaedic 3/7; general (n=48) 2/7.
+
+So the gate's incident is a **trauma call**, whose one legal destination
+is `S V R Neuro & Trauma Hospital`, reached through all seven junctions
+in order. The dispatch route and the old hand-picked one share 8 of 9
+edges and traverse the same seven junctions in the same order, differing
+only in the final edge — the hand-picked one ran on to the bounding box,
+the dispatched one stops at the hospital. The gate measures the same
+manoeuvre it always did; it now measures a route the system *derived*,
+and the old edge list turning out to be very nearly the dispatch answer
+was luck, not method.
+
+Both cases are one flag apart in the demo:
+
+```
+python scripts/m7_demo.py --capability trauma     # 7 junctions, ~190 s
+python scripts/m7_demo.py --capability general    # 1 junction,   ~40 s
+```
+
+**Dispatch is frozen at t = 0 in the benchmark and live in the demo.**
+Routing against live conditions would let the arms diverge onto different
+hospitals, and an EV travel time measured against a different hospital in
+each arm is not a comparison at all. On this corridor `should_redispatch`
+fires zero times for a trauma call — there is nowhere else to go.
+
+### A fourth defect, found only because the ambulance had a destination
+
+With the route ending at a hospital instead of running off the bounding
+box, the arrival narration made a long-standing bug visible:
+`EmergencyVehicleReporter` stopped submitting reports the moment no
+junctions remained ahead, so the **final junction of every response**
+released on `report_ttl_s` with reason `stale_report` rather than
+`passed` — **41 of 281 releases across the recorded medium gate**, about
+one per emergency vehicle per run.
+
+Nothing unsafe happened. The bounded release is exactly the mechanism for
+a track that goes quiet and it fired correctly. But the junction stayed
+held for the full six-second timeout after the vehicle had already
+cleared it, and a release reason saying *we lost the vehicle* when the
+vehicle simply finished its route is the release-reason distribution
+failing at the one job it has — the distribution exists to answer "is
+this working", and it was reporting a detection failure on every single
+successful response.
+
+The fix is one line: a report whose route is empty is not an absent
+report. It states the true thing — no junctions remain ahead — and
+`_Track.dropped_by_passing` reads a fully-dropped prefix as a passage.
+One run went from 24 `passed` / 4 `stale_report` to **28 `passed` / 0
+`stale_report`**, with `28/28` junction passages confirmed independently
+by the reporter's own ground truth.
+
+It took a real destination to see it. While the ambulance drove off the
+edge of the map, "the vehicle vanished" and "the vehicle arrived" were
+the same event.
+
+This is the fourth defect in the family M4's `S(p)`, M5's
+`lost_time_weight` and M7's `D(p)` belong to, and it has the same shape:
+a mechanism that is correct in isolation, exercised only in a regime
+where its failure is indistinguishable from success.
+
+### The gate, re-measured
+
+Both changes above move measured behaviour, so the medium gate was
+re-run rather than carried over: `none`, `reactive` and `corridor`, the
+same ten evaluation seeds, paired. Artefact:
+`scripts/m5_artifacts/m7_corridor_gate_dispatch.json`. The ablation arms
+(`corridor_noAD`, `corridor_noD`, `corridor_v1`, `corridor_v2`) and
+everything at heavy demand were **not** re-run and stay on the older
+route and release behaviour; they remain the evidence for the three
+defects they were built to attribute and must not be compared
+numerically against these.
+
+| arm | EV travel (s) | EV time loss (s) | EV stops | person-delay | wait p95 (s) | wait max (s) | violations |
+|---|---|---|---|---|---|---|---|
+| none | 1211.9 | 542.8 | 11.6 | 256,922 | 372.2 | 553.0 | 0 |
+| reactive | 778.3 | 110.2 | 5.4 | 236,883 | 336.8 | 499.1 | 0 |
+| corridor | **750.7** | **82.3** | **3.7** | 240,748 | 328.8 | **448.8** | 1 |
+
+Paired against `reactive`, the arm that actually has to be beaten:
+
+| metric | difference | 95% CI | |
+|---|---|---|---|
+| EV travel | **−27.6 s (−3.5%)** | [−41.9, −13.4] | significant |
+| EV time loss | **−27.8 s (−25.3%)** | [−42.5, −13.1] | significant |
+| EV stops | **−1.70 (−31.5%)** | [−3.05, −0.35] | significant |
+| worst individual wait | **−50.3 s (−10.1%)** | [−92.3, −8.3] | significant |
+| person-delay | +3,864 (+1.6%) | [−12,540, +20,269] | not significant |
+| wait p95 | −8.0 s (−2.4%) | [−43.1, +27.1] | not significant |
+
+**How this compares with the pre-dispatch numbers.** The direction and
+the significance pattern are unchanged; the effect sizes are smaller.
+EV travel was −4.3% and is −3.5%; time loss was −31.2% and is −25.3%;
+stops were −45.5% and are −31.5%. Part of that is the release fix — the
+corridor arm now gives each response's last junction back about six
+seconds earlier, which is less preemption bought for the same trip — and
+part is the changed final edge, which slowed every arm (`none` went from
+1034 s to 1212 s). Reporting the smaller numbers rather than the larger
+ones because these are the ones the code in the repository produces.
+
+Two things worth flagging in the other direction. **Worst individual
+wait is now a significant win for the corridor arm** (−50 s against
+reactive), which is the metric H9 predicts EVP should damage — the cost
+of preemption lands on identifiable movements, and a mean hides it. And
+**cross-street person-delay is not distinguishable from reactive in
+either direction** at n=10; the previously recorded −4.2% and this run's
++1.6% are both inside the noise, so the honest claim is "no detectable
+cost", not "a saving".
+
+**One interlock violation**, corridor arm, seed 6, step 1731, junction
+`cluster_1880441740_4393296791`, mode `failsafe_interlock_rejected` —
+with the engine's own `denied_by_interlock` at **0** on every run. That
+places it in A-CA-MP and not in the corridor rung, which is the same
+attribution the heavy-demand runs recorded earlier. It is a pre-existing
+strategy-level issue now appearing once at medium demand, not a
+regression in the preemption path, and it is not fixed here.
+
+**Release reasons across all ten corridor runs: 280 releases, every one
+of them `passed`.** Zero `stale_report`, zero `max_dwell`, zero
+`route_changed`, zero `budget`, zero `max_wait_headroom`, zero
+`superseded`. The pre-fix gate recorded 41 `stale_report` and 2
+`max_dwell` over the same ten seeds.
+
+---
+
+## M4/M5 re-measured under the fixed cabinet — the headline inverts, and the cause is found
+
+Requested as "fix M4 and M5". Re-measurement came first, on the argument
+that every M4 and M5 number in this file was produced while
+`TraCICabinet` wrote `'G'` for nine movements the network marks `'g'` —
+removing the yield obligation and, with it, handing those movements
+capacity they were never entitled to. That is a *capacity* defect, not
+only a safety one, so any diagnosis resting on those numbers was resting
+on an inflated network.
+
+It was resting on an inflated network. The headline inverts.
+
+### The corrected gate (10 `EVAL_SEEDS`, paired, `preserve_permissive` on)
+
+| level | Webster | A-CA-MP | paired difference | before the fix |
+|---|---|---|---|---|
+| light | 69,573 ± 2,111 | 99,791 ± 13,005 | **+43.4%** [+17,031, +43,404], 9/10 seeds worse | −16.7%, "a clear, proven win" |
+| medium | 193,354 ± 12,664 | 243,015 ± 9,785 | **+25.7%** [+33,819, +65,503], 10/10 seeds worse | +15.9%, "a statistical tie" |
+| heavy | 1,601,950 ± 47,059 | 1,534,346 ± 72,158 | **−4.2%** [−111,173, −24,034], 1/10 seeds worse | −6.7%, "narrow lean-win" |
+
+Artefacts: `scripts/m5_artifacts/m5_gate_medium_postfix.json`,
+`m5_gate_lightheavy_postfix.json`.
+
+**Light demand — this milestone's proudest result — was an artefact of
+the safety defect.** A −16.7% win is now a +43.4% loss, significant, on
+9 of 10 seeds. Medium was never a tie: it is a clean 25.7% loss on 10
+seeds out of 10. Heavy is the only level where A-CA-MP beats Webster,
+and it is now *better* established than before (significant, 9/10 seeds
+improving) rather than a narrow lean.
+
+M4's `camp`, measured in the same run at medium: **+148.6%** against
+Webster [+264,609, +310,180], 10/10 seeds. A-CA-MP beats it by **−49.5%**,
+so M5's work over M4 was a large and real improvement — just not enough
+to reach the baseline anywhere except heavy demand.
+
+**Two interlock violations at light and three at heavy** appeared in the
+A-CA-MP arm (Webster: zero at every level). New, and not previously
+recorded at these levels.
+
+### The hypothesis that looked obvious, and was wrong
+
+The post-fix decision counters showed `extend_allocation_protected`
+firing **330 times per run** at medium — which the record says is
+impossible: the mechanism is gated at `congestion_weight >= 0.5` and
+`m5_congestion_profile.py` measured medium peaking at 0.339. The cabinet
+fix explains it. Removing nine movements' unearned capacity lengthens the
+queues they feed, which raises the smoothed load, which pushes medium
+over a gate it previously sat below. **A safety fix moved medium demand
+into a regime whose mechanism had only ever been verified at heavy
+demand** — and `m5_protect_threshold_sweep.py` had separately measured
+that forcing it to fire at medium made delay monotonically worse.
+
+So: turn it off and re-measure. `scripts/m5_medium_ablation.py`, paired,
+10 seeds.
+
+**It is not the cause.** Turning protection off changed medium delay by
+**+2.8% [−20,478, +33,951] — not significant**, 6/10 seeds worse, and it
+*introduced two interlock violations* (seeds 2 and 6) at
+`cluster_1880441740_4393296791` where the shipped arm had none. That is
+the same junction PROGRESS.md records as the original starvation-deadlock
+site, and the same one that produced the lone violation in the M7 medium
+gate. `protect_allocated_green` appears to be suppressing a failure mode
+at that junction that nobody designed it for. Kept on; hypothesis dead.
+
+### The cause, found by following the signature instead of the mechanism
+
+The corrected numbers carry a signature that is not ambiguous. At medium,
+A-CA-MP stops vehicles **less** often than Webster (2.78 vs 3.09 per
+vehicle) and delays them **more** (+25.7%). Fewer stops with more total
+delay means longer waits per stop — vehicles sitting through one long red
+instead of being released and re-stopped. Short cycles give the opposite
+signature. So the suspect is **cycle length**, not switching logic.
+
+Webster's entire method is a closed-form delay-minimising cycle computed
+from measured flows. **A-CA-MP has no cycle concept at all.** Its
+effective cycle is whatever emerges from tick-by-tick extend/switch
+decisions, and nothing constrains that emergent value to be anywhere near
+the delay optimum. `scripts/m5_medium_cycle_diagnostic.py` measures both,
+with no simulation of its own — Webster's from `compute_timing` on the
+same flows, A-CA-MP's from the decision counters the gate already
+recorded:
+
+| level | Webster optimum | A-CA-MP emergent | ratio | result vs Webster |
+|---|---|---|---|---|
+| light | 40.0 s | 70.8 s | **1.77×** | **+43.4% worse** |
+| medium | 42.1 s | 59.1 s | **1.40×** | **+25.7% worse** |
+| heavy | 104.1 s | 76.7 s | **0.74×** | **−4.2% better** |
+
+**Monotonic, across all three demand levels, every comparison
+significant.** The further A-CA-MP's emergent cycle sits above Webster's
+optimum, the worse it does; in the single regime where it runs *shorter*
+than the optimum, it wins. Webster's delay curve is flat-bottomed but
+asymmetric — overrunning the optimum costs far more than underrunning it
+by the same margin — which is exactly the asymmetry this table shows.
+
+This also explains, retrospectively, why heavy demand was the only level
+A-CA-MP ever won at, and why every mechanism aimed at heavy demand
+generalised so badly: heavy is not where the controller is cleverest, it
+is where its uncontrolled emergent cycle happens to land in the right
+place.
+
+**This is the fourth instance of the same defect family.** M4's `S(p)`,
+M5's `lost_time_weight`, M7's `D(p)`, and now the emergent cycle: each
+time, a quantity compared against something it has no scale relationship
+to. Here there is no explicit term at fault at all — the missing thing is
+the comparison itself. `max_green_s` is not binding (`switch_max_green`
+is 0.3% of ticks) and the hold bias `F(scale)` resists switching with no
+reference to what cycle length that produces.
+
+### Status
+
+M4 and M5 are now **honestly measured** rather than fixed. The corrected
+position is that A-CA-MP beats a well-tuned Webster baseline at heavy
+demand only, loses substantially at light and medium, and the reason is
+identified and measured rather than hypothesised.
+
+**The direction a fix would take** — not implemented here: give the
+controller a cycle reference it currently lacks, by bounding the emergent
+cycle toward the junction's own Webster optimum computed from the same
+measured flows the baseline uses. That is a change to `acamp.py` and
+requires a full three-level re-gate, so it is left as a decision rather
+than taken.
+
+---
+
+## The cycle ceiling: the cheap test worked, and A-CA-MP now beats Webster everywhere
+
+The previous section identified an uncontrolled emergent cycle as the
+cause of M5's losses, and proposed a cycle supervisor. Before building
+one, the causal claim was tested with a parameter that already exists.
+
+**`max_green_s` was a flat 90 s for every phase of every junction** — a
+safety constant, never derived from demand. Against a mean green of
+~26 s it essentially never bound: `switch_max_green` was **0.3%** of
+ticks. So the controller had a cycle ceiling in name only.
+
+`scripts/m5_cycle_ceiling_probe.py` replaces it per phase with a multiple
+of *that phase's own Webster green*, computed from the same measured
+flows the baseline uses. This is the crudest possible version of the
+proposed supervisor: a hard ceiling, no intelligence, no choice of
+successor phase, **no change to `acamp.py` at all**. The ceiling is
+injected through the `Tier0Config` the harness already hands to both the
+strategy and the interlocks, so the thing measured is the shipped
+controller under a tighter safety bound.
+
+### Result — paired against Webster, post-cabinet-fix, 10 held-out `EVAL_SEEDS`
+
+| level | Webster | A-CA-MP (90 s) | A-CA-MP + ceiling 1.25× | ceiling vs Webster |
+|---|---|---|---|---|
+| light | 69,573 | 99,791 (+43.4%) | **56,472** | **−18.8%** [−17,303, −8,899] SIG, **10/10 seeds** |
+| medium | 193,354 | 243,015 (+25.7%) | **176,461** | **−8.7%** [−29,936, −3,851] SIG, 9/10 seeds |
+| heavy | 1,601,950 | 1,534,346 (−4.2%) | **1,498,307** | **−6.5%** [−185,634, −21,651] SIG, 8/10 seeds |
+
+**This is the first time in this project's history that the adaptive
+controller beats a well-tuned Webster baseline at every demand level.**
+Every comparison significant, every one on seeds nothing was tuned
+against.
+
+The emergent cycle moved exactly as the diagnosis predicted:
+
+| level | Webster optimum | before | after (1.25×) |
+|---|---|---|---|
+| light | 40.0 s | 70.8 s (1.77×) | **37.5 s (0.94×)** |
+| medium | 42.1 s | 59.1 s (1.40×) | **35.8 s (0.85×)** |
+| heavy | 104.1 s | 76.7 s (0.74×) | **56.0 s (0.54×)** |
+
+**Interlock violations at light went 2 → 0.** Medium was and stays 0.
+Heavy went 3 → 2 at 1.25× but **4** at 1.00×, so the tightest arm is not
+strictly safer and heavy's violations remain unexplained (Webster: 0 at
+every level).
+
+### What this does and does not establish
+
+**Confirmed:** the uncontrolled emergent cycle was the mechanism. Both
+ceiling factors (1.25× and 1.00×) recover ~43% at light and ~28% at
+medium against the shipped arm, so the finding does not depend on the
+factor's exact value — which is what makes it a result about the
+mechanism rather than about a tuned number.
+
+**A prediction that was wrong, recorded as such.** The probe's own
+docstring predicted the ceiling could not bind at heavy, because
+Webster's heavy cycle (104.1 s) already exceeds A-CA-MP's emergent one
+(76.7 s). It did bind — heavy's cycle fell to 56.0 s — because the
+ceiling is per *phase*, and the minor phases' Webster greens (20–28 s at
+the four-phase junction) are tighter than what A-CA-MP was taking. Heavy
+improved rather than degraded, so the one-sidedness concern is less acute
+than argued, but the argument's premise was still false.
+
+**Not established: that 1.25× is the right factor.** Both factors were
+compared on `EVAL_SEEDS`, which are held out precisely so that choices
+are not made against them. Selecting 1.25× on the strength of this table
+would be leakage. The factor must be chosen on `TRAIN_SEEDS` and only
+then re-verified here.
+
+**Not established: that the supervisor is worth building.** This is a
+*static* ceiling from offline route-file flows. The proposed supervisor
+adds live flow estimation, an explicit measured cycle, and choice of the
+best safe successor phase instead of a timeout. Those may well be worth
+having — but they now have to justify themselves against **this**, not
+against the broken 90 s baseline. The cheap thing working this well
+raises the bar for the expensive thing.
+
+### Open
+
+- Heavy demand's interlock violations (2–4 per 10 runs, Webster 0) are
+  not explained and are not new to this change.
+- The factor must be re-selected on training seeds.
+- Whether an online measured cycle beats an offline computed ceiling is
+  now the actual research question, and it is a much narrower one than
+  "why does A-CA-MP lose".
+
+---
+
+## Choosing the ceiling factor, and the root cause of the heavy-demand violations
+
+Two follow-ups to the cycle-ceiling result, both required before it can
+be called a shipped default.
+
+### 1. The factor cannot be chosen from the numbers, because they are all the same
+
+`m5_cycle_ceiling_probe.py --seed-set train --seeds 5 --factors
+0.75,1.0,1.25,1.5,2.0`, on `TRAIN_SEEDS[:5]`, reference arm 2.00×:
+
+| factor | light | medium | heavy | heavy violations |
+|---|---|---|---|---|
+| 0.75× | 60,063 (+4.5%) | 178,263 (−1.0%) | 1,423,913 (−5.7%) | 1 |
+| 1.00× | 55,465 (−3.5%) | 177,935 (−1.2%) | 1,503,732 (−0.4%) | 3 |
+| 1.25× | 53,914 (−6.2%) | 182,909 (+1.6%) | 1,477,472 (−2.1%) | 1 |
+| 1.50× | 54,832 (−4.6%) | 170,532 (−5.3%) | 1,420,098 (−5.9%) | 2 |
+| 2.00× | 57,480 | 180,021 | 1,509,507 | 4 |
+
+**Every comparison is non-significant, and every per-seed split is 2/5 to
+4/5 — noise.** Across a factor range of 0.75× to 2.00× — nearly three-fold
+— nothing separates them.
+
+That is a *useful* negative result, not a failed experiment. The entire
+effect is in having **a** ceiling rather than none: going from the shipped
+90 s to any Webster-derived bound recovers ~43% at light and ~28% at
+medium. Where inside that range the bound sits does not matter on the
+evidence available.
+
+So the factor is chosen on stated engineering grounds rather than by
+picking the best mean, which at these interval widths would be
+noise-chasing:
+
+- **1.25× — "Webster's green plus 25% headroom".** It has a rationale that
+  can be said in a sentence, which a tuned constant does not.
+- It ties for **fewest heavy-demand violations** (1, with 0.75×).
+- It keeps more adaptive range than the tighter factors: at 1.00× a phase
+  whose Webster green equals its 10 s minimum becomes effectively fixed.
+
+The eval-seed confirmation already recorded above (−18.8% / −8.7% /
+−6.5% against Webster) then stands as verification of that choice. **It
+is not the basis for it** — the choice rests on the training-seed result
+that the factors are indistinguishable, plus the reasons listed. Picking
+1.25× over 1.00× because the held-out numbers favoured it would have been
+leakage, and is explicitly not what happened.
+
+### 2. The heavy-demand interlock violations: I3 and I5 in direct conflict
+
+`m5_heavy_violation_diagnostic.py` wraps `arbiter.tick` to capture the
+rule and message the runner discards, keeping only `(junction, step,
+mode)`. Over three heavy seeds, one violation, and it is entirely
+specific:
+
+```
+junction  cluster_1880441740_4393296791   phase P1, elapsed 9.0 s
+rule      I5
+detail    "movement 'L3' has waited 452.0s (>= 452.0s bound) with
+           demand, but the plan doesn't serve it now"
+```
+
+Read that against the propose order in `AdaptiveCamp.__call__`:
+
+```python
+if not current_faulted and elapsed < min_g:     # I3 -- absolute
+    return  ...extend the current phase...
+critical = _critical_phases(cfg_t0, ctx, live)  # starvation override
+if critical and current not in critical:
+    return self._advance(...)
+```
+
+**The minimum-green check runs before the starvation override, and it
+must** — I3 is a safety floor no pressure, memory or fairness
+consideration may cut short. So when a movement crosses its max-wait
+bound *during another phase's minimum green*, the controller is obliged
+to return a plan that does not serve it, and I5 is obliged to reject that
+plan. `elapsed = 9.0` against a 10 s minimum: the violation happened one
+second before the override could have fired.
+
+**Neither interlock is wrong and neither is the controller.** What is
+infeasible is the configuration: this is the corridor's only four-phase
+junction, `max_wait_s = 452 s` against 256 s at every two-phase junction,
+and once it saturates there is no legal phase sequence that returns to
+every movement inside that bound. Webster never trips it because a fixed
+104 s cycle serves all four phases on rotation and no movement ever
+reaches 452 s. A-CA-MP's phase selection is demand-driven and carries **no
+guarantee that every phase is served each cycle** — which is precisely
+the property being missed.
+
+**The cycle ceiling does not fix this**, and the sweep shows it: violations
+persist at every factor (1, 3, 1, 2, 4 for 0.75× through 2.00×), loosely
+decreasing with a tighter bound but never reaching zero. A bound on cycle
+*length* does not imply every phase is *served*.
+
+**What does fix it is the other half of the cyclical max-pressure
+structure** — Levin, Hu & Odell (2020), *Max-pressure signal control with
+cyclical phase structure*, TR-C 120:102828 — whose constraint is not only
+a maximum cycle but that "each phase must be actuated for at least one
+time step each cycle". With every phase served once per bounded cycle C,
+worst-case wait is about 2C; at the ceiling arms' measured heavy cycle of
+55 s that is ~110 s against a 452 s bound, and the I5 violation becomes
+structurally impossible rather than rare.
+
+This is the strongest argument yet for building the full supervisor
+rather than shipping the static ceiling: **the ceiling captures the delay
+win, and only the serve-every-phase constraint closes the safety gap.**
+The two halves of the cited design fix two different measured defects.
+
+### Status
+
+- Ship `max_green_s` at **1.25× per-phase Webster green** as the default,
+  chosen on the stated grounds above, verified on held-out seeds.
+- The heavy-demand I5 violation is diagnosed, reproducible, and **not
+  fixed**. It is an infeasible-configuration problem, not a tuning one.
+- The supervisor's phase-order constraint is now justified by measurement
+  rather than by citation alone.
+
+---
+
+## CC-A-CAMP: the supervisor, built and gated
+
+The first change to `acamp.py` in this entire line of work. Everything up
+to here was measurement, diagnosis, and a Tier-0 parameter.
+
+**Design**, following the five-point specification and the two measured
+defects it has to close:
+
+1. Target cycle per junction, **derived not configured**:
+   `cycle_target_factor × Σ(max_green_s + yellow + all_red)` over the live
+   ring. With `max_green_s` set from Webster's greens that sum *is* a
+   Webster-referenced cycle, so the supervisor inherits its reference from
+   the same place the ceiling gets it and there is no second number to
+   keep in sync. The ceiling and the supervisor are one design.
+2. The completed cycle is **measured explicitly** — a cycle ends when every
+   live phase has been served or has no demand — and the bookkeeping runs
+   in the supervisor-**off** arm too, because a control arm that cannot
+   report the quantity under test is not much of a control.
+3. Inside the envelope, A-CA-MP acts unchanged.
+4. Past the envelope with phases still owed a green, force a switch to the
+   **highest-pressure owed phase** — max-pressure still choosing, the
+   supervisor only narrowing the field.
+5. Placement carries the safety guarantee. The supervisor sits **after**
+   the minimum-green gate (so it can never cut a green below its I3 floor,
+   which is also why it needs no interlock pre-check of its own: the only
+   invariant a forced switch could threaten has already been enforced) and
+   **after** the starvation override (a movement already at `max_wait_s`
+   is the more urgent claim; this exists to stop that bound being reached).
+
+`cycle_supervisor` defaults to **False**, so every recorded gate stays
+reproducible byte-for-byte and the arm that enables it is a gate arm.
+
+### Gate — 3 arms, 3 demand levels, 10 held-out `EVAL_SEEDS`, paired
+
+| level | arm | delay | p95 wait | max wait | stops | cycle | viol | sup/switch |
+|---|---|---|---|---|---|---|---|---|
+| light | webster | 69,573 | 102.9 | 159.0 | 1.91 | 40.0s | 0 | — |
+| | ceiling | 56,472 | 93.9 | 177.7 | 1.89 | 37.5s | 0 | 0.0% |
+| | **ccacamp** | **55,740** | **90.4** | **150.2** | 1.89 | 37.4s | 0 | 0.6% |
+| medium | webster | 193,354 | 169.5 | 255.7 | 3.09 | 42.1s | 0 | — |
+| | ceiling | 176,461 | 182.5 | 266.2 | 2.84 | 35.8s | 0 | 0.0% |
+| | **ccacamp** | **171,307** | **169.0** | 266.2 | **2.77** | 36.0s | 0 | 0.8% |
+| heavy | webster | 1,601,950 | 719.7 | 1148.3 | 10.42 | 104.1s | 0 | — |
+| | ceiling | 1,498,307 | 776.3 | 1361.5 | 9.80 | 56.0s | **2** | 0.0% |
+| | **ccacamp** | **1,416,609** | 741.3 | 1310.0 | **9.26** | 56.3s | **0** | 1.0% |
+
+**Against Webster**, paired:
+
+| level | person-delay | stops |
+|---|---|---|
+| light | **−19.9%** [−17,716, −9,951] SIG, 10/10 | −1.1% n.s. |
+| medium | **−11.4%** [−39,358, −4,736] SIG, 8/10 | **−10.1%** SIG, 8/10 |
+| heavy | **−11.6%** [−260,417, −110,264] SIG, 10/10 | **−11.1%** SIG, 9/10 |
+
+**Against the static ceiling** — the arm that actually decides whether the
+supervisor is a contribution:
+
+| level | person-delay | stops |
+|---|---|---|
+| light | −1.3% [−3,951, +2,487] n.s., 4/10 | +0.1% n.s. |
+| medium | −2.9% [−20,802, +10,495] n.s., 7/10 | −2.4% n.s. |
+| heavy | **−5.5%** [−146,721, −16,674] **SIG**, 8/10 | **−5.5%** SIG, 8/10 |
+
+### What this establishes
+
+**The delay prediction held, and then some.** The stated prior was that
+the supervisor would add little on delay, because the ceiling had already
+brought the cycle inside the envelope. Light and medium came back exactly
+that way — non-significant, intervals straddling zero. Heavy did **not**:
+−5.5% on delay and −5.5% on stops, both significant, 8 of 10 seeds. That
+was not predicted and is the stronger half of the result.
+
+**The safety prediction held. Heavy's interlock violations went 2 → 0.**
+This is what the supervisor was built for, and it is the only mechanism
+tried that has closed them — every ceiling factor from 0.75× to 2.00×
+left them in place. *Stated with the caveat it deserves:* 0 against 2 over
+ten runs is a weak statistical claim on its own. What carries it is the
+mechanism, which is not statistical — serving every phase inside a bounded
+cycle makes the 452 s wait unreachable rather than rare.
+
+**The supervisor is not Webster with extra steps.** It fires on **0.6% to
+1.0%** of phase changes. Ninety-nine percent of decisions are still
+A-CA-MP's own pressure contest. The delay win belongs to real-time
+adaptation operating inside a bound, which is the claim CC-A-CAMP was
+supposed to support and the one an intervention rate of 50% would have
+destroyed.
+
+### A defect in the implementation, found by its own instrumentation
+
+The first version also suppressed the hold bias when the cycle ran past
+its envelope — specification point 4's "reduce the current-phase hold
+bias". The counter for it came back **0 across all 60 gate runs**. The
+forced switch tests the identical condition and returns, so that branch is
+unreachable whenever it would have applied: the stronger action subsumes
+the weaker one.
+
+Removed rather than left as a second mechanism that never runs. Removing
+unreachable code cannot change behaviour, so the gate numbers above stand
+unchanged. The graduated version — soften the bias *approaching* the
+envelope, force the switch on *crossing* it — would make a softer response
+reachable and is the obvious next refinement. It is not implemented, so it
+is not claimed.
+
+### Tests
+
+9 new property/behaviour tests (`test_acamp_cycle_supervisor.py`), suite
+now **303 passing**, up from 294. They fix the ordering (min-green beats
+the supervisor, starvation beats the supervisor), the silence inside the
+envelope, the no-demand exemption, the highest-pressure choice among owed
+phases, and that every plan the supervisor proposes passes
+`interlocks.check` — the rule the corridor engine states and this must
+follow too.
+
+### Where M5 stands
+
+A-CA-MP with a Webster-referenced ceiling and the cyclical supervisor
+**beats a well-tuned Webster baseline at every demand level**, with zero
+interlock violations at every demand level, on seeds nothing was tuned
+against. That is the first time in this project that sentence has been
+true.
+
+---
+
+## Closing the gap the verification run named: the green corridor's protected-phase change
+
+`baselines/2026-09-16_m5_traffic_coordination/verified_a87e845/README.md`
+reviewed three commits and passed all three, while naming two things it
+could not cover. This closes them.
+
+> "Side effect: if a junction has *no* phase protecting the EV's movement,
+> it now returns no preemption there (safer, but no corridor at that
+> junction). **No unit test was added for this.**"
+
+> "the min-green hold path and the green-corridor change are **never
+> triggered** in these scenarios (they need emergency preemption). Only
+> unit tests cover them; the green-corridor fix has none of its own."
+
+So `626e45e` — a safety change to how the live corridor chooses which
+phase to preempt onto — was correct, uncovered by tests, and unexercised
+by the benchmark. Three ways of being invisible at once.
+
+### Was anything actually lost? Measured, not assumed
+
+The change makes `_phase_serving` count `protected_movements` rather than
+`green_movements`, so a junction with no protecting phase now yields no
+preemption at all. Whether that costs real corridor coverage is an
+empirical question about this network, and it had not been asked.
+
+Checking every junction, and then the movements the benchmark's emergency
+vehicle actually uses:
+
+| | |
+|---|---|
+| Junctions carrying permissive movements | **4 of 7** — matching the claim in the commit's own docstring |
+| Junctions on the EV route | 7 |
+| EV movements with no protecting phase | **0** |
+| Junctions where old and new code choose a different phase | **0** |
+
+So on the benchmarked arterial the fix is a pure safety tightening: every
+movement the emergency vehicle uses is protected by some phase, both code
+paths pick the same one, and nothing was lost. That is a property of one
+route on one network, not a guarantee — which is the entire reason the
+next section exists.
+
+### The other half: the silent skip
+
+`preemption_plan` did this:
+
+```python
+target = self._phase_serving(cfg, wanted, prefer=ctx.current_phase_id)
+if target is None:
+    return None
+```
+
+Returning None is indistinguishable at the arbiter from "no corridor is
+active here". A corridor could therefore report itself **ACTIVE** while
+one of its junctions was never preempted, with nothing in any log, event
+or counter saying so. The asymmetry is the giveaway: `activate` already
+logs its own version of this (`"no green corridor for %s -- route crosses
+no signal"`); the per-junction case was the one left silent.
+
+Added `CorridorController.unprotected_junctions` (ticks, per junction) and
+a one-line-per-junction warning — per junction rather than per tick,
+because `preemption_plan` runs every tick a window is open and a warning
+per tick buries itself. The counting is extracted into
+`_report_unprotected` so it is testable without standing up a graph, a
+planner and a live reservation just to observe a counter.
+
+### Tests — 5 new, in `tests/live/test_green_corridor_protected.py`
+
+- a permissive green does not count as serving the movement (and the test
+  asserts the *old* rule would have picked the other phase, so it
+  discriminates rather than merely passing)
+- no protected phase means no preemption, not a permissive one
+- omitted and empty protected sets mean opposite things
+- `prefer` only breaks ties among phases that actually protect — the
+  tie-break must not be able to keep a permissive phase live
+- an unprotected junction is counted and warned, not silently skipped
+
+### A smaller finding, recorded rather than changed
+
+`Phase.__post_init__` normalises `protected_movements=None` to
+`green_movements` at construction. So the
+`phase.protected_movements if ... is not None else phase.green_movements`
+guard inside `_phase_serving` — and the identical idiom in
+`corridor/junction.protected_phase_for` — **can never take its else
+branch on a real `Phase`.** It is unreachable defensive code, not live
+logic.
+
+Harmless, and left alone deliberately: it is the correct shape if that
+normalisation ever moves out of `__post_init__`. But it is worth knowing
+that it is not what makes the empty-set case work — `__post_init__` is,
+by preserving an explicitly empty frozenset while filling in an omitted
+one. The test pins both halves so neither can be "simplified" away.
+
+**Suite:** the live green-corridor tests pass (12 existing + 5 new); 186
+pass across corridor/strategies/dispatch with no regression. Only two
+files changed: `live/green_corridor.py` and the new test module.
+
+### Still open from that verification run
+
+- `ruff`: 2 cosmetic issues in `tests/control/test_runner_decision_contract.py`
+  (unsorted imports line 25, long line 61)
+- `mypy`: `signal_controller/arbiter.py:238`, `notes` redefined —
+  pre-existing, present in the baseline too
+- The min-green **hold** path from `1a88b6a` is still covered only by unit
+  tests and never exercised by a benchmark scenario. The green-corridor
+  half of that gap is now closed; this one is not.
+- `ceiling / heavy / seed 6` still carries 1 interlock violation (down
+  from 2). It is the A-CA-MP I5 case diagnosed earlier, not a corridor one.
+
+---
+
+## 2026-09-18 — Four measurement defects fixed, and what they did to the headline
+
+A review of the whole control path (`docs/algorithm_improvement_research.md`,
+690 scratch SUMO runs) found four defects that had each been quietly
+invalidating something. All four are fixed here, with their tests, and the
+gate has been re-measured from scratch. **The headline moved, and not only
+upward -- see "Where this leaves M5" at the end.**
+
+### 1. `receiving_occupancy` was divided by 100 twice -- the spillback gate had never run
+
+`queue_state.py` read `traci.lane.getLastStepOccupancy(lane) / 100.0`. That
+call already returns the occupied *fraction* of the lane. Measured on this
+corridor at heavy demand: the raw value peaks at **0.625 on a 599 m lane
+holding 81 vehicles**, which is the fraction, not a percent. The extra
+division pinned every occupancy under **0.0067**, so `acamp.gate` never
+returned less than **0.99992** on any tick of any run.
+
+The consequences were invisible precisely because they were total: ablating
+the gate (`rho_jam = 1e9`) and *hardening* it (`rho_jam = 0.30`) each
+reproduced the shipped gate results **bit-for-bit, on every seed and every
+demand level, with identical per-junction decision counters**. A-CA-MP's
+Defect-1 fix, `rho_jam`, `beta_gate`, and whatever `tuning.py` learned for
+them, had been scoring a term that was identically 1. The same division
+appeared in `spillback.py` (so the spillback-episode metric was structurally
+always 0), in `corridor/engine.py`'s `rho_couple` test by inheritance, and on
+the live path in `emergency_control.py` and the two SUMO adapters.
+
+Fixed at every call site, with a regression test that pins the unit contract
+(`test_receiving_occupancy_is_the_raw_traci_fraction_not_a_percentage`).
+
+### 2. The gate, now live, had to be re-tuned
+
+With real occupancies the shipped `rho_jam = 0.75, beta_gate = 2.0` pair
+discounts hard (occupancy 0.6 -> gate 0.36) and cost **+9.1% person-delay at
+heavy demand**. Searched on `TRAIN_SEEDS[:5]` only: `0.85 / 4.0` is -6.2% at
+heavy against the un-tuned pair (5/5 seeds, CI excludes zero) and flat at
+medium. That is now the default. Shape, not just number: near-open until the
+receiving link is genuinely close to jam, then a sharp knee.
+
+### 3. Clearance intervals were netconvert's guess; minimum green boxed the controller in
+
+`yellow_s` was read off whatever yellow-only phase netconvert had invented
+(5-6 s here); with `all_red_s = 2 s` every phase change cost 7-8 s, and the
+4-phase junction spent 32 s of a 72 s cycle dark. Minimum green was a flat
+10 s against a 1.25x Webster ceiling that is 12.5 s at most phases -- a 2.5 s
+band, and **62-64% of all decision ticks at light and medium demand were spent
+inside the floor**.
+
+`yellow_s` now comes from the ITE/IRC change-interval rule
+`y = t_r + v/(2a + 2gG)` at the fastest signal-controlled approach speed the
+network declares (t_r = 1.0 s, a = 3.0 m/s^2, G = 0, clamped to [3, 5] s,
+half-second grid): 5.0 s at six junctions, 4.5 s at `7871074777`. Minimum
+green is 7.0 s. Note honestly what limits this: the OSM extract declares
+22-28 m/s limits for these approaches, which is why the rule returns its
+5 s ceiling rather than the ~3.5 s a 50 km/h urban arterial would get. A
+scratch arm at 3 s yellow measured **-18.9% / -21.0% / -3.7%** for A-CA-MP and
+-14.3% / -20.6% / -7.6% for Webster, so correcting the corridor's speed limits
+to realistic urban values is the single largest lever left on the table -- but
+it changes the free-flow reference `timeLoss` is measured against, so it needs
+its own re-baselining and is not done here.
+
+What the new timing did do, measurably: **heavy demand's interlock violations
+are gone.** Re-running the fixed code with the old yellow/min-green produces 5
+violations across 10 heavy seeds; with the new values, 0.
+
+### 4. Two metrics could not measure what they claimed
+
+`person_throughput_per_hour` divided by a hard-coded `scenario_duration_s =
+1800.0` that no caller ever overrode, while runs last 2,000-3,600 s. Since
+every arm clears the same fixed demand, it returned **identical values for
+every controller at every demand level** (2,717 / 5,203 / 10,282 persons/h) --
+a constant, reported as a measurement. It is now persons cleared after warm-up
+over the window those trips occupy, and it now separates the arms.
+
+The warm-up filter used the tripinfo `depart`, which is SUMO's *insertion*
+time. Congestion delays insertion, so each arm scored a different population
+(heavy: 9,680 / 9,766 / 9,755 trips of the same 14,400). It now filters on the
+scheduled departure from the route file, so a paired comparison compares the
+same trips.
+
+Isolated cost of the metric changes alone, by re-scoring the *old* code under
+the new metrics: -0.2% to -1.0% of person-delay. They are not what moved the
+headline.
+
+### 5. `max_wait_s` did not follow the ceiling
+
+`extract_tier0_config` derives `max_wait_s` from the shipped flat 90 s ceiling
+(256 s at a 2-phase junction, 452 s at the 4-phase one), and
+`configs_with_ceiling` replaced `max_green_s` without touching it -- so I5's
+starvation bound sat 5-9x above the rotation the corridor actually ran
+(measured emergent cycles 46-232 s) and the override fired **twice in thirty
+heavy runs**. It is now re-derived from the ceiling in force. No effect on
+A-CA-MP's delay (measured: bit-identical at heavy), but the ceiling arm's two
+heavy-demand violations went to 0.
+
+### Where this leaves M5 -- new baseline `baselines/2026-09-18_post_fixes/`
+
+3 arms x 3 levels x 10 held-out seeds, paired:
+
+| level | Webster | ceiling | CC-A-CAMP | vs Webster | vs ceiling |
+|---|---:|---:|---:|---|---|
+| light | 60,962 | 51,631 | **48,818** | **-19.9% SIG** 10/10 | **-5.4% SIG** 7/10 |
+| medium | 194,620 | **170,199** | 173,710 | **-10.7% SIG** 8/10 | +2.1% n.s. |
+| heavy | 1,502,935 | **1,480,063** | 1,478,571 | -1.6% n.s. | -0.1% n.s. |
+
+Zero interlock violations in every arm, at every demand level, on every seed --
+for the first time including the ceiling arm at heavy demand.
+
+**Light demand is the good news, and it is new:** the supervisor now beats the
+static ceiling significantly (-5.4%, 7/10 seeds), which it never did before.
+
+**Heavy demand is the bad news, and it should be stated plainly.** M5's
+"-11.6% against Webster at heavy" is gone: Webster gained 6.2% from the
+corrected clearance intervals while A-CA-MP lost 4.4% once the spillback gate
+started discounting anything, and what remains is -1.6%, not significant. The
+earlier margin was partly an artifact of a gate that discounted nothing --
+the controller was, in effect, being rewarded for ignoring downstream
+occupancy that it was supposed to be respecting. Two seeds' worth of
+re-tuning recovered part of it; recovering the rest with a gate that actually
+works is the next real piece of work, and `docs/algorithm_improvement_research.md`
+lists the candidates (lane-group pressure aggregation, an extension rule to
+replace the min/max-green box, a per-phase supervisor trigger).
+
+### Follow-up the same day: the corridor's speed limits were never real either
+
+The kinematic yellow above returned its 5 s ceiling at six of seven junctions,
+and the reason is upstream of the rule: `netconvert` takes its limits from the
+OSM typemap, which labels these approaches **22-28 m/s (80-100 km/h)**. Those
+are `primary`/`trunk` defaults, not a survey. The corridor is Benz Circle to
+PNBS -- a signalised urban arterial with junctions every ~400 m and frontage
+access throughout. IRC:86 puts an urban arterial at 50-60 km/h.
+
+`scenarios/networks/vijayawada/cap_speeds.py` (step 4 of `build.sh`, idempotent,
+unit-tested) clamps every lane to 13.89 m/s. The kinematic rule then returns
+**3.5 s** at every junction, so a phase change now costs 3.5 + 2 = 5.5 s
+instead of 7-8 s.
+
+**Read the new numbers carefully: person-delay is not comparable across this
+change.** SUMO scores `timeLoss` against each vehicle's own free-flow speed, so
+lowering the limit lowers the reference the metric is measured from. What *is*
+comparable is anything that does not depend on that reference:
+
+    level    arm        p95 wait (s)        stops per vehicle
+    light    webster     75.8 ->  63.3        1.78 -> 1.91
+             ccacamp     72.7 ->  53.0        1.64 -> 1.56
+    medium   webster    148.8 ->  82.1        3.02 -> 2.21
+             ccacamp    175.9 ->  63.9        2.86 -> 1.76
+    heavy    webster    683.3 -> 433.4        9.95 -> 3.23
+             ccacamp    726.2 -> 328.0        9.69 -> 2.88
+
+Heavy demand's p95 wait more than halves and its stops fall by two thirds. The
+mechanism is not subtle: 1.5-2.5 s of usable green returned to every phase
+change, on a corridor that was change-interval-bound.
+
+New baseline `baselines/2026-09-18_speed_limits/`, 10 held-out seeds, zero
+interlock violations in every arm:
+
+    level    Webster    ceiling   CC-A-CAMP   vs Webster    vs ceiling
+    light     45,830     34,860      34,894   -23.9% SIG    +0.1% n.s.
+    medium   105,878     71,371      72,757   -31.3% SIG    +1.9% n.s.
+    heavy    645,098    539,175     515,141   -20.1% SIG    -4.5% n.s.
+
+Throughput separates the arms for the first time (it was a constant before the
+metric fix): at heavy demand CC-A-CAMP clears 5,885 persons/h against Webster's
+4,885, +20%.
+
+**And the honest half.** Against the static ceiling -- the arm that isolates
+what A-CA-MP's own logic contributes -- the controller is +0.1%, +1.9% and
+-4.5% n.s. The -5.4% light-demand win the supervisor had earlier today is gone.
+Cheap clearance lets a *static* Webster-referenced ceiling capture essentially
+all of the available gain, which is the same finding this day's work keeps
+producing from different directions: on this corridor the binding constraint
+has been the Tier-0 timing, not the control policy. Every headline improvement
+recorded today came from correcting an input, and none from the algorithm.
+
+Not re-measured, and worth flagging: `sat_flow_calibration.json` was measured
+under the old limits and saturation flow depends on approach speed; Webster
+still computes its cycle with a textbook 4 s lost time against a displayed
+5.5 s; and 50 km/h is a design-speed standard, not this corridor's measured
+85th-percentile speed.
+
+### Gap-out, re-tried at the new clearance and kept for what it actually does
+
+The review's diagnostic said the controller extends a green whose own
+approaches are empty on 43-65% of its extend ticks, because the pressure gap
+it is weighed against is 0.000 at the median decision tick. The obvious remedy
+-- the classic actuated gap-out -- had already been tested and was clearly
+worse: +3.9% / +15.7% SIG / +3.1% person-delay. But that test ran when a phase
+change cost 7-8 s. It now costs 5.5 s, so the trade was worth re-opening.
+
+Grace searched on `TRAIN_SEEDS[:5]`: 0 s (yield the instant the phase reads
+empty) is still worse at light and heavy; 5 s wins medium (-7.3% SIG, 5/5) and
+costs heavy (+9.4%); 3 s is within noise on delay everywhere and best on the
+wait distribution. 3 s taken to the held-out gate, and then to ten further
+unused seeds (11-20) at medium and heavy, because the training-seed delay gain
+looked like the kind of thing that does not reproduce:
+
+    metric                     light        medium        heavy
+    person-delay (10 seeds)    -1.4% n.s.   +0.1% n.s.    -7.6% n.s.
+    person-delay (20 seeds)     --          -3.1% n.s.    -4.6% n.s.
+    p95 wait                  -10.9% SIG    -3.4% n.s.   -11.9% n.s.
+    stops per vehicle          -6.2% SIG    -0.5% n.s.    -2.9% n.s.
+
+It did not reproduce. **This is not a delay improvement and is not recorded as
+one.** It ships because light demand's p95 wait and stop count improve
+significantly, nothing is significantly worse at any level, and there are zero
+interlock violations -- the same delay for a measurably smoother ride, which is
+the fairness half of the metric set rather than the mean §8.2 warns against
+reading alone.
+
+`gap_out_grace_s` defaults to 3.0. The rule fires only after `elapsed >=
+min_green_s`, sits after both the starvation override and the cycle supervisor
+(each a stronger claim), and builds its plan through `_advance`, so
+`interlocks.check` sees the same transition plan every other switch produces.
+Seven behaviour tests pin that ordering, including one that asserts the plan it
+proposes passes every interlock.
+
+New baseline `baselines/2026-09-18_gap_out/`. Against Webster: **-25.0% /
+-31.2% / -26.2%, all significant, 10/10 seeds**. Against the static ceiling:
+-2.1% / -0.0% / +2.4%, none significant.
+
+**Three baselines into this day, that second row is still the honest headline.**
+CC-A-CAMP cannot be distinguished from a static Webster-referenced ceiling at
+any demand level. Every improvement recorded today came from correcting an
+input -- occupancy units, clearance intervals, minimum green, speed limits --
+and the gap-out, the first behavioural change to survive a held-out gate, buys
+comfort rather than capacity. The two candidates left in
+`docs/algorithm_improvement_research.md` are lane-group pressure aggregation
+(53 of this corridor's 73 links share a physical lane, so phases inside one
+junction are weighted 1.0-3.0x by geometry alone) and a per-phase supervisor
+trigger.

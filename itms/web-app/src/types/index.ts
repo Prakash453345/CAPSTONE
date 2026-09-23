@@ -42,6 +42,9 @@ export interface Incident extends LatLng {
   detectedAt: string;
   status: IncidentStatus;
   affectedIntersection?: string;
+  /** False when the detector contract does not supply a severity. */
+  severityKnown?: boolean;
+  resolution?: string;
 }
 
 // ---------------------------------------------------------------- anomalies

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import Globe from "react-globe.gl";
+import Globe, { type GlobeMethods } from "react-globe.gl";
 import * as THREE from "three";
 
 export interface GlobeMarker {
@@ -21,6 +21,8 @@ export interface GlobeConfig {
   gridOpacity?: number; // from the previous tactical globe
 }
 
+type NormalizedMarker = GlobeMarker & { lat: number; lng: number };
+
 export interface Globe3DProps {
   markers?: GlobeMarker[];
   config?: GlobeConfig;
@@ -30,9 +32,9 @@ export interface Globe3DProps {
   pointOfView?: { lat: number; lng: number; altitude?: number };
 }
 
-export const Globe3D = React.forwardRef<any, Globe3DProps>(
+export const Globe3D = React.forwardRef<GlobeMethods | undefined, Globe3DProps>(
   ({ markers = [], config = {}, onMarkerClick, onMarkerHover, pointOfView }, ref) => {
-    const globeRef = useRef<any>();
+    const globeRef = useRef<GlobeMethods | undefined>(undefined);
     const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
     const containerRef = useRef<HTMLDivElement>(null);
 
@@ -86,7 +88,11 @@ export const Globe3D = React.forwardRef<any, Globe3DProps>(
     // Custom material adjustments for a premium look
     useEffect(() => {
       if (globeRef.current) {
-        const material = globeRef.current.globeMaterial();
+        // react-globe.gl's GlobeMethods typings omit globe.gl's own
+        // globeMaterial() accessor; it exists at runtime.
+        const material = (
+          globeRef.current as unknown as { globeMaterial(): THREE.MeshPhongMaterial }
+        ).globeMaterial();
         // The bumpScale prop needs a bump texture which we load in the component
         material.bumpScale = config.bumpScale ?? 5;
         // Make the oceans look deep and premium
@@ -112,7 +118,8 @@ export const Globe3D = React.forwardRef<any, Globe3DProps>(
             showGraticules={config.gridOpacity !== undefined && config.gridOpacity > 0}
             // Remove rings if we just want markers, or we could add rings here too
             htmlElementsData={normalizedMarkers}
-            htmlElement={(d: any) => {
+            htmlElement={(datum: object) => {
+              const d = datum as NormalizedMarker;
               const el = document.createElement("div"); // react-globe.gl applies its own transform here
               
               const inner = document.createElement("div");
@@ -132,7 +139,7 @@ export const Globe3D = React.forwardRef<any, Globe3DProps>(
               const offset = isImg ? 12 : 4;
               inner.style.transform = `translate(-${offset}px, -${offset}px)`;
 
-              if (isImg) {
+              if (d.src) {
                 const img = document.createElement("img");
                 img.src = d.src;
                 img.style.width = "24px";

@@ -31,11 +31,13 @@ const ROWS: Array<{ label: string; swatch: React.ReactNode }> = [
 ];
 
 export function MapLegend() {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   return (
     <div className="pointer-events-auto absolute bottom-3 left-3 w-44 overflow-hidden rounded-lg border border-border bg-surface/90 backdrop-blur-sm shadow-panel">
       <button
         type="button"
+        aria-expanded={open}
+        aria-label="Map legend"
         onClick={() => setOpen((o) => !o)}
         className="flex w-full items-center justify-between px-3 py-2 text-left"
       >

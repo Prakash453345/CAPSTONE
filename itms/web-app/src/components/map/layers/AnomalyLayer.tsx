@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { prefersReducedMotion } from "@/utils/motion";
 import type { GeoJSONSource, MapMouseEvent } from "maplibre-gl";
 import type { Feature, FeatureCollection, LineString, Point } from "geojson";
 import { useMapInstance } from "@/components/map/MapContext";
@@ -103,7 +104,7 @@ export function AnomalyLayer({ visible }: { visible: boolean }) {
     const start = performance.now();
     const pulse = () => {
       if (map.getLayer(MARK_RING)) {
-        const phase = ((performance.now() - start) % 1600) / 1600;
+        const phase = prefersReducedMotion() ? 0 : ((performance.now() - start) % 1600) / 1600;
         map.setPaintProperty(MARK_RING, "circle-radius", 10 + phase * 22);
         map.setPaintProperty(MARK_RING, "circle-stroke-opacity", 0.6 * (1 - phase));
       }

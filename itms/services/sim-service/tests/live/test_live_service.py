@@ -142,6 +142,9 @@ def test_built_in_dispatch_routes_anomaly_commands_to_the_controller(monkeypatch
         def restore_all(self):
             pass
 
+        def active_anomalies(self):
+            return []
+
     create = encode_envelope(
         event_type="AnomalyCreateRequested",
         source="t",

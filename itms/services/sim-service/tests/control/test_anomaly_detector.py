@@ -9,10 +9,17 @@ above the rest.
 
 from __future__ import annotations
 
-import numpy as np
+from typing import TYPE_CHECKING
+
 import pytest
-import torch
-from sim_service.control.anomaly.detector import (
+
+if TYPE_CHECKING:
+    import numpy as np
+
+np = pytest.importorskip("numpy")
+torch = pytest.importorskip("torch")
+
+from sim_service.control.anomaly.detector import (  # noqa: E402
     ErrorNormalizer,
     EWMALinkDetector,
     GraphAnomalyDetector,
@@ -21,7 +28,11 @@ from sim_service.control.anomaly.detector import (
     TemporalConvNet,
     WindowBuffer,
 )
-from sim_service.control.anomaly.graph_features import N_FEATURES, AnomalyGraph, FeatureNormalizer
+from sim_service.control.anomaly.graph_features import (  # noqa: E402
+    N_FEATURES,
+    AnomalyGraph,
+    FeatureNormalizer,
+)
 
 torch.manual_seed(0)
 np.random.seed(0)

@@ -6,13 +6,39 @@ back to a known phase id, so without this recovery step the junction's
 `JunctionContext` stays frozen forever and every subsequent tick fails
 the same way. Uses `FakeCabinet` (the same fixture the C1-C5 fault-
 injection tests use) rather than a real SUMO/TraCI connection -- this
-function's own logic (command a phase, rebuild ctx) doesn't need one."""
+function's own logic (command a phase, rebuild ctx) doesn't need one.
+
+**Updated when recovery was made to run through the normal clearance
+sequence.** The original assertions here checked that the recovery green
+was commanded *immediately* -- which, combined with the arbiter's
+snap-to-red in the same tick, meant the junction physically jumped from
+one green straight to a conflicting green. Recovery now shows the
+outgoing phase's yellow, then all-red, then the recovery green, so these
+tests drive that transition to completion (`_settle`) before asserting
+which phase the junction landed in. Where the recovery phase equals the
+phase that was already green there is nothing to clear and the command
+is still immediate. See `test_runner_decision_contract.py` for the
+tick-by-tick display-sequence assertions."""
 
 from __future__ import annotations
 
 from itms_domain import JunctionContext, Phase, Tier0Config
-from sim_service.control.runner import _JunctionState, _recover_from_fault
+from sim_service.control.runner import (
+    _advance_transition,
+    _JunctionState,
+    _recover_from_fault,
+)
 from sim_service.signal_controller.cabinet import FakeCabinet
+
+
+def _settle(js: _JunctionState) -> None:
+    """Run any clearance transition recovery scheduled through to its
+    green, exactly as the runner's main loop would over the next ticks."""
+    for _ in range(100):
+        if js.transition is None:
+            return
+        _advance_transition(js, 1.0)
+    raise AssertionError("recovery transition never completed")
 
 
 def _cfg() -> Tier0Config:
@@ -42,6 +68,7 @@ def test_recover_from_fault_commands_the_rings_first_phase():
     js = _JunctionState(cfg=cfg, cabinet=cabinet, ctx=stale_ctx)
 
     _recover_from_fault(js, "J")
+    _settle(js)
 
     assert cabinet.read_state().phase_id == "P0"  # the command actually landed
     assert js.ctx.current_phase_id == "P0"
@@ -67,6 +94,7 @@ def test_recover_from_fault_clears_stale_demand_and_queue_fields():
     js = _JunctionState(cfg=cfg, cabinet=cabinet, ctx=stale_ctx)
 
     _recover_from_fault(js, "J")
+    _settle(js)
 
     assert js.ctx.has_demand == {}
     assert js.ctx.wait_times_s == {}
@@ -89,6 +117,7 @@ def test_recover_from_fault_routes_to_the_phase_that_serves_the_violated_movemen
     js = _JunctionState(cfg=cfg, cabinet=cabinet, ctx=stale_ctx)
 
     _recover_from_fault(js, "J", frozenset({"L1"}))
+    _settle(js)
 
     assert cabinet.read_state().phase_id == "P1"
     assert js.ctx.current_phase_id == "P1"
@@ -108,6 +137,7 @@ def test_recover_from_fault_falls_back_to_rings_first_phase_when_no_phase_serves
     js = _JunctionState(cfg=cfg, cabinet=cabinet, ctx=stale_ctx)
 
     _recover_from_fault(js, "J", frozenset({"L99_no_such_movement"}))
+    _settle(js)
 
     assert cabinet.read_state().phase_id == "P0"
     assert js.ctx.current_phase_id == "P0"
@@ -123,5 +153,6 @@ def test_recover_from_fault_defaults_to_rings_first_phase_with_no_violated_movem
     js = _JunctionState(cfg=cfg, cabinet=cabinet, ctx=stale_ctx)
 
     _recover_from_fault(js, "J")  # no third arg -- exercises the default
+    _settle(js)
 
     assert js.ctx.current_phase_id == "P0"

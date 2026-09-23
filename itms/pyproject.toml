@@ -1,6 +1,9 @@
 [tool.pytest.ini_options]
 testpaths = ["packages", "services"]
 asyncio_mode = "auto"
+markers = [
+    "slow_property: Hypothesis suites with large example counts (10k+); still correct to run, just not fast -- excluded from `make test-fast`",
+]
 
 [tool.ruff]
 line-length = 100

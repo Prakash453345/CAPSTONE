@@ -243,7 +243,7 @@ def test_cancel_after_activate_tears_down_the_corridor_and_removes_the_vehicle(w
     assert term and term[0]["status"] == "CANCELLED"
 
 
-def test_activate_on_a_route_with_no_signal_stays_route_ready(wired, monkeypatch):
+def test_activate_on_a_route_with_no_signal_dispatches_without_a_corridor(wired, monkeypatch):
     c, corridor, veh, _ = wired
     # a graph whose S->T hop crosses no signal
     plain = RoadGraph(
@@ -263,7 +263,13 @@ def test_activate_on_a_route_with_no_signal_stays_route_ready(wired, monkeypatch
         step=2, sim_time_s=2.0,
     )
     req = c.active_requests()[0]
-    assert req.state.name == "ROUTE_READY"
+    # No junction to preempt, but the vehicle still has to actually drive
+    # there -- DISPATCH (ROUTE_READY -> IN_TRANSIT, no corridor) and a spawn,
+    # not a request left stranded in ROUTE_READY forever.
+    assert req.state.name == "IN_TRANSIT"
+    assert req.green_corridor_id is None
+    assert corridor.active_corridor_ids() == []
+    assert veh.added == [("amb-1", "ev-route-er-1")]
     (evt,) = c.drain_events()
     assert "no corridor needed" in evt["detail"]
 

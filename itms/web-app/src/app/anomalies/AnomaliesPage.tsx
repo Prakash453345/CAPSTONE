@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { IncidentInbox } from "@/components/panels/IncidentInbox";
 import { AlertTriangle, Columns2, Loader2, MapPin, X } from "lucide-react";
 import { TrafficMap } from "@/components/map/TrafficMap";
 import { useIncidentStore } from "@/store/incidentStore";
@@ -54,8 +55,8 @@ export function AnomaliesPage() {
   };
 
   return (
-    <div className="flex h-full">
-      <aside className="flex w-[320px] shrink-0 flex-col border-r border-border bg-surface">
+    <div className="operational-workspace flex h-full">
+      <aside className="workspace-roster flex w-[340px] shrink-0 flex-col border-r border-border bg-surface">
         <div className="border-b border-border px-4 py-3">
           <h2 className="text-sm font-semibold">Anomalies</h2>
           <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">
@@ -63,6 +64,7 @@ export function AnomaliesPage() {
           </p>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto p-2">
+          <IncidentInbox />
           {anomalies.length === 0 && (
             <p className="px-2 py-8 text-center text-xs text-muted-foreground">
               No anomalies on the network. Use{" "}

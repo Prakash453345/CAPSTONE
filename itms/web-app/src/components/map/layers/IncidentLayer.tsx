@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { prefersReducedMotion } from "@/utils/motion";
 import type { GeoJSONSource, MapMouseEvent } from "maplibre-gl";
 import type { FeatureCollection, Point } from "geojson";
 import { useMapInstance } from "@/components/map/MapContext";
@@ -100,7 +101,7 @@ export function IncidentLayer({ visible }: { visible: boolean }) {
     const start = performance.now();
     const pulse = () => {
       if (map.getLayer(PULSE)) {
-        const phase = ((performance.now() - start) % 1800) / 1800;
+        const phase = prefersReducedMotion() ? 0 : ((performance.now() - start) % 1800) / 1800;
         map.setPaintProperty(PULSE, "circle-radius", 10 + phase * 34);
         map.setPaintProperty(PULSE, "circle-opacity", 0.28 * (1 - phase));
         map.setPaintProperty(PULSE, "circle-stroke-opacity", 0.5 * (1 - phase));
@@ -136,7 +137,7 @@ export function IncidentLayer({ visible }: { visible: boolean }) {
         properties: {
           id: inc.id,
           status: inc.status,
-          color: SEVERITY_COLOR[inc.severity],
+          color: inc.severityKnown === false ? "#b4a3ef" : SEVERITY_COLOR[inc.severity],
           selected: inc.id === selectedId,
           lng: inc.longitude,
           lat: inc.latitude,

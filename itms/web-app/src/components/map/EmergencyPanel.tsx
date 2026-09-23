@@ -27,7 +27,7 @@ import {
   type PresetUnit,
 } from "@/store/emergencyStore";
 import { useMapStore, type MapInteractionMode } from "@/store/mapStore";
-import { edgeById, shortJunctionName } from "@/data/network";
+import { edgeById, roadEdges, shortJunctionName } from "@/data/network";
 import type {
   EmergencyRequest,
   EmergencyRouteView,
@@ -177,6 +177,7 @@ function DispatchDraftPanel() {
         <PointRow
           icon={<MapPin className="size-3.5" />}
           label="Source"
+          which="source"
           point={draft.source}
           picking={interactionMode === "pick-source"}
           onPick={() => pick("pick-source")}
@@ -184,6 +185,7 @@ function DispatchDraftPanel() {
         <PointRow
           icon={<Flag className="size-3.5" />}
           label="Destination"
+          which="destination"
           point={draft.destination}
           picking={interactionMode === "pick-destination"}
           onPick={() => pick("pick-destination")}
@@ -766,12 +768,14 @@ function Label({ children }: { children: React.ReactNode }) {
 function PointRow({
   icon,
   label,
+  which,
   point,
   picking,
   onPick,
 }: {
   icon: React.ReactNode;
   label: string;
+  which: "source" | "destination";
   point: { edgeId: string; edgeName: string | null } | null;
   picking: boolean;
   onPick: () => void;
@@ -798,6 +802,12 @@ function PointRow({
           <span>{picking ? "Click a road on the map…" : "Set on map"}</span>
         )}
       </button>
+      <select aria-label={`${label} road`} className="mt-1.5 w-full rounded-md border border-border bg-surface px-2 py-2 text-[11px]" value={point?.edgeId ?? ""} onChange={(e) => {
+        const edge = edgeById.get(e.target.value);
+        if (!edge) return;
+        useEmergencyStore.getState().setDraftPoint(which, { edgeId: edge.id, edgeName: edge.name, at: edge.path[Math.floor(edge.path.length / 2)] });
+        useMapStore.getState().setInteractionMode("idle");
+      }}><option value="">Or choose a road…</option>{roadEdges.map((edge) => <option key={edge.id} value={edge.id}>{edge.name ?? "Road"} · {edge.id}</option>)}</select>
     </div>
   );
 }
@@ -830,28 +840,17 @@ function Metric({
 }
 
 function CostBar({ route }: { route: EmergencyRouteView }) {
+  // Seconds and weighted penalties are different units; do not combine them
+  // into a percentage bar or silently divide signal delay by an arbitrary 10.
   const parts: Array<[string, number, string]> = [
-    ["Travel", route.cost.travelTimeS, "#5fd0ff"],
-    ["Congestion", route.cost.congestion, "#e0a12a"],
-    ["Anomaly", route.cost.anomaly, "#e5622a"],
-    ["Signals", route.cost.signalDelayS / 10, "#b78bff"],
-    ["Disruption", route.cost.disruption, "#8a94a6"],
+    ["Travel time", route.cost.travelTimeS, "s"],
+    ["Signal delay", route.cost.signalDelayS, "s"],
+    ["Congestion", route.cost.congestion, "cost"],
+    ["Anomaly", route.cost.anomaly, "cost"],
+    ["Disruption", route.cost.disruption, "cost"],
+    ["Reliability", route.cost.reliability, "cost"],
   ];
-  const total = parts.reduce((s, [, v]) => s + Math.max(0, v), 0) || 1;
-  return (
-    <div>
-      <Label>Cost breakdown</Label>
-      <div className="flex h-2 overflow-hidden rounded-full">
-        {parts.map(([name, v, color]) => (
-          <span
-            key={name}
-            title={`${name}: ${v.toFixed(1)}`}
-            style={{ width: `${(Math.max(0, v) / total) * 100}%`, backgroundColor: color }}
-          />
-        ))}
-      </div>
-    </div>
-  );
+  return <div><Label>Route factors · backend estimates</Label><dl className="grid grid-cols-2 gap-2">{parts.map(([name, value, unit]) => <div key={name} className="rounded border border-border bg-surface p-2"><dt className="text-[9px] text-muted-foreground">{name}</dt><dd className="mt-1 font-mono text-[11px]">{value.toFixed(1)} <span className="text-muted-foreground">{unit}</span></dd></div>)}</dl></div>;
 }
 
 function StatePill({ state }: { state: EmergencyRequest["state"] }) {

@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { prefersReducedMotion } from "@/utils/motion";
 import type { GeoJSONSource } from "maplibre-gl";
 import type { Feature, FeatureCollection, Point } from "geojson";
 import { useMapInstance } from "@/components/map/MapContext";
@@ -14,7 +15,6 @@ import {
   upsertMapImage,
 } from "@/components/map/mapIcons";
 import { angleDelta, bearingDeg } from "@/utils/geo";
-import { prefersReducedMotion } from "@/utils/motion";
 import type { EmergencyVehicleKind } from "@/types";
 
 const SRC = "em-vehicles";

@@ -30,7 +30,7 @@ export function SideNav({ collapsed, onToggleCollapsed, onNavigate }: SideNavPro
     <nav
       aria-label="Primary"
       className={cn(
-        "flex h-full flex-col border-r border-border bg-surface/60 backdrop-blur-sm transition-[width] duration-200",
+        "product-nav flex h-full flex-col border-r border-border bg-surface/60 backdrop-blur-sm transition-[width] duration-200",
         collapsed ? "w-16" : "w-60",
       )}
     >
@@ -51,6 +51,7 @@ export function SideNav({ collapsed, onToggleCollapsed, onNavigate }: SideNavPro
         )}
       </div>
 
+      {!collapsed && <div className="nav-caption">OPERATIONS WORKSPACE</div>}
       <ul className="flex flex-1 flex-col gap-1 overflow-y-auto p-2">
         {NAV_ITEMS.map((item) => {
           const link = (
@@ -80,6 +81,7 @@ export function SideNav({ collapsed, onToggleCollapsed, onNavigate }: SideNavPro
         })}
       </ul>
 
+      {!collapsed && <div className="nav-city"><span className="eyebrow">CONNECTED CORRIDOR</span><strong>Vijayawada, IN</strong><small>MG Road · Urban mobility network</small></div>}
       <div className="border-t border-border p-2">
         <button
           type="button"

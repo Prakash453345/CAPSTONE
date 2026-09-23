@@ -25,11 +25,23 @@ param defaults to 1.0 (car-equivalent), matching that same precedent.
 
 **`receiving_occupancy[l]`** -- `ρ_m`, the fraction of the *downstream*
 lane `l` discharges into that's physically covered by vehicles right now
-(`traci.lane.getLastStepOccupancy() / 100`), from
+(`traci.lane.getLastStepOccupancy()`, which already returns a fraction in
+[0, 1] -- see the unit note below), from
 `link_lanes.link_to_receiving_lane_map()`. This is exactly
 `SpillbackTracker`'s own occupancy query, pointed at each movement's own
 receiving lane instead of a fixed spillback-lane list -- reused rather
 than reinvented.
+
+**Unit note (fixed 2026-09-18).** Both occupancy reads used to divide the
+TraCI value by 100, on the assumption that it is a percentage. It is not:
+`traci.lane.getLastStepOccupancy` returns the occupied *fraction* of the
+lane. Measured on this corridor at heavy demand, the raw value peaks at
+0.625 on a 599 m lane holding 81 vehicles (~0.62 of its length, so the raw
+number is the fraction, not a percent). The extra division capped every
+`receiving_occupancy` at ~0.0067, which left `acamp.gate` >= 0.99992 on every
+tick of every run -- disabling A-CA-MP's spillback discount entirely
+(ablating the gate reproduced the shipped results bit-for-bit) and
+`corridor/engine.py`'s `rho_couple` test with it.
 
 Unlike `ActuationDetector` (a gap-timeout clock) or `SpillbackTracker` (a
 rising-edge counter), neither measurement here needs memory across ticks
@@ -224,7 +236,7 @@ class QueueStateSampler:
             for link_id, lane_id in self._approach_lanes.items()
         }
         receiving_occupancy = {
-            link_id: traci.lane.getLastStepOccupancy(lane_id) / 100.0
+            link_id: traci.lane.getLastStepOccupancy(lane_id)
             for link_id, lane_id in self._receiving_lanes.items()
         }
         return queue_pcu, receiving_occupancy
@@ -254,7 +266,7 @@ class QueueStateSampler:
         receiving_occupancy: dict[str, float] = {}
         receiving_queue_pcu: dict[str, float] = {}
         for link_id, lane_id in self._receiving_lanes.items():
-            receiving_occupancy[link_id] = traci.lane.getLastStepOccupancy(lane_id) / 100.0
+            receiving_occupancy[link_id] = traci.lane.getLastStepOccupancy(lane_id)
             receiving_queue_pcu[link_id] = self._halting_pcu(lane_id)
 
         return QueueSample(

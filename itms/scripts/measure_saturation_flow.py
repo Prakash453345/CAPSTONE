@@ -80,9 +80,9 @@ sys.path.insert(0, str(_ROOT / "scenarios" / "demand" / "vijayawada"))
 sys.path.insert(0, str(_ROOT / "services" / "sim-service" / "sim_service"))
 sys.path.insert(0, str(_ROOT / "services" / "sim-service"))
 
+from assign_vtypes import _MIX, _PCU, _VCLASS  # noqa: E402
 from extract_tier0_config import load_configs  # noqa: E402
 from link_lanes import link_to_lane_map, link_to_receiving_lane_map  # noqa: E402
-from assign_vtypes import _MIX, _OCCUPANCY, _PCU, _VCLASS  # noqa: E402
 from sim_service.control.runner import _ensure_sumo_home, _resolve_sumo_binary  # noqa: E402
 
 _DEFAULT_NET = _ROOT / "scenarios" / "networks" / "vijayawada" / "vijayawada_corridor.net.xml"
@@ -166,7 +166,7 @@ def _measure_one_movement(
         return None
 
     all_red = "r" * n_links
-    green_state = all_red[:int(link[1:])] + "G" + all_red[int(link[1:]) + 1:]
+    green_state = all_red[: int(link[1:])] + "G" + all_red[int(link[1:]) + 1 :]
     traci.trafficlight.setRedYellowGreenState(tls_id, all_red)
 
     type_ids = list(_MIX.keys())
@@ -192,8 +192,12 @@ def _measure_one_movement(
             vtype = rng.choices(type_ids, weights=weights, k=1)[0]
             try:
                 traci.vehicle.add(
-                    veh_id, route_id, typeID=vtype,
-                    departLane=from_lane_idx, departPos="free", departSpeed="0",
+                    veh_id,
+                    route_id,
+                    typeID=vtype,
+                    departLane=from_lane_idx,
+                    departPos="free",
+                    departSpeed="0",
                 )
                 inserted[veh_id] = vtype
             except traci.exceptions.TraCIException:
@@ -205,20 +209,27 @@ def _measure_one_movement(
             if veh_id in traci.vehicle.getIDList():
                 traci.vehicle.remove(veh_id)
         traci.trafficlight.setRedYellowGreenState(tls_id, all_red)
-        return {"error": f"only {len(inserted)} vehicles queued, needed >= {_MIN_RETAINED + _DISCARD_N}"}
+        return {
+            "error": f"only {len(inserted)} vehicles queued, needed >= {_MIN_RETAINED + _DISCARD_N}"
+        }
 
     traci.trafficlight.setRedYellowGreenState(tls_id, green_state)
     green_start = traci.simulation.getTime()
     crossings: list[tuple[float, str]] = []
     seen: set[str] = set()
-    while traci.simulation.getTime() - green_start < _MAX_GREEN_S and len(crossings) < _TARGET_RETAINED + _DISCARD_N:
+    while (
+        traci.simulation.getTime() - green_start < _MAX_GREEN_S
+        and len(crossings) < _TARGET_RETAINED + _DISCARD_N
+    ):
         traci.simulationStep()
         now = traci.simulation.getTime()
         for veh_id in list(inserted):
             if veh_id in seen:
                 continue
             if veh_id not in traci.vehicle.getIDList():
-                continue  # already left the network (short to_edge) -- can't happen here but guard anyway
+                # already left the network (short to_edge) -- can't happen
+                # here but guard anyway
+                continue
             if traci.vehicle.getRoadID(veh_id) == to_edge:
                 crossings.append((now, inserted[veh_id]))
                 seen.add(veh_id)
@@ -238,7 +249,9 @@ def _measure_one_movement(
         }
 
     elapsed_s = retained[-1][0] - retained[0][0]
-    total_pcu = sum(_PCU[vtype] for _, vtype in retained[1:])  # exclude the first retained vehicle's own (undefined) headway
+    total_pcu = sum(
+        _PCU[vtype] for _, vtype in retained[1:]
+    )  # exclude the first retained vehicle's own (undefined) headway
     if elapsed_s <= 0:
         return {"error": "degenerate: retained crossings had zero elapsed time"}
     sat_flow_pcu_s = total_pcu / elapsed_s
@@ -326,7 +339,11 @@ def measure_corridor(net_path: Path) -> dict:
                         if "sat_flow_pcu_s" in outcome
                         else f"SKIPPED -- {outcome.get('error', 'unknown')}"
                     )
-                    shared_note = f" [shared lane -> also {sorted(set(group) - {representative})}]" if len(group) > 1 else ""
+                    shared_note = (
+                        f" [shared lane -> also {sorted(set(group) - {representative})}]"
+                        if len(group) > 1
+                        else ""
+                    )
                     print(f"  {tls_id} {representative} (lane {lane_id}): {tag}{shared_note}")
                 results[tls_id] = junction_results
             finally:
@@ -351,7 +368,10 @@ def main() -> None:
     ok = sum(len(m) for m in measured.values())
     print(f"\nmeasured {ok}/{total} movements; wrote {out_path}")
     if ok < total:
-        print(f"{total - ok} movement(s) skipped -- callers should fall back to the placeholder for those:")
+        print(
+            f"{total - ok} movement(s) skipped -- callers should fall back "
+            "to the placeholder for those:"
+        )
         for tls, links in results.items():
             for link, v in links.items():
                 if "sat_flow_pcu_s" not in v:

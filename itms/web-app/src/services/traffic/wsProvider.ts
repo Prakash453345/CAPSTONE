@@ -29,8 +29,9 @@
  * to detect the narrow set of things worth a toast (Phase 5) — pushed onto
  * `pendingEvents` and drained into each snapshot's `events` field.
  *
- * Not on the live bus yet, so empty for now: detector incidents (the M6
- * anomaly-detection stream is a separate track from this interactive path).
+ * IncidentCandidate / IncidentDetected / IncidentUpdated feed the incident
+ * review workspace. Only received traffic observations advance lastUpdate;
+ * neither socket-open nor the snapshot timer is evidence of fresh telemetry.
  */
 import type {
   Anomaly,
@@ -73,6 +74,7 @@ import {
   classifySignalFault,
 } from "@/services/traffic/notifications";
 import { junctionVehicleStats } from "@/services/traffic/intersectionStats";
+import { mapIncident } from "@/services/traffic/incidents";
 
 const SNAPSHOT_MS = 500;
 /** Drop a vehicle / edge reading not refreshed within this long. */
@@ -122,6 +124,7 @@ export function createWebSocketProvider(): TrafficDataProvider {
   const snapshotListeners = new Set<(s: TrafficSnapshot) => void>();
   const statusListeners = new Set<(s: ProviderStatus) => void>();
 
+  const detectorIncidents = new Map<string, Incident>();
   const vehicles = new Map<string, VehEntry>();
   const edges = new Map<string, EdgeEntry>();
   /** intersection_id -> the arbiter decision that last commanded it. `source`
@@ -147,6 +150,7 @@ export function createWebSocketProvider(): TrafficDataProvider {
   // Receipt time anchors per-entity expiry only. It is deliberately *not*
   // connection health: a quiet but open WebSocket is still a live connection.
   let lastMessageAt = 0;
+  let lastTelemetryAt = 0;
   let status: ProviderStatus = "offline";
   let stopped = true;
 
@@ -160,7 +164,20 @@ export function createWebSocketProvider(): TrafficDataProvider {
     lastMessageAt = Date.now();
     const p = env.payload;
     switch (env.event_type) {
+      case "IncidentCandidate":
+      case "IncidentDetected":
+      case "IncidentUpdated": {
+        const id = String(p.incident_id);
+        const incident = mapIncident(env.event_type === "IncidentDetected" ? { ...p, state: "CONFIRMED" } : p, detectorIncidents.get(id));
+        if (incident) detectorIncidents.set(id, incident);
+        // Keep session memory bounded; the canonical registry remains available via REST.
+        if (detectorIncidents.size > 1000) detectorIncidents.delete(detectorIncidents.keys().next().value!);
+        break;
+      }
       case "VehiclePositionUpdated": {
+        if (typeof p.vehicle_id !== "string" || ![p.lat, p.lon, p.speed_mps, p.heading_deg].every((v) => typeof v === "number" && Number.isFinite(v))) break;
+        if (Math.abs(Number(p.lat)) > 90 || Math.abs(Number(p.lon)) > 180) break;
+        lastTelemetryAt = lastMessageAt;
         const id = String(p.vehicle_id);
         vehicles.set(id, {
           lat: Number(p.lat),
@@ -174,6 +191,8 @@ export function createWebSocketProvider(): TrafficDataProvider {
         break;
       }
       case "ApproachState": {
+        if (typeof p.movement_id !== "string" || typeof p.occupancy !== "number" || !Number.isFinite(p.occupancy)) break;
+        lastTelemetryAt = lastMessageAt;
         edges.set(String(p.movement_id), {
           occupancy: Number(p.occupancy),
           at: lastMessageAt,
@@ -377,7 +396,7 @@ export function createWebSocketProvider(): TrafficDataProvider {
       Object.values(roadCongestion).reduce((s, v) => s + v, 0) /
       Math.max(1, Object.keys(roadCongestion).length);
 
-    const incidents: Incident[] = []; // live *detector* incident stream lands later
+    const incidents = [...detectorIncidents.values()];
 
     const anomalyList: Anomaly[] = [];
     for (const [, a] of anomalies) {
@@ -394,12 +413,12 @@ export function createWebSocketProvider(): TrafficDataProvider {
     }
 
     const summary: SystemSummary = {
-      operational: status === "online",
+      operational: status === "online" && lastTelemetryAt > 0 && now - lastTelemetryAt < 6_000,
       vehicleCount: vehList.length,
       congestion: Number.isFinite(congestionAvg) ? congestionAvg : 0,
       signalsOnline: intersections.filter((i) => i.signalState !== "red").length,
       signalsTotal: signalJunctions.length,
-      lastUpdate: iso,
+      lastUpdate: lastTelemetryAt > 0 ? new Date(lastTelemetryAt).toISOString() : null,
     };
 
     const events = pendingEvents;
@@ -437,7 +456,7 @@ export function createWebSocketProvider(): TrafficDataProvider {
     }
     ws.onopen = () => {
       reconnectTries = 0;
-      lastMessageAt = Date.now();
+      lastMessageAt = 0;
       setStatus("online");
     };
     ws.onmessage = (evt) => {
@@ -447,6 +466,7 @@ export function createWebSocketProvider(): TrafficDataProvider {
       } catch {
         return;
       }
+      if (!env || typeof env.event_type !== "string" || !env.payload || typeof env.payload !== "object" || Array.isArray(env.payload)) return;
       handleEnvelope(env);
     };
     ws.onerror = () => ws?.close();
@@ -484,6 +504,8 @@ export function createWebSocketProvider(): TrafficDataProvider {
       ws?.close();
       ws = null;
       vehicles.clear();
+      detectorIncidents.clear();
+      lastTelemetryAt = lastMessageAt = 0;
       edges.clear();
       signalSeenAt.clear();
       signalFaults.clear();

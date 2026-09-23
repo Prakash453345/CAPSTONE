@@ -102,7 +102,7 @@ def test_score_trips_excludes_departures_before_warmup():
               waiting_count=1),
     ]
     result = metrics.score_trips(
-        trips, {"veh_car": 1.0}, warmup_s=600.0, scenario_duration_s=1800.0
+        trips, {"veh_car": 1.0}, warmup_s=600.0
     )
     assert result.n_trips_total == 2
     assert result.n_trips_scored == 1
@@ -120,26 +120,44 @@ def test_score_trips_person_delay_is_occupancy_weighted():
         _trip("car0", "veh_car", depart_s=700.0, time_loss_s=10.0),
     ]
     occupancy = {"veh_bus": 40.0, "veh_car": 1.5}
-    result = metrics.score_trips(trips, occupancy, warmup_s=0.0, scenario_duration_s=1800.0)
+    result = metrics.score_trips(trips, occupancy, warmup_s=0.0)
     assert math.isclose(result.person_delay_s, 40.0 * 10.0 + 1.5 * 10.0)
 
 
-def test_score_trips_throughput_is_not_warmup_filtered():
-    # Person-throughput is a whole-scenario figure on purpose (see module
-    # docstring) -- both trips count even though one departs before warmup.
+def test_score_trips_throughput_is_measured_over_the_scored_window():
+    # Fixed 2026-09-18: throughput used to divide by a hard-coded nominal
+    # duration no caller overrode, which made it identical for every
+    # controller. It is now persons cleared after warm-up, over the window
+    # those trips actually occupy.
     trips = [
-        _trip("v0", "veh_bus", depart_s=100.0),
-        _trip("v1", "veh_car", depart_s=700.0),
+        _trip("v0", "veh_bus", depart_s=100.0),                      # pre-warmup: excluded
+        _trip("v1", "veh_car", depart_s=700.0, duration_s=100.0),
+        _trip("v2", "veh_car", depart_s=1000.0, duration_s=2600.0),  # last arrival 3600 s
     ]
     occupancy = {"veh_bus": 40.0, "veh_car": 1.5}
-    result = metrics.score_trips(trips, occupancy, warmup_s=600.0, scenario_duration_s=3600.0)
-    # (40 + 1.5) persons over a 1-hour scenario -> 41.5 persons/hour.
-    assert math.isclose(result.person_throughput_per_hour, 41.5)
+    result = metrics.score_trips(trips, occupancy, warmup_s=600.0)
+    # 3.0 persons over (3600 - 600) s = 3.6 persons/hour.
+    assert math.isclose(result.person_throughput_per_hour, 3.6)
+
+
+def test_score_trips_scores_the_scheduled_departure_not_the_insertion_time():
+    # Fixed 2026-09-18: congestion delays SUMO's insertion, so filtering on
+    # the recorded departure scored a different population per arm.
+    trips = [
+        _trip("v0", "veh_car", depart_s=650.0, time_loss_s=10.0),  # scheduled at 500 -> out
+        _trip("v1", "veh_car", depart_s=700.0, time_loss_s=20.0),  # scheduled at 610 -> in
+    ]
+    result = metrics.score_trips(
+        trips, {"veh_car": 1.0}, warmup_s=600.0,
+        scheduled_depart_s={"v0": 500.0, "v1": 610.0},
+    )
+    assert result.n_trips_scored == 1
+    assert math.isclose(result.person_delay_s, 20.0)
 
 
 def test_score_trips_missing_vtype_defaults_to_occupancy_one():
     trips = [_trip("v0", "unknown_vtype", depart_s=700.0, time_loss_s=8.0)]
-    result = metrics.score_trips(trips, {}, warmup_s=0.0, scenario_duration_s=1800.0)
+    result = metrics.score_trips(trips, {}, warmup_s=0.0)
     assert result.person_delay_s == 8.0
 
 
@@ -150,7 +168,7 @@ def test_wait_time_distribution_reports_percentiles_not_just_mean():
         _trip(f"v{i}", "veh_car", depart_s=700.0, waiting_time_s=float(i))
         for i in range(1, 101)
     ]
-    result = metrics.score_trips(trips, {"veh_car": 1.0}, warmup_s=0.0, scenario_duration_s=1800.0)
+    result = metrics.score_trips(trips, {"veh_car": 1.0}, warmup_s=0.0)
     assert math.isclose(result.wait_time_s.mean_s, 50.5, rel_tol=1e-9)
     assert result.wait_time_s.max_s == 100.0
     assert result.wait_time_s.p99_s > result.wait_time_s.p50_s
@@ -158,7 +176,7 @@ def test_wait_time_distribution_reports_percentiles_not_just_mean():
 
 
 def test_score_trips_on_empty_input_is_all_zero():
-    result = metrics.score_trips([], {}, warmup_s=600.0, scenario_duration_s=1800.0)
+    result = metrics.score_trips([], {}, warmup_s=600.0)
     assert result.n_trips_total == 0
     assert result.n_trips_scored == 0
     assert result.person_delay_s == 0.0
@@ -181,7 +199,7 @@ def test_compute_run_metrics_end_to_end_from_files(tmp_path):
     )
     route_path = _write(tmp_path, "routes.xml", _route_xml({"veh_bus": 40.0, "veh_car": 1.5}))
     result = metrics.compute_run_metrics(
-        tripinfo_path, route_path, warmup_s=600.0, scenario_duration_s=1800.0
+        tripinfo_path, route_path, warmup_s=600.0
     )
     assert result.n_trips_scored == 2
     assert math.isclose(result.person_delay_s, 40.0 * 20.0 + 1.5 * 5.0)

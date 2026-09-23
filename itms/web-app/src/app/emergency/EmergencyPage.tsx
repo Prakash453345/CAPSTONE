@@ -60,8 +60,8 @@ export function EmergencyPage() {
   };
 
   return (
-    <div className="flex h-full">
-      <aside className="flex w-[300px] shrink-0 flex-col border-r border-border bg-surface">
+    <div className="operational-workspace flex h-full">
+      <aside className="workspace-roster flex w-[300px] shrink-0 flex-col border-r border-border bg-surface">
         <div className="border-b border-border px-4 py-3">
           <h2 className="text-sm font-semibold">Emergency requests</h2>
           <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">

@@ -10,9 +10,11 @@ from __future__ import annotations
 
 import math
 
-import numpy as np
 import pytest
-from sim_service.control.anomaly.calibration import (
+
+np = pytest.importorskip("numpy")
+
+from sim_service.control.anomaly.calibration import (  # noqa: E402
     ConformalCalibrator,
     ConformalConfig,
     _weighted_conformal_quantile,

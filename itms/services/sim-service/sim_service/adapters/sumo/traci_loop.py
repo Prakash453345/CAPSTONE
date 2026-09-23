@@ -19,6 +19,7 @@ import os
 import shutil
 import sys
 import time
+from collections.abc import Callable
 from pathlib import Path
 
 import traci
@@ -66,6 +67,78 @@ def _resolve_sumo_binary() -> str:
     )
 
 
+def _vtype_lookup(vtype_cache: dict[str, str]) -> Callable[[str], str]:
+    def vtype_of(veh_id: str) -> str:
+        cached = vtype_cache.get(veh_id)
+        if cached is None:
+            cached = vtype_cache[veh_id] = traci.vehicle.getTypeID(veh_id)
+        return cached
+
+    return vtype_of
+
+
+def publish_traffic_state(
+    bus: RedisStreamsSyncBus, *, step_length: float, vtype_cache: dict[str, str]
+) -> None:
+    """`VehiclePositionUpdated` (per vehicle) + `ApproachState` (per edge) for
+    the current TraCI tick -- the exact event shapes this module has
+    published since M1. Pulled out to a function (rather than left inline in
+    `run`) so `control/runner.py`'s live-demo path can publish the identical
+    events from its own per-tick loop instead of a second, drifting copy --
+    one `run_controlled_scenario` call now does what `run` below does plus
+    real signal control, for the live demo (`sim_service/main.py`).
+
+    `vtype_cache` is the caller's dict, kept across ticks: a vehicle's vType
+    never changes over its life, so this is one `getTypeID` call per vehicle
+    for the whole run rather than one per vehicle per tick -- the same
+    reasoning `signal_controller/lane_cache.py` documents for the identical
+    call on the control path.
+    """
+    vtype_of = _vtype_lookup(vtype_cache)
+
+    for veh_id in traci.vehicle.getIDList():
+        x, y = traci.vehicle.getPosition(veh_id)
+        lon, lat = traci.simulation.convertGeo(x, y)
+        raw = encode_envelope(
+            event_type="VehiclePositionUpdated",
+            source="sim-service",
+            payload={
+                "vehicle_id": veh_id,
+                "vehicle_type": vtype_of(veh_id),
+                "lat": lat,
+                "lon": lon,
+                "speed_mps": traci.vehicle.getSpeed(veh_id),
+                "heading_deg": traci.vehicle.getAngle(veh_id),
+                "edge_id": traci.vehicle.getRoadID(veh_id),
+                "source": "sumo",
+            },
+            partition_key=veh_id,
+        )
+        bus.publish(_VEHICLE_TOPIC, raw)
+
+    for edge_id in traci.edge.getIDList():
+        if edge_id.startswith(_INTERNAL_EDGE_PREFIX):
+            continue
+        count = traci.edge.getLastStepVehicleNumber(edge_id)
+        raw = encode_envelope(
+            event_type="ApproachState",
+            source="sim-service",
+            payload={
+                "movement_id": edge_id,
+                "q_pcu": float(count),
+                # Already a fraction in [0, 1] -- see queue_state.py's unit note.
+                "occupancy": traci.edge.getLastStepOccupancy(edge_id),
+                "arrival_rate_pcu_s": count / step_length,
+                "queue_truncated": False,
+                "confidence": 1.0,
+                "model": "ground_truth_sim",
+                "source": "sumo",
+            },
+            partition_key=edge_id,
+        )
+        bus.publish(_APPROACH_TOPIC, raw)
+
+
 def run(
     sumocfg_path: str,
     bus: RedisStreamsSyncBus,
@@ -110,6 +183,12 @@ def run(
     step = 0
     dropped_ticks = 0
 
+    # A vehicle's vType never changes over its life, so `getTypeID` is looked
+    # up once per vehicle and reused every tick after -- the same reasoning
+    # (and the measured cost) that `signal_controller/lane_cache.py` documents
+    # for the identical call on the control path.
+    vtype_cache: dict[str, str] = {}
+
     try:
         while traci.simulation.getMinExpectedNumber() > 0:
             tick_start = time.monotonic()
@@ -118,45 +197,7 @@ def run(
             step += 1
             sim_time = traci.simulation.getTime()
 
-            for veh_id in traci.vehicle.getIDList():
-                x, y = traci.vehicle.getPosition(veh_id)
-                lon, lat = traci.simulation.convertGeo(x, y)
-                raw = encode_envelope(
-                    event_type="VehiclePositionUpdated",
-                    source="sim-service",
-                    payload={
-                        "vehicle_id": veh_id,
-                        "lat": lat,
-                        "lon": lon,
-                        "speed_mps": traci.vehicle.getSpeed(veh_id),
-                        "heading_deg": traci.vehicle.getAngle(veh_id),
-                        "edge_id": traci.vehicle.getRoadID(veh_id),
-                        "source": "sumo",
-                    },
-                    partition_key=veh_id,
-                )
-                bus.publish(_VEHICLE_TOPIC, raw)
-
-            for edge_id in traci.edge.getIDList():
-                if edge_id.startswith(_INTERNAL_EDGE_PREFIX):
-                    continue
-                count = traci.edge.getLastStepVehicleNumber(edge_id)
-                raw = encode_envelope(
-                    event_type="ApproachState",
-                    source="sim-service",
-                    payload={
-                        "movement_id": edge_id,
-                        "q_pcu": float(count),
-                        "occupancy": traci.edge.getLastStepOccupancy(edge_id) / 100.0,
-                        "arrival_rate_pcu_s": count / step_length,
-                        "queue_truncated": False,
-                        "confidence": 1.0,
-                        "model": "ground_truth_sim",
-                        "source": "sumo",
-                    },
-                    partition_key=edge_id,
-                )
-                bus.publish(_APPROACH_TOPIC, raw)
+            publish_traffic_state(bus, step_length=step_length, vtype_cache=vtype_cache)
 
             elapsed = time.monotonic() - tick_start
             if elapsed > target_wall_s:

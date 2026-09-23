@@ -40,12 +40,18 @@ number already verified against this demand stays exactly as measured.
 Each vType carries an `occupancy` param the metrics collector reads
 directly:
 
-| vType | vClass | mix share | occupancy (persons/vehicle) |
-|---|---|---|---|
-| `veh_motorcycle` | `motorcycle` | 35% | 1.3 |
-| `veh_car` | `passenger` | 40% | 1.5 |
-| `veh_auto` | `taxi` (closest built-in class to a shared auto-rickshaw) | 20% | 2.5 |
-| `veh_bus` | `bus` | 5% | 40.0 |
+| vType | vClass | mix share | occupancy (persons/vehicle) | `guiShape` | colour |
+|---|---|---|---|---|---|
+| `veh_motorcycle` | `motorcycle` | 35% | 1.3 | `motorcycle` | green |
+| `veh_car` | `passenger` | 40% | 1.5 | `passenger/sedan` | cyan-blue |
+| `veh_auto` | `taxi` (closest built-in class to a shared auto-rickshaw) | 20% | 2.5 | `moped` | amber |
+| `veh_bus` | `bus` | 5% | 40.0 | `bus` | orange |
+
+`guiShape` and `color` are presentational: they give the four classes a
+distinct silhouette and hue in `sumo-gui`, and — via the `vehicle_type`
+field the sim-service copies onto `VehiclePositionUpdated` — a distinct
+marker shape in the operator console. Headless `sumo` (the sim-service
+TraCI loop included) parses and ignores both, so no measured number moves.
 
 **The mix share and occupancy figures are commonly-cited approximate
 values for a mixed Indian urban arterial, not measured for this
@@ -58,3 +64,16 @@ net.xml's `disallow` lists), so no vehicle's route changes.
 The checked-in `vijayawada_corridor.rou.xml` already has this mix
 applied. Re-run `assign_vtypes.py` after regenerating with `build.sh` if
 you rebuild the base trips from scratch.
+
+## Watching it in sumo-gui
+
+```bash
+sumo-gui -c vijayawada_corridor_gui.sumocfg
+```
+
+`vijayawada_corridor_gui.sumocfg` is the plain scenario plus a `<gui_only>`
+block that loads `vijayawada_corridor.view.xml` — a view-settings file that
+selects vehicle quality "simple shapes" and the "given vehicle/type/route
+color" colour scheme, so each class shows up as its own shape and colour
+instead of one uniform triangle. Non-GUI runs keep using
+`vijayawada_corridor.sumocfg` (the `sumo` binary rejects `<gui_only>`).

@@ -1,0 +1,2822 @@
+{
+ "meta": {
+  "created_unix": 1789573809,
+  "python": "3.11.15",
+  "platform": "Linux-6.18.44-fc-v33-x86_64-with-glibc2.39",
+  "sumo_version": "1.27.1",
+  "ceiling_factor": 1.25,
+  "seeds": [
+   1,
+   2,
+   3,
+   4,
+   5,
+   6,
+   7,
+   8,
+   9,
+   10
+  ],
+  "levels": [
+   "light",
+   "medium",
+   "heavy"
+  ],
+  "arms": [
+   "webster",
+   "ceiling",
+   "ccacamp"
+  ],
+  "wall_min": 13.4,
+  "source": {
+   "git_head": "ac09e69f98d3b19d2b08a63056a7481b13fec63a",
+   "branch": "komal",
+   "uncommitted_backend_diff_sha256": "bfdf796b9be8c9d9d46dba9313ed29a336d675b40c57022b79cd6c3d5a2e75b4"
+  }
+ },
+ "summary": {
+  "light": {
+   "arms": {
+    "webster": {
+     "n": 10,
+     "person_delay_s": 69573.4177,
+     "p95_wait_s": 102.9,
+     "max_wait_s": 159.0,
+     "stops_per_vehicle": 1.90875,
+     "person_throughput_per_hour": 2717.1999999999953,
+     "interlock_violations": 0
+    },
+    "ceiling": {
+     "n": 10,
+     "person_delay_s": 56472.3174,
+     "p95_wait_s": 93.9,
+     "max_wait_s": 177.7,
+     "stops_per_vehicle": 1.8858333333333335,
+     "person_throughput_per_hour": 2717.1999999999953,
+     "interlock_violations": 0
+    },
+    "ccacamp": {
+     "n": 10,
+     "person_delay_s": 55739.954000000005,
+     "p95_wait_s": 90.4,
+     "max_wait_s": 150.2,
+     "stops_per_vehicle": 1.8871438450899032,
+     "person_throughput_per_hour": 2717.1999999999953,
+     "interlock_violations": 0
+    }
+   },
+   "paired": {
+    "ccacamp_vs_webster:person_delay_s": {
+     "n": 10,
+     "mean": -13833.463699999993,
+     "pct": -19.883260241217087,
+     "ci95": [
+      -17716.333320037167,
+      -9950.594079962819
+     ],
+     "significant": true,
+     "n_better": 10
+    },
+    "ccacamp_vs_webster:stops_per_vehicle": {
+     "n": 10,
+     "mean": -0.021606154910096743,
+     "pct": -1.1319531059644659,
+     "ci95": [
+      -0.10814345894703936,
+      0.06493114912684586
+     ],
+     "significant": false,
+     "n_better": 6
+    },
+    "ccacamp_vs_ceiling:person_delay_s": {
+     "n": 10,
+     "mean": -732.3633999999911,
+     "pct": -1.2968538103591107,
+     "ci95": [
+      -3951.235882298561,
+      2486.509082298579
+     ],
+     "significant": false,
+     "n_better": 4
+    },
+    "ccacamp_vs_ceiling:stops_per_vehicle": {
+     "n": 10,
+     "mean": 0.0013105117565698654,
+     "pct": 0.06949244842615282,
+     "ci95": [
+      -0.07824474831732019,
+      0.08086577183045991
+     ],
+     "significant": false,
+     "n_better": 3
+    }
+   }
+  },
+  "medium": {
+   "arms": {
+    "webster": {
+     "n": 10,
+     "person_delay_s": 193354.16400000002,
+     "p95_wait_s": 169.5,
+     "max_wait_s": 255.7,
+     "stops_per_vehicle": 3.0856540084388184,
+     "person_throughput_per_hour": 5203.200000000007,
+     "interlock_violations": 0
+    },
+    "ceiling": {
+     "n": 10,
+     "person_delay_s": 176460.898,
+     "p95_wait_s": 182.5,
+     "max_wait_s": 266.2,
+     "stops_per_vehicle": 2.8428270042194095,
+     "person_throughput_per_hour": 5203.200000000007,
+     "interlock_violations": 0
+    },
+    "ccacamp": {
+     "n": 10,
+     "person_delay_s": 171307.2499,
+     "p95_wait_s": 169.0,
+     "max_wait_s": 266.2,
+     "stops_per_vehicle": 2.773206751054852,
+     "person_throughput_per_hour": 5203.200000000007,
+     "interlock_violations": 0
+    }
+   },
+   "paired": {
+    "ccacamp_vs_webster:person_delay_s": {
+     "n": 10,
+     "mean": -22046.914100000005,
+     "pct": -11.4023477146321,
+     "ci95": [
+      -39358.11024912857,
+      -4735.717950871436
+     ],
+     "significant": true,
+     "n_better": 8
+    },
+    "ccacamp_vs_webster:stops_per_vehicle": {
+     "n": 10,
+     "mean": -0.3124472573839662,
+     "pct": -10.125803363872555,
+     "ci95": [
+      -0.6068481200793937,
+      -0.018046394688538747
+     ],
+     "significant": true,
+     "n_better": 8
+    },
+    "ccacamp_vs_ceiling:person_delay_s": {
+     "n": 10,
+     "mean": -5153.6480999999885,
+     "pct": -2.9205609618964927,
+     "ci95": [
+      -20802.396568984324,
+      10495.100368984346
+     ],
+     "significant": false,
+     "n_better": 7
+    },
+    "ccacamp_vs_ceiling:stops_per_vehicle": {
+     "n": 10,
+     "mean": -0.06962025316455697,
+     "pct": -2.4489795918367347,
+     "ci95": [
+      -0.28597301075880355,
+      0.14673250442968958
+     ],
+     "significant": false,
+     "n_better": 6
+    }
+   }
+  },
+  "heavy": {
+   "arms": {
+    "webster": {
+     "n": 10,
+     "person_delay_s": 1601949.7186,
+     "p95_wait_s": 719.7,
+     "max_wait_s": 1148.3,
+     "stops_per_vehicle": 10.416834588374531,
+     "person_throughput_per_hour": 10282.2000000001,
+     "interlock_violations": 0
+    },
+    "ceiling": {
+     "n": 10,
+     "person_delay_s": 1498306.9964999997,
+     "p95_wait_s": 776.3,
+     "max_wait_s": 1361.5,
+     "stops_per_vehicle": 9.796727142423459,
+     "person_throughput_per_hour": 10282.200000000104,
+     "interlock_violations": 2
+    },
+    "ccacamp": {
+     "n": 10,
+     "person_delay_s": 1416609.3298,
+     "p95_wait_s": 741.3,
+     "max_wait_s": 1310.0,
+     "stops_per_vehicle": 9.256293360342099,
+     "person_throughput_per_hour": 10282.200000000103,
+     "interlock_violations": 0
+    }
+   },
+   "paired": {
+    "ccacamp_vs_webster:person_delay_s": {
+     "n": 10,
+     "mean": -185340.38880000022,
+     "pct": -11.569675792444702,
+     "ci95": [
+      -260417.04911970044,
+      -110263.7284803
+     ],
+     "significant": true,
+     "n_better": 10
+    },
+    "ccacamp_vs_webster:stops_per_vehicle": {
+     "n": 10,
+     "mean": -1.1605412280324323,
+     "pct": -11.14101619053861,
+     "ci95": [
+      -1.7275182258440647,
+      -0.5935642302208
+     ],
+     "significant": true,
+     "n_better": 9
+    },
+    "ccacamp_vs_ceiling:person_delay_s": {
+     "n": 10,
+     "mean": -81697.66669999975,
+     "pct": -5.452665367701217,
+     "ci95": [
+      -146721.02270643218,
+      -16674.31069356732
+     ],
+     "significant": true,
+     "n_better": 8
+    },
+    "ccacamp_vs_ceiling:stops_per_vehicle": {
+     "n": 10,
+     "mean": -0.5404337820813601,
+     "pct": -5.5164727385443,
+     "ci95": [
+      -0.9938378182956205,
+      -0.08702974586709972
+     ],
+     "significant": true,
+     "n_better": 8
+    }
+   }
+  }
+ },
+ "records": [
+  {
+   "controller": "webster",
+   "demand_level": "light",
+   "seed": 1,
+   "steps": 2117,
+   "interlock_violations": 0,
+   "n_trips_total": 360,
+   "n_trips_scored": 240,
+   "person_delay_s": 74826.38500000001,
+   "person_throughput_per_hour": 2717.1999999999953,
+   "stops_per_vehicle": 1.9625,
+   "wait_time_s": {
+    "mean_s": 37.125,
+    "p95_s": 106.0,
+    "max_s": 179.0
+   },
+   "arm": "webster",
+   "wall_s": 4.7
+  },
+  {
+   "controller": "webster",
+   "demand_level": "light",
+   "seed": 2,
+   "steps": 2118,
+   "interlock_violations": 0,
+   "n_trips_total": 360,
+   "n_trips_scored": 240,
+   "person_delay_s": 73445.70899999999,
+   "person_throughput_per_hour": 2717.1999999999953,
+   "stops_per_vehicle": 1.9666666666666666,
+   "wait_time_s": {
+    "mean_s": 37.19583333333333,
+    "p95_s": 106.0,
+    "max_s": 204.0
+   },
+   "arm": "webster",
+   "wall_s": 4.8
+  },
+  {
+   "controller": "webster",
+   "demand_level": "light",
+   "seed": 3,
+   "steps": 2117,
+   "interlock_violations": 0,
+   "n_trips_total": 360,
+   "n_trips_scored": 240,
+   "person_delay_s": 69128.58300000003,
+   "person_throughput_per_hour": 2717.1999999999953,
+   "stops_per_vehicle": 1.8291666666666666,
+   "wait_time_s": {
+    "mean_s": 34.87083333333333,
+    "p95_s": 107.0,
+    "max_s": 144.0
+   },
+   "arm": "webster",
+   "wall_s": 4.8
+  },
+  {
+   "controller": "webster",
+   "demand_level": "light",
+   "seed": 4,
+   "steps": 2117,
+   "interlock_violations": 0,
+   "n_trips_total": 360,
+   "n_trips_scored": 240,
+   "person_delay_s": 69568.20900000002,
+   "person_throughput_per_hour": 2717.1999999999953,
+   "stops_per_vehicle": 1.8333333333333333,
+   "wait_time_s": {
+    "mean_s": 34.38333333333333,
+    "p95_s": 100.0,
+    "max_s": 128.0
+   },
+   "arm": "webster",
+   "wall_s": 4.8
+  },
+  {
+   "controller": "webster",
+   "demand_level": "light",
+   "seed": 5,
+   "steps": 2117,
+   "interlock_violations": 0,
+   "n_trips_total": 360,
+   "n_trips_scored": 240,
+   "person_delay_s": 67511.82200000003,
+   "person_throughput_per_hour": 2717.1999999999953,
+   "stops_per_vehicle": 1.9625,
+   "wait_time_s": {
+    "mean_s": 36.483333333333334,
+    "p95_s": 111.0,
+    "max_s": 172.0
+   },
+   "arm": "webster",
+   "wall_s": 4.8
+  },
+  {
+   "controller": "webster",
+   "demand_level": "light",
+   "seed": 6,
+   "steps": 2117,
+   "interlock_violations": 0,
+   "n_trips_total": 360,
+   "n_trips_scored": 240,
+   "person_delay_s": 66199.18299999996,
+   "person_throughput_per_hour": 2717.1999999999953,
+   "stops_per_vehicle": 1.8416666666666666,
+   "wait_time_s": {
+    "mean_s": 33.416666666666664,
+    "p95_s": 93.0,
+    "max_s": 122.0
+   },
+   "arm": "webster",
+   "wall_s": 4.8
+  },
+  {
+   "controller": "webster",
+   "demand_level": "light",
+   "seed": 7,
+   "steps": 2117,
+   "interlock_violations": 0,
+   "n_trips_total": 360,
+   "n_trips_scored": 240,
+   "person_delay_s": 67332.52700000002,
+   "person_throughput_per_hour": 2717.1999999999953,
+   "stops_per_vehicle": 1.8083333333333333,
+   "wait_time_s": {
+    "mean_s": 33.1375,
+    "p95_s": 93.0,
+    "max_s": 167.0
+   },
+   "arm": "webster",
+   "wall_s": 4.8
+  },
+  {
+   "controller": "webster",
+   "demand_level": "light",
+   "seed": 8,
+   "steps": 2117,
+   "interlock_violations": 0,
+   "n_trips_total": 360,
+   "n_trips_scored": 240,
+   "person_delay_s": 69604.1039999999,
+   "person_throughput_per_hour": 2717.1999999999953,
+   "stops_per_vehicle": 2.025,
+   "wait_time_s": {
+    "mean_s": 36.56666666666667,
+    "p95_s": 108.0,
+    "max_s": 172.0
+   },
+   "arm": "webster",
+   "wall_s": 4.7
+  },
+  {
+   "controller": "webster",
+   "demand_level": "light",
+   "seed": 9,
+   "steps": 2118,
+   "interlock_violations": 0,
+   "n_trips_total": 360,
+   "n_trips_scored": 240,
+   "person_delay_s": 71745.19600000001,
+   "person_throughput_per_hour": 2717.1999999999953,
+   "stops_per_vehicle": 2.125,
+   "wait_time_s": {
+    "mean_s": 38.666666666666664,
+    "p95_s": 120.0,
+    "max_s": 168.0
+   },
+   "arm": "webster",
+   "wall_s": 4.8
+  },
+  {
+   "controller": "webster",
+   "demand_level": "light",
+   "seed": 10,
+   "steps": 2118,
+   "interlock_violations": 0,
+   "n_trips_total": 360,
+   "n_trips_scored": 240,
+   "person_delay_s": 66372.45900000005,
+   "person_throughput_per_hour": 2717.1999999999953,
+   "stops_per_vehicle": 1.7333333333333334,
+   "wait_time_s": {
+    "mean_s": 32.13333333333333,
+    "p95_s": 85.0,
+    "max_s": 134.0
+   },
+   "arm": "webster",
+   "wall_s": 4.8
+  },
+  {
+   "controller": "acamp",
+   "demand_level": "light",
+   "seed": 1,
+   "steps": 2085,
+   "interlock_violations": 0,
+   "n_trips_total": 360,
+   "n_trips_scored": 240,
+   "person_delay_s": 56134.82399999999,
+   "person_throughput_per_hour": 2717.1999999999953,
+   "stops_per_vehicle": 1.8083333333333333,
+   "wait_time_s": {
+    "mean_s": 30.8125,
+    "p95_s": 100.0,
+    "max_s": 174.0
+   },
+   "decision_stats": {
+    "ticks": 9843,
+    "switch_cycle_supervisor": 0,
+    "cycles_completed": 2938,
+    "extend": 9238,
+    "extend_allocation_protected": 0,
+    "switch_pressure": 336,
+    "switch_max_green": 269,
+    "switch_starvation": 0,
+    "blended": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "ceiling",
+   "wall_s": 11.9
+  },
+  {
+   "controller": "acamp",
+   "demand_level": "light",
+   "seed": 2,
+   "steps": 2096,
+   "interlock_violations": 0,
+   "n_trips_total": 360,
+   "n_trips_scored": 240,
+   "person_delay_s": 48707.323999999986,
+   "person_throughput_per_hour": 2717.1999999999953,
+   "stops_per_vehicle": 1.8208333333333333,
+   "wait_time_s": {
+    "mean_s": 27.341666666666665,
+    "p95_s": 84.0,
+    "max_s": 166.0
+   },
+   "decision_stats": {
+    "ticks": 9929,
+    "switch_cycle_supervisor": 0,
+    "cycles_completed": 2914,
+    "extend": 9326,
+    "extend_allocation_protected": 0,
+    "switch_pressure": 350,
+    "switch_max_green": 253,
+    "switch_starvation": 0,
+    "blended": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "ceiling",
+   "wall_s": 11.9
+  },
+  {
+   "controller": "acamp",
+   "demand_level": "light",
+   "seed": 3,
+   "steps": 2083,
+   "interlock_violations": 0,
+   "n_trips_total": 360,
+   "n_trips_scored": 240,
+   "person_delay_s": 55444.383,
+   "person_throughput_per_hour": 2717.1999999999953,
+   "stops_per_vehicle": 1.9125,
+   "wait_time_s": {
+    "mean_s": 29.233333333333334,
+    "p95_s": 82.0,
+    "max_s": 128.0
+   },
+   "decision_stats": {
+    "ticks": 9821,
+    "switch_cycle_supervisor": 0,
+    "cycles_completed": 2863,
+    "extend": 9215,
+    "extend_allocation_protected": 0,
+    "switch_pressure": 363,
+    "switch_max_green": 243,
+    "switch_starvation": 0,
+    "blended": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "ceiling",
+   "wall_s": 11.9
+  },
+  {
+   "controller": "acamp",
+   "demand_level": "light",
+   "seed": 4,
+   "steps": 2072,
+   "interlock_violations": 0,
+   "n_trips_total": 360,
+   "n_trips_scored": 240,
+   "person_delay_s": 62064.521,
+   "person_throughput_per_hour": 2717.1999999999953,
+   "stops_per_vehicle": 2.066666666666667,
+   "wait_time_s": {
+    "mean_s": 31.916666666666668,
+    "p95_s": 100.0,
+    "max_s": 198.0
+   },
+   "decision_stats": {
+    "ticks": 9741,
+    "switch_cycle_supervisor": 0,
+    "cycles_completed": 2779,
+    "extend": 9135,
+    "extend_allocation_protected": 0,
+    "switch_pressure": 359,
+    "switch_max_green": 247,
+    "switch_starvation": 0,
+    "blended": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "ceiling",
+   "wall_s": 12.0
+  },
+  {
+   "controller": "acamp",
+   "demand_level": "light",
+   "seed": 5,
+   "steps": 2109,
+   "interlock_violations": 0,
+   "n_trips_total": 360,
+   "n_trips_scored": 240,
+   "person_delay_s": 52107.33599999998,
+   "person_throughput_per_hour": 2717.1999999999953,
+   "stops_per_vehicle": 1.9041666666666666,
+   "wait_time_s": {
+    "mean_s": 29.141666666666666,
+    "p95_s": 85.0,
+    "max_s": 167.0
+   },
+   "decision_stats": {
+    "ticks": 9976,
+    "switch_cycle_supervisor": 0,
+    "cycles_completed": 2998,
+    "extend": 9366,
+    "extend_allocation_protected": 0,
+    "switch_pressure": 361,
+    "switch_max_green": 249,
+    "switch_starvation": 0,
+    "blended": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "ceiling",
+   "wall_s": 11.8
+  },
+  {
+   "controller": "acamp",
+   "demand_level": "light",
+   "seed": 6,
+   "steps": 2096,
+   "interlock_violations": 0,
+   "n_trips_total": 360,
+   "n_trips_scored": 240,
+   "person_delay_s": 57767.634000000005,
+   "person_throughput_per_hour": 2717.1999999999953,
+   "stops_per_vehicle": 1.9416666666666667,
+   "wait_time_s": {
+    "mean_s": 28.158333333333335,
+    "p95_s": 92.0,
+    "max_s": 131.0
+   },
+   "decision_stats": {
+    "ticks": 9910,
+    "switch_cycle_supervisor": 0,
+    "cycles_completed": 2896,
+    "extend": 9304,
+    "extend_allocation_protected": 0,
+    "switch_pressure": 349,
+    "switch_max_green": 257,
+    "switch_starvation": 0,
+    "blended": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "ceiling",
+   "wall_s": 12.0
+  },
+  {
+   "controller": "acamp",
+   "demand_level": "light",
+   "seed": 7,
+   "steps": 2064,
+   "interlock_violations": 0,
+   "n_trips_total": 360,
+   "n_trips_scored": 240,
+   "person_delay_s": 57448.17400000002,
+   "person_throughput_per_hour": 2717.1999999999953,
+   "stops_per_vehicle": 1.7291666666666667,
+   "wait_time_s": {
+    "mean_s": 31.570833333333333,
+    "p95_s": 113.0,
+    "max_s": 277.0
+   },
+   "decision_stats": {
+    "ticks": 9750,
+    "switch_cycle_supervisor": 0,
+    "cycles_completed": 2930,
+    "extend": 9152,
+    "extend_allocation_protected": 0,
+    "switch_pressure": 344,
+    "switch_max_green": 254,
+    "switch_starvation": 0,
+    "blended": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "ceiling",
+   "wall_s": 12.1
+  },
+  {
+   "controller": "acamp",
+   "demand_level": "light",
+   "seed": 8,
+   "steps": 2059,
+   "interlock_violations": 0,
+   "n_trips_total": 360,
+   "n_trips_scored": 240,
+   "person_delay_s": 61117.82900000002,
+   "person_throughput_per_hour": 2717.1999999999953,
+   "stops_per_vehicle": 1.9541666666666666,
+   "wait_time_s": {
+    "mean_s": 32.766666666666666,
+    "p95_s": 100.0,
+    "max_s": 201.0
+   },
+   "decision_stats": {
+    "ticks": 9816,
+    "switch_cycle_supervisor": 0,
+    "cycles_completed": 3002,
+    "extend": 9231,
+    "extend_allocation_protected": 0,
+    "switch_pressure": 322,
+    "switch_max_green": 263,
+    "switch_starvation": 0,
+    "blended": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "ceiling",
+   "wall_s": 11.9
+  },
+  {
+   "controller": "acamp",
+   "demand_level": "light",
+   "seed": 9,
+   "steps": 2143,
+   "interlock_violations": 0,
+   "n_trips_total": 360,
+   "n_trips_scored": 240,
+   "person_delay_s": 54583.06999999994,
+   "person_throughput_per_hour": 2717.1999999999953,
+   "stops_per_vehicle": 1.7791666666666666,
+   "wait_time_s": {
+    "mean_s": 28.35,
+    "p95_s": 86.0,
+    "max_s": 178.0
+   },
+   "decision_stats": {
+    "ticks": 10189,
+    "switch_cycle_supervisor": 0,
+    "cycles_completed": 3065,
+    "extend": 9576,
+    "extend_allocation_protected": 0,
+    "switch_pressure": 335,
+    "switch_max_green": 278,
+    "switch_starvation": 0,
+    "blended": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "ceiling",
+   "wall_s": 12.2
+  },
+  {
+   "controller": "acamp",
+   "demand_level": "light",
+   "seed": 10,
+   "steps": 2077,
+   "interlock_violations": 0,
+   "n_trips_total": 360,
+   "n_trips_scored": 240,
+   "person_delay_s": 59348.07900000003,
+   "person_throughput_per_hour": 2717.1999999999953,
+   "stops_per_vehicle": 1.9416666666666667,
+   "wait_time_s": {
+    "mean_s": 31.625,
+    "p95_s": 97.0,
+    "max_s": 157.0
+   },
+   "decision_stats": {
+    "ticks": 9840,
+    "switch_cycle_supervisor": 0,
+    "cycles_completed": 2959,
+    "extend": 9241,
+    "extend_allocation_protected": 0,
+    "switch_pressure": 353,
+    "switch_max_green": 246,
+    "switch_starvation": 0,
+    "blended": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "ceiling",
+   "wall_s": 12.0
+  },
+  {
+   "controller": "acamp",
+   "demand_level": "light",
+   "seed": 1,
+   "steps": 2099,
+   "interlock_violations": 0,
+   "n_trips_total": 360,
+   "n_trips_scored": 240,
+   "person_delay_s": 52723.071999999964,
+   "person_throughput_per_hour": 2717.1999999999953,
+   "stops_per_vehicle": 1.9375,
+   "wait_time_s": {
+    "mean_s": 31.404166666666665,
+    "p95_s": 98.0,
+    "max_s": 184.0
+   },
+   "decision_stats": {
+    "ticks": 9916,
+    "switch_cycle_supervisor": 3,
+    "cycles_completed": 2871,
+    "extend": 9307,
+    "extend_allocation_protected": 0,
+    "switch_pressure": 357,
+    "switch_max_green": 249,
+    "switch_starvation": 0,
+    "blended": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "ccacamp",
+   "wall_s": 12.0
+  },
+  {
+   "controller": "acamp",
+   "demand_level": "light",
+   "seed": 2,
+   "steps": 2057,
+   "interlock_violations": 0,
+   "n_trips_total": 360,
+   "n_trips_scored": 241,
+   "person_delay_s": 51429.762,
+   "person_throughput_per_hour": 2717.1999999999953,
+   "stops_per_vehicle": 1.8547717842323652,
+   "wait_time_s": {
+    "mean_s": 30.149377593360995,
+    "p95_s": 96.0,
+    "max_s": 162.0
+   },
+   "decision_stats": {
+    "ticks": 9704,
+    "switch_cycle_supervisor": 7,
+    "cycles_completed": 2836,
+    "extend": 9106,
+    "extend_allocation_protected": 0,
+    "switch_pressure": 334,
+    "switch_max_green": 257,
+    "switch_starvation": 0,
+    "blended": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "ccacamp",
+   "wall_s": 11.7
+  },
+  {
+   "controller": "acamp",
+   "demand_level": "light",
+   "seed": 3,
+   "steps": 2083,
+   "interlock_violations": 0,
+   "n_trips_total": 360,
+   "n_trips_scored": 240,
+   "person_delay_s": 55444.383,
+   "person_throughput_per_hour": 2717.1999999999953,
+   "stops_per_vehicle": 1.9125,
+   "wait_time_s": {
+    "mean_s": 29.233333333333334,
+    "p95_s": 82.0,
+    "max_s": 128.0
+   },
+   "decision_stats": {
+    "ticks": 9821,
+    "switch_cycle_supervisor": 2,
+    "cycles_completed": 2863,
+    "extend": 9215,
+    "extend_allocation_protected": 0,
+    "switch_pressure": 362,
+    "switch_max_green": 242,
+    "switch_starvation": 0,
+    "blended": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "ccacamp",
+   "wall_s": 11.9
+  },
+  {
+   "controller": "acamp",
+   "demand_level": "light",
+   "seed": 4,
+   "steps": 2053,
+   "interlock_violations": 0,
+   "n_trips_total": 360,
+   "n_trips_scored": 240,
+   "person_delay_s": 57940.52800000003,
+   "person_throughput_per_hour": 2717.1999999999953,
+   "stops_per_vehicle": 1.8166666666666667,
+   "wait_time_s": {
+    "mean_s": 28.354166666666668,
+    "p95_s": 90.0,
+    "max_s": 115.0
+   },
+   "decision_stats": {
+    "ticks": 9665,
+    "switch_cycle_supervisor": 4,
+    "cycles_completed": 2802,
+    "extend": 9065,
+    "extend_allocation_protected": 0,
+    "switch_pressure": 348,
+    "switch_max_green": 248,
+    "switch_starvation": 0,
+    "blended": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "ccacamp",
+   "wall_s": 11.6
+  },
+  {
+   "controller": "acamp",
+   "demand_level": "light",
+   "seed": 5,
+   "steps": 2066,
+   "interlock_violations": 0,
+   "n_trips_total": 360,
+   "n_trips_scored": 240,
+   "person_delay_s": 59582.02200000001,
+   "person_throughput_per_hour": 2717.199999999995,
+   "stops_per_vehicle": 1.9833333333333334,
+   "wait_time_s": {
+    "mean_s": 29.125,
+    "p95_s": 90.0,
+    "max_s": 147.0
+   },
+   "decision_stats": {
+    "ticks": 9697,
+    "switch_cycle_supervisor": 4,
+    "cycles_completed": 2824,
+    "extend": 9090,
+    "extend_allocation_protected": 0,
+    "switch_pressure": 369,
+    "switch_max_green": 234,
+    "switch_starvation": 0,
+    "blended": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "ccacamp",
+   "wall_s": 12.0
+  },
+  {
+   "controller": "acamp",
+   "demand_level": "light",
+   "seed": 6,
+   "steps": 2069,
+   "interlock_violations": 0,
+   "n_trips_total": 360,
+   "n_trips_scored": 240,
+   "person_delay_s": 58315.029,
+   "person_throughput_per_hour": 2717.1999999999953,
+   "stops_per_vehicle": 1.8916666666666666,
+   "wait_time_s": {
+    "mean_s": 30.795833333333334,
+    "p95_s": 85.0,
+    "max_s": 161.0
+   },
+   "decision_stats": {
+    "ticks": 9805,
+    "switch_cycle_supervisor": 3,
+    "cycles_completed": 2969,
+    "extend": 9209,
+    "extend_allocation_protected": 0,
+    "switch_pressure": 344,
+    "switch_max_green": 249,
+    "switch_starvation": 0,
+    "blended": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "ccacamp",
+   "wall_s": 12.1
+  },
+  {
+   "controller": "acamp",
+   "demand_level": "light",
+   "seed": 7,
+   "steps": 2056,
+   "interlock_violations": 0,
+   "n_trips_total": 360,
+   "n_trips_scored": 240,
+   "person_delay_s": 52113.31500000002,
+   "person_throughput_per_hour": 2717.1999999999953,
+   "stops_per_vehicle": 1.7333333333333334,
+   "wait_time_s": {
+    "mean_s": 27.345833333333335,
+    "p95_s": 87.0,
+    "max_s": 142.0
+   },
+   "decision_stats": {
+    "ticks": 9713,
+    "switch_cycle_supervisor": 2,
+    "cycles_completed": 2900,
+    "extend": 9116,
+    "extend_allocation_protected": 0,
+    "switch_pressure": 348,
+    "switch_max_green": 247,
+    "switch_starvation": 0,
+    "blended": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "ccacamp",
+   "wall_s": 12.0
+  },
+  {
+   "controller": "acamp",
+   "demand_level": "light",
+   "seed": 8,
+   "steps": 2062,
+   "interlock_violations": 0,
+   "n_trips_total": 360,
+   "n_trips_scored": 240,
+   "person_delay_s": 53351.13200000002,
+   "person_throughput_per_hour": 2717.1999999999953,
+   "stops_per_vehicle": 1.8875,
+   "wait_time_s": {
+    "mean_s": 27.266666666666666,
+    "p95_s": 89.0,
+    "max_s": 156.0
+   },
+   "decision_stats": {
+    "ticks": 9758,
+    "switch_cycle_supervisor": 5,
+    "cycles_completed": 2802,
+    "extend": 9163,
+    "extend_allocation_protected": 0,
+    "switch_pressure": 358,
+    "switch_max_green": 232,
+    "switch_starvation": 0,
+    "blended": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "ccacamp",
+   "wall_s": 11.8
+  },
+  {
+   "controller": "acamp",
+   "demand_level": "light",
+   "seed": 9,
+   "steps": 2088,
+   "interlock_violations": 0,
+   "n_trips_total": 360,
+   "n_trips_scored": 240,
+   "person_delay_s": 57152.21799999999,
+   "person_throughput_per_hour": 2717.1999999999953,
+   "stops_per_vehicle": 1.9125,
+   "wait_time_s": {
+    "mean_s": 30.2875,
+    "p95_s": 90.0,
+    "max_s": 150.0
+   },
+   "decision_stats": {
+    "ticks": 9877,
+    "switch_cycle_supervisor": 4,
+    "cycles_completed": 2955,
+    "extend": 9274,
+    "extend_allocation_protected": 0,
+    "switch_pressure": 348,
+    "switch_max_green": 251,
+    "switch_starvation": 0,
+    "blended": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "ccacamp",
+   "wall_s": 11.8
+  },
+  {
+   "controller": "acamp",
+   "demand_level": "light",
+   "seed": 10,
+   "steps": 2077,
+   "interlock_violations": 0,
+   "n_trips_total": 360,
+   "n_trips_scored": 240,
+   "person_delay_s": 59348.07900000003,
+   "person_throughput_per_hour": 2717.1999999999953,
+   "stops_per_vehicle": 1.9416666666666667,
+   "wait_time_s": {
+    "mean_s": 31.625,
+    "p95_s": 97.0,
+    "max_s": 157.0
+   },
+   "decision_stats": {
+    "ticks": 9840,
+    "switch_cycle_supervisor": 3,
+    "cycles_completed": 2959,
+    "extend": 9241,
+    "extend_allocation_protected": 0,
+    "switch_pressure": 350,
+    "switch_max_green": 246,
+    "switch_starvation": 0,
+    "blended": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "ccacamp",
+   "wall_s": 11.6
+  },
+  {
+   "controller": "webster",
+   "demand_level": "medium",
+   "seed": 1,
+   "steps": 2240,
+   "interlock_violations": 0,
+   "n_trips_total": 708,
+   "n_trips_scored": 474,
+   "person_delay_s": 203848.26000000007,
+   "person_throughput_per_hour": 5203.200000000009,
+   "stops_per_vehicle": 3.189873417721519,
+   "wait_time_s": {
+    "mean_s": 57.73839662447257,
+    "p95_s": 183.0,
+    "max_s": 253.0
+   },
+   "arm": "webster",
+   "wall_s": 5.4
+  },
+  {
+   "controller": "webster",
+   "demand_level": "medium",
+   "seed": 2,
+   "steps": 2161,
+   "interlock_violations": 0,
+   "n_trips_total": 708,
+   "n_trips_scored": 474,
+   "person_delay_s": 167126.43800000002,
+   "person_throughput_per_hour": 5203.200000000009,
+   "stops_per_vehicle": 2.6877637130801686,
+   "wait_time_s": {
+    "mean_s": 48.99789029535865,
+    "p95_s": 131.0,
+    "max_s": 169.0
+   },
+   "arm": "webster",
+   "wall_s": 5.1
+  },
+  {
+   "controller": "webster",
+   "demand_level": "medium",
+   "seed": 3,
+   "steps": 2242,
+   "interlock_violations": 0,
+   "n_trips_total": 708,
+   "n_trips_scored": 474,
+   "person_delay_s": 226815.21899999995,
+   "person_throughput_per_hour": 5203.200000000004,
+   "stops_per_vehicle": 3.559071729957806,
+   "wait_time_s": {
+    "mean_s": 65.55907172995781,
+    "p95_s": 229.0,
+    "max_s": 317.0
+   },
+   "arm": "webster",
+   "wall_s": 5.4
+  },
+  {
+   "controller": "webster",
+   "demand_level": "medium",
+   "seed": 4,
+   "steps": 2242,
+   "interlock_violations": 0,
+   "n_trips_total": 708,
+   "n_trips_scored": 474,
+   "person_delay_s": 191760.19199999998,
+   "person_throughput_per_hour": 5203.200000000008,
+   "stops_per_vehicle": 2.9662447257383966,
+   "wait_time_s": {
+    "mean_s": 54.81856540084388,
+    "p95_s": 167.0,
+    "max_s": 254.0
+   },
+   "arm": "webster",
+   "wall_s": 5.2
+  },
+  {
+   "controller": "webster",
+   "demand_level": "medium",
+   "seed": 5,
+   "steps": 2324,
+   "interlock_violations": 0,
+   "n_trips_total": 708,
+   "n_trips_scored": 474,
+   "person_delay_s": 212924.6549999999,
+   "person_throughput_per_hour": 5203.200000000006,
+   "stops_per_vehicle": 3.5443037974683542,
+   "wait_time_s": {
+    "mean_s": 62.40928270042194,
+    "p95_s": 205.0,
+    "max_s": 274.0
+   },
+   "arm": "webster",
+   "wall_s": 5.5
+  },
+  {
+   "controller": "webster",
+   "demand_level": "medium",
+   "seed": 6,
+   "steps": 2238,
+   "interlock_violations": 0,
+   "n_trips_total": 708,
+   "n_trips_scored": 474,
+   "person_delay_s": 181742.195,
+   "person_throughput_per_hour": 5203.20000000001,
+   "stops_per_vehicle": 2.911392405063291,
+   "wait_time_s": {
+    "mean_s": 52.19198312236287,
+    "p95_s": 150.0,
+    "max_s": 224.0
+   },
+   "arm": "webster",
+   "wall_s": 5.2
+  },
+  {
+   "controller": "webster",
+   "demand_level": "medium",
+   "seed": 7,
+   "steps": 2278,
+   "interlock_violations": 0,
+   "n_trips_total": 708,
+   "n_trips_scored": 474,
+   "person_delay_s": 184271.19499999995,
+   "person_throughput_per_hour": 5203.200000000009,
+   "stops_per_vehicle": 2.8860759493670884,
+   "wait_time_s": {
+    "mean_s": 53.257383966244724,
+    "p95_s": 144.0,
+    "max_s": 328.0
+   },
+   "arm": "webster",
+   "wall_s": 5.5
+  },
+  {
+   "controller": "webster",
+   "demand_level": "medium",
+   "seed": 8,
+   "steps": 2242,
+   "interlock_violations": 0,
+   "n_trips_total": 708,
+   "n_trips_scored": 474,
+   "person_delay_s": 199753.5900000001,
+   "person_throughput_per_hour": 5203.200000000004,
+   "stops_per_vehicle": 3.259493670886076,
+   "wait_time_s": {
+    "mean_s": 57.413502109704645,
+    "p95_s": 185.0,
+    "max_s": 266.0
+   },
+   "arm": "webster",
+   "wall_s": 5.2
+  },
+  {
+   "controller": "webster",
+   "demand_level": "medium",
+   "seed": 9,
+   "steps": 2243,
+   "interlock_violations": 0,
+   "n_trips_total": 708,
+   "n_trips_scored": 474,
+   "person_delay_s": 186534.47800000006,
+   "person_throughput_per_hour": 5203.200000000008,
+   "stops_per_vehicle": 3.0443037974683542,
+   "wait_time_s": {
+    "mean_s": 54.561181434599156,
+    "p95_s": 167.0,
+    "max_s": 276.0
+   },
+   "arm": "webster",
+   "wall_s": 5.4
+  },
+  {
+   "controller": "webster",
+   "demand_level": "medium",
+   "seed": 10,
+   "steps": 2163,
+   "interlock_violations": 0,
+   "n_trips_total": 708,
+   "n_trips_scored": 474,
+   "person_delay_s": 178765.4180000001,
+   "person_throughput_per_hour": 5203.200000000009,
+   "stops_per_vehicle": 2.808016877637131,
+   "wait_time_s": {
+    "mean_s": 50.38396624472574,
+    "p95_s": 134.0,
+    "max_s": 196.0
+   },
+   "arm": "webster",
+   "wall_s": 5.1
+  },
+  {
+   "controller": "acamp",
+   "demand_level": "medium",
+   "seed": 1,
+   "steps": 2171,
+   "interlock_violations": 0,
+   "n_trips_total": 708,
+   "n_trips_scored": 474,
+   "person_delay_s": 180490.34599999987,
+   "person_throughput_per_hour": 5203.200000000008,
+   "stops_per_vehicle": 2.871308016877637,
+   "wait_time_s": {
+    "mean_s": 56.08438818565401,
+    "p95_s": 187.0,
+    "max_s": 304.0
+   },
+   "decision_stats": {
+    "ticks": 10110,
+    "switch_cycle_supervisor": 0,
+    "cycles_completed": 2088,
+    "extend": 9138,
+    "extend_allocation_protected": 324,
+    "switch_pressure": 410,
+    "switch_max_green": 238,
+    "switch_starvation": 0,
+    "blended": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "ceiling",
+   "wall_s": 14.4
+  },
+  {
+   "controller": "acamp",
+   "demand_level": "medium",
+   "seed": 2,
+   "steps": 2197,
+   "interlock_violations": 0,
+   "n_trips_total": 708,
+   "n_trips_scored": 474,
+   "person_delay_s": 160315.201,
+   "person_throughput_per_hour": 5203.200000000007,
+   "stops_per_vehicle": 2.5253164556962027,
+   "wait_time_s": {
+    "mean_s": 47.91139240506329,
+    "p95_s": 159.0,
+    "max_s": 223.0
+   },
+   "decision_stats": {
+    "ticks": 10286,
+    "switch_cycle_supervisor": 0,
+    "cycles_completed": 2224,
+    "extend": 9310,
+    "extend_allocation_protected": 328,
+    "switch_pressure": 413,
+    "switch_max_green": 235,
+    "switch_starvation": 0,
+    "blended": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "ceiling",
+   "wall_s": 14.5
+  },
+  {
+   "controller": "acamp",
+   "demand_level": "medium",
+   "seed": 3,
+   "steps": 2143,
+   "interlock_violations": 0,
+   "n_trips_total": 708,
+   "n_trips_scored": 474,
+   "person_delay_s": 163276.897,
+   "person_throughput_per_hour": 5203.200000000007,
+   "stops_per_vehicle": 2.5738396624472575,
+   "wait_time_s": {
+    "mean_s": 49.029535864978904,
+    "p95_s": 178.0,
+    "max_s": 258.0
+   },
+   "decision_stats": {
+    "ticks": 9974,
+    "switch_cycle_supervisor": 0,
+    "cycles_completed": 2122,
+    "extend": 9023,
+    "extend_allocation_protected": 309,
+    "switch_pressure": 427,
+    "switch_max_green": 215,
+    "switch_starvation": 0,
+    "blended": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "ceiling",
+   "wall_s": 14.5
+  },
+  {
+   "controller": "acamp",
+   "demand_level": "medium",
+   "seed": 4,
+   "steps": 2188,
+   "interlock_violations": 0,
+   "n_trips_total": 708,
+   "n_trips_scored": 474,
+   "person_delay_s": 181146.53499999995,
+   "person_throughput_per_hour": 5203.200000000007,
+   "stops_per_vehicle": 2.9071729957805905,
+   "wait_time_s": {
+    "mean_s": 55.719409282700425,
+    "p95_s": 180.0,
+    "max_s": 277.0
+   },
+   "decision_stats": {
+    "ticks": 10206,
+    "switch_cycle_supervisor": 0,
+    "cycles_completed": 2114,
+    "extend": 9223,
+    "extend_allocation_protected": 332,
+    "switch_pressure": 406,
+    "switch_max_green": 245,
+    "switch_starvation": 0,
+    "blended": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "ceiling",
+   "wall_s": 14.7
+  },
+  {
+   "controller": "acamp",
+   "demand_level": "medium",
+   "seed": 5,
+   "steps": 2216,
+   "interlock_violations": 0,
+   "n_trips_total": 708,
+   "n_trips_scored": 474,
+   "person_delay_s": 190293.1610000001,
+   "person_throughput_per_hour": 5203.200000000006,
+   "stops_per_vehicle": 3.023206751054852,
+   "wait_time_s": {
+    "mean_s": 58.58016877637131,
+    "p95_s": 199.0,
+    "max_s": 248.0
+   },
+   "decision_stats": {
+    "ticks": 10358,
+    "switch_cycle_supervisor": 0,
+    "cycles_completed": 2175,
+    "extend": 9365,
+    "extend_allocation_protected": 337,
+    "switch_pressure": 407,
+    "switch_max_green": 249,
+    "switch_starvation": 0,
+    "blended": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "ceiling",
+   "wall_s": 15.3
+  },
+  {
+   "controller": "acamp",
+   "demand_level": "medium",
+   "seed": 6,
+   "steps": 2158,
+   "interlock_violations": 0,
+   "n_trips_total": 708,
+   "n_trips_scored": 474,
+   "person_delay_s": 184100.7009999999,
+   "person_throughput_per_hour": 5203.200000000007,
+   "stops_per_vehicle": 2.9535864978902953,
+   "wait_time_s": {
+    "mean_s": 55.027426160337555,
+    "p95_s": 189.0,
+    "max_s": 239.0
+   },
+   "decision_stats": {
+    "ticks": 10031,
+    "switch_cycle_supervisor": 0,
+    "cycles_completed": 2072,
+    "extend": 9074,
+    "extend_allocation_protected": 311,
+    "switch_pressure": 418,
+    "switch_max_green": 228,
+    "switch_starvation": 0,
+    "blended": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "ceiling",
+   "wall_s": 14.7
+  },
+  {
+   "controller": "acamp",
+   "demand_level": "medium",
+   "seed": 7,
+   "steps": 2167,
+   "interlock_violations": 0,
+   "n_trips_total": 708,
+   "n_trips_scored": 474,
+   "person_delay_s": 180578.29,
+   "person_throughput_per_hour": 5203.200000000008,
+   "stops_per_vehicle": 3.023206751054852,
+   "wait_time_s": {
+    "mean_s": 56.075949367088604,
+    "p95_s": 193.0,
+    "max_s": 283.0
+   },
+   "decision_stats": {
+    "ticks": 10100,
+    "switch_cycle_supervisor": 0,
+    "cycles_completed": 2109,
+    "extend": 9154,
+    "extend_allocation_protected": 301,
+    "switch_pressure": 423,
+    "switch_max_green": 222,
+    "switch_starvation": 0,
+    "blended": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "ceiling",
+   "wall_s": 15.0
+  },
+  {
+   "controller": "acamp",
+   "demand_level": "medium",
+   "seed": 8,
+   "steps": 2142,
+   "interlock_violations": 0,
+   "n_trips_total": 708,
+   "n_trips_scored": 474,
+   "person_delay_s": 182431.112,
+   "person_throughput_per_hour": 5203.200000000008,
+   "stops_per_vehicle": 2.8628691983122363,
+   "wait_time_s": {
+    "mean_s": 53.79324894514768,
+    "p95_s": 180.0,
+    "max_s": 235.0
+   },
+   "decision_stats": {
+    "ticks": 10047,
+    "switch_cycle_supervisor": 0,
+    "cycles_completed": 2122,
+    "extend": 9087,
+    "extend_allocation_protected": 329,
+    "switch_pressure": 401,
+    "switch_max_green": 230,
+    "switch_starvation": 0,
+    "blended": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "ceiling",
+   "wall_s": 14.6
+  },
+  {
+   "controller": "acamp",
+   "demand_level": "medium",
+   "seed": 9,
+   "steps": 2159,
+   "interlock_violations": 0,
+   "n_trips_total": 708,
+   "n_trips_scored": 474,
+   "person_delay_s": 174228.6170000001,
+   "person_throughput_per_hour": 5203.20000000001,
+   "stops_per_vehicle": 2.79957805907173,
+   "wait_time_s": {
+    "mean_s": 51.426160337552744,
+    "p95_s": 178.0,
+    "max_s": 282.0
+   },
+   "decision_stats": {
+    "ticks": 10072,
+    "switch_cycle_supervisor": 0,
+    "cycles_completed": 2005,
+    "extend": 9098,
+    "extend_allocation_protected": 330,
+    "switch_pressure": 415,
+    "switch_max_green": 229,
+    "switch_starvation": 0,
+    "blended": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "ceiling",
+   "wall_s": 14.7
+  },
+  {
+   "controller": "acamp",
+   "demand_level": "medium",
+   "seed": 10,
+   "steps": 2142,
+   "interlock_violations": 0,
+   "n_trips_total": 708,
+   "n_trips_scored": 474,
+   "person_delay_s": 167748.12000000005,
+   "person_throughput_per_hour": 5203.200000000006,
+   "stops_per_vehicle": 2.888185654008439,
+   "wait_time_s": {
+    "mean_s": 53.25316455696203,
+    "p95_s": 182.0,
+    "max_s": 313.0
+   },
+   "decision_stats": {
+    "ticks": 9966,
+    "switch_cycle_supervisor": 0,
+    "cycles_completed": 2001,
+    "extend": 8989,
+    "extend_allocation_protected": 337,
+    "switch_pressure": 407,
+    "switch_max_green": 233,
+    "switch_starvation": 0,
+    "blended": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "ceiling",
+   "wall_s": 15.0
+  },
+  {
+   "controller": "acamp",
+   "demand_level": "medium",
+   "seed": 1,
+   "steps": 2122,
+   "interlock_violations": 0,
+   "n_trips_total": 708,
+   "n_trips_scored": 474,
+   "person_delay_s": 149527.107,
+   "person_throughput_per_hour": 5203.20000000001,
+   "stops_per_vehicle": 2.5443037974683542,
+   "wait_time_s": {
+    "mean_s": 47.20253164556962,
+    "p95_s": 147.0,
+    "max_s": 247.0
+   },
+   "decision_stats": {
+    "ticks": 9834,
+    "switch_cycle_supervisor": 7,
+    "cycles_completed": 1989,
+    "extend": 8906,
+    "extend_allocation_protected": 288,
+    "switch_pressure": 421,
+    "switch_max_green": 212,
+    "switch_starvation": 0,
+    "blended": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "ccacamp",
+   "wall_s": 14.2
+  },
+  {
+   "controller": "acamp",
+   "demand_level": "medium",
+   "seed": 2,
+   "steps": 2123,
+   "interlock_violations": 0,
+   "n_trips_total": 708,
+   "n_trips_scored": 474,
+   "person_delay_s": 150328.14300000004,
+   "person_throughput_per_hour": 5203.200000000007,
+   "stops_per_vehicle": 2.4219409282700424,
+   "wait_time_s": {
+    "mean_s": 42.51898734177215,
+    "p95_s": 140.0,
+    "max_s": 200.0
+   },
+   "decision_stats": {
+    "ticks": 9917,
+    "switch_cycle_supervisor": 1,
+    "cycles_completed": 2109,
+    "extend": 8975,
+    "extend_allocation_protected": 312,
+    "switch_pressure": 418,
+    "switch_max_green": 211,
+    "switch_starvation": 0,
+    "blended": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "ccacamp",
+   "wall_s": 14.1
+  },
+  {
+   "controller": "acamp",
+   "demand_level": "medium",
+   "seed": 3,
+   "steps": 2190,
+   "interlock_violations": 0,
+   "n_trips_total": 708,
+   "n_trips_scored": 474,
+   "person_delay_s": 185450.062,
+   "person_throughput_per_hour": 5203.200000000007,
+   "stops_per_vehicle": 2.8860759493670884,
+   "wait_time_s": {
+    "mean_s": 54.371308016877634,
+    "p95_s": 190.0,
+    "max_s": 243.0
+   },
+   "decision_stats": {
+    "ticks": 10215,
+    "switch_cycle_supervisor": 5,
+    "cycles_completed": 2180,
+    "extend": 9245,
+    "extend_allocation_protected": 318,
+    "switch_pressure": 403,
+    "switch_max_green": 244,
+    "switch_starvation": 0,
+    "blended": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "ccacamp",
+   "wall_s": 15.2
+  },
+  {
+   "controller": "acamp",
+   "demand_level": "medium",
+   "seed": 4,
+   "steps": 2145,
+   "interlock_violations": 0,
+   "n_trips_total": 708,
+   "n_trips_scored": 474,
+   "person_delay_s": 150121.51100000014,
+   "person_throughput_per_hour": 5203.200000000008,
+   "stops_per_vehicle": 2.3586497890295357,
+   "wait_time_s": {
+    "mean_s": 43.221518987341774,
+    "p95_s": 130.0,
+    "max_s": 216.0
+   },
+   "decision_stats": {
+    "ticks": 10008,
+    "switch_cycle_supervisor": 8,
+    "cycles_completed": 2199,
+    "extend": 9131,
+    "extend_allocation_protected": 240,
+    "switch_pressure": 407,
+    "switch_max_green": 222,
+    "switch_starvation": 0,
+    "blended": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "ccacamp",
+   "wall_s": 14.2
+  },
+  {
+   "controller": "acamp",
+   "demand_level": "medium",
+   "seed": 5,
+   "steps": 2171,
+   "interlock_violations": 0,
+   "n_trips_total": 708,
+   "n_trips_scored": 474,
+   "person_delay_s": 188115.26999999993,
+   "person_throughput_per_hour": 5203.200000000006,
+   "stops_per_vehicle": 3.1054852320675104,
+   "wait_time_s": {
+    "mean_s": 56.30590717299578,
+    "p95_s": 197.0,
+    "max_s": 294.0
+   },
+   "decision_stats": {
+    "ticks": 10082,
+    "switch_cycle_supervisor": 6,
+    "cycles_completed": 2192,
+    "extend": 9121,
+    "extend_allocation_protected": 309,
+    "switch_pressure": 425,
+    "switch_max_green": 221,
+    "switch_starvation": 0,
+    "blended": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "ccacamp",
+   "wall_s": 15.4
+  },
+  {
+   "controller": "acamp",
+   "demand_level": "medium",
+   "seed": 6,
+   "steps": 2186,
+   "interlock_violations": 0,
+   "n_trips_total": 708,
+   "n_trips_scored": 474,
+   "person_delay_s": 176964.22700000004,
+   "person_throughput_per_hour": 5203.200000000006,
+   "stops_per_vehicle": 2.80168776371308,
+   "wait_time_s": {
+    "mean_s": 53.086497890295355,
+    "p95_s": 165.0,
+    "max_s": 239.0
+   },
+   "decision_stats": {
+    "ticks": 10159,
+    "switch_cycle_supervisor": 6,
+    "cycles_completed": 2204,
+    "extend": 9207,
+    "extend_allocation_protected": 295,
+    "switch_pressure": 420,
+    "switch_max_green": 231,
+    "switch_starvation": 0,
+    "blended": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "ccacamp",
+   "wall_s": 14.6
+  },
+  {
+   "controller": "acamp",
+   "demand_level": "medium",
+   "seed": 7,
+   "steps": 2227,
+   "interlock_violations": 0,
+   "n_trips_total": 708,
+   "n_trips_scored": 474,
+   "person_delay_s": 186661.6239999999,
+   "person_throughput_per_hour": 5203.200000000008,
+   "stops_per_vehicle": 3.172995780590717,
+   "wait_time_s": {
+    "mean_s": 57.244725738396625,
+    "p95_s": 197.0,
+    "max_s": 324.0
+   },
+   "decision_stats": {
+    "ticks": 10359,
+    "switch_cycle_supervisor": 7,
+    "cycles_completed": 2203,
+    "extend": 9400,
+    "extend_allocation_protected": 293,
+    "switch_pressure": 427,
+    "switch_max_green": 232,
+    "switch_starvation": 0,
+    "blended": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "ccacamp",
+   "wall_s": 15.4
+  },
+  {
+   "controller": "acamp",
+   "demand_level": "medium",
+   "seed": 8,
+   "steps": 2131,
+   "interlock_violations": 0,
+   "n_trips_total": 708,
+   "n_trips_scored": 474,
+   "person_delay_s": 161268.03899999993,
+   "person_throughput_per_hour": 5203.200000000008,
+   "stops_per_vehicle": 2.6645569620253164,
+   "wait_time_s": {
+    "mean_s": 48.924050632911396,
+    "p95_s": 156.0,
+    "max_s": 250.0
+   },
+   "decision_stats": {
+    "ticks": 9959,
+    "switch_cycle_supervisor": 3,
+    "cycles_completed": 2005,
+    "extend": 9027,
+    "extend_allocation_protected": 300,
+    "switch_pressure": 402,
+    "switch_max_green": 227,
+    "switch_starvation": 0,
+    "blended": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "ccacamp",
+   "wall_s": 14.2
+  },
+  {
+   "controller": "acamp",
+   "demand_level": "medium",
+   "seed": 9,
+   "steps": 2137,
+   "interlock_violations": 0,
+   "n_trips_total": 708,
+   "n_trips_scored": 474,
+   "person_delay_s": 160428.2330000001,
+   "person_throughput_per_hour": 5203.200000000009,
+   "stops_per_vehicle": 2.4831223628691985,
+   "wait_time_s": {
+    "mean_s": 46.128691983122366,
+    "p95_s": 142.0,
+    "max_s": 229.0
+   },
+   "decision_stats": {
+    "ticks": 9977,
+    "switch_cycle_supervisor": 7,
+    "cycles_completed": 2001,
+    "extend": 9069,
+    "extend_allocation_protected": 273,
+    "switch_pressure": 397,
+    "switch_max_green": 231,
+    "switch_starvation": 0,
+    "blended": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "ccacamp",
+   "wall_s": 14.8
+  },
+  {
+   "controller": "acamp",
+   "demand_level": "medium",
+   "seed": 10,
+   "steps": 2315,
+   "interlock_violations": 0,
+   "n_trips_total": 708,
+   "n_trips_scored": 474,
+   "person_delay_s": 204208.28300000002,
+   "person_throughput_per_hour": 5203.200000000007,
+   "stops_per_vehicle": 3.2932489451476794,
+   "wait_time_s": {
+    "mean_s": 61.744725738396625,
+    "p95_s": 226.0,
+    "max_s": 420.0
+   },
+   "decision_stats": {
+    "ticks": 10811,
+    "switch_cycle_supervisor": 4,
+    "cycles_completed": 2333,
+    "extend": 9776,
+    "extend_allocation_protected": 348,
+    "switch_pressure": 426,
+    "switch_max_green": 257,
+    "switch_starvation": 0,
+    "blended": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "ccacamp",
+   "wall_s": 16.0
+  },
+  {
+   "controller": "webster",
+   "demand_level": "heavy",
+   "seed": 1,
+   "steps": 3402,
+   "interlock_violations": 0,
+   "n_trips_total": 1440,
+   "n_trips_scored": 967,
+   "person_delay_s": 1586154.1990000014,
+   "person_throughput_per_hour": 10282.200000000103,
+   "stops_per_vehicle": 9.531540847983454,
+   "wait_time_s": {
+    "mean_s": 261.6556359875905,
+    "p95_s": 706.0,
+    "max_s": 1025.0
+   },
+   "arm": "webster",
+   "wall_s": 10.2
+  },
+  {
+   "controller": "webster",
+   "demand_level": "heavy",
+   "seed": 2,
+   "steps": 3248,
+   "interlock_violations": 0,
+   "n_trips_total": 1440,
+   "n_trips_scored": 968,
+   "person_delay_s": 1539442.640000001,
+   "person_throughput_per_hour": 10282.200000000099,
+   "stops_per_vehicle": 9.74586776859504,
+   "wait_time_s": {
+    "mean_s": 258.4927685950413,
+    "p95_s": 691.0,
+    "max_s": 982.0
+   },
+   "arm": "webster",
+   "wall_s": 10.1
+  },
+  {
+   "controller": "webster",
+   "demand_level": "heavy",
+   "seed": 3,
+   "steps": 3446,
+   "interlock_violations": 0,
+   "n_trips_total": 1440,
+   "n_trips_scored": 968,
+   "person_delay_s": 1616101.008000001,
+   "person_throughput_per_hour": 10282.200000000099,
+   "stops_per_vehicle": 10.075413223140496,
+   "wait_time_s": {
+    "mean_s": 262.59090909090907,
+    "p95_s": 706.0,
+    "max_s": 1194.0
+   },
+   "arm": "webster",
+   "wall_s": 10.4
+  },
+  {
+   "controller": "webster",
+   "demand_level": "heavy",
+   "seed": 4,
+   "steps": 3591,
+   "interlock_violations": 0,
+   "n_trips_total": 1440,
+   "n_trips_scored": 967,
+   "person_delay_s": 1556113.418,
+   "person_throughput_per_hour": 10282.200000000097,
+   "stops_per_vehicle": 10.413650465356774,
+   "wait_time_s": {
+    "mean_s": 256.482936918304,
+    "p95_s": 704.0,
+    "max_s": 1102.0
+   },
+   "arm": "webster",
+   "wall_s": 10.8
+  },
+  {
+   "controller": "webster",
+   "demand_level": "heavy",
+   "seed": 5,
+   "steps": 3403,
+   "interlock_violations": 0,
+   "n_trips_total": 1440,
+   "n_trips_scored": 966,
+   "person_delay_s": 1533302.1970000006,
+   "person_throughput_per_hour": 10282.200000000104,
+   "stops_per_vehicle": 9.9824016563147,
+   "wait_time_s": {
+    "mean_s": 258.14906832298135,
+    "p95_s": 711.0,
+    "max_s": 974.0
+   },
+   "arm": "webster",
+   "wall_s": 10.4
+  },
+  {
+   "controller": "webster",
+   "demand_level": "heavy",
+   "seed": 6,
+   "steps": 3642,
+   "interlock_violations": 0,
+   "n_trips_total": 1440,
+   "n_trips_scored": 967,
+   "person_delay_s": 1621919.8489999988,
+   "person_throughput_per_hour": 10282.2000000001,
+   "stops_per_vehicle": 10.361944157187176,
+   "wait_time_s": {
+    "mean_s": 275.76628748707344,
+    "p95_s": 730.0,
+    "max_s": 1343.0
+   },
+   "arm": "webster",
+   "wall_s": 11.0
+  },
+  {
+   "controller": "webster",
+   "demand_level": "heavy",
+   "seed": 7,
+   "steps": 3590,
+   "interlock_violations": 0,
+   "n_trips_total": 1440,
+   "n_trips_scored": 970,
+   "person_delay_s": 1580474.3169999986,
+   "person_throughput_per_hour": 10282.200000000099,
+   "stops_per_vehicle": 11.051546391752577,
+   "wait_time_s": {
+    "mean_s": 265.8536082474227,
+    "p95_s": 721.0,
+    "max_s": 1197.0
+   },
+   "arm": "webster",
+   "wall_s": 10.8
+  },
+  {
+   "controller": "webster",
+   "demand_level": "heavy",
+   "seed": 8,
+   "steps": 3453,
+   "interlock_violations": 0,
+   "n_trips_total": 1440,
+   "n_trips_scored": 969,
+   "person_delay_s": 1764972.83,
+   "person_throughput_per_hour": 10282.2000000001,
+   "stops_per_vehicle": 11.729618163054695,
+   "wait_time_s": {
+    "mean_s": 288.5923632610939,
+    "p95_s": 738.0,
+    "max_s": 1346.0
+   },
+   "arm": "webster",
+   "wall_s": 10.8
+  },
+  {
+   "controller": "webster",
+   "demand_level": "heavy",
+   "seed": 9,
+   "steps": 3447,
+   "interlock_violations": 0,
+   "n_trips_total": 1440,
+   "n_trips_scored": 968,
+   "person_delay_s": 1600506.3449999983,
+   "person_throughput_per_hour": 10282.200000000099,
+   "stops_per_vehicle": 11.036157024793388,
+   "wait_time_s": {
+    "mean_s": 276.41219008264466,
+    "p95_s": 749.0,
+    "max_s": 1225.0
+   },
+   "arm": "webster",
+   "wall_s": 10.8
+  },
+  {
+   "controller": "webster",
+   "demand_level": "heavy",
+   "seed": 10,
+   "steps": 3593,
+   "interlock_violations": 0,
+   "n_trips_total": 1440,
+   "n_trips_scored": 970,
+   "person_delay_s": 1620510.3830000006,
+   "person_throughput_per_hour": 10282.200000000099,
+   "stops_per_vehicle": 10.24020618556701,
+   "wait_time_s": {
+    "mean_s": 267.07525773195874,
+    "p95_s": 741.0,
+    "max_s": 1095.0
+   },
+   "arm": "webster",
+   "wall_s": 10.9
+  },
+  {
+   "controller": "acamp",
+   "demand_level": "heavy",
+   "seed": 1,
+   "steps": 3651,
+   "interlock_violations": 0,
+   "n_trips_total": 1440,
+   "n_trips_scored": 984,
+   "person_delay_s": 1483723.3479999977,
+   "person_throughput_per_hour": 10282.200000000103,
+   "stops_per_vehicle": 9.074186991869919,
+   "wait_time_s": {
+    "mean_s": 243.9441056910569,
+    "p95_s": 744.0,
+    "max_s": 1396.0
+   },
+   "decision_stats": {
+    "ticks": 19428,
+    "switch_cycle_supervisor": 0,
+    "cycles_completed": 5856,
+    "extend": 13871,
+    "extend_allocation_protected": 4772,
+    "switch_pressure": 470,
+    "switch_max_green": 309,
+    "switch_starvation": 6,
+    "blended": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "ceiling",
+   "wall_s": 43.1
+  },
+  {
+   "controller": "acamp",
+   "demand_level": "heavy",
+   "seed": 2,
+   "steps": 3559,
+   "interlock_violations": 0,
+   "n_trips_total": 1440,
+   "n_trips_scored": 972,
+   "person_delay_s": 1575521.6859999993,
+   "person_throughput_per_hour": 10282.200000000104,
+   "stops_per_vehicle": 9.799382716049383,
+   "wait_time_s": {
+    "mean_s": 247.34156378600824,
+    "p95_s": 794.0,
+    "max_s": 1625.0
+   },
+   "decision_stats": {
+    "ticks": 18914,
+    "switch_cycle_supervisor": 0,
+    "cycles_completed": 5451,
+    "extend": 13265,
+    "extend_allocation_protected": 4880,
+    "switch_pressure": 471,
+    "switch_max_green": 292,
+    "switch_starvation": 6,
+    "blended": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "ceiling",
+   "wall_s": 42.7
+  },
+  {
+   "controller": "acamp",
+   "demand_level": "heavy",
+   "seed": 3,
+   "steps": 3493,
+   "interlock_violations": 0,
+   "n_trips_total": 1440,
+   "n_trips_scored": 977,
+   "person_delay_s": 1411966.4660000005,
+   "person_throughput_per_hour": 10282.200000000104,
+   "stops_per_vehicle": 8.870010235414535,
+   "wait_time_s": {
+    "mean_s": 230.85261003070624,
+    "p95_s": 684.0,
+    "max_s": 1290.0
+   },
+   "decision_stats": {
+    "ticks": 18570,
+    "switch_cycle_supervisor": 0,
+    "cycles_completed": 5217,
+    "extend": 12965,
+    "extend_allocation_protected": 4851,
+    "switch_pressure": 462,
+    "switch_max_green": 287,
+    "switch_starvation": 5,
+    "blended": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "ceiling",
+   "wall_s": 41.8
+  },
+  {
+   "controller": "acamp",
+   "demand_level": "heavy",
+   "seed": 4,
+   "steps": 3439,
+   "interlock_violations": 0,
+   "n_trips_total": 1440,
+   "n_trips_scored": 971,
+   "person_delay_s": 1563013.4779999973,
+   "person_throughput_per_hour": 10282.200000000103,
+   "stops_per_vehicle": 9.977342945417096,
+   "wait_time_s": {
+    "mean_s": 265.529351184346,
+    "p95_s": 891.0,
+    "max_s": 1524.0
+   },
+   "decision_stats": {
+    "ticks": 18041,
+    "switch_cycle_supervisor": 0,
+    "cycles_completed": 5178,
+    "extend": 13179,
+    "extend_allocation_protected": 4088,
+    "switch_pressure": 495,
+    "switch_max_green": 273,
+    "switch_starvation": 6,
+    "blended": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "ceiling",
+   "wall_s": 40.4
+  },
+  {
+   "controller": "acamp",
+   "demand_level": "heavy",
+   "seed": 5,
+   "steps": 3463,
+   "interlock_violations": 0,
+   "n_trips_total": 1440,
+   "n_trips_scored": 977,
+   "person_delay_s": 1426949.8679999998,
+   "person_throughput_per_hour": 10282.200000000108,
+   "stops_per_vehicle": 10.052200614124873,
+   "wait_time_s": {
+    "mean_s": 248.5997952917093,
+    "p95_s": 774.0,
+    "max_s": 1222.0
+   },
+   "decision_stats": {
+    "ticks": 18409,
+    "switch_cycle_supervisor": 0,
+    "cycles_completed": 5102,
+    "extend": 12819,
+    "extend_allocation_protected": 4842,
+    "switch_pressure": 461,
+    "switch_max_green": 282,
+    "switch_starvation": 5,
+    "blended": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "ceiling",
+   "wall_s": 41.7
+  },
+  {
+   "controller": "acamp",
+   "demand_level": "heavy",
+   "seed": 6,
+   "steps": 3525,
+   "interlock_violations": 2,
+   "n_trips_total": 1440,
+   "n_trips_scored": 979,
+   "person_delay_s": 1485649.254,
+   "person_throughput_per_hour": 10282.200000000106,
+   "stops_per_vehicle": 10.237997957099081,
+   "wait_time_s": {
+    "mean_s": 250.89070480081716,
+    "p95_s": 801.0,
+    "max_s": 1272.0
+   },
+   "decision_stats": {
+    "ticks": 18611,
+    "switch_cycle_supervisor": 0,
+    "cycles_completed": 5272,
+    "extend": 13074,
+    "extend_allocation_protected": 4760,
+    "switch_pressure": 495,
+    "switch_max_green": 278,
+    "switch_starvation": 4,
+    "blended": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "ceiling",
+   "wall_s": 41.9
+  },
+  {
+   "controller": "acamp",
+   "demand_level": "heavy",
+   "seed": 7,
+   "steps": 3601,
+   "interlock_violations": 0,
+   "n_trips_total": 1440,
+   "n_trips_scored": 978,
+   "person_delay_s": 1449711.4429999993,
+   "person_throughput_per_hour": 10282.200000000106,
+   "stops_per_vehicle": 9.841513292433538,
+   "wait_time_s": {
+    "mean_s": 251.16359918200408,
+    "p95_s": 742.0,
+    "max_s": 1453.0
+   },
+   "decision_stats": {
+    "ticks": 19196,
+    "switch_cycle_supervisor": 0,
+    "cycles_completed": 5457,
+    "extend": 13491,
+    "extend_allocation_protected": 4934,
+    "switch_pressure": 457,
+    "switch_max_green": 308,
+    "switch_starvation": 6,
+    "blended": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "ceiling",
+   "wall_s": 41.6
+  },
+  {
+   "controller": "acamp",
+   "demand_level": "heavy",
+   "seed": 8,
+   "steps": 3543,
+   "interlock_violations": 0,
+   "n_trips_total": 1440,
+   "n_trips_scored": 977,
+   "person_delay_s": 1413511.9550000003,
+   "person_throughput_per_hour": 10282.200000000106,
+   "stops_per_vehicle": 9.79222108495394,
+   "wait_time_s": {
+    "mean_s": 231.51688843398156,
+    "p95_s": 762.0,
+    "max_s": 1078.0
+   },
+   "decision_stats": {
+    "ticks": 18862,
+    "switch_cycle_supervisor": 0,
+    "cycles_completed": 5335,
+    "extend": 13207,
+    "extend_allocation_protected": 4891,
+    "switch_pressure": 474,
+    "switch_max_green": 284,
+    "switch_starvation": 6,
+    "blended": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "ceiling",
+   "wall_s": 42.1
+  },
+  {
+   "controller": "acamp",
+   "demand_level": "heavy",
+   "seed": 9,
+   "steps": 3561,
+   "interlock_violations": 0,
+   "n_trips_total": 1440,
+   "n_trips_scored": 981,
+   "person_delay_s": 1592288.4009999994,
+   "person_throughput_per_hour": 10282.200000000104,
+   "stops_per_vehicle": 10.568807339449542,
+   "wait_time_s": {
+    "mean_s": 259.881753312946,
+    "p95_s": 777.0,
+    "max_s": 1279.0
+   },
+   "decision_stats": {
+    "ticks": 18955,
+    "switch_cycle_supervisor": 0,
+    "cycles_completed": 5310,
+    "extend": 13345,
+    "extend_allocation_protected": 4845,
+    "switch_pressure": 471,
+    "switch_max_green": 289,
+    "switch_starvation": 5,
+    "blended": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "ceiling",
+   "wall_s": 44.0
+  },
+  {
+   "controller": "acamp",
+   "demand_level": "heavy",
+   "seed": 10,
+   "steps": 3475,
+   "interlock_violations": 0,
+   "n_trips_total": 1440,
+   "n_trips_scored": 970,
+   "person_delay_s": 1580734.0660000027,
+   "person_throughput_per_hour": 10282.200000000103,
+   "stops_per_vehicle": 9.753608247422681,
+   "wait_time_s": {
+    "mean_s": 259.8443298969072,
+    "p95_s": 794.0,
+    "max_s": 1476.0
+   },
+   "decision_stats": {
+    "ticks": 18464,
+    "switch_cycle_supervisor": 0,
+    "cycles_completed": 5091,
+    "extend": 12880,
+    "extend_allocation_protected": 4833,
+    "switch_pressure": 465,
+    "switch_max_green": 280,
+    "switch_starvation": 6,
+    "blended": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "ceiling",
+   "wall_s": 43.9
+  },
+  {
+   "controller": "acamp",
+   "demand_level": "heavy",
+   "seed": 1,
+   "steps": 3406,
+   "interlock_violations": 0,
+   "n_trips_total": 1440,
+   "n_trips_scored": 973,
+   "person_delay_s": 1406145.212,
+   "person_throughput_per_hour": 10282.200000000104,
+   "stops_per_vehicle": 9.343268242548818,
+   "wait_time_s": {
+    "mean_s": 235.71736896197328,
+    "p95_s": 829.0,
+    "max_s": 1643.0
+   },
+   "decision_stats": {
+    "ticks": 18057,
+    "switch_cycle_supervisor": 8,
+    "cycles_completed": 4945,
+    "extend": 12711,
+    "extend_allocation_protected": 4605,
+    "switch_pressure": 468,
+    "switch_max_green": 265,
+    "switch_starvation": 0,
+    "blended": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "ccacamp",
+   "wall_s": 43.2
+  },
+  {
+   "controller": "acamp",
+   "demand_level": "heavy",
+   "seed": 2,
+   "steps": 3462,
+   "interlock_violations": 0,
+   "n_trips_total": 1440,
+   "n_trips_scored": 972,
+   "person_delay_s": 1503864.7599999998,
+   "person_throughput_per_hour": 10282.200000000106,
+   "stops_per_vehicle": 9.77366255144033,
+   "wait_time_s": {
+    "mean_s": 241.880658436214,
+    "p95_s": 733.0,
+    "max_s": 1346.0
+   },
+   "decision_stats": {
+    "ticks": 18355,
+    "switch_cycle_supervisor": 8,
+    "cycles_completed": 5034,
+    "extend": 12970,
+    "extend_allocation_protected": 4631,
+    "switch_pressure": 456,
+    "switch_max_green": 290,
+    "switch_starvation": 0,
+    "blended": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "ccacamp",
+   "wall_s": 42.9
+  },
+  {
+   "controller": "acamp",
+   "demand_level": "heavy",
+   "seed": 3,
+   "steps": 3434,
+   "interlock_violations": 0,
+   "n_trips_total": 1440,
+   "n_trips_scored": 977,
+   "person_delay_s": 1447505.237000001,
+   "person_throughput_per_hour": 10282.200000000104,
+   "stops_per_vehicle": 9.408393039918117,
+   "wait_time_s": {
+    "mean_s": 233.27942681678607,
+    "p95_s": 734.0,
+    "max_s": 1266.0
+   },
+   "decision_stats": {
+    "ticks": 18267,
+    "switch_cycle_supervisor": 7,
+    "cycles_completed": 5065,
+    "extend": 12720,
+    "extend_allocation_protected": 4807,
+    "switch_pressure": 447,
+    "switch_max_green": 286,
+    "switch_starvation": 0,
+    "blended": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "ccacamp",
+   "wall_s": 41.8
+  },
+  {
+   "controller": "acamp",
+   "demand_level": "heavy",
+   "seed": 4,
+   "steps": 3352,
+   "interlock_violations": 0,
+   "n_trips_total": 1440,
+   "n_trips_scored": 971,
+   "person_delay_s": 1336130.7249999999,
+   "person_throughput_per_hour": 10282.200000000103,
+   "stops_per_vehicle": 8.693099897013388,
+   "wait_time_s": {
+    "mean_s": 229.33470648815654,
+    "p95_s": 708.0,
+    "max_s": 1311.0
+   },
+   "decision_stats": {
+    "ticks": 17780,
+    "switch_cycle_supervisor": 6,
+    "cycles_completed": 5020,
+    "extend": 12403,
+    "extend_allocation_protected": 4648,
+    "switch_pressure": 461,
+    "switch_max_green": 261,
+    "switch_starvation": 1,
+    "blended": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "ccacamp",
+   "wall_s": 40.0
+  },
+  {
+   "controller": "acamp",
+   "demand_level": "heavy",
+   "seed": 5,
+   "steps": 3515,
+   "interlock_violations": 0,
+   "n_trips_total": 1440,
+   "n_trips_scored": 977,
+   "person_delay_s": 1395636.6339999996,
+   "person_throughput_per_hour": 10282.2000000001,
+   "stops_per_vehicle": 9.089048106448312,
+   "wait_time_s": {
+    "mean_s": 218.65097236438075,
+    "p95_s": 754.0,
+    "max_s": 1216.0
+   },
+   "decision_stats": {
+    "ticks": 18680,
+    "switch_cycle_supervisor": 7,
+    "cycles_completed": 5605,
+    "extend": 13246,
+    "extend_allocation_protected": 4673,
+    "switch_pressure": 476,
+    "switch_max_green": 278,
+    "switch_starvation": 0,
+    "blended": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "ccacamp",
+   "wall_s": 40.6
+  },
+  {
+   "controller": "acamp",
+   "demand_level": "heavy",
+   "seed": 6,
+   "steps": 3418,
+   "interlock_violations": 0,
+   "n_trips_total": 1440,
+   "n_trips_scored": 979,
+   "person_delay_s": 1385976.0699999996,
+   "person_throughput_per_hour": 10282.200000000099,
+   "stops_per_vehicle": 9.374872318692544,
+   "wait_time_s": {
+    "mean_s": 226.29724208375893,
+    "p95_s": 724.0,
+    "max_s": 1361.0
+   },
+   "decision_stats": {
+    "ticks": 18042,
+    "switch_cycle_supervisor": 7,
+    "cycles_completed": 5115,
+    "extend": 12602,
+    "extend_allocation_protected": 4686,
+    "switch_pressure": 485,
+    "switch_max_green": 262,
+    "switch_starvation": 0,
+    "blended": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "ccacamp",
+   "wall_s": 41.1
+  },
+  {
+   "controller": "acamp",
+   "demand_level": "heavy",
+   "seed": 7,
+   "steps": 3428,
+   "interlock_violations": 0,
+   "n_trips_total": 1440,
+   "n_trips_scored": 978,
+   "person_delay_s": 1512930.63,
+   "person_throughput_per_hour": 10282.200000000103,
+   "stops_per_vehicle": 9.413087934560327,
+   "wait_time_s": {
+    "mean_s": 241.2116564417178,
+    "p95_s": 753.0,
+    "max_s": 1498.0
+   },
+   "decision_stats": {
+    "ticks": 18225,
+    "switch_cycle_supervisor": 7,
+    "cycles_completed": 5216,
+    "extend": 12719,
+    "extend_allocation_protected": 4767,
+    "switch_pressure": 443,
+    "switch_max_green": 289,
+    "switch_starvation": 0,
+    "blended": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "ccacamp",
+   "wall_s": 39.9
+  },
+  {
+   "controller": "acamp",
+   "demand_level": "heavy",
+   "seed": 8,
+   "steps": 3479,
+   "interlock_violations": 0,
+   "n_trips_total": 1440,
+   "n_trips_scored": 977,
+   "person_delay_s": 1343775.2249999982,
+   "person_throughput_per_hour": 10282.2000000001,
+   "stops_per_vehicle": 9.163766632548619,
+   "wait_time_s": {
+    "mean_s": 212.80040941658137,
+    "p95_s": 738.0,
+    "max_s": 951.0
+   },
+   "decision_stats": {
+    "ticks": 18544,
+    "switch_cycle_supervisor": 7,
+    "cycles_completed": 5155,
+    "extend": 13054,
+    "extend_allocation_protected": 4746,
+    "switch_pressure": 443,
+    "switch_max_green": 294,
+    "switch_starvation": 0,
+    "blended": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "ccacamp",
+   "wall_s": 41.2
+  },
+  {
+   "controller": "acamp",
+   "demand_level": "heavy",
+   "seed": 9,
+   "steps": 3571,
+   "interlock_violations": 0,
+   "n_trips_total": 1440,
+   "n_trips_scored": 981,
+   "person_delay_s": 1426256.8150000009,
+   "person_throughput_per_hour": 10282.200000000103,
+   "stops_per_vehicle": 9.216106014271151,
+   "wait_time_s": {
+    "mean_s": 242.74821610601427,
+    "p95_s": 759.0,
+    "max_s": 1207.0
+   },
+   "decision_stats": {
+    "ticks": 18943,
+    "switch_cycle_supervisor": 8,
+    "cycles_completed": 5420,
+    "extend": 13592,
+    "extend_allocation_protected": 4576,
+    "switch_pressure": 464,
+    "switch_max_green": 302,
+    "switch_starvation": 1,
+    "blended": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "ccacamp",
+   "wall_s": 44.3
+  },
+  {
+   "controller": "acamp",
+   "demand_level": "heavy",
+   "seed": 10,
+   "steps": 3391,
+   "interlock_violations": 0,
+   "n_trips_total": 1440,
+   "n_trips_scored": 970,
+   "person_delay_s": 1407871.9899999998,
+   "person_throughput_per_hour": 10282.200000000106,
+   "stops_per_vehicle": 9.087628865979381,
+   "wait_time_s": {
+    "mean_s": 224.71237113402063,
+    "p95_s": 681.0,
+    "max_s": 1301.0
+   },
+   "decision_stats": {
+    "ticks": 17846,
+    "switch_cycle_supervisor": 7,
+    "cycles_completed": 4772,
+    "extend": 12665,
+    "extend_allocation_protected": 4427,
+    "switch_pressure": 472,
+    "switch_max_green": 275,
+    "switch_starvation": 0,
+    "blended": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "ccacamp",
+   "wall_s": 39.3
+  }
+ ]
+}

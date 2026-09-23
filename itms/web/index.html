@@ -5,36 +5,79 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>ITMS — Traffic that responds before you call it in</title>
 <meta name="description" content="An anomaly-driven traffic platform: detects incidents from live video and traffic patterns, dispatches the nearest unit by real drive time, and clears a rolling green corridor ahead of it." />
+<meta name="color-scheme" content="light" />
+<meta name="theme-color" content="#FAFAF9" />
+<meta property="og:type" content="website" />
+<meta property="og:title" content="ITMS — Traffic that responds before you call it in" />
+<meta property="og:description" content="Traffic infrastructure that notices an incident on its own, puts a human on the confirmation, sends the unit that is genuinely closest, and clears a rolling green ahead of it." />
+<meta property="og:site_name" content="ITMS" />
+<meta name="twitter:card" content="summary_large_image" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='16' fill='%2314181A'/%3E%3Crect x='14.8' y='7' width='2.4' height='9' rx='1.2' fill='%233FE0FF'/%3E%3Crect x='7' y='14.8' width='9' height='2.4' rx='1.2' fill='%235C6B70'/%3E%3C/svg%3E" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
+/* ============================================================================
+   ITMS — design tokens
+   Greys are split into three tiers by the size they are allowed to appear at,
+   and every pair below was checked against its real background:
+     --body   5.68:1   body copy at any size
+     --muted  4.92:1   small text (10–15px): labels, captions, eyebrows
+     --faint  3.24:1   display text only (>=24px) and non-text decoration
+   On dark surfaces the same split is --d-body / --d-muted / --d-faint.
+   ========================================================================== */
 :root{
-  --bg:#FAFAF9; --card:#FFFFFF; --ink:#14181A; --grey:#AFAFAB; --body:#5E6568;
-  --line:#E7E5E1; --line2:#D9D6D1; --dark:#101416; --dark2:#191E21;
-  --cy:#3FE0FF; --cy-d:#0A9AB0;
-  --sans:'Plus Jakarta Sans',-apple-system,sans-serif;
-  --mono:'IBM Plex Mono',ui-monospace,monospace;
-  --gut:clamp(20px,4.6vw,56px); --max:1280px;
+  /* surfaces */
+  --bg:#FAFAF9; --card:#FFFFFF; --dark:#101416; --dark2:#191E21;
+  --line:#E7E5E1; --line2:#D9D6D1; --d-line:#232A2D; --d-line2:#2E383C;
+  /* light-surface text */
+  --ink:#14181A; --body:#5E6568; --muted:#6E6E67; --faint:#8C8C86;
+  /* dark-surface text */
+  --d-ink:#FFFFFF; --d-body:#9BAAB0; --d-muted:#7F9198; --d-faint:#5B686D;
+  /* accent */
+  --cy:#3FE0FF; --cy-d:#0A9AB0; --ok:#37B26A;
+  /* type */
+  --sans:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  /* metrics */
+  --gut:clamp(20px,4.6vw,56px); --max:1280px; --r-lg:26px; --r-md:18px; --r-sm:12px;
   --ease:cubic-bezier(.16,1,.3,1);
+  --navh:72px;
 }
+
 *{box-sizing:border-box;margin:0;padding:0;}
-html{scroll-behavior:smooth;}
+html{scroll-behavior:smooth;scroll-padding-top:calc(var(--navh) + 24px);-webkit-text-size-adjust:100%;}
 body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.6;
-  -webkit-font-smoothing:antialiased;overflow-x:hidden;letter-spacing:-.011em;}
+  -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;
+  overflow-x:hidden;letter-spacing:-.011em;}
 a{color:inherit;text-decoration:none;}
+img,svg{display:block;max-width:100%;}
+button{font:inherit;color:inherit;}
+::selection{background:var(--ink);color:#fff;}
 :focus-visible{outline:2px solid var(--ink);outline-offset:3px;border-radius:4px;}
+.dark-surface :focus-visible,footer :focus-visible{outline-color:var(--cy);}
+
 .wrap{max-width:var(--max);margin:0 auto;padding:0 var(--gut);}
 .mono{font-family:var(--mono);letter-spacing:0;}
+.vh{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
+  clip:rect(0 0 0 0);white-space:nowrap;border:0;}
+
+/* skip link — first tab stop on the page */
+.skip{position:fixed;left:50%;top:12px;transform:translate(-50%,-160%);z-index:200;
+  background:var(--ink);color:#fff;padding:11px 20px;border-radius:999px;font-size:14px;
+  font-weight:500;transition:transform .3s var(--ease);}
+.skip:focus{transform:translate(-50%,0);}
 
 /* ---------- type ---------- */
-h1,h2,h3,h4{font-weight:600;letter-spacing:-.032em;line-height:1.02;}
+h1,h2,h3,h4{font-weight:600;letter-spacing:-.032em;line-height:1.02;text-wrap:balance;}
 .h1{font-size:clamp(38px,5.6vw,80px);}
 .h2{font-size:clamp(30px,4.3vw,60px);}
-.dim{color:var(--grey);}
-p{color:var(--body);}
+.dim{color:var(--faint);}
+p{color:var(--body);text-wrap:pretty;}
 .lede{font-size:clamp(15.5px,1.25vw,18px);line-height:1.6;color:var(--body);}
-.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:var(--grey);}
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--muted);}
+.tnum{font-variant-numeric:tabular-nums;}
 
 /* line-mask reveal */
 .lines .ln{display:block;overflow:hidden;padding-bottom:.14em;margin-bottom:-.14em;}
@@ -56,13 +99,16 @@ p{color:var(--body);}
 
 /* ---------- floating nav ---------- */
 .navdock{position:fixed;top:16px;left:0;right:0;z-index:90;display:flex;justify-content:center;
-  pointer-events:none;}
+  pointer-events:none;padding:0 12px;}
 .nav{pointer-events:auto;display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.82);
-  backdrop-filter:blur(20px) saturate(1.6);border:1px solid var(--line);border-radius:999px;
+  -webkit-backdrop-filter:blur(20px) saturate(1.6);backdrop-filter:blur(20px) saturate(1.6);
+  border:1px solid var(--line);border-radius:999px;max-width:100%;
   padding:7px 7px 7px 14px;box-shadow:0 4px 20px rgba(20,24,26,.06),0 1px 2px rgba(20,24,26,.05);
-  transition:padding .6s var(--ease),gap .6s var(--ease),box-shadow .4s;}
+  transition:box-shadow .4s,border-color .4s;}
+.navdock.shrunk .nav{box-shadow:0 6px 26px rgba(20,24,26,.1),0 1px 2px rgba(20,24,26,.06);
+  border-color:var(--line2);}
 .nav .mark{display:flex;align-items:center;gap:9px;font-weight:700;font-size:15px;letter-spacing:-.02em;
-  white-space:nowrap;padding-right:6px;}
+  white-space:nowrap;padding-right:6px;flex:0 0 auto;}
 .nav .glyph{width:26px;height:26px;border-radius:50%;background:var(--ink);position:relative;flex:0 0 26px;}
 .nav .glyph::before{content:'';position:absolute;left:50%;top:6px;width:2.4px;height:9px;border-radius:2px;
   background:var(--cy);transform:translateX(-50%);}
@@ -71,15 +117,20 @@ p{color:var(--body);}
 .nav .lk{display:flex;align-items:center;gap:2px;overflow:hidden;max-width:520px;opacity:1;
   transition:max-width .6s var(--ease),opacity .35s var(--ease),margin .6s var(--ease);}
 .nav .lk a{padding:8px 13px;font-size:14px;color:var(--body);border-radius:999px;white-space:nowrap;
-  transition:background .25s,color .25s;}
+  position:relative;transition:background .25s,color .25s;}
 .nav .lk a:hover{background:var(--bg);color:var(--ink);}
+.nav .lk a[aria-current="true"]{color:var(--ink);font-weight:500;background:var(--bg);}
+.nav .lk a[aria-current="true"]::after{content:'';position:absolute;left:50%;bottom:2px;width:14px;
+  height:2px;border-radius:2px;background:var(--cy);transform:translateX(-50%);}
 .nav .cta{background:var(--ink);color:#fff;border-radius:999px;padding:9px 17px;font-size:14px;
-  font-weight:500;white-space:nowrap;transition:transform .3s var(--ease),background .3s;}
+  font-weight:500;white-space:nowrap;flex:0 0 auto;transition:transform .3s var(--ease),background .3s;}
 .nav .cta:hover{transform:translateY(-1px);background:#242A2D;}
 .nav .dots{display:none;width:34px;height:34px;border-radius:50%;background:var(--bg);border:0;
-  cursor:pointer;align-items:center;justify-content:center;gap:3px;}
-.nav .dots i{width:3.4px;height:3.4px;border-radius:50%;background:var(--body);display:block;}
-.navdock.shrunk .nav{padding:7px 7px 7px 14px;}
+  cursor:pointer;align-items:center;justify-content:center;gap:3px;flex:0 0 34px;}
+.nav .dots i{width:3.4px;height:3.4px;border-radius:50%;background:var(--body);display:block;
+  transition:transform .35s var(--ease),background .25s;}
+.navdock.open .nav .dots i:nth-child(1){transform:translateX(3px);}
+.navdock.open .nav .dots i:nth-child(3){transform:translateX(-3px);}
 .navdock.shrunk .nav .lk{max-width:0;opacity:0;margin-left:-6px;}
 .navdock.shrunk .nav .cta{display:none;}
 .navdock.shrunk .nav .dots{display:flex;}
@@ -89,7 +140,7 @@ p{color:var(--body);}
 /* ---------- buttons ---------- */
 .btn{display:inline-flex;align-items:center;gap:9px;font-size:15px;font-weight:500;padding:13px 22px;
   border-radius:999px;background:var(--ink);color:#fff;border:1px solid var(--ink);white-space:nowrap;
-  transition:transform .35s var(--ease),background .3s,box-shadow .35s;}
+  cursor:pointer;transition:transform .35s var(--ease),background .3s,box-shadow .35s;}
 .btn:hover{transform:translateY(-2px);background:#242A2D;box-shadow:0 10px 26px rgba(20,24,26,.16);}
 .btn.gh{background:transparent;color:var(--ink);border-color:var(--line2);}
 .btn.gh:hover{background:#fff;border-color:var(--ink);box-shadow:0 8px 22px rgba(20,24,26,.07);}
@@ -100,70 +151,27 @@ p{color:var(--body);}
 .btn.sm{padding:10px 17px;font-size:14px;}
 
 /* ---------- hero ---------- */
-.hero{padding:clamp(96px,11vw,150px) 0 clamp(40px,6vw,80px);position:relative;}
+.hero{padding:clamp(112px,12vw,164px) 0 clamp(40px,6vw,80px);position:relative;}
 .herogrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.02fr);gap:clamp(24px,4vw,60px);
   align-items:center;}
 .badge{display:inline-flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--line);
   border-radius:999px;padding:6px 14px 6px 10px;font-size:13px;color:var(--body);font-weight:500;}
-.badge .live{width:7px;height:7px;border-radius:50%;background:#37B26A;box-shadow:0 0 0 0 rgba(55,178,106,.5);
-  animation:ping 2.4s ease-out infinite;}
+.badge .live{width:7px;height:7px;border-radius:50%;background:var(--ok);flex:0 0 7px;
+  box-shadow:0 0 0 0 rgba(55,178,106,.5);animation:ping 2.4s ease-out infinite;}
 @keyframes ping{70%{box-shadow:0 0 0 7px rgba(55,178,106,0)}100%{box-shadow:0 0 0 0 rgba(55,178,106,0)}}
 .hero h1{margin:24px 0 22px;max-width:12ch;}
 .hero .lede{max-width:46ch;}
 .herocta{display:flex;gap:11px;flex-wrap:wrap;margin-top:30px;}
 .proof{display:flex;align-items:center;gap:13px;margin-top:34px;}
-.pstack{display:flex;}
+.pstack{display:flex;flex:0 0 auto;}
 .pstack i{width:34px;height:34px;border-radius:50%;background:var(--dark);border:2.5px solid var(--bg);
   margin-left:-11px;display:flex;align-items:center;justify-content:center;flex:0 0 34px;}
 .pstack i:first-child{margin-left:0;}
-.proof .txt{font-size:13.5px;color:var(--body);line-height:1.35;}
-.proof .txt b{display:block;color:var(--ink);font-weight:600;font-size:14px;}
+.proof .txt{font-size:13.5px;color:var(--muted);line-height:1.35;}
+.proof .txt b{display:block;color:var(--ink);font-weight:600;font-size:14px;margin-bottom:2px;}
 
-/* ---------- hero deck ---------- */
-.deck{position:relative;height:clamp(340px,44vw,560px);perspective:1500px;perspective-origin:56% 42%;}
-.c3d{position:absolute;left:50%;top:50%;width:78%;aspect-ratio:1.46;border-radius:15px;
-  overflow:hidden;background:var(--dark);border:1px solid rgba(255,255,255,.085);
-  transform-style:preserve-3d;backface-visibility:hidden;will-change:transform,opacity;
-  box-shadow:0 42px 84px -26px rgba(20,24,26,.55),0 12px 28px -8px rgba(20,24,26,.2);}
-.c3d.float{width:45%;aspect-ratio:1.04;
-  box-shadow:0 30px 62px -18px rgba(20,24,26,.5),0 8px 18px -6px rgba(20,24,26,.18);}
-.c3d .bar{height:24px;background:#0B0F11;display:flex;align-items:center;gap:5px;padding:0 11px;
-  border-bottom:1px solid rgba(255,255,255,.06);}
-.c3d .bar b{width:6px;height:6px;border-radius:50%;background:#2B3439;display:block;flex:0 0 6px;}
-.c3d .bar span{margin-left:9px;font-family:var(--mono);font-size:8.5px;color:#4E6068;letter-spacing:.05em;
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.c3d .pane{position:absolute;inset:24px 0 0;overflow:hidden;}
-.c3d .pane svg{display:block;width:100%;height:100%;}
-
-/* mini console fragments */
-.mini{padding:12px 14px;font-family:var(--mono);color:#8FA5AD;font-size:9.5px;}
-.mini .rowx{display:flex;justify-content:space-between;align-items:center;padding:6px 0;
-  border-bottom:1px solid #1B2225;}
-.mini .rowx:last-child{border-bottom:0;}
-.mini .k{color:#5E7178;}
-.mini .v{color:#DCE7EA;}
-.mini .cy{color:var(--cy);}
-.mini h6{font-family:var(--sans);font-size:12.5px;color:#E7EFF1;font-weight:600;letter-spacing:-.015em;
-  margin-bottom:8px;}
-.mini .lbl{font-size:8.5px;letter-spacing:.15em;color:#4E6068;text-transform:uppercase;margin-bottom:9px;}
-.mini .big{font-family:var(--sans);font-size:28px;font-weight:700;color:#fff;letter-spacing:-.035em;
-  line-height:1;}
-.gr{display:flex;align-items:center;gap:8px;margin-bottom:7px;}
-.gr .lane{flex:1;height:10px;position:relative;}
-.gr .bar2{position:absolute;height:10px;border-radius:3px;}
-
-/* mini console fragments */
-.mini{padding:11px 12px 13px;font-family:var(--mono);color:#8FA5AD;font-size:9px;}
-.mini .rowx{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #1B2225;}
-.mini .rowx:last-child{border-bottom:0;}
-.mini .k{color:#5E7178;}
-.mini .v{color:#DCE7EA;}
-.mini .cy{color:var(--cy);}
-.mini h6{font-family:var(--sans);font-size:11.5px;color:#E7EFF1;font-weight:600;letter-spacing:-.01em;
-  margin-bottom:7px;}
-.mini .lbl{font-size:8px;letter-spacing:.14em;color:#4E6068;text-transform:uppercase;margin-bottom:6px;}
-.mini .big{font-family:var(--sans);font-size:26px;font-weight:700;color:#fff;letter-spacing:-.03em;line-height:1;}
-.gbar{height:9px;border-radius:2px;margin:4px 0;}
+/* hero anchor box — the module cards fly out of here (see fold script) */
+.deck{position:relative;height:clamp(340px,44vw,560px);}
 
 /* ---------- marquee ---------- */
 .marq{border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:22px 0;
@@ -176,11 +184,12 @@ p{color:var(--body);}
   mask-image:linear-gradient(90deg,transparent,#000 7%,#000 93%,transparent);}
 .marqtrack{display:flex;width:max-content;animation:slide 40s linear infinite;}
 @keyframes slide{to{transform:translateX(-50%)}}
-.marqwin:hover .marqtrack{animation-play-state:paused;}
+.marqwin:hover .marqtrack,.marqwin:focus-within .marqtrack{animation-play-state:paused;}
 .mq{display:flex;align-items:center;gap:9px;padding:0 26px;font-size:15px;font-weight:500;
-  color:#9A9A95;white-space:nowrap;transition:color .3s;}
+  color:var(--muted);white-space:nowrap;transition:color .3s;}
 .mq:hover{color:var(--ink);}
-.mq s{width:19px;height:19px;border-radius:5px;background:#E3E1DD;display:block;text-decoration:none;}
+.mq s{width:19px;height:19px;border-radius:5px;background:#E3E1DD;display:block;text-decoration:none;
+  flex:0 0 19px;}
 
 /* ---------- sections ---------- */
 section{padding:clamp(64px,8vw,128px) 0;}
@@ -188,99 +197,174 @@ section{padding:clamp(64px,8vw,128px) 0;}
   margin-bottom:clamp(30px,4vw,52px);}
 .shead .sub{max-width:40ch;}
 
-/* module cards */
+/* ---------- module cards ---------- */
 .mods{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
-.mod{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:24px 24px 0;
-  overflow:hidden;transition:box-shadow .5s var(--ease),border-color .4s;
+.mod{background:var(--card);border:1px solid var(--line);border-radius:var(--r-md);padding:24px 24px 0;
+  overflow:hidden;text-align:left;width:100%;cursor:pointer;display:block;
+  transition:box-shadow .5s var(--ease),border-color .4s;
   backface-visibility:hidden;-webkit-backface-visibility:hidden;}
 .mod:hover{box-shadow:0 26px 56px -20px rgba(20,24,26,.24);border-color:var(--line2);}
 /* while stacked in the hero the cards carry their own lift */
 .mod.is-stacked{box-shadow:0 40px 80px -26px rgba(20,24,26,.42),0 10px 24px -8px rgba(20,24,26,.16);}
 .mods.fold-armed .mod{will-change:transform;transform-origin:50% 50%;contain:paint;}
-.modvis{margin:-24px -24px 0;background:var(--dark);position:relative;
-  overflow:hidden;border-radius:18px 18px 0 0;}
-.modvis img{display:block;width:100%;aspect-ratio:758/508;object-fit:cover;transition:transform .7s var(--ease);}
+.modvis{display:block;margin:-24px -24px 0;background:var(--dark);position:relative;
+  overflow:hidden;border-radius:var(--r-md) var(--r-md) 0 0;}
+.modvis img{width:100%;aspect-ratio:758/508;object-fit:cover;transition:transform .7s var(--ease);
+  background:var(--dark);}
 .mod:hover .modvis img{transform:scale(1.04);}
 .viewpill{position:absolute;right:16px;bottom:16px;background:rgba(255,255,255,.94);color:var(--ink);
-  font-size:13px;font-weight:600;padding:9px 16px;border-radius:999px;display:flex;align-items:center;gap:6px;
-  white-space:nowrap;
-  opacity:0;transform:translateY(8px);pointer-events:none;
+  font-size:13px;font-weight:600;padding:9px 16px;border-radius:999px;display:flex;align-items:center;
+  gap:6px;white-space:nowrap;opacity:0;transform:translateY(8px);pointer-events:none;
   transition:opacity .35s var(--ease),transform .35s var(--ease);box-shadow:0 10px 24px rgba(20,24,26,.18);}
-.mod:hover .viewpill{opacity:1;transform:none;}
+.mod:hover .viewpill,.mod:focus-visible .viewpill{opacity:1;transform:none;}
 .modfoot{display:flex;align-items:center;justify-content:space-between;padding:18px 0;gap:12px;}
-.modfoot .n{font-size:18px;font-weight:600;letter-spacing:-.015em;display:block;}
-.modfoot .sub{font-size:13px;color:var(--grey);display:block;margin-top:2px;}
-.modfoot .g{font-size:13.5px;color:var(--grey);display:flex;align-items:center;gap:6px;white-space:nowrap;}
+.modfoot .n{font-size:18px;font-weight:600;letter-spacing:-.015em;display:block;color:var(--ink);}
+.modfoot .sub{font-size:13px;color:var(--muted);display:block;margin-top:2px;}
+.modfoot .g{font-family:var(--mono);font-size:12px;color:var(--muted);display:flex;align-items:center;
+  gap:7px;white-space:nowrap;letter-spacing:.02em;}
+.mod:hover .modfoot .g{color:var(--ink);}
+
+/* ---------- module detail dialog ---------- */
+dialog.sheet{border:0;padding:0;background:transparent;max-width:none;max-height:none;
+  width:100%;height:100%;overflow:visible;color:var(--ink);}
+dialog.sheet::backdrop{background:rgba(16,20,22,.52);-webkit-backdrop-filter:blur(5px);
+  backdrop-filter:blur(5px);opacity:0;transition:opacity .4s var(--ease);}
+dialog.sheet[open]::backdrop{opacity:1;}
+/* flex column so the body scrolls while the header and the actions stay put —
+   the close button must never be scrolled out of reach */
+.sheetin{position:absolute;left:50%;top:50%;transform:translate(-50%,-46%) scale(.97);
+  width:min(620px,calc(100vw - 32px));max-height:min(86vh,760px);
+  display:flex;flex-direction:column;overflow:hidden;
+  background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);
+  box-shadow:0 50px 100px -30px rgba(20,24,26,.42);opacity:0;
+  transition:opacity .4s var(--ease),transform .5s var(--ease);}
+dialog.sheet[open] .sheetin{opacity:1;transform:translate(-50%,-50%) scale(1);}
+.sheethead{position:relative;flex:0 0 auto;background:var(--dark);
+  border-radius:var(--r-lg) var(--r-lg) 0 0;padding:22px 56px 22px 24px;overflow:hidden;}
+.sheethead .glow{position:absolute;right:-90px;top:-120px;width:320px;height:320px;border-radius:50%;
+  background:radial-gradient(circle,rgba(63,224,255,.18),transparent 66%);pointer-events:none;}
+.sheethead .no{font-family:var(--mono);font-size:11px;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--cy);position:relative;}
+.sheethead h3{font-size:clamp(22px,3.4vw,28px);color:#fff;margin-top:8px;position:relative;}
+.sheethead .sub{font-size:13.5px;color:var(--d-body);margin-top:6px;position:relative;}
+.sheetx{position:absolute;right:16px;top:16px;width:34px;height:34px;border-radius:50%;
+  background:rgba(255,255,255,.1);border:0;cursor:pointer;display:flex;align-items:center;
+  justify-content:center;z-index:2;transition:background .25s,transform .3s var(--ease);}
+.sheetx:hover{background:rgba(255,255,255,.2);transform:rotate(90deg);}
+.sheetbody{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:24px;}
+.sheetbody p{font-size:14.8px;line-height:1.7;}
+.sheetbody p+p{margin-top:13px;}
+.sheetdl{margin-top:20px;border-top:1px solid var(--line);}
+.sheetdl .r{display:grid;grid-template-columns:132px 1fr;gap:14px;padding:12px 0;
+  border-bottom:1px solid var(--line);align-items:baseline;}
+.sheetdl .r:last-child{border-bottom:0;padding-bottom:0;}
+.sheetdl dt{font-family:var(--mono);font-size:10.5px;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--muted);}
+.sheetdl dd{font-size:14px;color:var(--ink);}
+.sheetdl dd .ev{font-family:var(--mono);font-size:12.5px;color:var(--body);
+  background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:2px 7px;
+  display:inline-block;margin:2px 4px 2px 0;}
+.sheetfoot{flex:0 0 auto;display:flex;gap:10px;flex-wrap:wrap;padding:16px 24px;
+  border-top:1px solid var(--line);background:var(--card);
+  border-radius:0 0 var(--r-lg) var(--r-lg);}
 
 /* ---------- statement ---------- */
 .stmt{text-align:center;max-width:24ch;margin:0 auto;font-size:clamp(24px,3.5vw,46px);
-  font-weight:500;letter-spacing:-.032em;line-height:1.14;}
+  font-weight:500;letter-spacing:-.032em;line-height:1.14;text-wrap:balance;}
 .stmt b{font-weight:600;}
-.stmt .dim{color:var(--grey);font-weight:500;}
+.stmt .dim{color:var(--faint);font-weight:500;}
 .stmtby{display:flex;align-items:center;justify-content:center;gap:11px;margin-top:30px;}
 .stmtby .ic{width:38px;height:38px;border-radius:50%;background:var(--ink);display:flex;
-  align-items:center;justify-content:center;}
-.stmtby .t{text-align:left;font-size:13.5px;color:var(--grey);line-height:1.35;}
-.stmtby .t b{display:block;color:var(--ink);font-weight:600;font-size:14px;}
+  align-items:center;justify-content:center;flex:0 0 38px;}
+.stmtby .t{text-align:left;font-size:13.5px;color:var(--muted);line-height:1.35;}
+.stmtby .t b{display:block;color:var(--ink);font-weight:600;font-size:14px;margin-bottom:2px;}
 
 /* ---------- capability list ---------- */
 .caplist{display:grid;grid-template-columns:1fr 1fr;gap:clamp(28px,5vw,80px);align-items:start;}
 .cl{display:flex;flex-direction:column;gap:2px;}
-.cl a,.cl div.row{display:flex;align-items:center;gap:15px;padding:13px 0;border-bottom:1px solid var(--line);
+.cl .row{display:flex;align-items:center;gap:15px;padding:13px 0;border-bottom:1px solid var(--line);
   transition:padding-left .4s var(--ease);}
-.cl div.row:hover{padding-left:8px;}
+.cl .row:last-child{border-bottom:0;}
+.cl .row:hover{padding-left:8px;}
 .cl .ic{width:42px;height:42px;border-radius:50%;background:var(--ink);flex:0 0 42px;
   display:flex;align-items:center;justify-content:center;transition:transform .45s var(--ease);}
-.cl div.row:hover .ic{transform:rotate(-12deg) scale(1.06);}
-.cl .nm{font-size:19px;font-weight:600;letter-spacing:-.025em;}
-.cl .ds{font-size:13.5px;color:var(--grey);margin-top:1px;}
+.cl .row:hover .ic{transform:rotate(-12deg) scale(1.06);}
+.cl .nm{font-size:19px;font-weight:600;letter-spacing:-.025em;display:block;}
+.cl .ds{font-size:13.5px;color:var(--muted);margin-top:1px;display:block;}
 .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px;}
 .chip{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:9px 13px;
   font-size:13px;color:var(--body);font-weight:500;transition:transform .35s var(--ease),box-shadow .35s;}
 .chip:hover{transform:translateY(-3px);box-shadow:0 8px 18px rgba(20,24,26,.08);}
 
+/* ---------- live network illustration ---------- */
+.screen{background:var(--dark);border:1px solid var(--d-line);border-radius:var(--r-lg);
+  overflow:hidden;margin-bottom:16px;}
+.screenbar{display:flex;align-items:center;gap:10px;padding:12px 16px;background:#0B0F11;
+  border-bottom:1px solid var(--d-line);}
+.screenbar .dots3{display:flex;gap:5px;flex:0 0 auto;}
+.screenbar .dots3 b{width:6px;height:6px;border-radius:50%;background:#2B3439;display:block;}
+.screenbar .ttl{font-family:var(--mono);font-size:11px;color:var(--d-muted);letter-spacing:.04em;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.screenbar .tag{margin-left:auto;flex:0 0 auto;font-family:var(--mono);font-size:9.5px;
+  letter-spacing:.12em;text-transform:uppercase;color:var(--d-muted);border:1px solid var(--d-line2);
+  border-radius:999px;padding:3px 9px;}
+.screenvis{position:relative;background:#0B0F11;}
+.screenvis svg{width:100%;height:auto;aspect-ratio:900/420;}
+.screenfoot{display:flex;flex-wrap:wrap;gap:2px 0;border-top:1px solid var(--d-line);}
+.screenfoot .cell{flex:1 1 190px;padding:14px 16px;border-right:1px solid var(--d-line);
+  display:flex;align-items:center;gap:9px;font-size:12.5px;color:var(--d-body);}
+.screenfoot .cell:last-child{border-right:0;}
+.screenfoot .sw{width:14px;height:4px;border-radius:2px;flex:0 0 14px;}
+.screenfoot .sw.rd{background:#C8384A;}.screenfoot .sw.am{background:#E8B23A;}
+.screenfoot .sw.gn{background:#2C6B49;}
+.screenfoot .sw.cy{background:var(--cy);height:0;border-top:3px dashed var(--cy);border-radius:0;}
+
 /* ---------- flow ---------- */
 .flow{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;}
-.fs{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:22px;
-  transition:transform .5s var(--ease),box-shadow .5s var(--ease);}
-.fs:hover{transform:translateY(-5px);box-shadow:0 22px 46px -20px rgba(20,24,26,.2);}
-.fs .t{font-size:34px;font-weight:700;letter-spacing:-.04em;line-height:1;}
-.fs .t sub{font-family:var(--mono);font-size:12px;font-weight:400;color:var(--grey);vertical-align:baseline;
-  margin-left:3px;letter-spacing:0;}
+.fs{background:var(--card);border:1px solid var(--line);border-radius:var(--r-md);padding:22px;
+  display:flex;flex-direction:column;
+  transition:transform .5s var(--ease),box-shadow .5s var(--ease),border-color .4s;}
+.fs:hover{transform:translateY(-5px);box-shadow:0 22px 46px -20px rgba(20,24,26,.2);
+  border-color:var(--line2);}
+.fs .t{font-size:34px;font-weight:700;letter-spacing:-.04em;line-height:1;font-variant-numeric:tabular-nums;}
+.fs .t sub{font-family:var(--mono);font-size:12px;font-weight:400;color:var(--muted);
+  vertical-align:baseline;margin-left:3px;letter-spacing:0;}
 .fs h4{font-size:17px;margin:12px 0 8px;}
 .fs p{font-size:13.6px;}
-.fs .ev{display:block;font-family:var(--mono);font-size:10px;color:var(--grey);margin-top:14px;
-  padding-top:11px;border-top:1px solid var(--line);letter-spacing:.02em;}
+.fs .ev{display:block;font-family:var(--mono);font-size:10.5px;color:var(--muted);margin-top:auto;
+  padding-top:14px;border-top:1px solid var(--line);letter-spacing:.02em;}
+.fs .ev::before{content:'';display:inline-block;width:5px;height:5px;border-radius:50%;
+  background:var(--cy-d);margin-right:7px;vertical-align:middle;}
 
 /* ---------- dark metric band ---------- */
-.band{background:var(--dark);color:#fff;border-radius:26px;padding:clamp(32px,5vw,64px);
+.band{background:var(--dark);color:#fff;border-radius:var(--r-lg);padding:clamp(32px,5vw,64px);
   position:relative;overflow:hidden;}
 .band .glow{position:absolute;right:-140px;top:-140px;width:460px;height:460px;border-radius:50%;
   background:radial-gradient(circle,rgba(63,224,255,.16),transparent 65%);pointer-events:none;}
 .band h2{color:#fff;position:relative;}
-.band .dim{color:#5B686D;}
-.band p{color:#9BAAB0;}
-.mets{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:#232A2D;margin-top:44px;
-  border:1px solid #232A2D;border-radius:14px;overflow:hidden;position:relative;}
+.band .dim{color:var(--d-faint);}
+.band p{color:var(--d-body);position:relative;}
+.mets{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--d-line);margin-top:44px;
+  border:1px solid var(--d-line);border-radius:14px;overflow:hidden;position:relative;}
 .met{background:var(--dark);padding:24px 22px 26px;}
 .met b{display:block;font-size:clamp(30px,3.6vw,46px);font-weight:700;letter-spacing:-.04em;
-  line-height:1;color:#fff;}
-.met span{display:block;font-size:13.4px;color:#93A3A9;margin-top:9px;}
-.met em{display:block;font-family:var(--mono);font-style:normal;font-size:9.5px;letter-spacing:.13em;
-  text-transform:uppercase;color:#5B686D;margin-top:12px;}
+  line-height:1;color:#fff;font-variant-numeric:tabular-nums;}
+.met span{display:block;font-size:13.4px;color:var(--d-body);margin-top:9px;}
+.met em{display:block;font-family:var(--mono);font-style:normal;font-size:10px;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--d-muted);margin-top:12px;}
 
 /* ---------- phases ---------- */
 .phases{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
 .ph{border:1px solid var(--line);border-radius:20px;padding:30px;background:var(--card);
   display:flex;flex-direction:column;}
 .ph.now{background:var(--dark);border-color:var(--dark);color:#fff;}
-.ph.now p{color:#9BAAB0;}
-.ph.now .fl li{color:#C3D0D4;border-color:#232A2D;}
+.ph.now p{color:var(--d-body);}
+.ph.now .fl li{color:#C3D0D4;border-color:var(--d-line);}
 .ph.now .fl li::before{background:var(--cy);}
 .ph .tagx{align-self:flex-start;font-family:var(--mono);font-size:10px;letter-spacing:.13em;
-  text-transform:uppercase;padding:5px 11px;border-radius:999px;background:rgba(63,224,255,.14);
+  text-transform:uppercase;padding:5px 11px;border-radius:999px;background:rgba(63,224,255,.16);
   color:var(--cy);margin-bottom:18px;}
-.ph:not(.now) .tagx{background:var(--bg);color:var(--grey);}
+.ph:not(.now) .tagx{background:var(--bg);color:var(--muted);border:1px solid var(--line);}
 .ph h3{font-size:27px;margin-bottom:9px;}
 .ph.now h3{color:#fff;}
 .ph>p{font-size:14.4px;margin-bottom:22px;}
@@ -299,8 +383,8 @@ section{padding:clamp(64px,8vw,128px) 0;}
   transition:box-shadow .4s,border-color .4s;}
 .fq.open{box-shadow:0 14px 34px -18px rgba(20,24,26,.22);border-color:var(--line2);}
 .fqb{width:100%;background:none;border:0;cursor:pointer;text-align:left;display:flex;gap:14px;
-  align-items:center;padding:19px 20px;font-family:inherit;color:inherit;}
-.fqb .n{font-family:var(--mono);font-size:12px;color:var(--grey);flex:0 0 22px;}
+  align-items:center;padding:19px 20px;font-family:inherit;color:inherit;border-radius:15px;}
+.fqb .n{font-family:var(--mono);font-size:12px;color:var(--muted);flex:0 0 22px;}
 .fqb .q{flex:1;font-size:16.5px;font-weight:600;letter-spacing:-.022em;line-height:1.3;}
 .fqb .ic{flex:0 0 24px;height:24px;position:relative;transition:transform .5s var(--ease);}
 .fqb .ic::before,.fqb .ic::after{content:'';position:absolute;background:var(--ink);left:50%;top:50%;
@@ -310,64 +394,70 @@ section{padding:clamp(64px,8vw,128px) 0;}
 .fq.open .ic{transform:rotate(180deg);}
 .fq.open .ic::after{opacity:0;}
 .fqa{max-height:0;overflow:hidden;transition:max-height .55s var(--ease);}
-.fqa div{padding:0 54px 20px 56px;font-size:14.6px;color:var(--body);}
-.stickcard{position:sticky;top:100px;background:var(--card);border:1px solid var(--line);
+.fqa .inner{padding:0 54px 20px 56px;font-size:14.6px;color:var(--body);}
+.stickcard{position:sticky;top:calc(var(--navh) + 28px);background:var(--card);border:1px solid var(--line);
   border-radius:20px;padding:26px;}
 .stickcard .ic{width:52px;height:52px;border-radius:50%;background:var(--ink);margin-bottom:18px;
   display:flex;align-items:center;justify-content:center;}
 .stickcard h3{font-size:23px;margin-bottom:10px;}
-.stickcard h3 .dim{display:block;}
+/* 23px at weight 600 is not "large text" under WCAG, so this lead-in line takes
+   the small-text tier rather than --faint */
+.stickcard h3 .dim{display:block;color:var(--muted);}
 .stickcard p{font-size:14.2px;margin-bottom:20px;}
 
 /* ---------- cta ---------- */
-.ctac{background:var(--dark);border-radius:26px;padding:clamp(34px,5.5vw,74px);position:relative;
+.ctac{background:var(--dark);border-radius:var(--r-lg);padding:clamp(34px,5.5vw,74px);position:relative;
   overflow:hidden;display:grid;grid-template-columns:1fr auto;gap:34px;align-items:end;}
 .ctac h2{color:#fff;position:relative;}
+.ctac .dim{color:var(--d-faint);}
 .ctac .glow{position:absolute;left:-120px;bottom:-160px;width:480px;height:480px;border-radius:50%;
-  background:radial-gradient(circle,rgba(63,224,255,.15),transparent 66%);}
-.ctac p{color:#9BAAB0;max-width:36ch;margin-top:16px;position:relative;}
+  background:radial-gradient(circle,rgba(63,224,255,.15),transparent 66%);pointer-events:none;}
+.ctac p{color:var(--d-body);max-width:36ch;margin-top:16px;position:relative;}
 .ctac .btn{background:#fff;color:var(--ink);border-color:#fff;}
 .ctac .btn:hover{background:#EDECEA;}
-.ctac .btn.gh{background:transparent;color:#fff;border-color:#33393C;}
-.ctac .btn.gh:hover{background:#1B2124;}
+.ctac .btn.gh{background:transparent;color:#fff;border-color:#3A4245;}
+.ctac .btn.gh:hover{background:#1B2124;border-color:#546064;}
 
 /* ---------- footer ---------- */
-footer{background:var(--dark);color:#fff;padding:clamp(50px,6vw,90px) 0 26px;margin-top:clamp(64px,8vw,128px);}
+footer{background:var(--dark);color:#fff;padding:clamp(50px,6vw,90px) 0 26px;
+  margin-top:clamp(64px,8vw,128px);}
 .fgrid{display:grid;grid-template-columns:1.7fr 1fr 1fr 1fr;gap:30px;padding:0 0 40px;}
 .fgrid h5{font-family:var(--mono);font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;
-  color:#5B686D;margin-bottom:15px;font-weight:400;}
-.fgrid a,.fgrid span{display:block;color:#9BAAB0;font-size:14.5px;padding:5px 0;transition:color .25s;}
-.fgrid a:hover{color:#fff;}
-.fgrid span{color:#5B686D;}
+  color:var(--d-muted);margin-bottom:15px;font-weight:400;}
+.fgrid a,.fgrid .li{display:block;color:var(--d-body);font-size:14.5px;padding:5px 0;
+  transition:color .25s,transform .25s var(--ease);}
+.fgrid a:hover{color:#fff;transform:translateX(3px);}
+.fgrid .li{color:var(--d-muted);}
+.fgrid .li .soon{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;
+  font-weight:400;color:var(--d-muted);border:1px solid var(--d-line2);border-radius:999px;
+  padding:2px 7px;margin-left:6px;vertical-align:1px;}
 .kin{font-size:clamp(26px,3.6vw,44px);font-weight:600;letter-spacing:-.035em;line-height:1.08;
   margin-bottom:16px;color:#fff;}
-.kin+p{color:#9BAAB0;}
+.kin+p{color:var(--d-body);}
 .rot{display:inline-block;height:1.08em;overflow:hidden;vertical-align:bottom;color:var(--cy);}
 .rot>span{display:block;animation:roll 8.4s cubic-bezier(.72,0,.28,1) infinite;}
 .rot i{display:block;height:1.08em;line-height:1.08;font-style:normal;}
-/* .fgrid span{...} (footer link columns) is a descendant selector that otherwise
-   wins on specificity and hijacks the rotating word's font-size/color/display --
-   pin them back here. */
-.kin .rot{font-size:inherit;color:var(--cy);padding:0;display:inline-block;}
-.kin .rot>span{font-size:inherit;padding:0;}
 @keyframes roll{0%,22%{transform:none}33%,55%{transform:translateY(-1.08em)}
   66%,88%{transform:translateY(-2.16em)}100%{transform:translateY(-3.24em)}}
-.wm{display:flex;justify-content:space-between;border-top:1px solid #232A2D;padding-top:12px;
+.wm{display:flex;justify-content:space-between;border-top:1px solid var(--d-line);padding-top:12px;
   font-size:clamp(58px,20vw,268px);font-weight:800;letter-spacing:-.05em;line-height:.78;
   color:#1B2124;user-select:none;overflow:hidden;}
 .fbot{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;padding-top:18px;
-  font-family:var(--mono);font-size:11px;color:#5B686D;letter-spacing:.02em;}
+  font-family:var(--mono);font-size:11px;color:var(--d-muted);letter-spacing:.02em;}
 
 /* ---------- floating widget ---------- */
 .dock{position:fixed;right:20px;bottom:20px;z-index:88;display:flex;align-items:center;gap:8px;
-  background:rgba(255,255,255,.88);backdrop-filter:blur(18px) saturate(1.5);border:1px solid var(--line);
+  background:rgba(255,255,255,.88);-webkit-backdrop-filter:blur(18px) saturate(1.5);
+  backdrop-filter:blur(18px) saturate(1.5);border:1px solid var(--line);
   border-radius:999px;padding:8px 8px 8px 16px;box-shadow:0 8px 30px rgba(20,24,26,.13);
-  transform:translateY(120px);opacity:0;transition:transform .8s var(--ease),opacity .6s var(--ease);}
-.dock.on{transform:none;opacity:1;}
-.dock .t{font-size:13px;line-height:1.3;color:var(--grey);}
+  transform:translateY(120px);opacity:0;visibility:hidden;
+  transition:transform .8s var(--ease),opacity .6s var(--ease),visibility .6s;}
+.dock.on{transform:none;opacity:1;visibility:visible;}
+.dock .t{font-size:13px;line-height:1.3;color:var(--muted);}
 .dock .t b{display:block;color:var(--ink);font-weight:600;font-size:13.5px;}
 .dock .ib{width:36px;height:36px;border-radius:50%;background:var(--ink);display:flex;
-  align-items:center;justify-content:center;transition:transform .35s var(--ease),background .3s;}
+  align-items:center;justify-content:center;flex:0 0 36px;
+  transition:transform .35s var(--ease),background .3s;}
 .dock .ib:hover{transform:translateY(-3px) rotate(-8deg);}
 .dock .ib.alt{background:var(--bg);border:1px solid var(--line);}
 
@@ -375,8 +465,6 @@ footer{background:var(--dark);color:#fff;padding:clamp(50px,6vw,90px) 0 26px;mar
 @media(max-width:1040px){
   .herogrid{grid-template-columns:1fr;}
   .deck{height:clamp(285px,54vw,420px);margin-top:20px;}
-  .c3d{width:86%;}
-  .c3d.float{width:50%;}
   .mods,.phases,.caplist{grid-template-columns:1fr;}
   .flow{grid-template-columns:1fr 1fr;}
   .faqgrid{grid-template-columns:1fr;}
@@ -384,38 +472,63 @@ footer{background:var(--dark);color:#fff;padding:clamp(50px,6vw,90px) 0 26px;mar
   .mets{grid-template-columns:1fr 1fr;}
   .fgrid{grid-template-columns:1fr 1fr;}
 }
+@media(max-width:860px){
+  /* the fold animation is off below this width, so the hero anchor is dead space */
+  .deck{display:none;}
+  .hero{padding-bottom:0;}
+}
 @media(max-width:700px){
+  .nav{padding:7px 7px 7px 12px;}
   .nav .lk{max-width:0;opacity:0;margin-left:-6px;}
   .nav .dots{display:flex;}
-  .navdock.open .nav .lk{max-width:60vw;opacity:1;margin-left:0;overflow-x:auto;}
+  .navdock.open .nav .lk{max-width:min(58vw,320px);opacity:1;margin-left:0;overflow-x:auto;
+    scrollbar-width:none;}
+  .navdock.open .nav .lk::-webkit-scrollbar{display:none;}
   .flow{grid-template-columns:1fr;}
   .shead{grid-template-columns:1fr;}
-  .ctac{grid-template-columns:1fr;}
+  .ctac{grid-template-columns:1fr;align-items:start;}
   .fgrid{grid-template-columns:1fr;}
-  .fqa div{padding:0 20px 20px;}
+  .fqa .inner{padding:0 20px 20px;}
   .dock .t{display:none;}
-  .dock{padding:8px;}
+  .dock{padding:8px;right:14px;bottom:14px;}
+  .screenfoot .cell{flex:1 1 100%;border-right:0;border-bottom:1px solid var(--d-line);}
+  .screenfoot .cell:last-child{border-bottom:0;}
+  .sheetdl .r{grid-template-columns:1fr;gap:4px;}
+  .stmtby{flex-wrap:wrap;}
 }
 @media(prefers-reduced-motion:reduce){
-  *{animation-duration:.01ms!important;transition-duration:.01ms!important;}
+  html{scroll-behavior:auto;}
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;
+    transition-duration:.01ms!important;}
   .rv,.stg>*{opacity:1;transform:none;}
   .lines .ln>i{transform:none;}
+  .dock{visibility:visible;}
+}
+@media print{
+  .navdock,.dock,.marq,.skip{display:none!important;}
+  body{background:#fff;}
+  .rv,.stg>*,.lines .ln>i{opacity:1!important;transform:none!important;}
+  .fqa{max-height:none!important;}
+  section{padding:24px 0;break-inside:avoid;}
 }
 </style>
 </head>
 <body>
 
+<a class="skip" href="#top">Skip to content</a>
+
 <div class="navdock" id="navdock">
-  <nav class="nav">
-    <a class="mark" href="#top"><span class="glyph"></span>ITMS</a>
-    <div class="lk">
+  <nav class="nav" aria-label="Primary">
+    <a class="mark" href="#top"><span class="glyph" aria-hidden="true"></span>ITMS</a>
+    <div class="lk" id="navlinks">
       <a href="#modules">Platform</a>
       <a href="#flow">Response</a>
       <a href="#deploy">Deployment</a>
       <a href="#faq">FAQ</a>
     </div>
     <a class="cta" href="live.html">Open console</a>
-    <button class="dots" id="dots" aria-label="Menu"><i></i><i></i><i></i></button>
+    <button class="dots" id="dots" aria-label="Menu" aria-expanded="false" aria-controls="navlinks">
+      <i></i><i></i><i></i></button>
   </nav>
 </div>
 
@@ -425,7 +538,7 @@ footer{background:var(--dark);color:#fff;padding:clamp(50px,6vw,90px) 0 26px;mar
   <div class="wrap">
     <div class="herogrid">
       <div>
-        <span class="badge rv"><i class="live"></i> Phase 1 pilot · Vijayawada · 20 junctions</span>
+        <span class="badge rv"><i class="live" aria-hidden="true"></i> Phase 1 pilot · Vijayawada · 20 junctions</span>
         <h1 class="h1 lines">
           <span class="ln"><i class="dim">An ambulance should</i></span>
           <span class="ln"><i class="dim">never meet</i></span>
@@ -435,14 +548,14 @@ footer{background:var(--dark);color:#fff;padding:clamp(50px,6vw,90px) 0 26px;mar
           confirmation, sends the unit that is genuinely closest, and clears a rolling green ahead of it —
           then hands every junction back to adaptive control.</p>
         <div class="herocta rv">
-          <a class="btn" href="live.html"><span class="av">
+          <a class="btn" href="live.html"><span class="av" aria-hidden="true">
             <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M2 7h10M8 3l4 4-4 4"
               stroke="#3FE0FF" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </span>Open the operator console</a>
           <a class="btn gh" href="#modules">See how it works</a>
         </div>
         <div class="proof rv">
-          <div class="pstack">
+          <div class="pstack" aria-hidden="true">
             <i><svg width="15" height="15" viewBox="0 0 16 16" fill="none"><rect x="5.5" y="1.5" width="5" height="13" rx="2.5" stroke="#8FA5AD" stroke-width="1.3"/><circle cx="8" cy="5" r="1.2" fill="#3FE0FF"/></svg></i>
             <i><svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M1.5 11h13M3 11V7l2.5-3h5L13 7v4" stroke="#8FA5AD" stroke-width="1.3" stroke-linejoin="round"/><circle cx="4.8" cy="12.6" r="1.3" stroke="#8FA5AD" stroke-width="1.3"/><circle cx="11.2" cy="12.6" r="1.3" stroke="#8FA5AD" stroke-width="1.3"/></svg></i>
             <i><svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M1.5 9c1.7-5 3.4-5 5 0s3.4 5 5 0 2.6-3.4 4 -1.7" stroke="#3FE0FF" stroke-width="1.3" stroke-linecap="round"/></svg></i>
@@ -452,8 +565,7 @@ footer{background:var(--dark);color:#fff;padding:clamp(50px,6vw,90px) 0 26px;mar
         </div>
       </div>
 
-      <div class="deck" id="deck" aria-hidden="true"><!-- anchor: the module cards stack here -->
-      </div>
+      <div class="deck" id="deck" aria-hidden="true"><!-- anchor: the module cards stack here --></div>
     </div>
   </div>
 </section>
@@ -462,52 +574,56 @@ footer{background:var(--dark);color:#fff;padding:clamp(50px,6vw,90px) 0 26px;mar
 <div class="marq">
   <div class="marqin">
     <span class="marqlbl">Built on <b>proven parts</b></span>
-    <div class="marqwin"><div class="marqtrack" id="marq"></div></div>
+    <div class="marqwin"><div class="marqtrack" id="marq" aria-hidden="true"></div></div>
   </div>
 </div>
 
 <!-- ================= MODULES ================= -->
-<section id="modules">
+<section id="modules" aria-labelledby="modules-h">
   <div class="wrap">
     <div class="shead">
-      <h2 class="h2 lines"><span class="ln"><i class="dim">Four systems,</i></span>
+      <h2 class="h2 lines" id="modules-h"><span class="ln"><i class="dim">Four systems,</i></span>
         <span class="ln"><i>one event language.</i></span></h2>
       <p class="lede sub rv">Every module publishes and consumes the same versioned events, so the core never
         learns whether it is optimising a simulation or a city.</p>
     </div>
 
     <div class="mods" id="mods">
-      <article class="mod">
-        <div class="modvis"><img src="images/module-signal.jpg" alt="Intelligent traffic operations illustration of an isometric junction with live adaptive signals" loading="lazy">
-          <span class="viewpill">View module <svg width="11" height="11" viewBox="0 0 14 14" fill="none"><path d="M3 11L11 3M11 3H5M11 3v6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span>
-        </div>
-        <div class="modfoot"><div><span class="n">Adaptive signal control</span><span class="sub">Max-pressure control</span></div>
-          <span class="g">Module 01 <svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M3 11L11 3M11 3H5M11 3v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span></div>
-      </article>
+      <button class="mod" type="button" data-mod="1" aria-haspopup="dialog">
+        <span class="modvis"><img src="images/module-signal.jpg" width="758" height="508" decoding="async" loading="lazy"
+            alt="Isometric illustration of a junction under live adaptive signal control">
+          <span class="viewpill">View module <svg width="11" height="11" viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="M3 11L11 3M11 3H5M11 3v6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span>
+        </span>
+        <span class="modfoot"><span><span class="n">Adaptive signal control</span><span class="sub">Max-pressure control</span></span>
+          <span class="g">Module 01 <svg width="12" height="12" viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="M3 11L11 3M11 3H5M11 3v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span></span>
+      </button>
 
-      <article class="mod">
-        <div class="modvis"><img src="images/module-anomaly.jpg" alt="AI-powered incident detection illustration of a CCTV camera flagging a collision on a highway" loading="lazy">
-          <span class="viewpill">View module <svg width="11" height="11" viewBox="0 0 14 14" fill="none"><path d="M3 11L11 3M11 3H5M11 3v6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span>
-        </div>
-        <div class="modfoot"><div><span class="n">Anomaly-driven detection</span><span class="sub">Multi-modal fusion</span></div>
-          <span class="g">Module 02 <svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M3 11L11 3M11 3H5M11 3v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span></div>
-      </article>
+      <button class="mod" type="button" data-mod="2" aria-haspopup="dialog">
+        <span class="modvis"><img src="images/module-anomaly.jpg" width="758" height="508" decoding="async" loading="lazy"
+            alt="Illustration of a CCTV camera flagging a collision on a highway">
+          <span class="viewpill">View module <svg width="11" height="11" viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="M3 11L11 3M11 3H5M11 3v6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span>
+        </span>
+        <span class="modfoot"><span><span class="n">Anomaly-driven detection</span><span class="sub">Multi-modal fusion</span></span>
+          <span class="g">Module 02 <svg width="12" height="12" viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="M3 11L11 3M11 3H5M11 3v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span></span>
+      </button>
 
-      <article class="mod">
-        <div class="modvis"><img src="images/module-corridor.jpg" alt="Green corridor management illustration of an ambulance following a signal-preempted route to a hospital" loading="lazy">
-          <span class="viewpill">View module <svg width="11" height="11" viewBox="0 0 14 14" fill="none"><path d="M3 11L11 3M11 3H5M11 3v6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span>
-        </div>
-        <div class="modfoot"><div><span class="n">Green corridor</span><span class="sub">Reservation ledger</span></div>
-          <span class="g">Module 03 <svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M3 11L11 3M11 3H5M11 3v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span></div>
-      </article>
+      <button class="mod" type="button" data-mod="3" aria-haspopup="dialog">
+        <span class="modvis"><img src="images/module-corridor.jpg" width="758" height="508" decoding="async" loading="lazy"
+            alt="Illustration of an ambulance following a signal-preempted route to a hospital">
+          <span class="viewpill">View module <svg width="11" height="11" viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="M3 11L11 3M11 3H5M11 3v6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span>
+        </span>
+        <span class="modfoot"><span><span class="n">Green corridor</span><span class="sub">Reservation ledger</span></span>
+          <span class="g">Module 03 <svg width="12" height="12" viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="M3 11L11 3M11 3H5M11 3v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span></span>
+      </button>
 
-      <article class="mod">
-        <div class="modvis"><img src="images/module-command.jpg" alt="Network operations illustration of a signal network radiating from a central optimization hub" loading="lazy">
-          <span class="viewpill">View module <svg width="11" height="11" viewBox="0 0 14 14" fill="none"><path d="M3 11L11 3M11 3H5M11 3v6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span>
-        </div>
-        <div class="modfoot"><div><span class="n">One writer, full audit</span><span class="sub">Command authority</span></div>
-          <span class="g">Module 04 <svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M3 11L11 3M11 3H5M11 3v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span></div>
-      </article>
+      <button class="mod" type="button" data-mod="4" aria-haspopup="dialog">
+        <span class="modvis"><img src="images/module-command.jpg" width="758" height="508" decoding="async" loading="lazy"
+            alt="Illustration of a signal network radiating from a central optimisation hub">
+          <span class="viewpill">View module <svg width="11" height="11" viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="M3 11L11 3M11 3H5M11 3v6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span>
+        </span>
+        <span class="modfoot"><span><span class="n">One writer, full audit</span><span class="sub">Command authority</span></span>
+          <span class="g">Module 04 <svg width="12" height="12" viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="M3 11L11 3M11 3H5M11 3v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span></span>
+      </button>
     </div>
   </div>
 </section>
@@ -519,7 +635,7 @@ footer{background:var(--dark);color:#fff;padding:clamp(50px,6vw,90px) 0 26px;mar
       <p class="stmt"><span class="dim">Automated dispatch on inferred human behaviour is not defensible in an
         audit or in public.</span> <b>So vision may confirm a stopped vehicle on its own — and never a person.</b></p>
       <div class="stmtby">
-        <span class="ic"><svg width="17" height="17" viewBox="0 0 18 18" fill="none"><path d="M9 2l6 3v4c0 3.4-2.4 6.2-6 7-3.6-.8-6-3.6-6-7V5l6-3z" stroke="#3FE0FF" stroke-width="1.4" stroke-linejoin="round"/></svg></span>
+        <span class="ic" aria-hidden="true"><svg width="17" height="17" viewBox="0 0 18 18" fill="none"><path d="M9 2l6 3v4c0 3.4-2.4 6.2-6 7-3.6-.8-6-3.6-6-7V5l6-3z" stroke="#3FE0FF" stroke-width="1.4" stroke-linejoin="round"/></svg></span>
         <span class="t"><b>ADR-006 · Human-in-the-loop gate</b>Accepted, with the response-time cost recorded</span>
       </div>
     </div>
@@ -527,11 +643,11 @@ footer{background:var(--dark);color:#fff;padding:clamp(50px,6vw,90px) 0 26px;mar
 </section>
 
 <!-- ================= CAPABILITIES ================= -->
-<section>
+<section aria-labelledby="cap-h">
   <div class="wrap">
     <div class="caplist">
       <div>
-        <h2 class="h2 lines"><span class="ln"><i class="dim">Capabilities that</i></span>
+        <h2 class="h2 lines" id="cap-h"><span class="ln"><i class="dim">Capabilities that</i></span>
           <span class="ln"><i>hold up in an audit.</i></span></h2>
         <p class="lede rv" style="margin-top:20px;max-width:38ch">Not a feature list. Each one exists because a
           specific failure mode would otherwise reach the street.</p>
@@ -545,31 +661,31 @@ footer{background:var(--dark);color:#fff;padding:clamp(50px,6vw,90px) 0 26px;mar
 
       <div class="cl stg">
         <div class="row">
-          <span class="ic"><svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="6" y="2" width="6" height="14" rx="3" stroke="#fff" stroke-width="1.4"/><circle cx="9" cy="6" r="1.3" fill="#3FE0FF"/></svg></span>
+          <span class="ic" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="6" y="2" width="6" height="14" rx="3" stroke="#fff" stroke-width="1.4"/><circle cx="9" cy="6" r="1.3" fill="#3FE0FF"/></svg></span>
           <span><span class="nm">Adaptive phase control</span><span class="ds">Max-pressure on live queues</span></span>
         </div>
         <div class="row">
-          <span class="ic"><svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M2 9s2.6-4.6 7-4.6S16 9 16 9s-2.6 4.6-7 4.6S2 9 2 9z" stroke="#fff" stroke-width="1.4"/><circle cx="9" cy="9" r="2" stroke="#3FE0FF" stroke-width="1.4"/></svg></span>
+          <span class="ic" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M2 9s2.6-4.6 7-4.6S16 9 16 9s-2.6 4.6-7 4.6S2 9 2 9z" stroke="#fff" stroke-width="1.4"/><circle cx="9" cy="9" r="2" stroke="#3FE0FF" stroke-width="1.4"/></svg></span>
           <span><span class="nm">Incident detection</span><span class="ds">Vision, pattern and sensor fusion</span></span>
         </div>
         <div class="row">
-          <span class="ic"><svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M2 12c2-6 4-6 6.5 0S13 12 16 7" stroke="#3FE0FF" stroke-width="1.4" stroke-linecap="round"/><path d="M2 4h14" stroke="#fff" stroke-width="1.4" stroke-dasharray="2 2.4" stroke-linecap="round"/></svg></span>
+          <span class="ic" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M2 12c2-6 4-6 6.5 0S13 12 16 7" stroke="#3FE0FF" stroke-width="1.4" stroke-linecap="round"/><path d="M2 4h14" stroke="#fff" stroke-width="1.4" stroke-dasharray="2 2.4" stroke-linecap="round"/></svg></span>
           <span><span class="nm">Green corridor</span><span class="ds">Reservation windows, not blind preemption</span></span>
         </div>
         <div class="row">
-          <span class="ic"><svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M2 12h2.5l2.5-3 2.5 6 2.5-9 1.5 6H16" stroke="#fff" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <span class="ic" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M2 12h2.5l2.5-3 2.5 6 2.5-9 1.5 6H16" stroke="#fff" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
           <span><span class="nm">Live routing</span><span class="ds">Drive time, not map distance</span></span>
         </div>
         <div class="row">
-          <span class="ic"><svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="2.5" y="2.5" width="13" height="13" rx="3" stroke="#fff" stroke-width="1.4"/><path d="M5.5 7h7M5.5 10h7M5.5 13h4" stroke="#3FE0FF" stroke-width="1.3" stroke-linecap="round"/></svg></span>
+          <span class="ic" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="2.5" y="2.5" width="13" height="13" rx="3" stroke="#fff" stroke-width="1.4"/><path d="M5.5 7h7M5.5 10h7M5.5 13h4" stroke="#3FE0FF" stroke-width="1.3" stroke-linecap="round"/></svg></span>
           <span><span class="nm">Hash-chained audit</span><span class="ds">Refusals recorded, not just commands</span></span>
         </div>
         <div class="row">
-          <span class="ic"><svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M9 2v6M9 2L6 5M9 2l3 3" stroke="#fff" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 10v4a1.5 1.5 0 001.5 1.5h9A1.5 1.5 0 0015 14v-4" stroke="#3FE0FF" stroke-width="1.4" stroke-linecap="round"/></svg></span>
-          <span><span class="nm">Degradation ladder</span><span class="ds">Five rungs, none of them "stop"</span></span>
+          <span class="ic" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M9 2v6M9 2L6 5M9 2l3 3" stroke="#fff" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 10v4a1.5 1.5 0 001.5 1.5h9A1.5 1.5 0 0015 14v-4" stroke="#3FE0FF" stroke-width="1.4" stroke-linecap="round"/></svg></span>
+          <span><span class="nm">Degradation ladder</span><span class="ds">Five rungs, none of them &ldquo;stop&rdquo;</span></span>
         </div>
         <div class="row">
-          <span class="ic"><svg width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="6.5" stroke="#fff" stroke-width="1.4"/><path d="M9 5.5v4l2.5 1.5" stroke="#3FE0FF" stroke-width="1.4" stroke-linecap="round"/></svg></span>
+          <span class="ic" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="6.5" stroke="#fff" stroke-width="1.4"/><path d="M9 5.5v4l2.5 1.5" stroke="#3FE0FF" stroke-width="1.4" stroke-linecap="round"/></svg></span>
           <span><span class="nm">Replayable event log</span><span class="ds">Every decision reconstructable</span></span>
         </div>
       </div>
@@ -578,14 +694,33 @@ footer{background:var(--dark);color:#fff;padding:clamp(50px,6vw,90px) 0 26px;mar
 </section>
 
 <!-- ================= FLOW ================= -->
-<section id="flow">
+<section id="flow" aria-labelledby="flow-h">
   <div class="wrap">
     <div class="shead">
-      <h2 class="h2 lines"><span class="ln"><i class="dim">Collision to rolling</i></span>
+      <h2 class="h2 lines" id="flow-h"><span class="ln"><i class="dim">Collision to rolling</i></span>
         <span class="ln"><i>green, end to end.</i></span></h2>
       <p class="lede sub rv">Measured in the pilot zone from the injected incident. Verification is deliberately
         human, and deliberately the slowest step.</p>
     </div>
+
+    <div class="screen rv dark-surface">
+      <div class="screenbar">
+        <span class="dots3" aria-hidden="true"><b></b><b></b><b></b></span>
+        <span class="ttl">MG Road corridor · signal behaviour, illustrated</span>
+        <span class="tag">Illustration</span>
+      </div>
+      <div class="screenvis">
+        <svg id="netstrip" viewBox="0 0 900 420" preserveAspectRatio="xMidYMid meet" role="img"
+          aria-label="Animated diagram of a road grid. Signals switch between north–south and east–west phases, queues build on the approaches that are held, and periodically a cyan dashed corridor opens across several junctions ahead of a moving unit. This is a stylised illustration of the behaviour described below, not a live feed — the operator console carries the running simulation."></svg>
+      </div>
+      <div class="screenfoot">
+        <span class="cell"><i class="sw gn" aria-hidden="true"></i> Free-flowing approach</span>
+        <span class="cell"><i class="sw am" aria-hidden="true"></i> Queue building at a held signal</span>
+        <span class="cell"><i class="sw rd" aria-hidden="true"></i> Saturated approach</span>
+        <span class="cell"><i class="sw cy" aria-hidden="true"></i> Green corridor, junctions preempted ahead</span>
+      </div>
+    </div>
+
     <div class="flow stg">
       <div class="fs"><div class="t">0<sub>s</sub></div><h4>Detect</h4>
         <p>A stopped vehicle holds a live lane past threshold. Vision raises a candidate with a confidence and a
@@ -610,8 +745,8 @@ footer{background:var(--dark);color:#fff;padding:clamp(50px,6vw,90px) 0 26px;mar
 <!-- ================= DARK BAND ================= -->
 <section style="padding-top:0">
   <div class="wrap">
-    <div class="band rv">
-      <div class="glow"></div>
+    <div class="band rv dark-surface">
+      <div class="glow" aria-hidden="true"></div>
       <h2 class="h2"><span class="dim">Built small.</span><br>Designed large.</h2>
       <p class="lede" style="max-width:52ch;margin-top:20px">The pilot is not a throwaway prototype. It is the
         same architecture with service boundaries collapsed into module boundaries, so extraction later is
@@ -627,16 +762,16 @@ footer{background:var(--dark);color:#fff;padding:clamp(50px,6vw,90px) 0 26px;mar
 </section>
 
 <!-- ================= PHASES ================= -->
-<section id="deploy" style="padding-top:0">
+<section id="deploy" style="padding-top:0" aria-labelledby="deploy-h">
   <div class="wrap">
     <div class="shead">
-      <h2 class="h2 lines"><span class="ln"><i class="dim">One architecture,</i></span>
+      <h2 class="h2 lines" id="deploy-h"><span class="ln"><i class="dim">One architecture,</i></span>
         <span class="ln"><i>two scales.</i></span></h2>
       <p class="lede sub rv">Zones are the scaling axis. A new district is new partitions and new pods, not a
         new design.</p>
     </div>
     <div class="phases stg">
-      <div class="ph now">
+      <div class="ph now dark-surface">
         <span class="tagx">Running now</span>
         <h3>Phase 1 — Simulation pilot</h3>
         <p>One machine, three processes, a 20-junction zone driven by SUMO. Everything an operator touches is
@@ -672,67 +807,75 @@ footer{background:var(--dark);color:#fff;padding:clamp(50px,6vw,90px) 0 26px;mar
 </section>
 
 <!-- ================= FAQ ================= -->
-<section id="faq">
+<section id="faq" aria-labelledby="faq-h">
   <div class="wrap">
     <div class="shead">
-      <h2 class="h2 lines"><span class="ln"><i>Your questions</i></span>
+      <h2 class="h2 lines" id="faq-h"><span class="ln"><i>Your questions</i></span>
         <span class="ln"><i class="dim">answered.</i></span></h2>
     </div>
     <div class="faqgrid">
       <div class="rv" id="faqlist">
         <div class="fq open">
-          <button class="fqb" aria-expanded="true"><span class="n">01</span>
-            <span class="q">What happens when the optimizer crashes mid-peak?</span><span class="ic"></span></button>
-          <div class="fqa"><div>The signal controller watches for proposal silence and, after ten seconds,
-            falls back to stored fixed-timer plans across the zone. The street never depends on the optimizer
-            being alive — it only benefits when it is. The same ladder covers GPU loss, where detection degrades
-            to pattern-only and the fusion threshold rises to compensate, and broker lag, where position updates
-            drop oldest-first while incident events are never dropped at all.</div></div>
+          <h3><button class="fqb" id="fqb1" aria-expanded="true" aria-controls="fqa1"><span class="n">01</span>
+            <span class="q">What happens when the optimizer crashes mid-peak?</span>
+            <span class="ic" aria-hidden="true"></span></button></h3>
+          <div class="fqa" id="fqa1" role="region" aria-labelledby="fqb1"><div class="inner">The signal controller
+            watches for proposal silence and, after ten seconds, falls back to stored fixed-timer plans across
+            the zone. The street never depends on the optimizer being alive — it only benefits when it is. The
+            same ladder covers GPU loss, where detection degrades to pattern-only and the fusion threshold rises
+            to compensate, and broker lag, where position updates drop oldest-first while incident events are
+            never dropped at all.</div></div>
         </div>
         <div class="fq">
-          <button class="fqb" aria-expanded="false"><span class="n">02</span>
-            <span class="q">Can an operator override a signal whenever they want?</span><span class="ic"></span></button>
-          <div class="fqa"><div>No, and that is the point. Minimum green must have elapsed, and an active
-            emergency corridor outranks a manual request outright. A refused request returns a structured
-            problem response naming the interlock and the time remaining, rather than failing silently.
-            Accepted or refused, it is written to the audit log with the requesting identity, the reason string
-            and a fencing token.</div></div>
+          <h3><button class="fqb" id="fqb2" aria-expanded="false" aria-controls="fqa2"><span class="n">02</span>
+            <span class="q">Can an operator override a signal whenever they want?</span>
+            <span class="ic" aria-hidden="true"></span></button></h3>
+          <div class="fqa" id="fqa2" role="region" aria-labelledby="fqb2"><div class="inner">No, and that is the
+            point. Minimum green must have elapsed, and an active emergency corridor outranks a manual request
+            outright. A refused request returns a structured problem response naming the interlock and the time
+            remaining, rather than failing silently. Accepted or refused, it is written to the audit log with the
+            requesting identity, the reason string and a fencing token.</div></div>
         </div>
         <div class="fq">
-          <button class="fqb" aria-expanded="false"><span class="n">03</span>
-            <span class="q">Why simulate at all instead of starting with real cameras?</span><span class="ic"></span></button>
-          <div class="fqa"><div>Because the simulation is never thrown away. It is the source adapter for the
-            pilot, the staging environment for every later release, the chaos rig for failure testing, and
-            eventually the digital twin that live events calibrate. Since every source normalises to the same
-            event language, the core genuinely cannot tell which one is feeding it — which is how you find out
-            whether the abstraction holds before a city depends on it.</div></div>
+          <h3><button class="fqb" id="fqb3" aria-expanded="false" aria-controls="fqa3"><span class="n">03</span>
+            <span class="q">Why simulate at all instead of starting with real cameras?</span>
+            <span class="ic" aria-hidden="true"></span></button></h3>
+          <div class="fqa" id="fqa3" role="region" aria-labelledby="fqb3"><div class="inner">Because the
+            simulation is never thrown away. It is the source adapter for the pilot, the staging environment for
+            every later release, the chaos rig for failure testing, and eventually the digital twin that live
+            events calibrate. Since every source normalises to the same event language, the core genuinely
+            cannot tell which one is feeding it — which is how you find out whether the abstraction holds before
+            a city depends on it.</div></div>
         </div>
         <div class="fq">
-          <button class="fqb" aria-expanded="false"><span class="n">04</span>
-            <span class="q">How are two emergencies wanting the same junction resolved?</span><span class="ic"></span></button>
-          <div class="fqa"><div>Non-overlapping windows are simply both granted. Where they overlap,
-            arbitration runs in order: severity class, then commitment — an already-active corridor beats a new
-            one — then the smaller ETA. The loser re-routes when an alternative costs little, and otherwise
-            degrades to signal priority: an extended green rather than a full preemption. There is also a hard
-            cap on simultaneous preemptions per zone, because enough corridors at once will gridlock the network
-            they are trying to cross.</div></div>
+          <h3><button class="fqb" id="fqb4" aria-expanded="false" aria-controls="fqa4"><span class="n">04</span>
+            <span class="q">How are two emergencies wanting the same junction resolved?</span>
+            <span class="ic" aria-hidden="true"></span></button></h3>
+          <div class="fqa" id="fqa4" role="region" aria-labelledby="fqb4"><div class="inner">Non-overlapping
+            windows are simply both granted. Where they overlap, arbitration runs in order: severity class, then
+            commitment — an already-active corridor beats a new one — then the smaller ETA. The loser re-routes
+            when an alternative costs little, and otherwise degrades to signal priority: an extended green
+            rather than a full preemption. There is also a hard cap on simultaneous preemptions per zone,
+            because enough corridors at once will gridlock the network they are trying to cross.</div></div>
         </div>
         <div class="fq">
-          <button class="fqb" aria-expanded="false"><span class="n">05</span>
-            <span class="q">What stops this from becoming a surveillance system?</span><span class="ic"></span></button>
-          <div class="fqa"><div>A deliberate boundary in the detection pipeline. Vision may auto-confirm traffic
-            incidents — stopped vehicles, debris, wrong-way movement, queue spillback. Any detection involving a
-            person routes to an operator and cannot dispatch anything on its own. That costs response time on
-            that class of event, and it was accepted knowingly.</div></div>
+          <h3><button class="fqb" id="fqb5" aria-expanded="false" aria-controls="fqa5"><span class="n">05</span>
+            <span class="q">What stops this from becoming a surveillance system?</span>
+            <span class="ic" aria-hidden="true"></span></button></h3>
+          <div class="fqa" id="fqa5" role="region" aria-labelledby="fqb5"><div class="inner">A deliberate
+            boundary in the detection pipeline. Vision may auto-confirm traffic incidents — stopped vehicles,
+            debris, wrong-way movement, queue spillback. Any detection involving a person routes to an operator
+            and cannot dispatch anything on its own. That costs response time on that class of event, and it was
+            accepted knowingly.</div></div>
         </div>
       </div>
 
       <aside class="stickcard rv">
-        <span class="ic"><svg width="22" height="22" viewBox="0 0 22 22" fill="none"><path d="M3 6.5A2.5 2.5 0 015.5 4h11A2.5 2.5 0 0119 6.5v9a2.5 2.5 0 01-2.5 2.5h-11A2.5 2.5 0 013 15.5v-9z" stroke="#fff" stroke-width="1.5"/><path d="M3.6 6l7.4 5.4L18.4 6" stroke="#3FE0FF" stroke-width="1.5" stroke-linecap="round"/></svg></span>
+        <span class="ic" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 22 22" fill="none"><path d="M3 6.5A2.5 2.5 0 015.5 4h11A2.5 2.5 0 0119 6.5v9a2.5 2.5 0 01-2.5 2.5h-11A2.5 2.5 0 013 15.5v-9z" stroke="#fff" stroke-width="1.5"/><path d="M3.6 6l7.4 5.4L18.4 6" stroke="#3FE0FF" stroke-width="1.5" stroke-linecap="round"/></svg></span>
         <h3><span class="dim">Still not sure?</span>Run the drill yourself.</h3>
         <p>The console injects a live incident, walks you through verification, dispatch and the corridor
           ledger, and lets you kill the optimizer to watch control degrade rather than stop.</p>
-        <a class="btn" href="live.html">Open the console <span class="arw">→</span></a>
+        <a class="btn" href="live.html">Open the console <span class="arw" aria-hidden="true">→</span></a>
       </aside>
     </div>
   </div>
@@ -741,15 +884,15 @@ footer{background:var(--dark);color:#fff;padding:clamp(50px,6vw,90px) 0 26px;mar
 <!-- ================= CTA ================= -->
 <section id="cta" style="padding-top:0">
   <div class="wrap">
-    <div class="ctac rv">
-      <div class="glow"></div>
+    <div class="ctac rv dark-surface">
+      <div class="glow" aria-hidden="true"></div>
       <div>
         <h2 class="h2"><span class="dim">See it run</span><br>before you believe it.</h2>
         <p>The operator console runs the whole pilot zone in your browser — adaptive control, the verification
           queue, live routing, the reservation ledger and the fault-injection panel.</p>
       </div>
       <div style="display:flex;gap:11px;flex-wrap:wrap;position:relative">
-        <a class="btn" href="live.html">Open the console <span class="arw">→</span></a>
+        <a class="btn" href="live.html">Open the console <span class="arw" aria-hidden="true">→</span></a>
         <a class="btn gh" href="#deploy">Architecture</a>
       </div>
     </div>
@@ -770,11 +913,12 @@ footer{background:var(--dark);color:#fff;padding:clamp(50px,6vw,90px) 0 26px;mar
         <a href="#modules">Modules</a><a href="#flow">Response flow</a>
         <a href="#deploy">Deployment</a><a href="#faq">FAQ</a></div>
       <div><h5>Built with</h5>
-        <span>SUMO · TraCI</span><span>FastAPI · Python 3.12</span>
-        <span>PostGIS · TimescaleDB</span><span>YOLO11 · ByteTrack</span></div>
+        <span class="li">SUMO · TraCI</span><span class="li">FastAPI · Python 3.12</span>
+        <span class="li">PostGIS · TimescaleDB</span><span class="li">YOLO11 · ByteTrack</span></div>
       <div><h5>Interfaces</h5>
-        <a href="live.html">Operator console</a><span>Citizen portal — planned</span>
-        <span>Field mobile app — planned</span></div>
+        <a href="live.html">Operator console</a>
+        <span class="li">Citizen portal <b class="soon">Planned</b></span>
+        <span class="li">Field mobile app <b class="soon">Planned</b></span></div>
     </div>
     <div class="wm" aria-hidden="true"><span>I</span><span>T</span><span>M</span><span>S</span></div>
     <div class="fbot">
@@ -786,26 +930,87 @@ footer{background:var(--dark);color:#fff;padding:clamp(50px,6vw,90px) 0 26px;mar
 
 <div class="dock" id="dock">
   <span class="t"><b>Explore it</b>Console or architecture</span>
-  <a class="ib" href="live.html" aria-label="Open console"><svg width="16" height="16" viewBox="0 0 18 18" fill="none"><rect x="2" y="3" width="14" height="11" rx="2" stroke="#fff" stroke-width="1.4"/><path d="M5.6 7l2 2-2 2M9.4 11H12" stroke="#3FE0FF" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
-  <a class="ib alt" href="#deploy" aria-label="Architecture"><svg width="16" height="16" viewBox="0 0 18 18" fill="none"><path d="M9 2l6 3.2v7.6L9 16l-6-3.2V5.2L9 2z" stroke="#14181A" stroke-width="1.4" stroke-linejoin="round"/><path d="M9 8.4l6-3.2M9 8.4v7.4M9 8.4L3 5.2" stroke="#14181A" stroke-width="1.4" stroke-linejoin="round"/></svg></a>
+  <a class="ib" href="live.html" aria-label="Open the operator console"><svg width="16" height="16" viewBox="0 0 18 18" fill="none" aria-hidden="true"><rect x="2" y="3" width="14" height="11" rx="2" stroke="#fff" stroke-width="1.4"/><path d="M5.6 7l2 2-2 2M9.4 11H12" stroke="#3FE0FF" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+  <a class="ib alt" href="#deploy" aria-label="Jump to architecture"><svg width="16" height="16" viewBox="0 0 18 18" fill="none" aria-hidden="true"><path d="M9 2l6 3.2v7.6L9 16l-6-3.2V5.2L9 2z" stroke="#14181A" stroke-width="1.4" stroke-linejoin="round"/><path d="M9 8.4l6-3.2M9 8.4v7.4M9 8.4L3 5.2" stroke="#14181A" stroke-width="1.4" stroke-linejoin="round"/></svg></a>
 </div>
 
+<!-- ================= MODULE DETAIL SHEET ================= -->
+<dialog class="sheet" id="sheet" aria-labelledby="sheet-h">
+  <div class="sheetin">
+    <div class="sheethead">
+      <div class="glow" aria-hidden="true"></div>
+      <button class="sheetx" id="sheetx" aria-label="Close" type="button">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="M3 3l8 8M11 3l-8 8" stroke="#fff" stroke-width="1.7" stroke-linecap="round"/></svg></button>
+      <span class="no" id="sheet-no">Module 01</span>
+      <h3 id="sheet-h">Adaptive signal control</h3>
+      <p class="sub" id="sheet-sub">Max-pressure control</p>
+    </div>
+    <div class="sheetbody">
+      <div id="sheet-copy"></div>
+      <dl class="sheetdl" id="sheet-meta"></dl>
+    </div>
+    <div class="sheetfoot">
+      <a class="btn" href="live.html">See it in the console <span class="arw" aria-hidden="true">→</span></a>
+      <button class="btn gh" type="button" data-sheet-close>Close</button>
+    </div>
+  </div>
+</dialog>
 <script>
 (function(){
 "use strict";
 var RM = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-var $ = function(s,r){ return (r||document).querySelector(s); };
+var $  = function(s,r){ return (r||document).querySelector(s); };
 var $$ = function(s,r){ return Array.prototype.slice.call((r||document).querySelectorAll(s)); };
 
-/* ---------- nav shrink + dots ---------- */
-var dock = $('#navdock');
+/* ---------- nav: shrink, mobile toggle, scroll spy ---------- */
+var dock = $('#navdock'), dots = $('#dots'), navlinks = $('#navlinks');
+
 function nscroll(){ dock.classList.toggle('shrunk', window.scrollY > 90); }
-nscroll(); window.addEventListener('scroll', nscroll, {passive:true});
-$('#dots').addEventListener('click', function(){ dock.classList.toggle('open'); });
+nscroll();
+window.addEventListener('scroll', nscroll, {passive:true});
+
+function setMenu(open){
+  dock.classList.toggle('open', open);
+  dots.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+dots.addEventListener('click', function(e){
+  e.stopPropagation();
+  setMenu(!dock.classList.contains('open'));
+});
+navlinks.addEventListener('click', function(e){ if(e.target.closest('a')) setMenu(false); });
+document.addEventListener('click', function(e){
+  if(dock.classList.contains('open') && !e.target.closest('.nav')) setMenu(false);
+});
+document.addEventListener('keydown', function(e){
+  if(e.key === 'Escape' && dock.classList.contains('open')){ setMenu(false); dots.focus(); }
+});
+
+/* scroll spy — marks the nav link whose section is currently in the reading band */
+var spyLinks = $$('#navlinks a');
+var spyMap = spyLinks.map(function(a){
+  var id = a.getAttribute('href').slice(1);
+  return { a:a, el:document.getElementById(id) };
+}).filter(function(o){ return o.el; });
+
+if(spyMap.length && 'IntersectionObserver' in window){
+  var visible = Object.create(null);
+  var spy = new IntersectionObserver(function(entries){
+    entries.forEach(function(en){ visible[en.target.id] = en.isIntersecting; });
+    var active = null;
+    for(var i = spyMap.length - 1; i >= 0; i--){ if(visible[spyMap[i].el.id]) active = spyMap[i].a; }
+    spyMap.forEach(function(o){
+      if(o.a === active) o.a.setAttribute('aria-current','true');
+      else o.a.removeAttribute('aria-current');
+    });
+  }, { rootMargin: '-45% 0px -45% 0px' });
+  spyMap.forEach(function(o){ spy.observe(o.el); });
+}
 
 /* ---------- floating dock ---------- */
 var fd = $('#dock');
-window.addEventListener('scroll', function(){ fd.classList.toggle('on', window.scrollY > 620); }, {passive:true});
+window.addEventListener('scroll', function(){
+  fd.classList.toggle('on', window.scrollY > 620);
+}, {passive:true});
 
 /* ---------- marquee ---------- */
 var stack = ['SUMO','TraCI','FastAPI','Redis Streams','Kafka','PostgreSQL','PostGIS','TimescaleDB',
@@ -814,7 +1019,7 @@ var stack = ['SUMO','TraCI','FastAPI','Redis Streams','Kafka','PostgreSQL','Post
 var mk = stack.map(function(s){ return '<span class="mq"><s></s>'+s+'</span>'; }).join('');
 $('#marq').innerHTML = mk + mk;
 
-/* ---------- reveals ---------- */
+/* ---------- reveals + counters ---------- */
 var targets = $$('.rv, .stg, .lines');
 if('IntersectionObserver' in window && !RM){
   var io = new IntersectionObserver(function(es){
@@ -833,7 +1038,9 @@ if('IntersectionObserver' in window && !RM){
 
 function countUp(root){
   $$('[data-count]', root).forEach(function(el){
-    var to = parseFloat(el.getAttribute('data-count'));
+    if(el.dataset.done) return;
+    el.dataset.done = '1';
+    var to  = parseFloat(el.getAttribute('data-count'));
     var pre = el.getAttribute('data-prefix') || '';
     var suf = el.getAttribute('data-suffix') || '';
     var dur = 1300, t0 = performance.now();
@@ -848,114 +1055,33 @@ function countUp(root){
 }
 
 /* ---------- faq ---------- */
-$$('.fq').forEach(function(fq){
+var faqs = $$('.fq');
+function openFq(fq, on){
   var b = $('.fqb',fq), a = $('.fqa',fq);
-  if(fq.classList.contains('open')) requestAnimationFrame(function(){ a.style.maxHeight = a.scrollHeight+'px'; });
-  b.addEventListener('click', function(){
+  fq.classList.toggle('open', on);
+  b.setAttribute('aria-expanded', on ? 'true' : 'false');
+  a.style.maxHeight = on ? a.scrollHeight + 'px' : null;
+}
+faqs.forEach(function(fq){
+  if(fq.classList.contains('open')) requestAnimationFrame(function(){ openFq(fq, true); });
+  $('.fqb',fq).addEventListener('click', function(){
     var was = fq.classList.contains('open');
-    $$('.fq').forEach(function(o){
-      o.classList.remove('open'); $('.fqa',o).style.maxHeight = null;
-      $('.fqb',o).setAttribute('aria-expanded','false');
-    });
-    if(!was){ fq.classList.add('open'); a.style.maxHeight = a.scrollHeight+'px';
-      b.setAttribute('aria-expanded','true'); }
+    faqs.forEach(function(o){ openFq(o, false); });
+    if(!was) openFq(fq, true);
   });
 });
-
-/* ---------- hero deck: fold / unfold ---------- */
-/* Each card has a resting offset. spread=0 stacks every card exactly on top of the
-   others (a folded deck); spread=1 fans them to rest. Scrolling pushes spread past 1
-   and flattens the tilt, so the deck keeps opening as the hero leaves. */
-var DECK = [
-  /* fx/fy/fz = folded (tight stack)   tx/ty/tz = fanned open (at rest) */
-  {fx:-24, fy:-16, fz:-46, tx:-148, ty:-84, tz:-300, rz:-9.5, sc:.90, dep:.030, br:.56, dl:.00},
-  {fx: 17, fy:-11, fz:-31, tx: 126, ty:-102, tz:-215, rz: 7.5, sc:.93, dep:.052, br:.68, dl:.08},
-  {fx: 11, fy:  9, fz:-17, tx: 188, ty:  48, tz:-125, rz: 4.5, sc:.95, dep:.074, br:.83, dl:.16},
-  {fx:  0, fy:  0, fz:  0, tx:   0, ty:   0, tz:   0, rz: 0.0, sc:1,   dep:.104, br:1,   dl:.24},
-  {fx: 64, fy: 60, fz: 58, tx: 150, ty: 138, tz: 140, rz:-4.0, sc:1,   dep:.150, br:1,   dl:.34}
-];
-var deck = $('#deck');
-var cards = deck ? $$('.c3d', deck) : [];
-var scrollY0 = 0, sy = 0, entry = 0, appear = 0, entering = false, t0 = 0, tAppear = 0;
-
-window.addEventListener('scroll', function(){ scrollY0 = window.scrollY; }, {passive:true});
-
-function startUnfold(){
-  entering = true; entry = 0; appear = 0;
-  tAppear = performance.now(); t0 = tAppear + HOLD_MS;
-}
-
-if(deck){
-  cards.forEach(function(c,i){ c.style.opacity = '0'; });
-  if('IntersectionObserver' in window && !RM){
-    var armed = true;
-    new IntersectionObserver(function(es){
-      es.forEach(function(e){
-        if(e.isIntersecting){ if(armed){ armed = false; startUnfold(); } }
-        else { armed = true; }
-      });
-    },{threshold:.2}).observe(deck);
-  } else { entry = 1; }
-}
-
-var UNFOLD_MS = 1100, HOLD_MS = 180, LAST_DL = 0.34;
-/* easeInOutCubic — anticipation, then travel you can see, then a settle */
-var ease = function(p){ return p < .5 ? 4*p*p*p : 1 - Math.pow(-2*p + 2, 3)/2; };
-/* scroll-linked fan: eases out so the cards decelerate as they reach rest */
-var unfoldEase = function(p){ return 1 - Math.pow(1 - p, 2.6); };
-
-var deckTop = 0;
-function measure(){ if(deck) deckTop = deck.getBoundingClientRect().top + window.scrollY; }
-window.addEventListener('resize', measure); window.addEventListener('load', measure); measure();
-
-function paintDeck(){
-  if(!deck) return;
-  /* Unfold progress is read straight off scroll position: at the top of the
-     page the deck is a tight stack, and it fans open in BOTH axes as you
-     travel down through the hero. */
-  var range = 780;
-  var scrollT = Math.max(0, Math.min(1, (sy - Math.max(0, deckTop - 460)) / range));
-  var unfold = Math.min(1, scrollT * 1.28);
-  var u = unfoldEase(unfold);
-
-  var rotY = -19 + scrollT*13;
-  var rotX =   9 - scrollT*6;
-
-  cards.forEach(function(c,i){
-    var d = DECK[i] || DECK[0];
-    /* entrance: staggered arrival of the folded stack, not of the fan */
-    var p = Math.max(0, Math.min(1, (entry - d.dl) / (1 - LAST_DL)));
-    var e = RM ? 1 : ease(p);
-
-    var x = (d.fx + (d.tx - d.fx) * u) * e;
-    var y = (d.fy + (d.ty - d.fy) * u) * e - sy * d.dep + (1-e)*46;
-    var z = (d.fz + (d.tz - d.fz) * u) * e;
-    var rz = d.rz * u * e;
-    var sc = d.sc * (0.93 + 0.07*e);
-
-    /* Opaque. A folded card hides the one behind it — that is what makes the
-       stack read as physical instead of as ghosted overlays. */
-    c.style.opacity = appear.toFixed(3);
-    c.style.filter = d.br < 1 ? 'brightness(' + (d.br + (1-d.br)*0.45*u).toFixed(3) + ')' : '';
-    c.style.transform =
-      'translate(-50%,-50%) translate3d(' + x.toFixed(1) + 'px,' + y.toFixed(1) + 'px,' + z.toFixed(1) + 'px)' +
-      ' rotateY(' + rotY.toFixed(2) + 'deg) rotateX(' + rotX.toFixed(2) + 'deg)' +
-      ' rotateZ(' + rz.toFixed(2) + 'deg) scale(' + sc.toFixed(3) + ')';
-  });
-}
-
-(function deckLoop(now){
-  if(!deck || !cards.length) return;     /* mockup deck retired; free the frame */
-  requestAnimationFrame(deckLoop);
-  sy += (scrollY0 - sy) * (RM ? 1 : .09);
-  if(entering){
-    appear = Math.min(1, (now - tAppear) / 420);
-    var p = Math.max(0, Math.min(1, (now - t0) / UNFOLD_MS));
-    entry = p;
-    if(p >= 1) entering = false;
-  } else if(!('IntersectionObserver' in window) || RM){ entry = 1; appear = 1; }
-  paintDeck();
-})(performance.now());
+/* an open panel's natural height changes with the column width — re-measure it */
+var fqTimer;
+window.addEventListener('resize', function(){
+  clearTimeout(fqTimer);
+  fqTimer = setTimeout(function(){
+    faqs.forEach(function(fq){
+      if(!fq.classList.contains('open')) return;
+      var a = $('.fqa',fq); a.style.maxHeight = 'none';
+      var h = a.scrollHeight; a.style.maxHeight = h + 'px';
+    });
+  }, 140);
+});
 
 /* ---------- magnetic buttons ---------- */
 if(!RM) $$('.btn').forEach(function(b){
@@ -969,14 +1095,130 @@ if(!RM) $$('.btn').forEach(function(b){
   b.addEventListener('mouseleave', function(){ b.style.transform = ''; b.style.transition = ''; });
 });
 
-/* ================= hero live network ================= */
+/* ---------- module detail sheet ----------
+   The cards advertised "View module" and did nothing. Each one now opens a
+   detail sheet; the copy below is the page's own claims about that module,
+   gathered in one place rather than scattered across the flow and the FAQ. */
+var MODULES = {
+  '1': {
+    no:'Module 01', name:'Adaptive signal control', sub:'Max-pressure control',
+    copy:[
+      'Every junction in the zone runs max-pressure control against live queue measurements rather than a fixed timetable. The controller proposes a phase; it never writes to the street directly.',
+      'If proposals go silent for ten seconds, the zone falls back to stored fixed-timer plans. The street never depends on the optimizer being alive — it only benefits when it is.'
+    ],
+    meta:[
+      ['Strategy','Max-pressure on live queue measurements'],
+      ['Scope','20 junctions across the Phase 1 zone'],
+      ['Fallback','Stored fixed-timer plans after 10 s of proposal silence'],
+      ['Events','<span class="ev">ApproachState</span><span class="ev">SignalChanged</span>']
+    ]
+  },
+  '2': {
+    no:'Module 02', name:'Anomaly-driven detection', sub:'Multi-modal fusion',
+    copy:[
+      'Detection does not wait for a phone call. A stopped vehicle holding a live lane past threshold raises a vision candidate carrying a confidence and a clip reference — while segment speed is already collapsing independently. Two signals, fused.',
+      'Fusion itself takes about two seconds; the rest of the budget is the operator, who sees the frame, the evidence breakdown and the score, then confirms or rejects. A rejection becomes a training label.',
+      'Vision may auto-confirm traffic incidents on its own. Any detection involving a person routes to an operator and cannot dispatch anything.'
+    ],
+    meta:[
+      ['Inputs','Live video, traffic pattern and sensor streams'],
+      ['May auto-confirm','Stopped vehicles, debris, wrong-way movement, queue spillback'],
+      ['Never auto-confirms','Anything involving a person — ADR-006'],
+      ['On GPU loss','Degrades to pattern-only with a raised fusion threshold'],
+      ['Events','<span class="ev">anomaly.candidate</span><span class="ev">incident.detected</span>']
+    ]
+  },
+  '3': {
+    no:'Module 03', name:'Green corridor', sub:'Reservation ledger',
+    copy:[
+      'A corridor is a ledger of time windows, not a blanket preemption. Each window opens fifteen seconds before the unit’s predicted arrival at that junction and closes behind it, handing the junction straight back to the optimizer.',
+      'Two corridors wanting the same junction with non-overlapping windows are simply both granted. Where the windows overlap, arbitration runs in order: severity class, then commitment — an already-active corridor beats a new one — then the smaller ETA.',
+      'The loser re-routes when an alternative costs little, and otherwise degrades to signal priority: an extended green rather than a full preemption. A hard cap limits simultaneous preemptions per zone, because enough corridors at once will gridlock the network they are trying to cross.'
+    ],
+    meta:[
+      ['Unit','One reservation window per junction on the route'],
+      ['Window opens','15 s before predicted arrival'],
+      ['Arbitration','Severity class → commitment → smaller ETA'],
+      ['Safety cap','Hard per-zone limit on simultaneous preemptions'],
+      ['Events','<span class="ev">route.calculated</span><span class="ev">signal.override.started</span><span class="ev">signal.override.ended</span>']
+    ]
+  },
+  '4': {
+    no:'Module 04', name:'One writer, full audit', sub:'Command authority',
+    copy:[
+      'Every strategy on the platform proposes. Exactly one component writes to a signal, and it checks the interlocks first: minimum green must have elapsed, and an active emergency corridor outranks a manual request outright.',
+      'A refused request returns a structured problem response naming the interlock and the time remaining, rather than failing silently. Accepted or refused, it lands in a hash-chained audit log with the requesting identity, the reason string and a fencing token — which is what makes every decision reconstructable after the fact.'
+    ],
+    meta:[
+      ['Writers','Exactly one, for the whole zone'],
+      ['Interlocks','Minimum green elapsed · corridor outranks manual'],
+      ['On refusal','Structured problem response naming the interlock and time remaining'],
+      ['Audit log','Hash-chained — records refusals as well as commands'],
+      ['Events','<span class="ev">SignalChanged</span><span class="ev">SignalFaulted</span>']
+    ]
+  }
+};
+
+var sheet = $('#sheet');
+if(sheet && typeof sheet.showModal === 'function'){
+  var sIn = $('.sheetin', sheet), lastTrigger = null;
+
+  function fillSheet(key){
+    var m = MODULES[key]; if(!m) return false;
+    $('#sheet-no').textContent  = m.no;
+    $('#sheet-h').textContent   = m.name;
+    $('#sheet-sub').textContent = m.sub;
+    $('#sheet-copy').innerHTML  = m.copy.map(function(p){ return '<p>'+p+'</p>'; }).join('');
+    $('#sheet-meta').innerHTML  = m.meta.map(function(r){
+      return '<div class="r"><dt>'+r[0]+'</dt><dd>'+r[1]+'</dd></div>';
+    }).join('');
+    return true;
+  }
+
+  function openSheet(key, trigger){
+    if(!fillSheet(key)) return;
+    lastTrigger = trigger || null;
+    sheet.showModal();
+    document.body.style.overflow = 'hidden';
+    sIn.scrollTop = 0;
+    $('#sheetx').focus({ preventScroll:true });
+  }
+
+  function closeSheet(){
+    document.body.style.overflow = '';
+    sheet.close();
+  }
+
+  $$('.mod').forEach(function(card){
+    card.addEventListener('click', function(){ openSheet(card.getAttribute('data-mod'), card); });
+  });
+
+  $('#sheetx').addEventListener('click', closeSheet);
+  $$('[data-sheet-close]', sheet).forEach(function(b){ b.addEventListener('click', closeSheet); });
+  /* the dialog element fills the viewport, so a click that misses the panel is the backdrop */
+  sheet.addEventListener('click', function(e){ if(!e.target.closest('.sheetin')) closeSheet(); });
+  /* covers Esc, which closes natively without firing our handler */
+  sheet.addEventListener('close', function(){
+    document.body.style.overflow = '';
+    if(lastTrigger) lastTrigger.focus({ preventScroll:true });
+    lastTrigger = null;
+  });
+}
+
+/* ============================================================================
+   Illustrated network — a stylised grid where signals switch phase, queues
+   build on whichever approach is being held, and a green corridor periodically
+   sweeps across several junctions ahead of a unit. Decorative, and paused
+   whenever it is off-screen so it costs nothing while you read the rest.
+   ========================================================================== */
 var NS='http://www.w3.org/2000/svg';
 function E(n,a){ var e=document.createElementNS(NS,n); for(var k in a) e.setAttribute(k,a[k]); return e; }
 var svg = document.getElementById('netstrip');
 if(svg){
+  var W = 900, H = 420;
   var NC=5, NR=4, nodes=[], edges=[], adj=[];
   for(var r=0;r<NR;r++) for(var c=0;c<NC;c++)
-    nodes.push({x:90+c*180, y:84+r*120, c:c, r:r, phase:(c+r)%2?'NS':'EW', t:Math.random()*8, pre:false});
+    nodes.push({x:90+c*180, y:66+r*96, c:c, r:r, phase:(c+r)%2?'NS':'EW', t:Math.random()*8, pre:false});
   for(var i=0;i<nodes.length;i++) adj.push([]);
   function link(a,b,ori){
     var A=nodes[a],B=nodes[b];
@@ -992,8 +1234,8 @@ if(svg){
     veh.push({e:ei,dir:Math.random()<.5?1:-1,u:Math.random(),sp:34+Math.random()*16,stop:false});
   }
 
-  for(var gx=0; gx<=900; gx+=45) svg.appendChild(E('line',{x1:gx,y1:0,x2:gx,y2:520,stroke:'#141A1D','stroke-width':1}));
-  for(var gy=0; gy<=520; gy+=45) svg.appendChild(E('line',{x1:0,y1:gy,x2:900,y2:gy,stroke:'#141A1D','stroke-width':1}));
+  for(var gx=0; gx<=W; gx+=45) svg.appendChild(E('line',{x1:gx,y1:0,x2:gx,y2:H,stroke:'#141A1D','stroke-width':1}));
+  for(var gy=0; gy<=H; gy+=45) svg.appendChild(E('line',{x1:0,y1:gy,x2:W,y2:gy,stroke:'#141A1D','stroke-width':1}));
 
   var eEl = edges.map(function(e){
     var A=nodes[e.a],B=nodes[e.b];
@@ -1030,9 +1272,7 @@ if(svg){
     return eids.length>=3 ? {path:path,eids:eids,leg:0,u:0} : null;
   }
 
-  var last=performance.now();
-  function frame(now){
-    var dt=Math.min(.05,(now-last)/1000); last=now;
+  function step(dt){
     var groups={};
     veh.forEach(function(vv,ix){ var k=vv.e+':'+(vv.dir>0?1:0); (groups[k]=groups[k]||[]).push(ix); });
 
@@ -1124,9 +1364,35 @@ if(svg){
       vEl[ix].setAttribute('cy', A.y+(B.y-A.y)*u + ny*off);
       vEl[ix].setAttribute('fill', vv.stop?'#5F7480':'#9FB6C0');
     });
-    if(!RM) requestAnimationFrame(frame);
   }
-  if(RM) frame(performance.now()); else requestAnimationFrame(frame);
+
+  /* one settled frame for reduced-motion and for the paused state */
+  if(RM){
+    for(var w=0; w<90; w++) step(1/30);
+  } else {
+    var running=false, last=0, rafId=0;
+    function frame(now){
+      if(!running) return;
+      rafId = requestAnimationFrame(frame);
+      var dt = Math.min(.05,(now-last)/1000); last=now;
+      step(dt);
+    }
+    function setRunning(on){
+      if(on === running) return;
+      running = on;
+      if(on){ last = performance.now(); rafId = requestAnimationFrame(frame); }
+      else cancelAnimationFrame(rafId);
+    }
+    if('IntersectionObserver' in window){
+      new IntersectionObserver(function(es){
+        setRunning(es[0].isIntersecting && !document.hidden);
+      },{threshold:0}).observe(svg);
+    } else setRunning(true);
+    document.addEventListener('visibilitychange', function(){
+      if(document.hidden) setRunning(false);
+      else if(svg.getBoundingClientRect().top < window.innerHeight) setRunning(true);
+    });
+  }
 }
 })();
 </script>
@@ -1270,15 +1536,14 @@ if(svg){
     }
   }
 
-  function boot(){ measure(); prog = clamp01((window.pageYOffset - range.start) / (range.end - range.start));
-    if(!raf) raf = requestAnimationFrame(paint); }
+  function boot(){
+    measure();
+    prog = clamp01((window.pageYOffset - range.start) / (range.end - range.start));
+    if(!raf) raf = requestAnimationFrame(paint);
+  }
   window.addEventListener('load', boot);
   window.addEventListener('resize', measure);
   if(document.readyState === 'complete') boot(); else setTimeout(boot, 350);
-
-  window.__modFold = { measure: measure, cards: cards,
-    progress: function(){ return clamp01((window.pageYOffset - range.start)/(range.end - range.start)); },
-    range: function(){ return range; }, anchor: function(){ return anchor; } };
 })();
 </script>
 </body>
