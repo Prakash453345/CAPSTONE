@@ -30,7 +30,7 @@ export function RouteError() {
         <h2 className="text-base font-semibold tracking-tight">{heading}</h2>
         <p className="mx-auto mt-1.5 text-sm text-muted-foreground">{detail}</p>
         <div className="mt-4 flex justify-center gap-2">
-          <Button variant="default" onClick={() => navigate("/")}>
+          <Button variant="default" onClick={() => navigate("/console")}>
             Back to Command Center
           </Button>
           <Button variant="subtle" onClick={() => navigate(0)}>

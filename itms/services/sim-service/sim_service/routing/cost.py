@@ -10,8 +10,15 @@
 Every weight and reference is an `itms_domain.EmergencyRoutingConfig` field --
 nothing here is a magic number. Each term is normalised to roughly 0..1 before
 the weight applies, so a large raw scale (metres, seconds) cannot dominate a
-bounded one (a 0..1 congestion index). BLOCKED-severity edges are removed from
-the graph before search; if one is costed anyway this returns +inf.
+bounded one (a 0..1 congestion index). BLOCKED-severity edges are excluded from
+the *primary* search (`RoutePlanner.plan`'s first pass, over
+`graph.without_edges(blocked)`) rather than costed here at all. This model
+never returns an infinite cost for them: `RoutePlanner` needs a finite score
+for its last-resort fallback pass -- the one route through a blocked edge when
+there is no way around it -- so the operator gets an explainable, still-useful
+route instead of a dead end. `anomaly_norm` carries a large fixed penalty for
+BLOCKED (`config.blocked_fallback_anomaly_norm`) so that pass still strongly
+prefers any real alternative when one exists.
 """
 
 from __future__ import annotations
@@ -74,17 +81,6 @@ class RouteCostModel:
         c = self.config
         cond = cond or EdgeConditions()
 
-        if cond.is_blocked:
-            return EdgeCostParts(
-                travel_time_s=math.inf,
-                congestion_cost=math.inf,
-                anomaly_cost=math.inf,
-                signal_delay_s=0.0,
-                disruption_cost=0.0,
-                reliability_cost=0.0,
-                weighted_total=math.inf,
-            )
-
         # --- travel time (congestion slows you down) ---
         speed_frac = (
             cond.mean_speed_frac
@@ -98,12 +94,18 @@ class RouteCostModel:
         # --- congestion ---
         congestion_norm = _clamp01(cond.congestion)
 
-        # --- anomaly (partial; BLOCKED handled above) ---
+        # --- anomaly ---
         anomaly_norm = 0.0
         if cond.has_active_anomaly:
             penalty = c.severity_penalty.get(cond.anomaly_severity or "", 1.0)
-            if not math.isfinite(penalty):
-                anomaly_norm = 10.0  # defensive: BLOCKED slipped through
+            if cond.is_blocked or not math.isfinite(penalty):
+                # BLOCKED edges are excluded from the primary search, not costed
+                # -- this only runs in RoutePlanner's last-resort fallback pass,
+                # when crossing one is the only way through. Keep it a large
+                # fixed penalty rather than +inf: a route through it must stay
+                # comparable/scorable so the UI can show *why* it's discouraged,
+                # not just that it's unusable.
+                anomaly_norm = c.blocked_fallback_anomaly_norm
             else:
                 anomaly_norm = (penalty - 1.0) + c.impact_penalty_scale * _clamp01(
                     cond.anomaly_impact

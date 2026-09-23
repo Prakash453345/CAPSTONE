@@ -65,18 +65,10 @@ def run_live(
     proposal fed to the arbiter -- never a direct cabinet command).
     """
     topics = command_topics or DEFAULT_COMMAND_TOPICS
-    setup = load_corridor(demand)
     bus = RedisStreamsSyncBus(redis_url)
     consumer = RedisStreamsSyncConsumer(
         topics, group=CONSUMER_GROUP, consumer="live-1", url=redis_url
     )
-    graph = RoadGraph.from_network(NET_PATH)
-    anomalies = OperatorAnomalyController()
-    corridor = CorridorController(graph)
-    emergency = EmergencyController(graph, anomalies, corridor_controller=corridor)
-    handler = command_handler or _build_dispatch(anomalies, emergency)
-
-    drained = 0
 
     def publish(topic: str, event_type: str, payload: dict, key: str) -> None:
         bus.publish(
@@ -86,71 +78,89 @@ def run_live(
             ),
         )
 
-    def on_tick(step: int, sim_time: float) -> None:
-        nonlocal drained
-        for msg in consumer.drain():
-            try:
-                envelope = decode_envelope(msg.raw)
-            except Exception:
-                log.exception(
-                    "undecodable command on %s (%s) -- acking to skip", msg.topic, msg.message_id
-                )
-                consumer.ack(msg.topic, msg.message_id)
-                continue
-            try:
-                handler(envelope, step, sim_time)
-            except Exception:
-                log.exception("command handler raised for %s", envelope.get("event_type"))
-            finally:
-                consumer.ack(msg.topic, msg.message_id)
-                drained += 1
-        anomalies.tick(step, sim_time)
-        emergency.tick(step, sim_time)
-        for p in anomalies.drain_events():
-            publish(ANOMALY_TOPIC, "AnomalyUpdated", p, p["edge_id"])
-        for p in emergency.drain_events():
-            publish(EMERGENCY_REQUEST_TOPIC, "EmergencyRequestUpdated", p, p["request_id"])
-        for p in emergency.drain_vehicle_events():
-            publish(EMERGENCY_VEHICLE_TOPIC, "EmergencyVehicleUpdated", p, p["vehicle_id"])
-        for p in corridor.drain_events():
-            publish(GREEN_CORRIDOR_TOPIC, "GreenCorridorUpdated", p, p["request_id"])
+    run_number = 0
+    while True:
+        run_number += 1
+        setup = load_corridor(demand)
+        graph = RoadGraph.from_network(NET_PATH)
+        anomalies = OperatorAnomalyController()
+        corridor = CorridorController(graph)
+        emergency = EmergencyController(graph, anomalies, corridor_controller=corridor)
+        handler = command_handler or _build_dispatch(anomalies, emergency)
+        drained = 0
 
-    log.info(
-        "live corridor starting: demand=%s realtime_factor=%.1f, draining %s, publishing "
-        "traffic.vehicle-positions / traffic.updated / signal.changed / %s / %s / %s / %s",
-        demand,
-        realtime_factor,
-        topics,
-        ANOMALY_TOPIC,
-        EMERGENCY_REQUEST_TOPIC,
-        EMERGENCY_VEHICLE_TOPIC,
-        GREEN_CORRIDOR_TOPIC,
-    )
-    try:
-        summary = run_controlled_scenario(
-            setup.sumocfg_path,
-            setup.configs,
-            setup.strategy,
-            seed=seed,
-            step_length=step_length,
-            max_steps=max_steps,
-            link_lanes=setup.link_lanes,
-            receiving_lanes=setup.receiving_lanes,
-            vtype_pcu=setup.vtype_pcu,
-            bus=bus,
-            publish_traffic_state=True,
-            on_tick=on_tick,
-            pace_realtime_factor=realtime_factor,
-            preempt_source=corridor.preemption_plan,
-        )
-    finally:
-        anomalies.restore_all()
-        consumer.close()
-        bus.close()
+        def on_tick(step: int, sim_time: float) -> None:
+            nonlocal drained
+            for msg in consumer.drain():
+                try:
+                    envelope = decode_envelope(msg.raw)
+                except Exception:
+                    log.exception(
+                        "undecodable command on %s (%s) -- acking to skip", msg.topic, msg.message_id
+                    )
+                    consumer.ack(msg.topic, msg.message_id)
+                    continue
+                try:
+                    handler(envelope, step, sim_time)
+                except Exception:
+                    log.exception("command handler raised for %s", envelope.get("event_type"))
+                finally:
+                    consumer.ack(msg.topic, msg.message_id)
+                    drained += 1
+            try:
+                anomalies.tick(step, sim_time)
+            except Exception:
+                log.exception("anomaly controller tick raised at step %s", step)
+            try:
+                emergency.tick(step, sim_time)
+            except Exception:
+                log.exception("emergency controller tick raised at step %s", step)
+            for p in anomalies.drain_events():
+                publish(ANOMALY_TOPIC, "AnomalyUpdated", p, p["edge_id"])
+            for p in emergency.drain_events():
+                publish(EMERGENCY_REQUEST_TOPIC, "EmergencyRequestUpdated", p, p["request_id"])
+            for p in emergency.drain_vehicle_events():
+                publish(EMERGENCY_VEHICLE_TOPIC, "EmergencyVehicleUpdated", p, p["vehicle_id"])
+            for p in corridor.drain_events():
+                publish(GREEN_CORRIDOR_TOPIC, "GreenCorridorUpdated", p, p["request_id"])
 
-    summary["commands_drained"] = drained
-    log.info("live corridor finished: %s", summary)
-    return summary
+        if run_number == 1:
+            log.info(
+                "live corridor starting: demand=%s realtime_factor=%.1f, draining %s, publishing "
+                "traffic.vehicle-positions / traffic.updated / signal.changed / %s / %s / %s / %s",
+                demand,
+                realtime_factor,
+                topics,
+                ANOMALY_TOPIC,
+                EMERGENCY_REQUEST_TOPIC,
+                EMERGENCY_VEHICLE_TOPIC,
+                GREEN_CORRIDOR_TOPIC,
+            )
+        else:
+            log.info("live corridor restarting (run #%d, demand=%s)", run_number, demand)
+
+        try:
+            summary = run_controlled_scenario(
+                setup.sumocfg_path,
+                setup.configs,
+                setup.strategy,
+                seed=seed,
+                step_length=step_length,
+                max_steps=max_steps,
+                link_lanes=setup.link_lanes,
+                receiving_lanes=setup.receiving_lanes,
+                vtype_pcu=setup.vtype_pcu,
+                bus=bus,
+                publish_traffic_state=True,
+                on_tick=on_tick,
+                pace_realtime_factor=realtime_factor,
+                preempt_source=corridor.preemption_plan,
+            )
+        finally:
+            anomalies.restore_all()
+
+        summary["commands_drained"] = drained
+        log.info("live corridor run #%d finished: %s -- restarting", run_number, summary)
 
 
 def _build_dispatch(

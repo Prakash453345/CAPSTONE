@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { AlertTriangle, Ambulance, ScanEye, Siren } from "lucide-react";
 import { useMapStore } from "@/store/mapStore";
-import { PRESET_UNITS, selectActiveRequests, useEmergencyStore } from "@/store/emergencyStore";
+import { PRESET_UNITS, useActiveRequests, useEmergencyStore } from "@/store/emergencyStore";
 import { useIncidentStore } from "@/store/incidentStore";
 import { cn } from "@/utils/cn";
 
@@ -22,7 +22,7 @@ export function CommandActionBar() {
   const startDraft = useEmergencyStore((s) => s.startDraft);
   const clearDraft = useEmergencyStore((s) => s.clearDraft);
   const selectRequest = useEmergencyStore((s) => s.selectRequest);
-  const activeRequests = useEmergencyStore(selectActiveRequests);
+  const activeRequests = useActiveRequests();
   const activeAnomalies = useIncidentStore(
     (s) => s.anomalies.filter((a) => a.status === "active").length,
   );
@@ -36,7 +36,7 @@ export function CommandActionBar() {
 
   const openActiveEmergency = () => {
     if (activeRequests.length === 1) selectRequest(activeRequests[0].id);
-    navigate("/emergency");
+    navigate("/console/emergency");
   };
 
   return (
@@ -60,7 +60,7 @@ export function CommandActionBar() {
         icon={ScanEye}
         label="View active incidents"
         count={activeAnomalies}
-        onClick={() => navigate("/anomalies")}
+        onClick={() => navigate("/console/anomalies")}
       />
       <ActionButton
         icon={Siren}

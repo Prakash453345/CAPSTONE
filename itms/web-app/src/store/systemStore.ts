@@ -35,7 +35,7 @@ const emptySummary: SystemSummary = {
 
 export const useSystemStore = create<SystemState>((set) => ({
   connectionStatus: "connecting",
-  dataMode: "simulation",
+  dataMode: "live",
   viewMode: "single",
   summary: emptySummary,
 

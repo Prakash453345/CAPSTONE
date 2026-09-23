@@ -10,6 +10,7 @@ from itms_domain import Anomaly, AnomalySeverity, AnomalySource, AnomalyType
 from sim_service.live import emergency_control as ec
 from sim_service.live.emergency_control import EmergencyController
 from sim_service.routing.graph import EdgeInfo, GraphEdge, RoadGraph
+from sim_service.routing.planner import NoRouteError
 
 
 def _edge(eid: str, length: float = 100.0, speed: float = 10.0) -> EdgeInfo:
@@ -88,6 +89,56 @@ def test_a_blocked_short_branch_routes_around_it(patched_edges):
     c.handle_create(_create_payload(), step=1, sim_time_s=1.0)
     (evt,) = c.drain_events()
     assert evt["route"]["edges"] == ["S", "B", "T"]
+
+
+def test_both_branches_blocked_still_reaches_route_ready_forced_through(patched_edges):
+    """Neither branch avoids the blockage -- this must still route (as the
+    operator's only option) rather than cancel the mission."""
+    blocked_both = [
+        Anomaly.create(
+            anomaly_id="an-a", source=AnomalySource.OPERATOR, anomaly_type=AnomalyType.LANE_BLOCKAGE,
+            severity=AnomalySeverity.BLOCKED, edge_id="A", at_ms=1, estimated_impact=1.0,
+        ),
+        Anomaly.create(
+            anomaly_id="an-b", source=AnomalySource.OPERATOR, anomaly_type=AnomalyType.LANE_BLOCKAGE,
+            severity=AnomalySeverity.BLOCKED, edge_id="B", at_ms=1, estimated_impact=1.0,
+        ),
+    ]
+    c = EmergencyController(_diamond(), _FakeAnomalies(blocked_both))
+    c.handle_create(_create_payload(), step=1, sim_time_s=1.0)
+    (evt,) = c.drain_events()
+    assert evt["state"] == "ROUTE_READY"
+    assert evt["route"] is not None
+    assert evt["route"]["forced_through"]
+    assert evt["route"]["reliable"] is False
+    assert c.active_requests()[0].state.name == "ROUTE_READY"
+
+
+def test_recalculate_failure_holds_the_route_instead_of_crashing(patched_edges, monkeypatch):
+    """Regression: a planning failure on RECALCULATE (or the background
+    monitor) used to be treated like the *initial* routing attempt --
+    applying ROUTE_FAILED from ROUTE_READY, which the state machine doesn't
+    allow, raising IllegalRequestTransition and taking the whole sim-service
+    tick down with it. It must now hold the existing route instead."""
+    c = EmergencyController(_diamond(), _FakeAnomalies())
+    c.handle_create(_create_payload(), step=1, sim_time_s=1.0)
+    c.drain_events()
+    assert c.active_requests()[0].state.name == "ROUTE_READY"
+
+    monkeypatch.setattr(
+        c.planner, "plan",
+        lambda *a, **k: (_ for _ in ()).throw(NoRouteError("no route is currently available")),
+    )
+
+    c.handle_command(
+        {"request_id": "er-1", "action": "RECALCULATE", "requested_at": 2_000_000},
+        step=2, sim_time_s=2.0,
+    )
+
+    (evt,) = c.drain_events()
+    assert evt["state"] == "ROUTE_READY"           # held, never cancelled
+    assert "reroute held" in evt["detail"]
+    assert c.active_requests()[0].state.name == "ROUTE_READY"
 
 
 def test_unreachable_destination_fails_the_request_and_releases_the_vehicle(patched_edges):

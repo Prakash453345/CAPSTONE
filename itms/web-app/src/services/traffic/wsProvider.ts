@@ -57,6 +57,7 @@ import type {
 } from "@/services/traffic/types";
 import { postCommand, type CommandResult, type OperatorCommand } from "@/services/traffic/commands";
 import {
+  inferVehicleType,
   mapCorridor,
   mapRoute,
   mapVehicleLive,
@@ -103,6 +104,7 @@ interface VehEntry {
   speedMps: number;
   heading: number;
   edgeId: string;
+  type: Vehicle["type"];
   at: number;
 }
 interface EdgeEntry {
@@ -142,6 +144,8 @@ export function createWebSocketProvider(): TrafficDataProvider {
   let snapshotTimer: number | null = null;
   let reconnectTimer: number | null = null;
   let reconnectTries = 0;
+  // Receipt time anchors per-entity expiry only. It is deliberately *not*
+  // connection health: a quiet but open WebSocket is still a live connection.
   let lastMessageAt = 0;
   let status: ProviderStatus = "offline";
   let stopped = true;
@@ -164,6 +168,7 @@ export function createWebSocketProvider(): TrafficDataProvider {
           speedMps: Number(p.speed_mps),
           heading: Number(p.heading_deg),
           edgeId: String(p.edge_id),
+          type: inferVehicleType(id, p.vtype ?? p.vehicle_class ?? p.type),
           at: lastMessageAt,
         });
         break;
@@ -336,7 +341,7 @@ export function createWebSocketProvider(): TrafficDataProvider {
     for (const [id, v] of vehicles) {
       vehList.push({
         id,
-        type: "car", // backend does not carry a vehicle class yet
+        type: v.type,
         latitude: v.lat,
         longitude: v.lon,
         speed: Math.max(0, v.speedMps) * 3.6,
@@ -414,16 +419,9 @@ export function createWebSocketProvider(): TrafficDataProvider {
   }
 
   function emitSnapshot() {
-    // Flag a stall so the UI can show "reconnecting" without dropping the socket.
-    if (
-      ws?.readyState === WebSocket.OPEN &&
-      lastMessageAt > 0 &&
-      Date.now() - lastMessageAt > 5_000
-    ) {
-      setStatus("reconnecting");
-    } else if (ws?.readyState === WebSocket.OPEN && status === "reconnecting") {
-      setStatus("online");
-    }
+    // Connection status belongs to the transport lifecycle (`onopen`,
+    // `onclose`, `onerror`), not the event cadence. SUMO may legitimately be
+    // quiet; an open Live socket must stay Online in that interval.
     const snap = buildSnapshot();
     for (const l of snapshotListeners) l(snap);
   }

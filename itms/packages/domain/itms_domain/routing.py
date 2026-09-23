@@ -87,6 +87,18 @@ class EmergencyRoutingConfig:
     # --- multi-route ---
     max_alternatives: int = 2
 
+    # --- last-resort routing ---
+    # `RoutePlanner.plan`'s primary pass always excludes BLOCKED edges. If that
+    # leaves no path at all -- the blockage sits on the only way through --
+    # it retries once allowing them, so a real dispatch never dead-ends over
+    # one bad segment. This is the finite anomaly-cost stand-in a BLOCKED edge
+    # gets in that fallback pass: large enough that any real alternative always
+    # scores lower (so the primary pass still wins whenever one exists), but
+    # finite so the resulting route has a displayable ETA/score instead of
+    # infinity. The route is always marked `reliable=False` and its
+    # `forced_through` edges are reported so the UI can warn explicitly.
+    blocked_fallback_anomaly_norm: float = 10.0
+
     # --- continuous re-routing ---
     reroute_cost_increase_frac: float = 0.35  # recompute if remaining cost jumps this much
     reroute_cooldown_s: float = 30.0          # never recompute more often than this
@@ -120,6 +132,10 @@ class EmergencyRoutingConfig:
                 problems.append(f"severity_penalty missing key {key!r}")
         if self.reroute_cooldown_s < 0:
             problems.append("reroute_cooldown_s must be >= 0")
+        if self.blocked_fallback_anomaly_norm <= 0 or not math.isfinite(
+            self.blocked_fallback_anomaly_norm
+        ):
+            problems.append("blocked_fallback_anomaly_norm must be finite and > 0")
         if self.corridor_max_simultaneous < 1:
             problems.append("corridor_max_simultaneous must be >= 1")
         if not 0.0 < self.reliability_reject_threshold:
@@ -184,6 +200,10 @@ class RouteResult:
     reliable: bool
     weights_used: Mapping[str, float] = field(default_factory=dict)
     rank: int = 0  # 0 = recommended, 1.. = alternatives
+    # Edges this route had to cross despite being flagged BLOCKED, because no
+    # alternative existed at all -- `RoutePlanner.plan`'s last-resort fallback.
+    # Empty on every ordinary route. Non-empty implies `reliable is False`.
+    forced_through: tuple[str, ...] = ()
 
     @property
     def score(self) -> float:
@@ -199,6 +219,7 @@ class RouteResult:
             "signalised_intersections": list(self.signalised_intersections),
             "congested_segments": list(self.congested_segments),
             "anomalous_segments_avoided": list(self.anomalous_segments_avoided),
+            "forced_through": list(self.forced_through),
             "reliable": self.reliable,
             "rank": self.rank,
             "cost": self.cost.as_dict(),

@@ -90,7 +90,7 @@ export function ActivityFeed({ className }: { className?: string }) {
                 r={row.item}
                 onClick={() => {
                   selectRequest(row.item.id);
-                  navigate("/emergency");
+                  navigate("/console/emergency");
                 }}
               />
             ),

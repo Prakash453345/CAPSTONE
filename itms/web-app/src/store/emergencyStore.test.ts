@@ -42,6 +42,7 @@ function route(rank: number, edges: string[], score: number): EmergencyRouteView
     signalisedIntersections: [],
     congestedSegments: [],
     anomalousSegmentsAvoided: [],
+    forcedThrough: [],
     reliable: true,
     cost: {
       travelTimeS: 90,

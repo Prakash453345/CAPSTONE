@@ -2,6 +2,8 @@ import { useState } from "react";
 import { ChevronDown } from "lucide-react";
 import {
   ANOMALY_SEVERITY_COLOR,
+  CORRIDOR_ACCENT_COLOR,
+  EV_ROUTE_COLOR,
   SIGNAL_COLOR,
   VEHICLE_COLOR,
 } from "@/components/map/mapColors";
@@ -9,12 +11,14 @@ import { cn } from "@/utils/cn";
 
 const ROWS: Array<{ label: string; swatch: React.ReactNode }> = [
   { label: "Car", swatch: <Dot color={VEHICLE_COLOR.car} /> },
+  { label: "Motorcycle", swatch: <Dot color={VEHICLE_COLOR.motorcycle} /> },
   { label: "Bus", swatch: <Dot color={VEHICLE_COLOR.bus} /> },
   { label: "Truck", swatch: <Dot color={VEHICLE_COLOR.truck} /> },
-  { label: "Emergency", swatch: <Dot color={VEHICLE_COLOR.ambulance} /> },
+  { label: "Emergency vehicle", swatch: <Dot color={VEHICLE_COLOR.ambulance} /> },
+  { label: "Emergency route (optimal)", swatch: <Line color={EV_ROUTE_COLOR} /> },
+  { label: "Green corridor / preemption", swatch: <Ring color={CORRIDOR_ACCENT_COLOR} /> },
   { label: "Signal — under control", swatch: <Dot color={SIGNAL_COLOR.green} /> },
   { label: "Signal — idle / no data", swatch: <Dot color={SIGNAL_COLOR.red} /> },
-  { label: "Corridor preemption", swatch: <Ring color="#5fd0ff" /> },
   { label: "Signal fault", swatch: <Ring color="#ffa726" /> },
   { label: "Anomaly", swatch: <Dot color={ANOMALY_SEVERITY_COLOR.high} /> },
   { label: "Blocked road", swatch: <Dot color={ANOMALY_SEVERITY_COLOR.blocked} /> },
@@ -77,6 +81,15 @@ function Ring({ color }: { color: string }) {
     <span
       className="size-2.5 shrink-0 rounded-full border-2"
       style={{ borderColor: color }}
+    />
+  );
+}
+
+function Line({ color }: { color: string }) {
+  return (
+    <span
+      className="h-1 w-4 shrink-0 rounded-full"
+      style={{ backgroundColor: color }}
     />
   );
 }

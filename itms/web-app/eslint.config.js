@@ -5,7 +5,10 @@ import reactRefresh from "eslint-plugin-react-refresh";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["dist", "node_modules"] },
+  // TacticalGlobe3D.js is a third-party Framer asset vendored verbatim
+  // (see its header comment) — not ours to lint or reformat. The rest of
+  // src/vendor (the "framer" shim, its ambient types) is ours as normal.
+  { ignores: ["dist", "node_modules", "src/vendor/TacticalGlobe3D.js"] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ["**/*.{ts,tsx}"],

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { AlertTriangle, X, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { SimModeNotice } from "@/components/map/SimModeNotice";
 import { cn } from "@/utils/cn";
 import { CommandError, postCommand } from "@/services/traffic/commands";
 import type { AnomalyKind, AnomalySeverity } from "@/types";
@@ -93,6 +94,8 @@ export function CreateAnomalyPanel({
       </div>
 
       <div className="space-y-3 p-3">
+        <SimModeNotice />
+
         <div>
           <FieldLabel>Location</FieldLabel>
           <div className="rounded-md border border-border bg-surface px-2.5 py-1.5 font-mono text-xs text-foreground">

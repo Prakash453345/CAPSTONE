@@ -12,6 +12,7 @@
 import type { Feature, LineString, Point } from "geojson";
 import { edgeById, junctionById } from "@/data/network";
 import { colorForRequest } from "@/components/map/emergencyColors";
+import { CORRIDOR_ACCENT_COLOR, EV_ROUTE_COLOR } from "@/components/map/mapColors";
 import {
   isTerminalRequest,
   requestRoutes,
@@ -60,7 +61,7 @@ export function buildRouteFeatures(
   for (const req of requests) {
     if (isTerminalRequest(req)) continue;
     const selected = req.id === selectedRequestId;
-    const color = colorForRequest(req.id);
+    const color = EV_ROUTE_COLOR;
     const routes = selected ? requestRoutes(req) : req.route ? [req.route] : [];
     const mainIdx = selected ? (routes[previewRank] ? previewRank : 0) : 0;
     routes.forEach((rt, i) => {
@@ -178,7 +179,7 @@ export function buildCorridorFeatures(
   for (const req of requests) {
     if (isTerminalRequest(req) || !req.corridor) continue;
     const selected = req.id === selectedRequestId;
-    const color = colorForRequest(req.id);
+    const color = CORRIDOR_ACCENT_COLOR;
     const passed = new Set(req.corridor.passedIntersections);
     for (const r of req.corridor.reservations) {
       const j = junctionById.get(r.intersectionId);

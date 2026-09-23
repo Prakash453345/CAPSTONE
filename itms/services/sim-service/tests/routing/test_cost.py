@@ -43,9 +43,19 @@ def test_congestion_raises_travel_time_and_adds_a_congestion_term():
     assert jam.weighted_total > free.weighted_total
 
 
-def test_blocked_severity_is_infinite():
-    parts = _model().edge_cost(_EDGE, EdgeConditions(anomaly_severity="blocked"))
-    assert math.isinf(parts.weighted_total)
+def test_blocked_severity_is_a_large_but_finite_penalty():
+    """BLOCKED edges are excluded structurally by `RoutePlanner`'s primary
+    search pass (`graph.without_edges`) -- this cost model never needs to
+    return +inf for one. Only the planner's last-resort fallback pass (no
+    alternative exists at all) ever costs a BLOCKED edge, and it needs a
+    finite, displayable number: a large penalty that dominates any ordinary
+    route, but not infinity."""
+    free = _model().edge_cost(_EDGE, EdgeConditions())
+    high = _model().edge_cost(_EDGE, EdgeConditions(anomaly_severity="high", anomaly_impact=1.0))
+    blocked = _model().edge_cost(_EDGE, EdgeConditions(anomaly_severity="blocked"))
+    assert math.isfinite(blocked.weighted_total)
+    assert math.isfinite(blocked.travel_time_s)
+    assert blocked.weighted_total > high.weighted_total > free.weighted_total
 
 
 def test_partial_anomaly_penalty_is_ordered_by_severity():

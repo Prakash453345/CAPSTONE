@@ -56,10 +56,10 @@ class RedisStreamsBus:
         message_id = await self._redis.xadd(topic, {"raw": raw})
         return message_id.decode() if isinstance(message_id, bytes) else message_id
 
-    async def _ensure_group(self, topic: str, group: str) -> None:
+    async def _ensure_group(self, topic: str, group: str, *, start_id: str = "0") -> None:
         try:
             await self._redis.xgroup_create(
-                name=topic, groupname=group, id="0", mkstream=True
+                name=topic, groupname=group, id=start_id, mkstream=True
             )
         except redis.ResponseError as exc:
             if "BUSYGROUP" not in str(exc):
@@ -72,9 +72,10 @@ class RedisStreamsBus:
         group: str,
         consumer: str,
         block_ms: int = 5000,
+        start_id: str = "0",
     ) -> AsyncIterator[Message]:
         for topic in topics:
-            await self._ensure_group(topic, group)
+            await self._ensure_group(topic, group, start_id=start_id)
 
         streams = {topic: ">" for topic in topics}
         while True:
@@ -103,7 +104,7 @@ class RedisStreamsBus:
                 if "NOGROUP" not in str(exc):
                     raise
                 for topic in topics:
-                    await self._ensure_group(topic, group)
+                    await self._ensure_group(topic, group, start_id=start_id)
                 continue
             except (redis.TimeoutError, redis.ConnectionError):
                 # A blocking XREADGROUP that elapses with nothing to return is a

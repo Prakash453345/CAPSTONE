@@ -16,9 +16,9 @@ function useActiveWorkspaceLabel(viewMode: ViewMode): string {
   if (viewMode === "split") return "Split View · Anomalies + Traffic";
   const match =
     [...NAV_ITEMS]
-      .filter((i) => i.path !== "/")
+      .filter((i) => i.path !== "/console")
       .find((i) => pathname.startsWith(i.path)) ??
-    NAV_ITEMS.find((i) => i.path === "/");
+    NAV_ITEMS.find((i) => i.path === "/console");
   return match?.label ?? "Command Center";
 }
 

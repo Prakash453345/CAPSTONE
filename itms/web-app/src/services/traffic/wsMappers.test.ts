@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  inferVehicleType,
   mapCorridor,
   mapRoute,
   mapVehicleLive,
@@ -41,6 +42,7 @@ describe("mapRoute", () => {
       signalised_intersections: ["J1"],
       congested_segments: ["B"],
       anomalous_segments_avoided: ["X"],
+      forced_through: ["B"],
       reliable: true,
       cost_travel_time_s: 90,
       cost_congestion: 1.2,
@@ -59,6 +61,7 @@ describe("mapRoute", () => {
       signalisedIntersections: ["J1"],
       congestedSegments: ["B"],
       anomalousSegmentsAvoided: ["X"],
+      forcedThrough: ["B"],
       reliable: true,
     });
     expect(r?.cost.score).toBe(12.3);
@@ -70,6 +73,7 @@ describe("mapRoute", () => {
     const r = mapRoute({ edges: ["A"] });
     expect(r?.edges).toEqual(["A"]);
     expect(r?.totalDistanceM).toBe(0);
+    expect(r?.forcedThrough).toEqual([]);
     expect(r?.reliable).toBe(false);
     expect(r?.weightsUsed).toEqual({});
   });
@@ -141,6 +145,29 @@ describe("mapVehicleLive", () => {
     expect(v.lon).toBeUndefined();
     expect(v.etaS).toBeUndefined();
     expect(v.status).toBe("en_route");
+  });
+});
+
+describe("inferVehicleType", () => {
+  it("reads SUMO vType ids and class names", () => {
+    expect(inferVehicleType("veh0", "veh_motorcycle")).toBe("motorcycle");
+    expect(inferVehicleType("veh1", "veh_bus")).toBe("bus");
+    expect(inferVehicleType("veh2", "veh_car")).toBe("car");
+    expect(inferVehicleType("lorry-9", "truck")).toBe("truck");
+    expect(inferVehicleType("amb-01")).toBe("ambulance");
+  });
+
+  it("uses a stable varied fleet mix when SUMO omits vType", () => {
+    const ids = Array.from({ length: 200 }, (_, i) => `veh${i}`);
+    const types = ids.map((id) => inferVehicleType(id));
+    expect(new Set(types)).toEqual(
+      new Set(["car", "motorcycle", "truck", "bus", "ambulance"]),
+    );
+    expect(ids.map((id) => inferVehicleType(id))).toEqual(types);
+  });
+
+  it("uses car as a safe fallback for an unrecognised explicit vType", () => {
+    expect(inferVehicleType("veh42", "unrecognised-vtype")).toBe("car");
   });
 });
 

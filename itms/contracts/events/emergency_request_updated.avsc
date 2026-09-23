@@ -25,6 +25,7 @@
           { "name": "signalised_intersections", "type": { "type": "array", "items": "string" } },
           { "name": "congested_segments", "type": { "type": "array", "items": "string" } },
           { "name": "anomalous_segments_avoided", "type": { "type": "array", "items": "string" } },
+          { "name": "forced_through", "type": { "type": "array", "items": "string" }, "default": [], "doc": "Edges this route had to cross despite being flagged BLOCKED, because no alternative existed at all. Non-empty implies reliable=false; the UI should show this as an explicit warning, not a failure." },
           { "name": "reliable", "type": "boolean" },
           { "name": "cost_travel_time_s", "type": "double" },
           { "name": "cost_congestion", "type": "double" },

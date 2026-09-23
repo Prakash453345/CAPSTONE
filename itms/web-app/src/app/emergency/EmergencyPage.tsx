@@ -3,9 +3,9 @@ import { TrafficMap } from "@/components/map/TrafficMap";
 import { cn } from "@/utils/cn";
 import {
   useEmergencyStore,
-  selectActiveRequests,
   selectSelectedRequest,
-  selectVisibleRequests,
+  useActiveRequests,
+  useVisibleRequests,
 } from "@/store/emergencyStore";
 import { useMapStore } from "@/store/mapStore";
 import { edgeById } from "@/data/network";
@@ -36,11 +36,11 @@ const STATE_LABEL: Record<EmergencyRequest["state"], [string, string]> = {
  * mission and pans the map to it without hiding any of the others.
  */
 export function EmergencyPage() {
-  const requests = useEmergencyStore(selectVisibleRequests);
+  const requests = useVisibleRequests();
   const selected = useEmergencyStore(selectSelectedRequest);
   const selectRequest = useEmergencyStore((s) => s.selectRequest);
   const focusOn = useMapStore((s) => s.focusOn);
-  const active = useEmergencyStore(selectActiveRequests);
+  const active = useActiveRequests();
 
   // Selecting a mission from the roster brings the map to it — its live
   // position if it's already moving, else where it will depart from. This

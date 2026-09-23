@@ -36,6 +36,7 @@ from itms_domain import (
     EmergencyRoutingConfig,
     EmergencyVehicle,
     EmergencyVehicleStatus,
+    IllegalRequestTransition,
     RouteResult,
 )
 
@@ -134,7 +135,7 @@ class EmergencyController:
         self._requests[request_id] = req
         self._route_and_transition(
             request_id, at_ms=at_ms, step=step, sim_time_s=sim_time_s,
-            action=EmergencyRequestAction.ROUTE_READY,
+            action=EmergencyRequestAction.ROUTE_READY, initial=True,
         )
 
     def handle_command(self, payload: Mapping, *, step: int, sim_time_s: float) -> None:
@@ -395,15 +396,29 @@ class EmergencyController:
         detail: str = "",
         from_edge: str | None = None,
         conditions: Mapping[str, EdgeConditions] | None = None,
+        initial: bool = False,
     ) -> None:
         """Plan (or replan, when `from_edge` is set) and apply `action`.
 
         `from_edge` is the vehicle's current edge for an in-flight reroute --
         the plan starts there, the request's own `source_edge` is unchanged, and
         on success the SUMO route and any active green corridor are re-pointed
-        at the new path. A planning failure during an in-flight reroute keeps
-        the current route (a moving vehicle is never abandoned mid-road); only
-        the *initial* routing failure cancels the request.
+        at the new path.
+
+        `initial` marks the one call this genuinely is a first attempt --
+        from `handle_create`, before any route has ever existed for this
+        request. Only *that* failure cancels the request: `NoRouteError` here
+        is now reserved for routes that are unreachable outright (see
+        `RoutePlanner.plan`'s docstring -- it already retries once, allowing a
+        BLOCKED edge, before giving up), so a request that ever reaches
+        ROUTE_READY keeps its current route on every later planning failure
+        (recalculate, or the background monitor's auto-reroute) rather than
+        being abandoned -- an operator-visible route is always better than a
+        request that vanishes. `ROUTE_FAILED` is also only a legal transition
+        out of ROUTING (see `itms_domain.emergency`'s state machine); applying
+        it from any other state would itself be a bug, so it is guarded
+        defensively below too, never left to crash the whole sim tick over a
+        state-machine slip.
         """
         req = self._requests[request_id]
         origin = from_edge or req.source_edge
@@ -411,7 +426,7 @@ class EmergencyController:
         try:
             routes = self.planner.plan(origin, req.destination_edge, cond)
         except NoRouteError as exc:
-            if from_edge is not None:
+            if not initial:
                 self._last_route_s[request_id] = sim_time_s  # cool down before retry
                 self._queue(
                     request_id, step=step, actor="system:monitor",
@@ -420,10 +435,22 @@ class EmergencyController:
                 log.warning("emergency request %s reroute failed, holding route: %s",
                             request_id, exc.reason)
                 return
-            self._requests[request_id] = req.apply(
-                EmergencyRequestAction.ROUTE_FAILED, at_ms=at_ms, actor="system:router",
-                detail=exc.reason,
-            )
+            try:
+                self._requests[request_id] = req.apply(
+                    EmergencyRequestAction.ROUTE_FAILED, at_ms=at_ms, actor="system:router",
+                    detail=exc.reason,
+                )
+            except IllegalRequestTransition:
+                log.exception(
+                    "emergency request %s could not be marked ROUTE_FAILED from %s "
+                    "-- holding instead of crashing the tick",
+                    request_id, req.state.value,
+                )
+                self._queue(
+                    request_id, step=step, actor="system:router",
+                    detail=f"routing problem (not applied): {exc.reason}",
+                )
+                return
             self._release_vehicle(req.vehicle_id)
             self._queue(request_id, step=step, actor="system:router")
             log.warning("emergency request %s route failed: %s", request_id, exc.reason)
@@ -655,6 +682,7 @@ def route_summary(route: RouteResult) -> dict:
         "signalised_intersections": list(route.signalised_intersections),
         "congested_segments": list(route.congested_segments),
         "anomalous_segments_avoided": list(route.anomalous_segments_avoided),
+        "forced_through": list(route.forced_through),
         "reliable": route.reliable,
         "cost_travel_time_s": c.travel_time_s,
         "cost_congestion": c.congestion_cost,

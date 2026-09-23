@@ -1,6 +1,7 @@
 import { NavLink } from "react-router-dom";
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { NAV_ITEMS } from "@/app/nav";
+import { BrandMark } from "@/components/branding/BrandMark";
 import { Tooltip } from "@/components/ui/tooltip";
 import { useSystemStore } from "@/store/systemStore";
 import { cn } from "@/utils/cn";
@@ -55,7 +56,7 @@ export function SideNav({ collapsed, onToggleCollapsed, onNavigate }: SideNavPro
           const link = (
             <NavLink
               to={item.path}
-              end={item.path === "/"}
+              end={item.path === "/console"}
               onClick={goTo}
               className={({ isActive }) =>
                 cn(
@@ -100,28 +101,5 @@ export function SideNav({ collapsed, onToggleCollapsed, onNavigate }: SideNavPro
         </button>
       </div>
     </nav>
-  );
-}
-
-function BrandMark() {
-  return (
-    <span className="grid size-8 shrink-0 place-items-center rounded-lg border border-primary/30 bg-primary-muted/40">
-      <svg width="16" height="16" viewBox="0 0 32 32" fill="none" aria-hidden>
-        <path
-          d="M16 4v24M4 16h24"
-          stroke="hsl(var(--primary))"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-        />
-        <circle
-          cx="16"
-          cy="16"
-          r="3.4"
-          fill="hsl(var(--background))"
-          stroke="hsl(var(--primary))"
-          strokeWidth="2.5"
-        />
-      </svg>
-    </span>
   );
 }

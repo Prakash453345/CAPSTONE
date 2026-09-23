@@ -2,8 +2,9 @@ import { useEffect, useRef } from "react";
 import type { GeoJSONSource, MapMouseEvent } from "maplibre-gl";
 import type { FeatureCollection, Point } from "geojson";
 import { useMapInstance } from "@/components/map/MapContext";
+import { isMapAlive } from "@/components/map/mapSafe";
 import { useIncidentStore } from "@/store/incidentStore";
-import { SIGNAL_COLOR } from "@/components/map/mapColors";
+import { CORRIDOR_ACCENT_COLOR, SIGNAL_COLOR } from "@/components/map/mapColors";
 
 const SRC = "signals";
 const HALO = "signals-halo";
@@ -11,11 +12,11 @@ const DOT = "signals-dot";
 const PREEMPT_RING = "signals-preempt-ring";
 const FAULT_RING = "signals-fault-ring";
 
-/** Cyan — the same accent `EmergencyRouteLayer` uses for the active route, so
- *  "this junction is coordinating for an emergency vehicle" reads as one
- *  consistent colour language across the map, distinct from ordinary
- *  green/red phase colour. */
-const PREEMPT_COLOR = "#5fd0ff";
+/** Cyan — the same accent `emergencyGeo.ts` uses for a mission's green
+ *  corridor, so "this junction is coordinating for an emergency vehicle"
+ *  reads as one consistent colour language across the map, distinct from
+ *  ordinary green/red phase colour. */
+const PREEMPT_COLOR = CORRIDOR_ACCENT_COLOR;
 /** Amber, not `SIGNAL_COLOR.red` — a fault is a distinct condition from
  *  "just not under control right now" (which already renders red), so it
  *  needs its own colour, not a louder version of an existing one. */
@@ -108,6 +109,7 @@ export function SignalLayer({ visible }: { visible: boolean }) {
 
     const start = performance.now();
     const pulse = () => {
+      if (!isMapAlive(map)) return;
       if (map.getLayer(PREEMPT_RING)) {
         const phase = ((performance.now() - start) % 1200) / 1200;
         map.setPaintProperty(PREEMPT_RING, "circle-radius", 10 + phase * 16);
@@ -137,6 +139,7 @@ export function SignalLayer({ visible }: { visible: boolean }) {
 
     return () => {
       cancelAnimationFrame(raf.current);
+      if (!isMapAlive(map)) return;
       map.off("click", DOT, onClick);
       map.off("mouseenter", DOT, onEnter);
       map.off("mouseleave", DOT, onLeave);
@@ -147,12 +150,14 @@ export function SignalLayer({ visible }: { visible: boolean }) {
   }, [map, selectIntersection]);
 
   useEffect(() => {
+    if (!isMapAlive(map)) return;
     const v = visible ? "visible" : "none";
     for (const id of [DOT, FAULT_RING, PREEMPT_RING, HALO])
       if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", v);
   }, [map, visible]);
 
   useEffect(() => {
+    if (!isMapAlive(map)) return;
     const src = map.getSource(SRC) as GeoJSONSource | undefined;
     if (!src) return;
     const data: FeatureCollection<Point> = {

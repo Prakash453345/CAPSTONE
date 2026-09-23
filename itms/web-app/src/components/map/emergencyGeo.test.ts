@@ -9,6 +9,7 @@ import {
   edgesToCoords,
 } from "@/components/map/emergencyGeo";
 import { colorForRequest } from "@/components/map/emergencyColors";
+import { CORRIDOR_ACCENT_COLOR, EV_ROUTE_COLOR } from "@/components/map/mapColors";
 import type {
   EmergencyRequest,
   EmergencyRequestState,
@@ -34,6 +35,7 @@ function route(edges: string[], rank = 0, over: Partial<EmergencyRouteView> = {}
     signalisedIntersections: [],
     congestedSegments: [],
     anomalousSegmentsAvoided: [],
+    forcedThrough: [],
     reliable: true,
     cost: {
       travelTimeS: 90, congestion: 1, anomaly: 0, signalDelayS: 6,
@@ -94,13 +96,15 @@ describe("buildRouteFeatures — multiple active requests", () => {
     expect(mains.map((f) => f.properties.requestId).sort()).toEqual(["er-1", "er-2"]);
   });
 
-  it("gives each request's route its own colour and its own geometry", () => {
+  it("gives every mission's route the same constant colour, but its own geometry", () => {
+    // Every route reads as "the optimal route" at a glance regardless of
+    // which mission it belongs to -- unlike the vehicle marker, it is
+    // deliberately NOT hashed per request (see EV_ROUTE_COLOR's doc comment).
     const r1 = req("er-1", { route: route([EDGE_A]) });
     const r2 = req("er-2", { route: route([EDGE_C]) });
     const [f1, f2] = buildRouteFeatures([r1, r2], null, 0);
-    expect(f1.properties.color).toBe(colorForRequest("er-1"));
-    expect(f2.properties.color).toBe(colorForRequest("er-2"));
-    expect(f1.properties.color).not.toBe(f2.properties.color);
+    expect(f1.properties.color).toBe(EV_ROUTE_COLOR);
+    expect(f2.properties.color).toBe(EV_ROUTE_COLOR);
     expect(f1.geometry.coordinates).not.toEqual(f2.geometry.coordinates);
   });
 
@@ -212,7 +216,11 @@ describe("buildCorridorFeatures", () => {
     const byId = Object.fromEntries(features.map((f) => [f.properties.requestId, f.properties]));
     expect(byId["er-1"].selected).toBe(true);
     expect(byId["er-2"].selected).toBe(false);
-    expect(byId["er-1"].color).not.toBe(byId["er-2"].color);
+    // Same constant accent for every mission's corridor -- see
+    // CORRIDOR_ACCENT_COLOR's doc comment (one consistent "held for an EV"
+    // colour, shared with SignalLayer's preemption ring).
+    expect(byId["er-1"].color).toBe(CORRIDOR_ACCENT_COLOR);
+    expect(byId["er-2"].color).toBe(CORRIDOR_ACCENT_COLOR);
   });
 
   it("marks a passed junction as not held", () => {

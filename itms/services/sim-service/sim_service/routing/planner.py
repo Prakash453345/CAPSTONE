@@ -6,8 +6,24 @@
 full `RouteCostBreakdown` and the lists the "why this route" panel needs
 (signalised intersections, congested segments, anomalous segments avoided).
 
+`plan()` searches twice at most. The primary pass excludes every BLOCKED edge
+outright -- the graph literally doesn't have them -- exactly like before.
+Only when that pass finds *no* path at all does a second pass run, on the
+full graph, allowing BLOCKED edges back in at a large-but-finite cost
+(`RouteCostModel` / `config.blocked_fallback_anomaly_norm`). This is a
+deliberate product decision, not a relaxation of safety: a real emergency
+vehicle can usually still get through a "blocked" road when it is the only
+way in or out, and a hard "no route" here would strand an otherwise-valid
+dispatch over one bad segment instead of giving the operator a route to
+review. Routes from that second pass always come back `reliable=False` with
+`forced_through` naming the edges crossed anyway, so the operator sees the
+hazard plainly rather than a mission failure.
+
 Failure is a typed `NoRouteError` with a human-readable reason -- never a raw
-exception or an empty list without explanation.
+exception or an empty list without explanation. It is now reserved for routes
+that are unreachable outright (unknown edges, a genuinely isolated
+destination, or the vehicle's *own* current/destination edge itself blocked)
+-- not merely "the only path crosses an active incident".
 """
 
 from __future__ import annotations
@@ -51,33 +67,45 @@ class RoutePlanner:
         self._preflight(source_edge, dest_edge, cond)
 
         blocked = {e for e, c in cond.items() if c.is_blocked}
-        graph = self.graph.without_edges(blocked)
-        if source_edge not in graph.edges:
+        avoiding = self.graph.without_edges(blocked)
+        if source_edge not in avoiding.edges:
             raise NoRouteError("the emergency vehicle's current road is blocked")
-        if dest_edge not in graph.edges:
+        if dest_edge not in avoiding.edges:
             raise NoRouteError("the destination road is blocked")
 
-        engine = GraphSearchEngine(graph)
-
-        def weight(from_edge: str, ge: GraphEdge) -> float:
-            ec = cond.get(ge.to_edge)
-            if ge.signalised:
-                ec = _with_signal(ec)
-            return self.cost_model.edge_cost(graph.edges[ge.to_edge], ec).weighted_total
-
-        candidates = engine.k_shortest(
-            source_edge, dest_edge, weight, k=1 + max(0, self.config.max_alternatives)
+        k = 1 + max(0, self.config.max_alternatives)
+        graph = avoiding
+        candidates = GraphSearchEngine(graph).k_shortest(
+            source_edge, dest_edge, self._weight(graph, cond), k=k
         )
+        forced_through: frozenset[str] = frozenset()
+
+        if not candidates and blocked:
+            # The primary pass found nothing avoiding the blockage at all --
+            # it's the only way through. Retry on the full graph: BLOCKED
+            # edges are no longer excluded, just heavily penalised
+            # (RouteCostModel folds `is_blocked` into a large finite
+            # anomaly_norm precisely for this pass), so the search still
+            # prefers any real alternative and only lands here when there
+            # truly is none.
+            graph = self.graph
+            candidates = GraphSearchEngine(graph).k_shortest(
+                source_edge, dest_edge, self._weight(graph, cond), k=k
+            )
+            if candidates:
+                forced_through = blocked & set(candidates[0].edges)
+
         if not candidates:
             raise NoRouteError(
                 "no route is currently available — the destination is isolated by "
                 "active road blockages or congestion"
             )
 
-        # the free-flow shortest path (ignores conditions) -- used to report
-        # which anomalous edges the chosen route "avoided"
-        ff = engine.shortest_path(
-            source_edge, dest_edge, lambda _f, ge: graph.edges[ge.to_edge].free_flow_time_s
+        # the free-flow shortest path (ignores conditions, and blockages --
+        # it's purely "what would the ideal path be") -- used to report which
+        # anomalous edges the chosen route "avoided"
+        ff = GraphSearchEngine(self.graph).shortest_path(
+            source_edge, dest_edge, lambda _f, ge: self.graph.edges[ge.to_edge].free_flow_time_s
         )
         ff_edges = set(ff.edges)
         anomalous = {e for e, c in cond.items() if c.has_active_anomaly}
@@ -85,9 +113,21 @@ class RoutePlanner:
         results: list[RouteResult] = []
         for rank, cand in enumerate(candidates):
             results.append(
-                self._build_result(cand.edges, cond, graph, ff_edges, anomalous, rank)
+                self._build_result(
+                    cand.edges, cond, graph, ff_edges, anomalous, rank,
+                    forced_through=forced_through & set(cand.edges),
+                )
             )
         return results
+
+    def _weight(self, graph: RoadGraph, cond: Mapping[str, EdgeConditions]):
+        def weight(from_edge: str, ge: GraphEdge) -> float:
+            ec = cond.get(ge.to_edge)
+            if ge.signalised:
+                ec = _with_signal(ec)
+            return self.cost_model.edge_cost(graph.edges[ge.to_edge], ec).weighted_total
+
+        return weight
 
     def evaluate(
         self,
@@ -113,7 +153,11 @@ class RoutePlanner:
             if _find_graph_edge(self.graph, a, b) is None:
                 raise NoRouteError(f"route is no longer connected between {a!r} and {b!r}")
         anomalous = {e for e, c in cond.items() if c.has_active_anomaly}
-        return self._build_result(tuple(edges), cond, self.graph, set(), anomalous, rank=0)
+        blocked = {e for e, c in cond.items() if c.is_blocked}
+        return self._build_result(
+            tuple(edges), cond, self.graph, set(), anomalous, rank=0,
+            forced_through=blocked & set(edges),
+        )
 
     # ---- internals ----------------------------------------------
 
@@ -124,6 +168,21 @@ class RoutePlanner:
             raise NoRouteError(f"unknown source road {source_edge!r}")
         if not self.graph.has_edge(dest_edge):
             raise NoRouteError(f"unknown destination road {dest_edge!r}")
+            
+        if not self.graph.neighbours(source_edge):
+            raise NoRouteError(
+                f"cannot route from {source_edge!r} — it is a network terminus with no onward road connections"
+            )
+            
+        has_incoming = any(
+            dest_edge in [ge.to_edge for ge in ges]
+            for ges in self.graph.adjacency.values()
+        )
+        if not has_incoming:
+            raise NoRouteError(
+                f"cannot route to {dest_edge!r} — it is a network boundary entry edge with no incoming roads"
+            )
+
         problems = self.config.validate()
         if problems:
             raise NoRouteError(f"routing config is invalid: {problems[0]}")
@@ -136,6 +195,7 @@ class RoutePlanner:
         ff_edges: set[str],
         anomalous: set[str],
         rank: int,
+        forced_through: frozenset[str] | set[str] = frozenset(),
     ) -> RouteResult:
         total_distance = 0.0
         travel_time_s = 0.0
@@ -184,7 +244,15 @@ class RoutePlanner:
         )
         avoided = tuple(sorted(anomalous & ff_edges - set(edges)))
         n_intersections = max(0, len(edges) - 1)
-        reliable = reliability_cost <= self.config.reliability_reject_threshold
+        # A route forced through a BLOCKED edge is never "reliable", full
+        # stop -- regardless of what the weighted reliability math says (a
+        # short route with just one such edge could otherwise slip under
+        # `reliability_reject_threshold`). This is the signal the UI keys its
+        # "only route available, proceed with caution" warning off of.
+        reliable = (
+            not forced_through
+            and reliability_cost <= self.config.reliability_reject_threshold
+        )
 
         return RouteResult(
             edges=tuple(edges),
@@ -195,6 +263,7 @@ class RoutePlanner:
             signalised_intersections=tuple(signalised),
             congested_segments=tuple(congested),
             anomalous_segments_avoided=avoided,
+            forced_through=tuple(sorted(forced_through)),
             cost=breakdown,
             reliable=reliable,
             weights_used=self.config.as_dict(),

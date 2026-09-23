@@ -32,9 +32,10 @@ const YELLOW_S = 4;
 /** Metres of road one vehicle "occupies" when estimating congestion. */
 const SLOT_M = 26;
 const VEHICLE_TYPES: { type: VehicleType; weight: number; speed: number }[] = [
-  { type: "car", weight: 0.66, speed: 12 },
-  { type: "truck", weight: 0.14, speed: 9 },
-  { type: "bus", weight: 0.2, speed: 8 },
+  { type: "car", weight: 0.52, speed: 12 },
+  { type: "motorcycle", weight: 0.22, speed: 14 },
+  { type: "truck", weight: 0.12, speed: 9 },
+  { type: "bus", weight: 0.14, speed: 8 },
 ];
 
 interface Agent {
@@ -175,6 +176,7 @@ export function createMockProvider(seed = 42): TrafficDataProvider {
     signalisedIntersections: signalisedOnRoute,
     congestedSegments: [],
     anomalousSegmentsAvoided: [],
+    forcedThrough: [],
     reliable: true,
     cost: {
       travelTimeS: Math.round(mockTravelTimeS * 10) / 10,

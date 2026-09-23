@@ -3,6 +3,8 @@ and its error handling."""
 
 from __future__ import annotations
 
+import math
+
 import pytest
 from _synthetic import edge, linear_graph
 from itms_domain import EmergencyRoutingConfig
@@ -72,6 +74,41 @@ def test_blocked_edge_is_removed_and_the_route_goes_around_it():
     r = planner.plan("S", "T", cond)[0]
     assert "A" not in r.edges
     assert r.edges == ("S", "B", "T")
+    assert not r.forced_through  # a real alternative existed -- never forced
+    assert r.reliable
+
+
+def _single_path_graph() -> RoadGraph:
+    """S -> M -> T, one road, no bypass -- the "only one route" case."""
+    edges = {"S": edge("S", 100.0, to="jM"), "M": edge("M", 100.0, to="jT"), "T": edge("T", 100.0, to="jEnd")}
+    adjacency = {
+        "S": (GraphEdge("M", "jT", False, None),),
+        "M": (GraphEdge("T", "jEnd", False, None),),
+    }
+    return RoadGraph(edges=edges, adjacency=adjacency, signalised_junctions=frozenset())
+
+
+def test_blocked_edge_on_the_only_route_is_crossed_anyway_as_a_last_resort():
+    """No alternative exists around the blockage -- plan() must still return
+    a route (the operator's only option), not fail the whole mission."""
+    planner = RoutePlanner(_single_path_graph())
+    cond = {"M": EdgeConditions(anomaly_severity="blocked")}
+    r = planner.plan("S", "T", cond)[0]
+    assert r.edges == ("S", "M", "T")           # the only physical path
+    assert r.forced_through == ("M",)           # named, so the UI can warn
+    assert not r.reliable                       # never "reliable" when forced
+    assert math.isfinite(r.eta_s) and r.eta_s > 0
+    assert math.isfinite(r.cost.total_score)    # displayable, not +inf
+
+
+def test_forced_through_route_still_prefers_a_real_alternative_when_one_exists():
+    """Sanity check that the fallback pass doesn't make BLOCKED edges "free" --
+    given a real choice, the search still avoids one."""
+    planner = RoutePlanner(_diamond())
+    cond = {"A": EdgeConditions(anomaly_severity="blocked")}
+    r = planner.plan("S", "T", cond)[0]
+    assert r.edges == ("S", "B", "T")
+    assert not r.forced_through
 
 
 def test_signalised_intersections_and_congested_segments_are_reported():

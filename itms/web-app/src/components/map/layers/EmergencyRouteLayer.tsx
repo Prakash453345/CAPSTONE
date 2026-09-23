@@ -61,10 +61,14 @@ export function EmergencyRouteLayer({ visible }: { visible: boolean }) {
         type: "circle",
         source: CORRIDOR_SRC,
         paint: {
+          // A `case` can't wrap two independent `interpolate`s (MapLibre:
+          // "only one zoom-based interpolate subexpression may be used") --
+          // `interpolate` has to be the outer expression, with `case` only
+          // choosing the value *at* each zoom stop.
           "circle-radius": [
-            "case", ["get", "selected"],
-            ["interpolate", ["linear"], ["zoom"], 12, 11, 17, 24],
-            ["interpolate", ["linear"], ["zoom"], 12, 8, 17, 17],
+            "interpolate", ["linear"], ["zoom"],
+            12, ["case", ["get", "selected"], 11, 8],
+            17, ["case", ["get", "selected"], 24, 17],
           ],
           "circle-color": ["get", "color"],
           "circle-opacity": [
@@ -125,9 +129,9 @@ export function EmergencyRouteLayer({ visible }: { visible: boolean }) {
         paint: {
           "line-color": ["get", "color"],
           "line-width": [
-            "case", ["get", "selected"],
-            ["interpolate", ["linear"], ["zoom"], 12, 2.5, 17, 6],
-            ["interpolate", ["linear"], ["zoom"], 12, 1.5, 17, 3.5],
+            "interpolate", ["linear"], ["zoom"],
+            12, ["case", ["get", "selected"], 2.5, 1.5],
+            17, ["case", ["get", "selected"], 6, 3.5],
           ],
           "line-opacity": ["case", ["get", "selected"], 1, 0.55],
         },

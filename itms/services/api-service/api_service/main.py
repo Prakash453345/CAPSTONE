@@ -93,17 +93,48 @@ def _json_safe_envelope(envelope: dict) -> dict:
     return safe
 
 
-async def consume_forever(bus: RedisStreamsBus) -> None:
-    async for msg in bus.subscribe(
-        TOPICS, group=CONSUMER_GROUP, consumer="api-service-1"
-    ):
+async def _consume_topic(bus: RedisStreamsBus, topic: str, consumer: str) -> None:
+    """Relay one topic with its own cursor so busy traffic cannot starve alarms."""
+    while True:
         try:
-            envelope = decode_envelope(msg.raw)
-            await manager.broadcast(_json_safe_envelope(envelope))
+            async for msg in bus.subscribe(
+                # This is a viewport/UI fan-out, not an archival processor. A
+                # newly created API group begins at the live edge; replaying a
+                # retained stream can leave the command center showing
+                # hours-old congestion before current vehicle positions.
+                [topic], group=CONSUMER_GROUP, consumer=consumer, start_id="$"
+            ):
+                try:
+                    envelope = decode_envelope(msg.raw)
+                    await manager.broadcast(_json_safe_envelope(envelope))
+                except Exception:
+                    log.exception("failed to handle message %s on %s", msg.message_id, msg.topic)
+                else:
+                    await bus.ack(msg.topic, CONSUMER_GROUP, msg.message_id)
+        except asyncio.CancelledError:
+            raise
         except Exception:
-            log.exception("failed to handle message %s on %s", msg.message_id, msg.topic)
+            log.exception("live stream consumer failed; retrying")
+            await asyncio.sleep(1)
         else:
-            await bus.ack(msg.topic, CONSUMER_GROUP, msg.message_id)
+            # A subscription is designed never to finish. If it does, keep the
+            # live bridge alive instead of leaving connected browsers stale.
+            log.warning("live stream consumer ended; restarting")
+            await asyncio.sleep(1)
+
+
+async def consume_forever(bus: RedisStreamsBus) -> None:
+    """Relay all live topics concurrently without starvation or silent death."""
+    tasks = [
+        asyncio.create_task(_consume_topic(bus, topic, f"api-service-{i}"))
+        for i, topic in enumerate(TOPICS, start=1)
+    ]
+    try:
+        await asyncio.gather(*tasks)
+    finally:
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
 
 
 @asynccontextmanager

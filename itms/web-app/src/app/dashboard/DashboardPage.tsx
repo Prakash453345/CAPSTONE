@@ -6,7 +6,7 @@ import { StatTile } from "@/components/ui/stat-tile";
 import { useSystemStore } from "@/store/systemStore";
 import { useTrafficStore } from "@/store/trafficStore";
 import { useIncidentStore } from "@/store/incidentStore";
-import { selectActiveRequests, useEmergencyStore } from "@/store/emergencyStore";
+import { useActiveRequests } from "@/store/emergencyStore";
 import { formatCount } from "@/utils/format";
 
 function useSecondTick() {
@@ -31,7 +31,7 @@ export function DashboardPage() {
   const activeAnomalies = useIncidentStore(
     (s) => s.anomalies.filter((a) => a.status === "active").length,
   );
-  const activeEmergencies = useEmergencyStore((s) => selectActiveRequests(s).length);
+  const activeEmergencies = useActiveRequests().length;
 
   const congestionPct = Math.round(summary.congestion * 100);
   const stale = lastTickAt != null && Date.now() - lastTickAt > 6000;

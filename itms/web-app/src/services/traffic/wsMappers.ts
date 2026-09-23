@@ -10,6 +10,7 @@ import type {
   GreenCorridorStatus,
   GreenCorridorView,
   RequestTimelineEntry,
+  VehicleType,
 } from "@/types";
 
 /** timestamp-millis fields arrive as ISO strings (api-service isoformats every
@@ -18,6 +19,42 @@ export function msToIso(v: unknown): string {
   if (typeof v === "string") return v;
   if (typeof v === "number") return new Date(v).toISOString();
   return new Date().toISOString();
+}
+
+/**
+ * Fleet silhouette for a SUMO vehicle. The position event has no class field
+ * (contracts/events/vehicle_position_updated.avsc), so this reads the id and
+ * any optional `vtype` / `vehicle_class` producers may already attach. For a
+ * generic SUMO id (for example `veh531`), a stable fleet-mix fallback gives
+ * the operator meaningful silhouettes without inventing a changing type on
+ * every update. It is presentation-only: SUMO position and speed data remain
+ * untouched.
+ */
+export function inferVehicleType(vehicleId: string, vtype?: unknown): VehicleType {
+  const blob = `${vehicleId} ${typeof vtype === "string" ? vtype : ""}`.toLowerCase();
+  if (/(ambulance|emergency|\bamb\b)/.test(blob)) return "ambulance";
+  if (/(motorcycle|moto|bike)/.test(blob)) return "motorcycle";
+  if (/\b(bus|coach)\b/.test(blob) || blob.includes("veh_bus")) return "bus";
+  if (/(truck|trailer|lorry|hgv)/.test(blob)) return "truck";
+  if (typeof vtype === "string" && vtype.trim() !== "") return "car";
+  return fleetTypeForGenericId(vehicleId);
+}
+
+/** A deterministic command-center fleet mix for streams that omit SUMO vType. */
+function fleetTypeForGenericId(vehicleId: string): VehicleType {
+  let hash = 2166136261;
+  for (let i = 0; i < vehicleId.length; i += 1) {
+    hash ^= vehicleId.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  const bucket = (hash >>> 0) % 100;
+  // Representative urban mix: mostly cars, then two-wheelers, commercial
+  // vehicles and transit, with a deliberately sparse ambulance presence.
+  if (bucket < 48) return "car";
+  if (bucket < 70) return "motorcycle";
+  if (bucket < 84) return "truck";
+  if (bucket < 97) return "bus";
+  return "ambulance";
 }
 
 export function toMs(v: unknown): number {
@@ -45,6 +82,7 @@ export function mapRoute(r: unknown): EmergencyRouteView | undefined {
     signalisedIntersections: arr("signalised_intersections"),
     congestedSegments: arr("congested_segments"),
     anomalousSegmentsAvoided: arr("anomalous_segments_avoided"),
+    forcedThrough: arr("forced_through"),
     reliable: Boolean(o.reliable),
     cost: {
       travelTimeS: Number(o.cost_travel_time_s ?? 0),

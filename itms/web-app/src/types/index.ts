@@ -13,7 +13,7 @@ export interface LatLng {
 }
 
 // ---------------------------------------------------------------- vehicles
-export type VehicleType = "car" | "bus" | "truck" | "ambulance";
+export type VehicleType = "car" | "bus" | "truck" | "motorcycle" | "ambulance";
 
 export interface Vehicle extends LatLng {
   id: string;
@@ -136,6 +136,10 @@ export interface EmergencyRouteView {
   signalisedIntersections: string[];
   congestedSegments: string[];
   anomalousSegmentsAvoided: string[];
+  /** Edges this route had to cross despite being flagged BLOCKED, because no
+   *  alternative existed at all -- the operator's only physical route.
+   *  Non-empty implies `reliable` is false. Always empty otherwise. */
+  forcedThrough: string[];
   reliable: boolean;
   cost: {
     travelTimeS: number;

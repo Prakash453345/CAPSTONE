@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { create } from "zustand";
 import type {
   CorridorReservationView,
@@ -97,16 +98,47 @@ export function isTerminalRequest(req: Pick<EmergencyRequest, "state">): boolean
 }
 
 /** Every request still in progress, in store order. The map (and any "N active
- *  missions" readout) renders this set, not just the selected one. */
+ *  missions" readout) renders this set, not just the selected one.
+ *
+ *  Pure — safe to call as a plain function (tests, or composed inside another
+ *  selector like `DashboardPage`'s `.length` read). Do NOT pass this straight
+ *  to `useEmergencyStore(...)` as a component's selector: it allocates a new
+ *  array every call, so `useSyncExternalStore`'s snapshot never stabilises
+ *  and React throws "Maximum update depth exceeded" ("the result of
+ *  getSnapshot should be cached"). Use `useActiveRequests()` below instead. */
 export const selectActiveRequests = (s: EmergencyState): EmergencyRequest[] =>
   s.requests.filter((r) => !isTerminalRequest(r));
 
 /** Every request the roster should still list — everything except what the
  *  operator has explicitly archived (Phase 6). Unlike `selectActiveRequests`,
  *  this keeps terminal requests around so their mission summary stays visible
- *  until dismissed. */
+ *  until dismissed.
+ *
+ *  Same caveat as `selectActiveRequests`: pure and test-safe, but never pass
+ *  this directly to `useEmergencyStore(...)` in a component — use
+ *  `useVisibleRequests()` below. */
 export const selectVisibleRequests = (s: EmergencyState): EmergencyRequest[] =>
   s.requests.filter((r) => !s.archivedRequestIds.has(r.id));
+
+/** Memoized, component-safe version of `selectActiveRequests`: subscribes to
+ *  the raw `requests` array (stable until the store really replaces it) and
+ *  only re-filters when that reference actually changes, instead of
+ *  allocating a new array on every render/snapshot check. */
+export function useActiveRequests(): EmergencyRequest[] {
+  const requests = useEmergencyStore((s) => s.requests);
+  return useMemo(() => requests.filter((r) => !isTerminalRequest(r)), [requests]);
+}
+
+/** Memoized, component-safe version of `selectVisibleRequests` — see
+ *  `useActiveRequests` for why this indirection matters. */
+export function useVisibleRequests(): EmergencyRequest[] {
+  const requests = useEmergencyStore((s) => s.requests);
+  const archivedRequestIds = useEmergencyStore((s) => s.archivedRequestIds);
+  return useMemo(
+    () => requests.filter((r) => !archivedRequestIds.has(r.id)),
+    [requests, archivedRequestIds],
+  );
+}
 
 /**
  * How many times a request was rerouted (operator recalculation or an

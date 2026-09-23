@@ -1,6 +1,7 @@
 import { useState } from "react";
 import {
   Ambulance,
+  AlertTriangle,
   ChevronRight,
   X,
   Loader2,
@@ -10,6 +11,7 @@ import {
   Route as RouteIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { SimModeNotice } from "@/components/map/SimModeNotice";
 import { cn } from "@/utils/cn";
 import { CommandError, postCommand } from "@/services/traffic/commands";
 import {
@@ -146,6 +148,8 @@ function DispatchDraftPanel() {
       </div>
 
       <div className="space-y-3 p-3">
+        <SimModeNotice />
+
         <div>
           <Label>Unit</Label>
           <div className="grid grid-cols-2 gap-1">
@@ -281,6 +285,18 @@ function RoutePreview({ request }: { request: EmergencyRequest }) {
 
             {previewed && (
               <>
+                {previewed.forcedThrough.length > 0 && (
+                  <p className="flex items-start gap-1.5 rounded-md border border-[#e5484d]/40 bg-[color-mix(in_srgb,#e5484d_10%,transparent)] px-2.5 py-1.5 text-[11px] text-[#f0a6a6]">
+                    <AlertTriangle className="mt-px size-3 shrink-0" />
+                    <span>
+                      This is the only route available, and it crosses{" "}
+                      {previewed.forcedThrough.length} blocked segment
+                      {previewed.forcedThrough.length > 1 ? "s" : ""}. The vehicle can still
+                      get through, but expect serious delays — proceed with caution.
+                    </span>
+                  </p>
+                )}
+
                 {routes.length > 1 && (
                   <RouteTabs
                     routes={routes}

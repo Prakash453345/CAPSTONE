@@ -2,12 +2,24 @@ import { useEffect, useRef } from "react";
 import type { GeoJSONSource } from "maplibre-gl";
 import type { Feature, FeatureCollection, Point } from "geojson";
 import { useMapInstance } from "@/components/map/MapContext";
+import { isMapAlive } from "@/components/map/mapSafe";
 import { useEmergencyStore } from "@/store/emergencyStore";
 import { buildVehicleFrames, type VehicleFrame } from "@/components/map/emergencyGeo";
+import { VEHICLE_COLOR } from "@/components/map/mapColors";
+import {
+  AMBULANCE_BEACON_ICON_ID,
+  EMERGENCY_ICON_ID,
+  iconIdForEmergencyKind,
+  makeEmergencyIcon,
+  upsertMapImage,
+} from "@/components/map/mapIcons";
+import { angleDelta, bearingDeg } from "@/utils/geo";
+import { prefersReducedMotion } from "@/utils/motion";
+import type { EmergencyVehicleKind } from "@/types";
 
 const SRC = "em-vehicles";
 const HALO = "em-vehicles-halo";
-const DOT = "em-vehicles-dot";
+const ICON = "em-vehicles-icon";
 
 /**
  * Every active emergency vehicle, fed by the `emergency.vehicle-updated`
@@ -25,14 +37,46 @@ export function EmergencyVehicleLayer({ visible }: { visible: boolean }) {
 
   const prev = useRef(new Map<string, VehicleFrame>());
   const target = useRef(new Map<string, VehicleFrame>());
+  const heading = useRef(new Map<string, number>());
   const updatedAt = useRef(performance.now());
   const interval = useRef(1000);
   const raf = useRef(0);
 
   useEffect(() => {
+    for (const [kind, name] of Object.entries(EMERGENCY_ICON_ID) as [
+      EmergencyVehicleKind,
+      string,
+    ][]) {
+      const color =
+        kind === "ambulance" ? VEHICLE_COLOR.ambulance : kind === "fire_truck" ? "#ff8a4c" : "#6ea8ff";
+      try {
+        upsertMapImage(map, name, makeEmergencyIcon(kind, color));
+      } catch (err) {
+        console.warn("emergency sprite failed", name, err);
+      }
+    }
+    // Symbol images are GPU textures. Register both quiet beacon phases once,
+    // then select the texture from feature data during the existing frame loop.
+    try {
+      upsertMapImage(
+        map,
+        AMBULANCE_BEACON_ICON_ID.red,
+        makeEmergencyIcon("ambulance", VEHICLE_COLOR.ambulance, 80, true),
+      );
+      upsertMapImage(
+        map,
+        AMBULANCE_BEACON_ICON_ID.blue,
+        makeEmergencyIcon("ambulance", VEHICLE_COLOR.ambulance, 80, false),
+      );
+    } catch (err) {
+      console.warn("ambulance beacon sprite failed", err);
+    }
+
     if (!map.getSource(SRC)) {
       const empty: FeatureCollection = { type: "FeatureCollection", features: [] };
       map.addSource(SRC, { type: "geojson", data: empty });
+    }
+    if (!map.getLayer(HALO)) {
       map.addLayer({
         id: HALO,
         type: "circle",
@@ -41,55 +85,122 @@ export function EmergencyVehicleLayer({ visible }: { visible: boolean }) {
           "circle-radius": ["interpolate", ["linear"], ["zoom"], 12, 9, 17, 18],
           "circle-color": ["get", "color"],
           "circle-opacity": 0.22,
+          "circle-blur": 0.35,
         },
       });
+    }
+    if (!map.getLayer(ICON)) {
       map.addLayer({
-        id: DOT,
-        type: "circle",
+        id: ICON,
+        type: "symbol",
         source: SRC,
-        paint: {
-          "circle-radius": [
-            "case", ["get", "selected"],
-            ["interpolate", ["linear"], ["zoom"], 12, 4.5, 17, 8],
-            ["interpolate", ["linear"], ["zoom"], 12, 3, 17, 5.5],
+        layout: {
+          "icon-image": [
+            "case",
+            ["==", ["get", "kind"], "ambulance"],
+            [
+              "case",
+              [">", ["to-number", ["get", "beaconRed"]], 0],
+              AMBULANCE_BEACON_ICON_ID.red,
+              AMBULANCE_BEACON_ICON_ID.blue,
+            ],
+            [
+              "match",
+              ["get", "kind"],
+              "fire_truck",
+              EMERGENCY_ICON_ID.fire_truck,
+              "police",
+              EMERGENCY_ICON_ID.police,
+              EMERGENCY_ICON_ID.ambulance,
+            ],
           ],
-          "circle-color": ["get", "color"],
-          "circle-opacity": ["case", ["get", "selected"], 1, 0.65],
-          "circle-stroke-color": "#0a0e14",
-          "circle-stroke-width": 2,
+          "icon-size": [
+            "*",
+            ["interpolate", ["linear"], ["zoom"], 11, 0.62, 13, 0.85, 16, 1.12, 18, 1.32],
+            ["case", [">", ["to-number", ["get", "selected"]], 0], 1.35, 1],
+          ],
+          "icon-rotate": ["to-number", ["get", "heading"]],
+          "icon-rotation-alignment": "map",
+          "icon-pitch-alignment": "map",
+          "icon-anchor": "center",
+          "icon-allow-overlap": true,
+          "icon-ignore-placement": true,
+          "icon-padding": 0,
         },
       });
     }
 
     const start = performance.now();
     const loop = () => {
+      if (!isMapAlive(map)) return;
       const src = map.getSource(SRC) as GeoJSONSource | undefined;
       if (src) {
-        const f = Math.min(1, (performance.now() - updatedAt.current) / interval.current);
+        const reduced = prefersReducedMotion();
+        // A restrained red/blue alternation: once per 1.2 s, not a strobe.
+        // Reduced-motion users receive the stable red phase.
+        const beaconRed = reduced || ((performance.now() - start) % 1200) < 600;
+        const f = reduced
+          ? 1
+          : Math.min(1, (performance.now() - updatedAt.current) / interval.current);
         const features: Feature<Point>[] = [];
         for (const [id, t] of target.current) {
           const p = prev.current.get(id) ?? t;
+          const lng = p.lng + (t.lng - p.lng) * f;
+          const lat = p.lat + (t.lat - p.lat) * f;
+          const moved = Math.hypot(t.lng - p.lng, t.lat - p.lat) > 1e-7;
+          const targetHeading = moved
+            ? bearingDeg([p.lng, p.lat], [t.lng, t.lat])
+            : (heading.current.get(id) ?? 0);
+          const fromHeading = heading.current.get(id) ?? targetHeading;
+          const hdg = fromHeading + angleDelta(fromHeading, targetHeading) * (reduced ? 1 : f);
+          heading.current.set(id, hdg);
           features.push({
             type: "Feature",
             id,
-            properties: { id, kind: t.kind, progress: t.progress, color: t.color, selected: t.selected },
+            properties: {
+              id,
+              kind: t.kind,
+              icon: iconIdForEmergencyKind(t.kind),
+              progress: t.progress,
+              color: t.color,
+              selected: t.selected ? 1 : 0,
+              heading: hdg,
+              beaconRed: beaconRed ? 1 : 0,
+            },
             geometry: {
               type: "Point",
-              coordinates: [p.lng + (t.lng - p.lng) * f, p.lat + (t.lat - p.lat) * f],
+              coordinates: [lng, lat],
             },
           });
         }
         src.setData({ type: "FeatureCollection", features });
-        // gentle halo breathing, bigger for the selected mission's vehicle
         if (map.getLayer(HALO)) {
-          const phase = ((performance.now() - start) % 1400) / 1400;
+          const phase = reduced ? 0.35 : ((performance.now() - start) % 1600) / 1600;
           map.setPaintProperty(HALO, "circle-radius", [
-            "case", ["get", "selected"],
-            ["interpolate", ["linear"], ["zoom"], 12, 8 + phase * 20, 17, 16 + phase * 26],
-            ["interpolate", ["linear"], ["zoom"], 12, 7 + phase * 10, 17, 13 + phase * 14],
+            "interpolate",
+            ["linear"],
+            ["zoom"],
+            12,
+            ["case", [">", ["get", "selected"], 0], 10 + phase * 8, 7 + phase * 4],
+            17,
+            ["case", [">", ["get", "selected"], 0], 20 + phase * 10, 14 + phase * 6],
           ]);
+          if (!reduced) {
+            const beaconColor = beaconRed ? "rgba(255, 60, 70, 0.85)" : "rgba(70, 110, 255, 0.85)";
+            map.setPaintProperty(HALO, "circle-color", [
+              "case",
+              [">", ["get", "selected"], 0],
+              beaconColor,
+              ["get", "color"],
+            ]);
+          } else {
+            map.setPaintProperty(HALO, "circle-color", ["get", "color"]);
+          }
           map.setPaintProperty(HALO, "circle-opacity", [
-            "case", ["get", "selected"], 0.3 * (1 - phase), 0.14 * (1 - phase),
+            "case",
+            [">", ["get", "selected"], 0],
+            reduced ? 0.28 : 0.32 * (1 - phase * 0.45),
+            0.16,
           ]);
         }
       }
@@ -99,14 +210,16 @@ export function EmergencyVehicleLayer({ visible }: { visible: boolean }) {
 
     return () => {
       cancelAnimationFrame(raf.current);
-      for (const id of [DOT, HALO]) if (map.getLayer(id)) map.removeLayer(id);
+      if (!isMapAlive(map)) return;
+      for (const id of [ICON, HALO]) if (map.getLayer(id)) map.removeLayer(id);
       if (map.getSource(SRC)) map.removeSource(SRC);
     };
   }, [map]);
 
   useEffect(() => {
+    if (!isMapAlive(map)) return;
     const v = visible ? "visible" : "none";
-    for (const id of [DOT, HALO])
+    for (const id of [ICON, HALO])
       if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", v);
   }, [map, visible]);
 
