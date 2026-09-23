@@ -1,5 +1,8 @@
 import { test, expect, type Page } from "@playwright/test";
 
+// "/" is the public landing page; the operator workspace lives under
+// "/console". These specs drive the workspace, so they enter there directly.
+
 async function navigate(page: Page, label: string) {
   const menu = page.getByRole("button", {
     name: "Open navigation",
@@ -17,7 +20,7 @@ test("map, operational routes, analytics and CSV stay integrated", async ({
 }, info) => {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  await page.goto("/");
+  await page.goto("/console");
   await expect(
     page.getByRole("heading", { name: "A city in motion. In view." }),
   ).toBeVisible();
@@ -124,7 +127,7 @@ test("live stream freshness, incident review and source isolation", async ({
       });
     },
   );
-  await page.goto("/");
+  await page.goto("/console");
   await page.getByRole("radio", { name: "Live", exact: true }).click();
   await expect.poll(() => Boolean(send)).toBe(true);
   await expect(
@@ -168,7 +171,7 @@ test("blocked basemap does not block bundled geometry or map controls", async ({
   page,
 }) => {
   await page.route("https://basemaps.cartocdn.com/**", (r) => r.abort());
-  await page.goto("/");
+  await page.goto("/console");
   await expect(
     page.getByRole("button", { name: "Zoom in", exact: true }),
   ).toBeVisible();
@@ -183,7 +186,7 @@ test("mobile drawer keyboard focus and reduced-motion preference", async ({
   page,
 }, info) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.goto("/");
+  await page.goto("/console");
   expect(
     await page
       .locator(".overview-page")

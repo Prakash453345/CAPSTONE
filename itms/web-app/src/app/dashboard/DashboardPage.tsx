@@ -89,7 +89,7 @@ export function DashboardPage() {
           </h1>
           <p>Your network, understood. Your next move, informed.</p>
         </div>
-        <Link className="primary-action" to="/emergency">
+        <Link className="primary-action" to="/console/emergency">
           <Siren size={16} /> Emergency response <ArrowUpRight size={16} />
         </Link>
       </header>
@@ -135,7 +135,7 @@ export function DashboardPage() {
                 <p>Vijayawada, Andhra Pradesh</p>
               </div>
             </div>
-            <Link className="text-action" to="/traffic">
+            <Link className="text-action" to="/console/traffic">
               Explore map <ArrowUpRight size={15} />
             </Link>
           </div>
@@ -159,7 +159,7 @@ export function DashboardPage() {
               </div>
               <ScanEye size={19} className="text-status-warn" />
             </div>
-            <Link to="/anomalies" className="attention-row">
+            <Link to="/console/anomalies" className="attention-row">
               <span className="attention-count">
                 {pending.length.toString().padStart(2, "0")}
               </span>
@@ -168,7 +168,7 @@ export function DashboardPage() {
               </span>
               <ArrowUpRight size={16} />
             </Link>
-            <Link to="/anomalies" className="attention-row">
+            <Link to="/console/anomalies" className="attention-row">
               <span className="attention-count muted-count">
                 {disruptions.length.toString().padStart(2, "0")}
               </span>
@@ -229,7 +229,7 @@ export function DashboardPage() {
                   className="mission-button"
                   onClick={() => {
                     selectRequest(mission.id);
-                    navigate("/emergency");
+                    navigate("/console/emergency");
                   }}
                 >
                   Track mission <ArrowRight size={15} />
@@ -242,7 +242,7 @@ export function DashboardPage() {
                 <span>
                   Dispatch a unit to plan a route and prepare a green corridor.
                 </span>
-                <Link className="text-action" to="/emergency">
+                <Link className="text-action" to="/console/emergency">
                   Open emergency workspace <ArrowRight size={14} />
                 </Link>
               </div>
@@ -261,7 +261,7 @@ export function DashboardPage() {
         <span>
           TRAFFIX <i /> INTELLIGENT TRAFFIC MANAGEMENT
         </span>
-        <Link to="/analytics">
+        <Link to="/console/analytics">
           Explore session analytics <ArrowUpRight size={13} />
         </Link>
       </footer>

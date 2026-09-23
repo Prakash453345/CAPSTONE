@@ -33,5 +33,8 @@ export default defineConfig({
       "npm run build && npm run preview -- --host 127.0.0.1 --port 4173 --strictPort",
     url: "http://127.0.0.1:4173",
     reuseExistingServer: false,
+    // Playwright's 60s default covers the preview server, not the production
+    // build that runs first -- which alone takes longer than that here.
+    timeout: 300_000,
   },
 });
