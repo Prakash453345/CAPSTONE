@@ -7,6 +7,7 @@ import { useIncidentStore } from "@/store/incidentStore";
 import { useEmergencyStore } from "@/store/emergencyStore";
 import { useNotificationStore } from "@/store/notificationStore";
 import { createTrafficProvider } from "@/services/traffic";
+import { isBackendReachable } from "@/services/traffic/backendProbe";
 import { classifyConnectionEvent } from "@/services/traffic/notifications";
 
 /**
@@ -16,6 +17,19 @@ import { classifyConnectionEvent } from "@/services/traffic/notifications";
  */
 export function TrafficDataBridge() {
   const dataMode = useSystemStore((s) => s.dataMode);
+
+  // Once per mount, ask whether a backend is actually there. Deliberately not
+  // in the provider effect below: this decides the *initial* mode, and must
+  // not re-run each time the operator switches.
+  useEffect(() => {
+    let cancelled = false;
+    isBackendReachable().then((reachable) => {
+      if (reachable && !cancelled) useSystemStore.getState().adoptLiveIfUnchosen();
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const provider = createTrafficProvider(dataMode);

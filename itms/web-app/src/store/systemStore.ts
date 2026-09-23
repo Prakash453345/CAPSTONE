@@ -14,11 +14,16 @@ export const STALE_AFTER_MS = 10_000;
 interface SystemState {
   connectionStatus: ConnectionStatus;
   dataMode: DataMode;
+  /** True once the operator picks a mode themselves, so the startup backend
+   *  probe knows not to overrule them. */
+  dataModeChosen: boolean;
   viewMode: ViewMode;
   summary: SystemSummary;
 
   setConnectionStatus: (status: ConnectionStatus) => void;
   setDataMode: (mode: DataMode) => void;
+  /** Upgrade to live only while the mode is still the untouched default. */
+  adoptLiveIfUnchosen: () => void;
   setViewMode: (mode: ViewMode) => void;
   toggleViewMode: () => void;
   applySummary: (patch: Partial<SystemSummary>) => void;
@@ -35,12 +40,18 @@ const emptySummary: SystemSummary = {
 
 export const useSystemStore = create<SystemState>((set) => ({
   connectionStatus: "connecting",
-  dataMode: "live",
+  // Simulation first: the console must render something real on a cold open,
+  // with no api-service or SUMO running. `adoptLiveIfUnchosen` upgrades it
+  // when the startup probe finds a backend.
+  dataMode: "simulation",
+  dataModeChosen: false,
   viewMode: "single",
   summary: emptySummary,
 
   setConnectionStatus: (connectionStatus) => set({ connectionStatus }),
-  setDataMode: (dataMode) => set({ dataMode }),
+  setDataMode: (dataMode) => set({ dataMode, dataModeChosen: true }),
+  adoptLiveIfUnchosen: () =>
+    set((s) => (s.dataModeChosen ? s : { dataMode: "live" })),
   setViewMode: (viewMode) => set({ viewMode }),
   toggleViewMode: () =>
     set((s) => ({ viewMode: s.viewMode === "single" ? "split" : "single" })),
