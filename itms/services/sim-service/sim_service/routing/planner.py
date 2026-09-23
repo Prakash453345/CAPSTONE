@@ -171,7 +171,8 @@ class RoutePlanner:
             
         if not self.graph.neighbours(source_edge):
             raise NoRouteError(
-                f"cannot route from {source_edge!r} — it is a network terminus with no onward road connections"
+                f"cannot route from {source_edge!r} — it is a network terminus "
+                "with no onward road connections"
             )
             
         has_incoming = any(
@@ -180,7 +181,8 @@ class RoutePlanner:
         )
         if not has_incoming:
             raise NoRouteError(
-                f"cannot route to {dest_edge!r} — it is a network boundary entry edge with no incoming roads"
+                f"cannot route to {dest_edge!r} — it is a network boundary entry "
+                "edge with no incoming roads"
             )
 
         problems = self.config.validate()

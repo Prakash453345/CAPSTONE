@@ -16,10 +16,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from dataclasses import replace  # noqa: E402
+
 import m5_harness as H  # noqa: E402
 from sim_service.control import bench_stats  # noqa: E402
 from sim_service.control.tuning import load_config  # noqa: E402
-from dataclasses import replace  # noqa: E402
 
 _TUNED_PATH = H.ARTIFACT_DIR / "acamp_tuned.json"
 LEVELS = ["light", "medium", "heavy"]

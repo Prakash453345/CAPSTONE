@@ -64,7 +64,11 @@ def main() -> None:
         best, best_overlap = None, 0
         for pid in cfg.ring_order:
             ph = cfg.phases[pid]
-            prot = ph.protected_movements if ph.protected_movements is not None else ph.green_movements
+            prot = (
+                ph.protected_movements
+                if ph.protected_movements is not None
+                else ph.green_movements
+            )
             ov = len(prot & wanted)
             if ov > best_overlap:
                 best, best_overlap = pid, ov

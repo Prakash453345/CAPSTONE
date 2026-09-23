@@ -336,5 +336,8 @@ def tick(
         )
 
     return Decision(
-        mode="fixed_time", plan=plan, events=denial_events + [_changed_event(iid, plan)], notes=notes
+        mode="fixed_time",
+        plan=plan,
+        events=denial_events + [_changed_event(iid, plan)],
+        notes=notes,
     )

@@ -96,11 +96,15 @@ def test_both_branches_blocked_still_reaches_route_ready_forced_through(patched_
     operator's only option) rather than cancel the mission."""
     blocked_both = [
         Anomaly.create(
-            anomaly_id="an-a", source=AnomalySource.OPERATOR, anomaly_type=AnomalyType.LANE_BLOCKAGE,
+            anomaly_id="an-a",
+            source=AnomalySource.OPERATOR,
+            anomaly_type=AnomalyType.LANE_BLOCKAGE,
             severity=AnomalySeverity.BLOCKED, edge_id="A", at_ms=1, estimated_impact=1.0,
         ),
         Anomaly.create(
-            anomaly_id="an-b", source=AnomalySource.OPERATOR, anomaly_type=AnomalyType.LANE_BLOCKAGE,
+            anomaly_id="an-b",
+            source=AnomalySource.OPERATOR,
+            anomaly_type=AnomalyType.LANE_BLOCKAGE,
             severity=AnomalySeverity.BLOCKED, edge_id="B", at_ms=1, estimated_impact=1.0,
         ),
     ]

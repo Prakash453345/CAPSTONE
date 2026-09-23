@@ -25,7 +25,6 @@ or all-red between two conflicting phases.
 from __future__ import annotations
 
 from itms_domain import JunctionContext, Phase, PlanStep, SignalPlan, Tier0Config
-
 from sim_service.control.runner import (
     _advance_transition,
     _apply_decision,
@@ -58,7 +57,9 @@ def _junction(current: str, elapsed: float) -> _JunctionState:
     cabinet = FakeCabinet()
     cabinet.command(current)
     cabinet.raw_states.clear()
-    ctx = JunctionContext(intersection_id="J", current_phase_id=current, current_phase_elapsed_s=elapsed)
+    ctx = JunctionContext(
+        intersection_id="J", current_phase_id=current, current_phase_elapsed_s=elapsed
+    )
     return _JunctionState(cfg=_cfg(), cabinet=cabinet, ctx=ctx)
 
 

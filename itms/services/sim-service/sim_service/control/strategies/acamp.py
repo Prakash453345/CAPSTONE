@@ -535,7 +535,8 @@ class AcampConfig:
         level    default (unprotected)      protect_allocated_green
         light      57,928 +/-  2,631           57,928 +/-  2,631  (+0.0%, all 10 seeds identical)
         medium    212,741 +/- 35,358          212,741 +/- 35,358  (+0.0%, all 10 seeds identical)
-        heavy   1,454,395 +/- 61,600        1,277,791 +/- 53,763  (-12.1%, NO OVERLAP, 10/10 seeds improved)
+        heavy   1,454,395 +/- 61,600        1,277,791 +/- 53,763
+                (-12.1%, NO OVERLAP, 10/10 seeds improved)
 
     Zero interlock violations in either arm, at every demand level, on
     every seed. The light/medium identity is not a fluke or a rounding
@@ -753,7 +754,9 @@ def q_hat(ctx: JunctionContext, cfg: AcampConfig, movement: str) -> float:
     )
 
 
-def press_pressure(cfg_t0: Tier0Config, ctx: JunctionContext, cfg: AcampConfig, phase_id: str) -> float:
+def press_pressure(
+    cfg_t0: Tier0Config, ctx: JunctionContext, cfg: AcampConfig, phase_id: str
+) -> float:
     """`Σ_m s_m · (q̂_m · gate(ρ_m) − r_m)` -- Defect 1's fix."""
     total = 0.0
     for m in cfg_t0.phases[phase_id].green_movements:
@@ -1001,7 +1004,11 @@ def _critical_phases(cfg_t0: Tier0Config, ctx: JunctionContext, live: list[str])
 def _exit_step(
     cfg_t0: Tier0Config, ctx: JunctionContext, current: str, min_g: float, tick_s: float
 ) -> PlanStep:
-    green_s = 0.0 if current in ctx.faulted_phases else max(tick_s, min_g - ctx.current_phase_elapsed_s)
+    green_s = (
+        0.0
+        if current in ctx.faulted_phases
+        else max(tick_s, min_g - ctx.current_phase_elapsed_s)
+    )
     return PlanStep(
         phase_id=current, green_s=green_s, yellow_s=cfg_t0.yellow_s, all_red_s=cfg_t0.all_red_s
     )
@@ -1202,7 +1209,9 @@ class AdaptiveCamp:
 
         slow_half_life = max(1e-6, self.cfg.baseline_halflife_s)
         slow_decay = 0.5 ** (self.tick_s / slow_half_life)
-        self._baseline_load_ewma = slow_decay * self._baseline_load_ewma + (1.0 - slow_decay) * scale
+        self._baseline_load_ewma = (
+            slow_decay * self._baseline_load_ewma + (1.0 - slow_decay) * scale
+        )
 
     def _track_gap(self, cfg_t0: Tier0Config, ctx: JunctionContext) -> None:
         """Maintain `_empty_for_s`, the gap-out clock -- see
@@ -1507,7 +1516,9 @@ class AdaptiveCamp:
             # field's docstring for the measured reason (a documented
             # negative result, not a placeholder). Default path is exactly
             # v2's validated behaviour, byte-for-byte.
-            congestion_scale = self.relative_load if cfg.use_relative_congestion_gate else self._load_ewma
+            congestion_scale = (
+                self.relative_load if cfg.use_relative_congestion_gate else self._load_ewma
+            )
             congestion = memory_mod.congestion_weight(
                 congestion_scale, cfg.switch_scale_ref, cfg.switch_scale_exponent
             )
@@ -1552,7 +1563,11 @@ class AdaptiveCamp:
         elif not current_faulted:
             self.stats["switch_max_green"] += 1
 
-        ring = [p for p in _ring_candidates(cfg_t0.ring_order, current, cfg.k) if p not in ctx.faulted_phases]
+        ring = [
+            p
+            for p in _ring_candidates(cfg_t0.ring_order, current, cfg.k)
+            if p not in ctx.faulted_phases
+        ]
         candidates = ring or live
         filtered = [p for p in candidates if not _skippable(cfg_t0, ctx, p)]
         if filtered:

@@ -80,7 +80,11 @@ def test_blocked_edge_is_removed_and_the_route_goes_around_it():
 
 def _single_path_graph() -> RoadGraph:
     """S -> M -> T, one road, no bypass -- the "only one route" case."""
-    edges = {"S": edge("S", 100.0, to="jM"), "M": edge("M", 100.0, to="jT"), "T": edge("T", 100.0, to="jEnd")}
+    edges = {
+        "S": edge("S", 100.0, to="jM"),
+        "M": edge("M", 100.0, to="jT"),
+        "T": edge("T", 100.0, to="jEnd"),
+    }
     adjacency = {
         "S": (GraphEdge("M", "jT", False, None),),
         "M": (GraphEdge("T", "jEnd", False, None),),
