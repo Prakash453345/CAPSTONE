@@ -191,6 +191,28 @@ class CorridorController:
         self._events: list[dict] = []
         self._now_ms = 0
         self._ids = itertools.count(1)
+        self.unprotected_junctions: dict[str, int] = {}
+        """Ticks on which an open reservation could not be served because no
+        phase protects the movement the emergency vehicle needs.
+
+        Exists because the alternative is silence. `_phase_serving` returning
+        None makes `preemption_plan` return None, and at the arbiter that is
+        indistinguishable from "no corridor is active here" -- so a corridor
+        can report itself ACTIVE while one of its junctions is never actually
+        preempted, and nothing anywhere says so. `activate` already logs its
+        own version of this ("route crosses no signal"); the per-junction case
+        was the one left silent.
+
+        Measured on this corridor: four of the seven junctions carry
+        permissive movements, and on the benchmarked arterial route every
+        movement an emergency vehicle uses *is* protected by some phase, so
+        this counter stays empty there. That is a property of one route on one
+        network rather than a guarantee, which is why it is counted rather
+        than assumed."""
+        self._warned_unprotected: set[str] = set()
+        """Junctions already warned about, so the log carries one line per
+        junction rather than one per tick -- `preemption_plan` is called every
+        tick the window is open, and a warning per tick would bury itself."""
 
     # ---- lifecycle ------------------------------------------------
 
@@ -311,7 +333,11 @@ class CorridorController:
         wanted = frozenset(reservation.movements)
         target = self._phase_serving(cfg, wanted, prefer=ctx.current_phase_id)
         if target is None:
-            return None
+            # Counted and warned rather than returned silently -- see
+            # `unprotected_junctions`. The corridor stays active and the other
+            # junctions on its route are still served; this one is not, and
+            # that has to be visible to whoever is watching the corridor.
+            return self._report_unprotected(cfg, wanted)
 
         if target == ctx.current_phase_id:
             steps: tuple[PlanStep, ...] = (PlanStep(phase_id=target, green_s=tick_s),)
@@ -364,6 +390,26 @@ class CorridorController:
                     if best is None or r.close_at_ms < best.close_at_ms:
                         best = r
         return best
+
+    def _report_unprotected(self, cfg: Tier0Config, wanted: frozenset[str]) -> None:
+        """Record that this junction cannot be preempted, and return None.
+
+        Always returns None -- it is the "no plan" answer plus its
+        accounting, kept as one call so the two can never drift apart.
+        Extracted from `preemption_plan` so the accounting is testable
+        without standing up a graph, a planner and a live reservation just
+        to observe a counter."""
+        tl_id = cfg.intersection_id
+        self.unprotected_junctions[tl_id] = self.unprotected_junctions.get(tl_id, 0) + 1
+        if tl_id not in self._warned_unprotected:
+            self._warned_unprotected.add(tl_id)
+            log.warning(
+                "green corridor: no phase at %s protects movement(s) %s -- this "
+                "junction will not be preempted for the current corridor",
+                tl_id,
+                ",".join(sorted(wanted)),
+            )
+        return None
 
     @staticmethod
     def _phase_serving(
