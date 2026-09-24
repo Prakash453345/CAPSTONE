@@ -1,446 +1,441 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AnimatePresence, animate, motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { DEFAULT_CENTER } from "@/store/mapStore";
 import { useTransitionStore } from "@/store/transitionStore";
-import { Globe3D, type GlobeMarker } from "@/components/ui/3d-globe";
-import { LoaderOne } from "@/components/ui/loader";
+import { CinematicEarth, preloadEarthTextures, type EarthCamera } from "./cinematicEarth";
 
 /**
- * Landing → console cinematic: "Globe-to-Console".
+ * Landing → console cinematic: a single continuous camera move from high
+ * orbit down onto Vijayawada, rendered by CinematicEarth (a photoreal
+ * three.js Earth — see cinematicEarth.ts).
  *
- * TacticalGlobe3D (see src/vendor/TacticalGlobe3D.js) has no camera-distance
- * or zoom API — only orthographic rotation (rotateY/rotateZ = latitude/
- * longitude) driven by props. So this sequence uses the one real capability
- * the globe exposes — rotating it to genuinely bring Vijayawada to the
- * center of the sphere — and fakes the "diving toward the surface" feeling
- * with a CSS transform scale + blur + fade-to-black on its container.
+ * Why it stays smooth:
  *
- * Two things make this feel smooth rather than stuttery, both deliberate:
- *
- * 1. Every phase uses the SAME ease-in-out curve and starts/ends at zero
- *    velocity. Chaining ease-OUT segments back-to-back (as an earlier
- *    version did) leaves each phase ending at ~0 speed but the next one
- *    starting at full speed — that velocity jump at every seam reads as a
- *    stutter even at a perfect frame rate. Ease-in-out removes the jump.
- * 2. Only rotation (rz/ry) is driven from JS, because it has to flow into
- *    React props with no built-in tweening on the globe's side. Scale,
- *    blur, the fade-to-black and the progress bar are plain CSS
- *    transitions — the browser compositor animates those smoothly even
- *    while the globe's own per-frame SVG redraw (recomputing ~180
- *    countries' paths every tick) is busy on the main thread. During the
- *    dive/blackout/hold tail there is no per-frame JS at all.
- *
- * The real destination — the actual /console route with its live MapLibre
- * map, WebSocket feed and Zustand stores — only starts mounting at the
- * start of the dive phase (not earlier), so its own mount cost (WebGL
- * context, tile fetches, socket handshake) never competes with the
- * globe's rotation, which is the part where main-thread contention would
- * be most visible. It still gets the whole dive + blackout + hold + exit
- * fade to finish connecting before the reveal.
+ * - The whole move is ONE timeline. Longitude/latitude, altitude, field of
+ *   view and roll are each a function of the same clock with their own ease,
+ *   so there are no phase seams where velocity could jump.
+ * - Altitude is interpolated in log space, the way a real zoom feels: each
+ *   second covers the same *ratio* of distance, from 4.2 Earth radii down to
+ *   ~640 km (below that the 4K imagery goes soft — the console takes over), instead of racing through orbit and crawling at the end.
+ * - Per-frame work never goes through React. One requestAnimationFrame loop
+ *   moves the camera, renders, and writes the HUD readouts/reticle straight
+ *   to DOM refs. React state changes only on the four caption changes.
+ * - The first frame (shader compile, texture upload) is drawn while still
+ *   invisible. The console route then mounts (MapLibre, WebSocket, stores)
+ *   behind the overlay while the Earth holds still, and the camera only
+ *   starts once frames are arriving on time again — so none of that cost
+ *   lands mid-move. The clock also advances at most MAX_FRAME_MS per frame,
+ *   so any stray hitch slows the camera for a beat rather than jumping it.
+ * - The reveal is a crossfade while the camera is still descending, into a
+ *   console map that finishes the same zoom (TrafficMap eases in on arrival),
+ *   so the dive reads as one motion from space to street level.
  */
 
-type Phase = "idle" | "global" | "regional" | "local" | "dive" | "blackout";
+const TARGET = { lon: DEFAULT_CENTER.longitude, lat: DEFAULT_CENTER.latitude };
 
-interface Cam {
-  rz: number; // rotateZ (lambda) — degrees of longitude centered on-screen
-  ry: number; // rotateY (phi) — degrees of latitude centered on-screen
-}
+/** ms — the camera move itself, from first frame to rest. Sized so the whole
+ * cinematic lands at ~9 s end to end (fade-in + settle hold + move up to the
+ * reveal + fade-out). */
+const MOTION_MS = 6400;
+/** Fraction of MOTION_MS at which the console starts showing through. */
+const REVEAL_AT = 0.91;
+/** The hidden console is made visible a beat before the reveal, once the
+ * haze is nearly opaque: its first rasterization stalls the compositor for a
+ * few hundred ms, which is invisible on an almost-solid frame. */
+const UNCOVER_AT = 0.87;
+const ENTER_MS = 700;
+const EXIT_MS = 1100;
+/** Console mounts under the overlay once the landing page has faded. */
+const NAVIGATE_AFTER_MS = ENTER_MS + 150;
+/** Longest step the clock may take in one frame. A main-thread hitch then
+ * slows the move for a beat instead of making the camera jump. */
+const MAX_FRAME_MS = 34;
+/** The camera starts once this many consecutive frames arrive within
+ * QUIET_FRAME_MS — i.e. the console has finished warming up — or after
+ * MAX_HOLD_MS regardless. */
+const QUIET_FRAMES_NEEDED = 12;
+const QUIET_FRAME_MS = 24;
+const MAX_HOLD_MS = 2500;
+/** Don't hold the visitor hostage to a slow network. */
+const TEXTURE_TIMEOUT_MS = 8000;
 
-type CubicBezier = readonly [number, number, number, number];
-const EASE_INOUT: CubicBezier = [0.65, 0, 0.35, 1];
-const EASE_INOUT_CSS = "cubic-bezier(0.65, 0, 0.35, 1)";
-const EASE_DIVE_CSS = "cubic-bezier(0.55, 0, 1, 0.45)"; // continues from local's v=0, accelerates through the punch
+const EASE: [number, number, number, number] = [0.65, 0, 0.35, 1];
 
-const ROT: Record<"start" | "global" | "regional" | "local", Cam> = {
-  start: { rz: -55, ry: 9 },
-  global: { rz: -18, ry: 10 },
-  regional: { rz: 40, ry: 13 },
-  local: { rz: DEFAULT_CENTER.longitude, ry: DEFAULT_CENTER.latitude },
+const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
+const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+const easeInOutCubic = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
+const smoothstep = (a: number, b: number, x: number) => {
+  const t = clamp01((x - a) / (b - a));
+  return t * t * (3 - 2 * t);
 };
 
-const SCALE = { start: 0.72, global: 1, regional: 1.85, local: 3.4, dive: 21 } as const;
+const ALT_START = 4.2;
+const ALT_END = 0.1;
 
-/** Premium, unhurried pacing — ms per phase. */
-const DURATION = {
-  enter: 850,
-  global: 1500,
-  regional: 1700,
-  local: 1500,
-  dive: 1150,
-  blackout: 600,
-  hold: 450,
-  exit: 950,
-} as const;
+/** The camera at normalized time t ∈ [0, 1]. */
+function cameraAt(t: number): EarthCamera {
+  // Arrive over the target a little early so the last stretch is a pure descent.
+  const travel = easeInOutCubic(clamp01(t / 0.8));
+  const lon = lerp(TARGET.lon - 66, TARGET.lon, travel);
+  // A shallow arc through the northern sky rather than a straight line.
+  const lat = lerp(22, TARGET.lat, travel) + Math.sin(Math.PI * travel) * 5;
+  const s = 0.5 - 0.5 * Math.cos(Math.PI * t);
+  const alt = ALT_START * Math.pow(ALT_END / ALT_START, s);
+  const fov = lerp(30, 46, smoothstep(0.5, 1, t));
+  const roll = -8 * (1 - easeOutCubic(clamp01(t / 0.7)));
+  return { lon, lat, alt, fov, roll };
+}
 
-/** The punch-through beat at the end of dive: flash up, drop the (by-then
- * fully hidden) globe, fade to solid black underneath, then let the flash
- * clear. Kept separate from DURATION.blackout's CSS transition so the black
- * fade can be fast enough to be fully opaque well before the flash finishes
- * clearing — no frame is ever caught between the two. */
-const BLACK_FADE_MS = 380;
-const FLASH_IN_MS = 120;
-const FLASH_HOLD_MS = 200;
-const FLASH_OUT_MS = DURATION.blackout - FLASH_HOLD_MS;
+type Caption = "orbit" | "region" | "city" | "live";
 
-const ROTATE_TOTAL_MS = DURATION.global + DURATION.regional + DURATION.local;
-const SEQUENCE_MS = ROTATE_TOTAL_MS + DURATION.dive + DURATION.blackout;
-const CUM = {
-  global: DURATION.global / SEQUENCE_MS,
-  regional: (DURATION.global + DURATION.regional) / SEQUENCE_MS,
-  local: ROTATE_TOTAL_MS / SEQUENCE_MS,
-  dive: (ROTATE_TOTAL_MS + DURATION.dive) / SEQUENCE_MS,
-  blackout: 1,
+const CAPTIONS: Record<Caption, { kicker: string; title: string; sub: string }> = {
+  orbit: { kicker: "Orbital view", title: "Earth", sub: "Traffic intelligence network" },
+  region: { kicker: "Regional approach", title: "South Asia", sub: "Andhra Pradesh · Krishna corridor" },
+  city: { kicker: "Target acquired", title: "Vijayawada", sub: "20 signalised junctions · pilot deployment" },
+  live: { kicker: "Handing over", title: "Live Command Center", sub: "Connecting to real-time traffic data" },
 };
 
-const WORLD_MARKERS: GlobeMarker[] = [
-  { label: "NORTH AMERICA", latitude: 38.9, longitude: -77.0, color: "#5f6b70" },
-  { label: "EUROPE", latitude: 51.5, longitude: -0.12, color: "#5f6b70" },
-  { label: "EAST ASIA", latitude: 35.68, longitude: 139.65, color: "#5f6b70" },
-  { label: "OCEANIA", latitude: -33.87, longitude: 151.21, color: "#5f6b70" },
-  {
-    label: "VIJAYAWADA",
-    description: "Deployment site",
-    latitude: DEFAULT_CENTER.latitude,
-    longitude: DEFAULT_CENTER.longitude,
-    color: "#3fe0ff",
-  },
-];
-
-const REGIONAL_MARKERS: GlobeMarker[] = [
-  {
-    label: "VIJAYAWADA",
-    description: "Pilot network",
-    latitude: DEFAULT_CENTER.latitude,
-    longitude: DEFAULT_CENTER.longitude,
-    color: "#3fe0ff",
-  },
-];
-
-const LOCAL_MARKERS: GlobeMarker[] = [];
-
-const PHASE_COPY: Record<Phase, { title: string; sub: string }> = {
-  idle: { title: "", sub: "" },
-  global: { title: "GLOBAL STRATEGIC VIEW", sub: "Traffic monitoring network — worldwide" },
-  regional: { title: "REGIONAL FOCUS", sub: "South Asia corridor" },
-  local: { title: "VIJAYAWADA TRAFFIC NETWORK", sub: "20 junctions · pilot deployment" },
-  dive: { title: "LIVE COMMAND CENTER", sub: "Connecting to real-time traffic data" },
-  blackout: { title: "LIVE COMMAND CENTER", sub: "Connecting to real-time traffic data" },
-};
-
-/** Static — hoisted so it's never rebuilt on the per-frame rotation re-renders. */
-const CORNER_BRACKETS = (
-  <>
-    <div className="absolute left-6 top-6 h-8 w-8 border-l border-t border-[#3fe0ff]/40" />
-    <div className="absolute right-6 top-6 h-8 w-8 border-r border-t border-[#3fe0ff]/40" />
-    <div className="absolute bottom-6 left-6 h-8 w-8 border-b border-l border-[#3fe0ff]/40" />
-    <div className="absolute bottom-6 right-6 h-8 w-8 border-b border-r border-[#3fe0ff]/40" />
-  </>
-);
-
-function lerp(a: number, b: number, t: number) {
-  return a + (b - a) * t;
+function captionAt(t: number): Caption {
+  if (t < 0.3) return "orbit";
+  if (t < 0.56) return "region";
+  if (t < REVEAL_AT) return "city";
+  return "live";
 }
 
-function wait(ms: number) {
-  return new Promise<void>((resolve) => setTimeout(resolve, ms));
+function fmtLat(v: number) {
+  return `${Math.abs(v).toFixed(4)}° ${v >= 0 ? "N" : "S"}`;
+}
+function fmtLon(v: number) {
+  return `${Math.abs(v).toFixed(4)}° ${v >= 0 ? "E" : "W"}`;
+}
+function fmtAlt(earthRadii: number) {
+  const km = earthRadii * 6371;
+  return km >= 1000 ? `${Math.round(km).toLocaleString("en-US")} km` : `${km.toFixed(1)} km`;
 }
 
-function formatLat(v: number) {
-  return `${Math.abs(v).toFixed(4)}°${v >= 0 ? "N" : "S"}`;
-}
-
-function formatLng(v: number) {
-  return `${Math.abs(v).toFixed(4)}°${v >= 0 ? "E" : "W"}`;
-}
+/** Static film grain — one inline SVG, never animated. */
+const GRAIN =
+  "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.55 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>\")";
 
 export function GlobeTransition() {
   const active = useTransitionStore((s) => s.active);
+  return <AnimatePresence>{active && <TransitionStage key="globe-transition" />}</AnimatePresence>;
+}
+
+function TransitionStage() {
   const finish = useTransitionStore((s) => s.finish);
+  const uncover = useTransitionStore((s) => s.uncover);
   const navigate = useNavigate();
 
-  const [phase, setPhase] = useState<Phase>("idle");
-  const [cam, setCam] = useState<Cam>(ROT.start);
-  const [markers, setMarkers] = useState<GlobeMarker[]>(WORLD_MARKERS);
-  const [progress, setProgress] = useState(0);
+  const hostRef = useRef<HTMLDivElement>(null);
+  const canvasWrapRef = useRef<HTMLDivElement>(null);
+  const hazeRef = useRef<HTMLDivElement>(null);
+  const reticleRef = useRef<HTMLDivElement>(null);
+  const latRef = useRef<HTMLSpanElement>(null);
+  const lonRef = useRef<HTMLSpanElement>(null);
+  const altRef = useRef<HTMLSpanElement>(null);
+  const progressRef = useRef<HTMLDivElement>(null);
 
-  // CSS-transition targets: each is flipped ONCE per phase and the browser
-  // compositor interpolates it — no per-frame JS involved for any of these.
-  const [scaleTarget, setScaleTarget] = useState<number>(SCALE.start);
-  const [scaleDurationMs, setScaleDurationMs] = useState(0);
-  const [blurTarget, setBlurTarget] = useState(0);
-  const [blackTarget, setBlackTarget] = useState(0);
-  const [flashOn, setFlashOn] = useState(false);
+  const [caption, setCaption] = useState<Caption | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const runningRef = useRef(false);
+  const navigatedRef = useRef(false);
+  const finishedRef = useRef(false);
+
+  const goToConsole = useCallback(() => {
+    if (navigatedRef.current) return;
+    navigatedRef.current = true;
+    navigate("/console");
+  }, [navigate]);
+
+  const reveal = useCallback(() => {
+    if (finishedRef.current) return;
+    finishedRef.current = true;
+    goToConsole();
+    finish();
+  }, [finish, goToConsole]);
 
   useEffect(() => {
-    if (!active) return;
-    if (runningRef.current) return; // duplicate-click guard mirrors the store's own
-    runningRef.current = true;
+    const host = hostRef.current;
+    const wrap = canvasWrapRef.current;
+    if (!host || !wrap) return;
+
     let cancelled = false;
+    let raf = 0;
+    let earth: CinematicEarth | null = null;
+    let cleanupResize: (() => void) | null = null;
+    const timers: number[] = [];
+    const later = (fn: () => void, ms: number) => timers.push(window.setTimeout(fn, ms));
 
-    const reduced =
-      typeof window !== "undefined" &&
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-    /** Rotates the globe over `ms`, driven from JS (framer-motion `animate`) since
-     * the globe has no built-in tweening. Scale rides along on a plain CSS
-     * transition set once, in parallel — never JS-driven. */
-    async function rotatePhase(p: Phase, from: Cam, to: Cam, scale: number, ms: number, cum: number) {
-      setPhase(p);
-      setScaleDurationMs(ms);
-      setScaleTarget(scale);
-      const zero: number = 0;
-      const one: number = 1;
-      await animate(zero, one, {
-        duration: ms / 1000,
-        ease: EASE_INOUT,
-        onUpdate: (t) => setCam({ rz: lerp(from.rz, to.rz, t), ry: lerp(from.ry, to.ry, t) }),
-      });
-      if (!cancelled) setProgress(cum);
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduced) {
+      later(reveal, 350);
+      return () => timers.forEach(clearTimeout);
     }
 
-    (async () => {
-      if (reduced) {
-        setCam(ROT.local);
-        setScaleTarget(SCALE.local);
-        setScaleDurationMs(0);
-        setPhase("dive");
-        setMarkers(LOCAL_MARKERS);
-        navigate("/console");
-        await wait(400);
-        if (!cancelled) finish();
-        runningRef.current = false;
-        return;
-      }
+    later(goToConsole, NAVIGATE_AFTER_MS);
 
-      setCam(ROT.start);
-      setScaleTarget(SCALE.start);
-      setScaleDurationMs(0);
-      setMarkers(WORLD_MARKERS);
+    // A fresh canvas per run: a canvas whose context was released can't host
+    // a new renderer (this also keeps React StrictMode's double mount honest).
+    const canvas = document.createElement("canvas");
+    canvas.style.cssText = "position:absolute;inset:0;width:100%;height:100%;display:block;";
+    wrap.appendChild(canvas);
 
-      await rotatePhase("global", ROT.start, ROT.global, SCALE.global, DURATION.global, CUM.global);
-      if (cancelled) return;
+    const timeout = new Promise<null>((resolve) => later(() => resolve(null), TEXTURE_TIMEOUT_MS));
 
-      setMarkers(REGIONAL_MARKERS);
-      await rotatePhase("regional", ROT.global, ROT.regional, SCALE.regional, DURATION.regional, CUM.regional);
-      if (cancelled) return;
+    Promise.race([preloadEarthTextures(), timeout])
+      .then((tex) => {
+        if (cancelled) return;
+        if (!tex) throw new Error("textures timed out");
+        earth = new CinematicEarth(canvas, tex);
+        const size = () => earth?.setSize(host.clientWidth, host.clientHeight);
+        size();
+        window.addEventListener("resize", size);
+        cleanupResize = () => window.removeEventListener("resize", size);
 
-      setMarkers(LOCAL_MARKERS);
-      await rotatePhase("local", ROT.regional, ROT.local, SCALE.local, DURATION.local, CUM.local);
-      if (cancelled) return;
+        // Draw the first frame while still invisible — during the overlay's
+        // fade-in — so shader compilation and texture upload are paid up
+        // front and never cost a frame mid-motion.
+        earth.setCamera(cameraAt(0));
+        earth.render(0);
+        setLoading(false);
+        wrap.style.opacity = "1";
 
-      // Dive: rotation target doesn't change any more (already centered on
-      // Vijayawada), so from here on nothing needs per-frame JS — scale,
-      // blur, the blackout and the progress bar are all plain CSS
-      // transitions running on the compositor. This is also where the real
-      // console starts mounting, once the busiest rotation work is done.
-      navigate("/console");
-      setMarkers([]);
-      setPhase("dive");
-      setScaleDurationMs(DURATION.dive);
-      setScaleTarget(SCALE.dive);
-      setBlurTarget(20);
-      setProgress(CUM.dive);
-      await wait(DURATION.dive);
-      if (cancelled) return;
+        // The Earth fades in at once, but the camera holds still until the
+        // console behind the overlay has finished warming up (its mount,
+        // map style, first data batches) and frames are arriving on time
+        // again. A stall on a still frame is invisible; mid-move it's a
+        // stutter.
+        const shownAt = performance.now();
+        let moving = false;
+        let quietFrames = 0;
+        let prev = 0;
+        let elapsed = 0;
+        let lastCaption: Caption | null = null;
+        const tick = (now: number) => {
+          if (cancelled || !earth) return;
+          const dt = prev ? now - prev : 0;
+          prev = now;
+          if (!moving) {
+            quietFrames = dt > 0 && dt < QUIET_FRAME_MS ? quietFrames + 1 : 0;
+            const settled = navigatedRef.current && quietFrames >= QUIET_FRAMES_NEEDED;
+            moving = settled || now - shownAt > MAX_HOLD_MS;
+          } else {
+            elapsed += Math.min(dt, MAX_FRAME_MS);
+          }
+          const t = clamp01(elapsed / MOTION_MS);
 
-      // Punch through: flash bright, fade to solid black, and drop the
-      // globe from the tree — all in the same beat. The globe's own
-      // per-frame redraw loop (recomputing every country's SVG path,
-      // every tick) only stops once it's actually unmounted; leaving it
-      // mounted-but-hidden behind the overlay is exactly what caused the
-      // stall right before the reveal. It's safe to cut the instant the
-      // flash covers the screen — black is already fully opaque well
-      // before the flash finishes clearing, so nothing is ever exposed.
-      setPhase("blackout");
-      setBlackTarget(1);
-      setFlashOn(true);
-      setProgress(CUM.blackout);
-      await wait(FLASH_HOLD_MS);
-      if (cancelled) return;
-      setFlashOn(false);
-      await wait(FLASH_OUT_MS);
-      if (cancelled) return;
+          const cam = cameraAt(t);
+          earth.setCamera(cam);
+          earth.render(elapsed / 1000);
 
-      await wait(DURATION.hold);
-      if (cancelled) return;
-      finish();
-      runningRef.current = false;
-    })();
+          const w = host.clientWidth;
+          const h = host.clientHeight;
+
+          if (latRef.current) latRef.current.textContent = fmtLat(cam.lat);
+          if (lonRef.current) lonRef.current.textContent = fmtLon(cam.lon);
+          if (altRef.current) altRef.current.textContent = fmtAlt(cam.alt);
+          if (progressRef.current) progressRef.current.style.transform = `scaleX(${t})`;
+
+          // Reticle locks onto Vijayawada once it is well in view.
+          const ret = reticleRef.current;
+          if (ret) {
+            const p = earth.project(TARGET.lon, TARGET.lat, w, h);
+            const vis = p ? smoothstep(0.3, 0.42, t) * (1 - smoothstep(0.68, 0.76, t)) * smoothstep(0.08, 0.3, p.facing) : 0;
+            ret.style.opacity = vis.toFixed(3);
+            if (p) ret.style.transform = `translate3d(${p.x}px, ${p.y}px, 0) scale(${1.25 - 0.25 * smoothstep(0.3, 0.45, t)})`;
+          }
+
+          // Atmospheric haze as we drop through the sky, so the crossfade
+          // lands on the console's own background tone. (Deliberately not a
+          // CSS blur: filtering a full-screen live canvas costs whole frames
+          // on integrated GPUs.)
+          const haze = smoothstep(0.64, 0.87, t) * 0.94;
+          if (hazeRef.current) hazeRef.current.style.opacity = haze.toFixed(3);
+
+          const c = captionAt(t);
+          if (c !== lastCaption) {
+            lastCaption = c;
+            setCaption(c);
+          }
+          if (t >= UNCOVER_AT && useTransitionStore.getState().covering) uncover();
+          if (t >= REVEAL_AT) reveal();
+
+          if (t < 1 || !finishedRef.current) raf = requestAnimationFrame(tick);
+        };
+        raf = requestAnimationFrame(tick);
+      })
+      .catch((err) => {
+        // No WebGL or no textures — skip straight to the console.
+        console.warn("[GlobeTransition] cinematic unavailable, going straight to the console:", err);
+        if (!cancelled) later(reveal, 300);
+      });
 
     return () => {
       cancelled = true;
+      cancelAnimationFrame(raf);
+      timers.forEach(clearTimeout);
+      cleanupResize?.();
+      earth?.dispose();
+      canvas.remove();
     };
-  }, [active, navigate, finish]);
+  }, [goToConsole, reveal, uncover]);
 
+  // Escape / Enter skip the cinematic.
   useEffect(() => {
-    if (!active) {
-      runningRef.current = false;
-      setPhase("idle");
-      setCam(ROT.start);
-      setMarkers(WORLD_MARKERS);
-      setScaleTarget(SCALE.start);
-      setScaleDurationMs(0);
-      setBlurTarget(0);
-      setBlackTarget(0);
-      setFlashOn(false);
-      setProgress(0);
-    }
-  }, [active]);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" || e.key === "Enter") reveal();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [reveal]);
 
-  const copy = PHASE_COPY[phase];
+  const copy = caption ? CAPTIONS[caption] : null;
 
   return (
-    <AnimatePresence>
-      {active && (
-        <motion.div
-          key="globe-transition"
-          className="fixed inset-0 z-[999] overflow-hidden bg-[#03050a] text-[#dfeef2]"
-          style={{ fontFamily: "'IBM Plex Mono', ui-monospace, monospace" }}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1, transition: { duration: DURATION.enter / 1000, ease: EASE_INOUT } }}
-          exit={{ opacity: 0, transition: { duration: DURATION.exit / 1000, ease: EASE_INOUT } }}
-        >
-          {/* base gradient */}
-          <div
-            className="pointer-events-none absolute inset-0"
-            style={{
-              background:
-                "radial-gradient(ellipse at 50% 42%, #0b1a20 0%, #050a0d 62%, #010203 100%)",
-            }}
-          />
+    <motion.div
+      ref={hostRef}
+      className="fixed inset-0 z-[999] overflow-hidden bg-[#010204] text-[#e6f1f4]"
+      style={{ fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif" }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1, transition: { duration: ENTER_MS / 1000, ease: EASE } }}
+      exit={{ opacity: 0, transition: { duration: EXIT_MS / 1000, ease: EASE } }}
+    >
+      {/* the Earth — faded in once its first frame is on the GPU */}
+      <div
+        ref={canvasWrapRef}
+        className="absolute inset-0"
+        style={{ opacity: 0, transition: "opacity 1400ms cubic-bezier(0.33, 0, 0.2, 1)" }}
+      />
 
-          {/* static framing vignette — never animated, so it's free */}
-          <div
-            className="pointer-events-none absolute inset-0"
-            style={{
-              background:
-                "radial-gradient(circle at 50% 50%, transparent 55%, rgba(1,2,4,0.85) 100%)",
-            }}
-          />
+      {/* lens vignette */}
+      <div
+        className="pointer-events-none absolute inset-0"
+        style={{ background: "radial-gradient(ellipse 120% 90% at 50% 50%, transparent 55%, rgba(0,0,0,0.7) 100%)" }}
+      />
 
-          {/* globe — scale/blur are CSS transitions (compositor-driven), rotation is the only JS-driven value.
-              Unmounted once "blackout" starts: it's the ONE thing on this page with a genuine per-frame
-              cost (its own internal loop recomputes every country's SVG path every tick, independent of
-              React), and leaving it mounted-but-hidden behind the flash/black is what caused the stall
-              right before the reveal — this is what actually stops that work, not just hiding it. */}
-          {phase !== "blackout" && (
-            <div
-              className="absolute left-1/2 top-1/2 h-[62vmin] w-[62vmin]"
-              style={{
-                transform: `translate(-50%, -50%) scale(${scaleTarget})`,
-                filter: blurTarget > 0.05 ? `blur(${blurTarget}px)` : undefined,
-                transition: `transform ${scaleDurationMs}ms ${phase === "dive" ? EASE_DIVE_CSS : EASE_INOUT_CSS}, filter ${Math.max(scaleDurationMs, 400)}ms ease-in`,
-                willChange: "transform, filter",
-              }}
+      {/* descent haze — tinted to the console background so the handoff is seamless */}
+      <div
+        ref={hazeRef}
+        className="pointer-events-none absolute inset-0"
+        style={{
+          opacity: 0,
+          background: "radial-gradient(ellipse at 50% 50%, rgba(78,118,150,0.55) 0%, rgba(20,34,46,0.85) 55%, #0a0f15 100%)",
+        }}
+      />
+
+      {/* film grain — plain alpha, no blend mode: blending over a live WebGL
+          canvas forces an extra full-screen compositing pass every frame */}
+      <div className="pointer-events-none absolute inset-0" style={{ backgroundImage: GRAIN, opacity: 0.035 }} />
+
+      {/* target reticle — positioned every frame from the 3D projection */}
+      <div ref={reticleRef} className="pointer-events-none absolute left-0 top-0" style={{ opacity: 0, willChange: "transform, opacity" }}>
+        <div className="absolute -left-7 -top-7 h-14 w-14 rounded-full border border-[#7fe6ff]/70" />
+        <div className="absolute -left-[3px] -top-[3px] h-[6px] w-[6px] rounded-full bg-[#7fe6ff] shadow-[0_0_14px_3px_rgba(127,230,255,0.7)]" />
+        <div className="absolute -left-12 top-0 h-px w-4 bg-[#7fe6ff]/70" />
+        <div className="absolute left-8 top-0 h-px w-4 bg-[#7fe6ff]/70" />
+        <div className="absolute -top-12 left-0 h-4 w-px bg-[#7fe6ff]/70" />
+        <div className="absolute left-0 top-8 h-4 w-px bg-[#7fe6ff]/70" />
+        <div className="absolute left-14 -top-3 whitespace-nowrap" style={{ fontFamily: "'IBM Plex Mono', ui-monospace, monospace" }}>
+          <div className="text-[10px] tracking-[0.28em] text-[#7fe6ff]">VIJAYAWADA</div>
+          <div className="mt-0.5 text-[10px] tracking-[0.12em] text-white/55">16.5062° N · 80.6335° E</div>
+        </div>
+      </div>
+
+      {/* cinematic letterbox */}
+      <motion.div
+        className="pointer-events-none absolute inset-x-0 top-0 h-[8vh] origin-top bg-black"
+        initial={{ scaleY: 0 }}
+        animate={{ scaleY: 1 }}
+        transition={{ duration: 1.1, ease: EASE, delay: 0.15 }}
+      />
+      <motion.div
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-[8vh] origin-bottom bg-black"
+        initial={{ scaleY: 0 }}
+        animate={{ scaleY: 1 }}
+        transition={{ duration: 1.1, ease: EASE, delay: 0.15 }}
+      />
+
+      {/* HUD */}
+      <div
+        className="pointer-events-none absolute inset-x-6 top-[calc(8vh+20px)] flex items-start justify-between text-[10px] tracking-[0.22em] text-white/55 sm:inset-x-10"
+        style={{ fontFamily: "'IBM Plex Mono', ui-monospace, monospace" }}
+      >
+        <div className="flex items-center gap-2.5">
+          <span className="relative flex h-1.5 w-1.5">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#7fe6ff] opacity-50" />
+            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-[#7fe6ff]" />
+          </span>
+          ITMS · ORBITAL APPROACH
+        </div>
+        <div className="grid grid-cols-[auto_auto] gap-x-4 gap-y-1 text-right tabular-nums">
+          <span className="text-white/35">LAT</span>
+          <span ref={latRef} className="text-white/75">—</span>
+          <span className="text-white/35">LON</span>
+          <span ref={lonRef} className="text-white/75">—</span>
+          <span className="text-white/35">ALT</span>
+          <span ref={altRef} className="text-white/75">—</span>
+        </div>
+      </div>
+
+      {/* lower-third caption */}
+      <div className="pointer-events-none absolute bottom-[calc(8vh+36px)] left-6 right-6 sm:left-10">
+        <AnimatePresence mode="wait">
+          {copy && (
+            <motion.div
+              key={caption}
+              initial={{ opacity: 0, y: 14, filter: "blur(6px)" }}
+              animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+              exit={{ opacity: 0, y: -8, filter: "blur(6px)" }}
+              transition={{ duration: 0.7, ease: EASE }}
             >
-              <Globe3D
-                pointOfView={{ lat: cam.ry, lng: cam.rz, altitude: 2.5 }}
-                markers={markers}
-                config={{
-                  atmosphereColor: "#3fe0ff",
-                  atmosphereIntensity: 15,
-                  bumpScale: 5,
-                }}
-              />
-            </div>
+              <div
+                className="flex items-center gap-3 text-[10px] tracking-[0.34em] text-[#7fe6ff]"
+                style={{ fontFamily: "'IBM Plex Mono', ui-monospace, monospace" }}
+              >
+                <span className="h-px w-8 bg-[#7fe6ff]/60" />
+                {copy.kicker.toUpperCase()}
+              </div>
+              <div className="mt-3 text-[34px] font-light leading-none tracking-[-0.01em] text-white sm:text-[48px]">
+                {copy.title}
+              </div>
+              <div className="mt-3 text-[13px] tracking-[0.02em] text-white/55">{copy.sub}</div>
+            </motion.div>
           )}
+        </AnimatePresence>
+      </div>
 
-          {/* fade to black for the reveal — fast enough to be fully opaque well before the flash below
-              finishes clearing, so no frame is ever caught between the globe disappearing and black
-              covering it (the flash masks that instant regardless). */}
-          <div
-            className="pointer-events-none absolute inset-0 bg-black"
-            style={{ opacity: blackTarget, transition: `opacity ${BLACK_FADE_MS}ms ease-in`, willChange: "opacity" }}
-          />
+      {/* acquiring signal — only while textures are still arriving */}
+      <AnimatePresence>
+        {loading && (
+          <motion.div
+            className="pointer-events-none absolute inset-0 flex items-center justify-center text-[10px] tracking-[0.34em] text-white/45"
+            style={{ fontFamily: "'IBM Plex Mono', ui-monospace, monospace" }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: [0.35, 1, 0.35], transition: { duration: 1.8, repeat: Infinity } }}
+            exit={{ opacity: 0, transition: { duration: 0.4 } }}
+          >
+            ACQUIRING ORBIT
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-          {/* punch-through flash — the brightness (not precise timing) is what hides the globe's unmount */}
-          <div
-            className="pointer-events-none absolute inset-0 bg-white"
-            style={{
-              opacity: flashOn ? 0.92 : 0,
-              transition: `opacity ${flashOn ? FLASH_IN_MS : FLASH_OUT_MS}ms ${flashOn ? "ease-out" : "ease-in"}`,
-            }}
-          />
-
-          {/* HUD chrome */}
-          <div className="pointer-events-none absolute inset-0">
-            {CORNER_BRACKETS}
-
-            {/* top-left status */}
-            <div className="absolute left-8 top-8 flex items-center gap-2 text-[11px] tracking-[0.18em] text-[#8fa5ad]">
-              <span className="relative flex h-2 w-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#3fe0ff] opacity-60" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-[#3fe0ff]" />
-              </span>
-              NETWORK UPLINK · LIVE
-            </div>
-
-            {/* top-right coordinates */}
-            <div className="absolute right-8 top-8 text-right text-[11px] tracking-[0.1em] text-[#8fa5ad]">
-              <div>{formatLat(cam.ry)}</div>
-              <div>{formatLng(cam.rz)}</div>
-            </div>
-
-            {/* center label */}
-            <div className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center">
-              <AnimatePresence mode="wait">
-                {(phase === "dive" || phase === "blackout") ? (
-                  <motion.div
-                    key="dive-loader"
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 1.05 }}
-                    transition={{ duration: 0.6, ease: EASE_INOUT }}
-                    className="flex flex-col items-center justify-center gap-8"
-                  >
-                    <LoaderOne />
-                  </motion.div>
-                ) : copy.title ? (
-                  <motion.div
-                    key={phase}
-                    initial={{ opacity: 0, y: 16 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -12 }}
-                    transition={{ duration: 0.55, ease: EASE_INOUT }}
-                  >
-                    <div className="text-[11px] font-semibold tracking-[0.3em] text-[#3fe0ff]">
-                      {copy.title}
-                    </div>
-                    <div className="mt-2 text-[13px] tracking-[0.05em] text-[#9bb0b6]">
-                      {copy.sub}
-                    </div>
-                  </motion.div>
-                ) : null}
-              </AnimatePresence>
-            </div>
-
-            {/* bottom progress — transform:scaleX so it's compositor-driven, not layout-driven */}
-            <AnimatePresence>
-              {(phase !== "dive" && phase !== "blackout") && (
-                <motion.div 
-                  initial={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="absolute inset-x-8 bottom-8"
-                >
-                  <div className="h-[2px] w-full overflow-hidden rounded-full bg-white/10">
-                    <div
-                      className="h-full w-full origin-left bg-[#3fe0ff]"
-                      style={{ transform: `scaleX(${progress})`, transition: "transform 420ms linear" }}
-                    />
-                  </div>
-                  <div className="mt-2 flex justify-between text-[10px] tracking-[0.14em] text-[#5b686d]">
-                    <span>ITMS COMMAND UPLINK</span>
-                    <span>{Math.round(progress * 100)}%</span>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+      {/* progress hairline + skip, sitting inside the lower letterbox */}
+      <div className="absolute inset-x-6 bottom-[calc(4vh-6px)] flex items-center gap-5 sm:inset-x-10">
+        <div className="h-px flex-1 overflow-hidden bg-white/10">
+          <div ref={progressRef} className="h-full w-full origin-left bg-[#7fe6ff]/80" style={{ transform: "scaleX(0)" }} />
+        </div>
+        <button
+          type="button"
+          onClick={reveal}
+          className="pointer-events-auto text-[10px] tracking-[0.28em] text-white/45 transition-colors hover:text-white/90"
+          style={{ fontFamily: "'IBM Plex Mono', ui-monospace, monospace" }}
+        >
+          SKIP ↵
+        </button>
+      </div>
+    </motion.div>
   );
 }

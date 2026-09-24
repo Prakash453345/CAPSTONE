@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useTransitionStore } from "@/store/transitionStore";
+import { preloadEarthTextures } from "@/components/transition/cinematicEarth";
 
 /**
  * The marketing landing page at "/" — ported verbatim (markup, styles, and the
@@ -1226,7 +1227,14 @@ export function LandingPage() {
     document.title = "ITMS — Traffic that responds before you call it in";
     const run = new Function(LANDING_SCRIPT);
     run();
+    // Warm the cinematic's Earth textures while the visitor reads, so the
+    // dive starts the instant they click through.
+    const warm = () => void preloadEarthTextures().catch(() => {});
+    const idle = window.requestIdleCallback?.(warm, { timeout: 2500 });
+    const fallback = idle === undefined ? window.setTimeout(warm, 1200) : undefined;
     return () => {
+      if (idle !== undefined) window.cancelIdleCallback(idle);
+      if (fallback !== undefined) window.clearTimeout(fallback);
       delete (window as typeof window & { __landingBooted?: boolean }).__landingBooted;
     };
   }, []);

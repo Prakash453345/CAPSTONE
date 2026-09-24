@@ -19,6 +19,7 @@ import {
 } from "@/components/map/CreateAnomalyPanel";
 import { EmergencyPanel } from "@/components/map/EmergencyPanel";
 import { useMapStore } from "@/store/mapStore";
+import { useTransitionStore } from "@/store/transitionStore";
 import { useIncidentStore } from "@/store/incidentStore";
 import { useEmergencyStore } from "@/store/emergencyStore";
 import { networkBounds, nearestEdge } from "@/data/network";
@@ -80,6 +81,30 @@ export function TrafficMap({ className }: { className?: string }) {
       }
       instance.on("error", () => { if (!disposed) setTileError(true); });
       instance.getCanvas().setAttribute("aria-label", "Vijayawada traffic map. Use arrow keys to pan, plus and minus to zoom.");
+      // Arriving via the globe cinematic: start a little further out and
+      // finish the dive's zoom once the overlay lifts, so the two read as
+      // one continuous move.
+      if (useTransitionStore.getState().active) {
+        const target = instance.getZoom();
+        const map = instance;
+        map.jumpTo({ zoom: Math.max(map.getMinZoom(), target - 1.6) });
+        const arrive = () => {
+          if (disposed) return;
+          map.easeTo({
+            zoom: target,
+            duration: 2400,
+            easing: (t) => 1 - Math.pow(1 - t, 3),
+            essential: false,
+          });
+        };
+        const unsub = useTransitionStore.subscribe((s) => {
+          if (!s.active) {
+            unsub();
+            arrive();
+          }
+        });
+        map.once("remove", unsub);
+      }
       const markReady = () => {
         if (!disposed) setReady(true);
       };
