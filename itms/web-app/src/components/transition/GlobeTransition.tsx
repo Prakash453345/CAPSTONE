@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { DEFAULT_CENTER } from "@/store/mapStore";
 import { useTransitionStore } from "@/store/transitionStore";
-import { CinematicEarth, preloadEarthTextures, type EarthCamera } from "./cinematicEarth";
+import type { EarthCamera } from "./cinematicEarth";
 
 /**
  * Landing → console cinematic: a single continuous camera move from high
@@ -164,7 +164,8 @@ function TransitionStage() {
 
     let cancelled = false;
     let raf = 0;
-    let earth: CinematicEarth | null = null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let earth: any = null;
     let cleanupResize: (() => void) | null = null;
     const timers: number[] = [];
     const later = (fn: () => void, ms: number) => timers.push(window.setTimeout(fn, ms));
@@ -185,10 +186,14 @@ function TransitionStage() {
 
     const timeout = new Promise<null>((resolve) => later(() => resolve(null), TEXTURE_TIMEOUT_MS));
 
-    Promise.race([preloadEarthTextures(), timeout])
-      .then((tex) => {
+    const moduleLoad = import("./cinematicEarth");
+    const texLoad = moduleLoad.then(({ preloadEarthTextures }) => preloadEarthTextures());
+
+    Promise.race([texLoad, timeout])
+      .then(async (tex) => {
         if (cancelled) return;
         if (!tex) throw new Error("textures timed out");
+        const { CinematicEarth } = await moduleLoad;
         earth = new CinematicEarth(canvas, tex);
         const size = () => earth?.setSize(host.clientWidth, host.clientHeight);
         size();

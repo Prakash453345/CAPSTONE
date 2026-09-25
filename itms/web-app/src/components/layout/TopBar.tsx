@@ -159,7 +159,7 @@ function Segmented<T extends string>({
             className={cn(
               "flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors",
               active
-                ? "bg-primary-muted/60 text-primary"
+                ? "bg-surface-raised text-foreground shadow-sm"
                 : "text-muted-foreground hover:text-foreground",
             )}
           >

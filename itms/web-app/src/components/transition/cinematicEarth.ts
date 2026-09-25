@@ -23,13 +23,13 @@ import * as THREE from "three";
  */
 
 const TEXTURE_URLS = {
-  day: "/globe/earth-day.jpg",
+  day: "/globe/earth-day.webp",
   // City lights only — extracted from NASA Black Marble with its moonlit
   // land base removed, so the night side stays dark instead of teal.
-  lights: "/globe/earth-lights.jpg",
-  water: "/globe/earth-water.jpg",
-  topo: "/globe/earth-topology.jpg",
-  clouds: "/globe/earth-clouds.jpg",
+  lights: "/globe/earth-lights.webp",
+  water: "/globe/earth-water.webp",
+  topo: "/globe/earth-topology.webp",
+  clouds: "/globe/earth-clouds.webp",
 } as const;
 
 type TextureKey = keyof typeof TEXTURE_URLS;

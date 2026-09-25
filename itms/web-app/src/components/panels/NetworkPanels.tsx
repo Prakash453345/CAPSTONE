@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { ArrowUpRight, Search, RadioTower, Route, MapPin } from "lucide-react";
 import { roadEdges } from "@/data/network";
 import { useTrafficStore } from "@/store/trafficStore";
@@ -6,17 +6,38 @@ import { useIncidentStore } from "@/store/incidentStore";
 import { useMapStore } from "@/store/mapStore";
 import { useSystemStore } from "@/store/systemStore";
 
+function getBucket(v: number | undefined): 0 | 1 | 2 | 3 {
+  if (v == null) return 3;
+  return v > 0.6 ? 0 : v > 0.35 ? 1 : 2;
+}
+
 export function RoadConditions({ compact = false }: { compact?: boolean }) {
   const congestion = useTrafficStore((s) => s.roadCongestion);
   const focusOn = useMapStore((s) => s.focusOn);
   const [search, setSearch] = useState("");
-  const roads = roadEdges
-    .filter((e) =>
-      `${e.name ?? "Unnamed road"} ${e.id}`
-        .toLowerCase()
-        .includes(search.toLowerCase()),
-    )
-    .sort((a, b) => (congestion[b.id] ?? -1) - (congestion[a.id] ?? -1));
+
+  // Recompute sort key only when a road changes congestion tier (critical/warn/ok/none),
+  // not on every fractional update — prevents list re-ordering on each WebSocket tick.
+  const bucketKey = useTrafficStore(
+    (s) => roadEdges.map((e) => getBucket(s.roadCongestion[e.id])).join(","),
+  );
+  const sortedRoads = useMemo(
+    () =>
+      [...roadEdges].sort((a, b) => {
+        const ba = getBucket(congestion[a.id]);
+        const bb = getBucket(congestion[b.id]);
+        if (ba !== bb) return ba - bb;
+        return (a.name ?? a.id).localeCompare(b.name ?? b.id);
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [bucketKey],
+  );
+
+  const roads = sortedRoads.filter((e) =>
+    `${e.name ?? "Unnamed road"} ${e.id}`
+      .toLowerCase()
+      .includes(search.toLowerCase()),
+  );
   return (
     <section className="product-panel road-panel">
       <div className="panel-heading">

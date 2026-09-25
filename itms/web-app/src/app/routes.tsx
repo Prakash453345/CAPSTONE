@@ -1,14 +1,38 @@
+import { lazy, Suspense } from "react";
 import { createBrowserRouter } from "react-router-dom";
 import { RootLayout } from "@/app/RootLayout";
 import { AppShell } from "@/components/layout/AppShell";
 import { RouteError } from "@/app/RouteError";
-import { LandingPage } from "@/app/landing/LandingPage";
-import { DashboardPage } from "@/app/dashboard/DashboardPage";
-import { AnomaliesPage } from "@/app/anomalies/AnomaliesPage";
-import { TrafficPage } from "@/app/traffic/TrafficPage";
-import { EmergencyPage } from "@/app/emergency/EmergencyPage";
-import { AnalyticsPage } from "@/app/analytics/AnalyticsPage";
-import { SettingsPage } from "@/app/settings/SettingsPage";
+
+const LandingPage = lazy(() =>
+  import("@/app/landing/LandingPage").then((m) => ({ default: m.LandingPage })),
+);
+const DashboardPage = lazy(() =>
+  import("@/app/dashboard/DashboardPage").then((m) => ({ default: m.DashboardPage })),
+);
+const AnomaliesPage = lazy(() =>
+  import("@/app/anomalies/AnomaliesPage").then((m) => ({ default: m.AnomaliesPage })),
+);
+const TrafficPage = lazy(() =>
+  import("@/app/traffic/TrafficPage").then((m) => ({ default: m.TrafficPage })),
+);
+const EmergencyPage = lazy(() =>
+  import("@/app/emergency/EmergencyPage").then((m) => ({ default: m.EmergencyPage })),
+);
+const AnalyticsPage = lazy(() =>
+  import("@/app/analytics/AnalyticsPage").then((m) => ({ default: m.AnalyticsPage })),
+);
+const SettingsPage = lazy(() =>
+  import("@/app/settings/SettingsPage").then((m) => ({ default: m.SettingsPage })),
+);
+
+function ConsoleFallback() {
+  return (
+    <div className="flex h-full items-center justify-center">
+      <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+    </div>
+  );
+}
 
 /**
  * "/" is the landing page (branding, product pitch, "Try the live demo");
@@ -25,17 +49,66 @@ export const router = createBrowserRouter(
       element: <RootLayout />,
       errorElement: <RouteError />,
       children: [
-        { index: true, element: <LandingPage /> },
+        {
+          index: true,
+          element: (
+            <Suspense fallback={null}>
+              <LandingPage />
+            </Suspense>
+          ),
+        },
         {
           path: "console",
           element: <AppShell />,
           children: [
-            { index: true, element: <DashboardPage /> },
-            { path: "anomalies", element: <AnomaliesPage /> },
-            { path: "traffic", element: <TrafficPage /> },
-            { path: "emergency", element: <EmergencyPage /> },
-            { path: "analytics", element: <AnalyticsPage /> },
-            { path: "settings", element: <SettingsPage /> },
+            {
+              index: true,
+              element: (
+                <Suspense fallback={<ConsoleFallback />}>
+                  <DashboardPage />
+                </Suspense>
+              ),
+            },
+            {
+              path: "anomalies",
+              element: (
+                <Suspense fallback={<ConsoleFallback />}>
+                  <AnomaliesPage />
+                </Suspense>
+              ),
+            },
+            {
+              path: "traffic",
+              element: (
+                <Suspense fallback={<ConsoleFallback />}>
+                  <TrafficPage />
+                </Suspense>
+              ),
+            },
+            {
+              path: "emergency",
+              element: (
+                <Suspense fallback={<ConsoleFallback />}>
+                  <EmergencyPage />
+                </Suspense>
+              ),
+            },
+            {
+              path: "analytics",
+              element: (
+                <Suspense fallback={<ConsoleFallback />}>
+                  <AnalyticsPage />
+                </Suspense>
+              ),
+            },
+            {
+              path: "settings",
+              element: (
+                <Suspense fallback={<ConsoleFallback />}>
+                  <SettingsPage />
+                </Suspense>
+              ),
+            },
             { path: "*", element: <RouteError /> },
           ],
         },
