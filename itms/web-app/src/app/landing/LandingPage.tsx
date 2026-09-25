@@ -19,8 +19,8 @@ const LANDING_CSS = `
   --bg:#FAFAF9; --card:#FFFFFF; --ink:#14181A; --grey:#AFAFAB; --body:#5E6568;
   --line:#E7E5E1; --line2:#D9D6D1; --dark:#101416; --dark2:#191E21;
   --cy:#3FE0FF; --cy-d:#0A9AB0;
-  --sans:'Plus Jakarta Sans',-apple-system,sans-serif;
-  --mono:'IBM Plex Mono',ui-monospace,monospace;
+  --sans:'Google Sans Flex',-apple-system,sans-serif;
+  --mono:'Google Sans Code',ui-monospace,monospace;
   --gut:clamp(20px,4.6vw,56px); --max:1280px;
   --ease:cubic-bezier(.16,1,.3,1);
 }

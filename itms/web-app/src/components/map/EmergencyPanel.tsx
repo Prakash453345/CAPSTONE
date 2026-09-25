@@ -13,6 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { SimModeNotice } from "@/components/map/SimModeNotice";
 import { cn } from "@/utils/cn";
+import { MAP_CHIP, MAP_CHIP_ACTIVE } from "@/components/map/mapChrome";
 import { CommandError, postCommand } from "@/services/traffic/commands";
 import {
   PRESET_UNITS,
@@ -55,22 +56,30 @@ const KIND_EVENT: Record<PresetUnit["kind"], string> = {
  * clicking the map, calculate a route, then review it before activating a
  * green corridor. Once a request exists the panel switches to the route
  * preview (fed by the live `emergency.request-updated` stream).
+ *
+ * Rendered twice on the map: `part="chip"` is the idle entry point in the
+ * search row, `part="panel"` the draft / route card that opens below it.
  */
-export function EmergencyPanel() {
+export function EmergencyPanel({ part }: { part: "chip" | "panel" }) {
   const draft = useEmergencyStore((s) => s.draft);
   const startDraft = useEmergencyStore((s) => s.startDraft);
   const selected = useEmergencyStore(selectSelectedRequest);
+  const busy = Boolean(draft || selected);
 
-  if (selected && !draft) return <RoutePreview request={selected} />;
-  if (draft) return <DispatchDraftPanel />;
+  if (part === "panel") {
+    if (selected && !draft) return <RoutePreview request={selected} />;
+    if (draft) return <DispatchDraftPanel />;
+    return null;
+  }
 
   return (
     <button
       type="button"
       onClick={() => startDraft(PRESET_UNITS[0])}
-      className="pointer-events-auto flex items-center gap-1.5 rounded-lg border border-border bg-surface/90 px-2.5 py-1.5 text-xs font-medium text-muted-foreground shadow-panel backdrop-blur-sm transition-colors hover:text-foreground"
+      aria-pressed={busy}
+      className={cn(MAP_CHIP, busy && MAP_CHIP_ACTIVE)}
     >
-      <Ambulance className="size-3.5" />
+      <Ambulance />
       Emergency response
     </button>
   );
@@ -131,7 +140,7 @@ function DispatchDraftPanel() {
   };
 
   return (
-    <div className="pointer-events-auto w-[300px] rounded-lg border border-border bg-surface-raised shadow-panel-lg">
+    <div className="pointer-events-auto w-[300px] max-w-full origin-top-left animate-sheet-in overflow-hidden rounded-xl bg-surface-raised shadow-elevation-3">
       <div className="flex items-center justify-between border-b border-border px-3 py-2.5">
         <div className="flex items-center gap-2">
           <Ambulance className="size-4 text-primary" />
@@ -240,7 +249,7 @@ function RoutePreview({ request }: { request: EmergencyRequest }) {
   };
 
   return (
-    <div className="pointer-events-auto w-[308px] rounded-lg border border-border bg-surface-raised shadow-panel-lg">
+    <div className="pointer-events-auto w-[308px] max-w-full origin-top-left animate-sheet-in overflow-hidden rounded-xl bg-surface-raised shadow-elevation-3">
       <div className="flex items-center justify-between border-b border-border px-3 py-2.5">
         <div className="flex items-center gap-2">
           <RouteIcon className="size-4 text-primary" />

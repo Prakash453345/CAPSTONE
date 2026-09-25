@@ -1,7 +1,8 @@
 import { useLocation } from "react-router-dom";
-import { Menu, FlaskConical, Radio, Columns2, Square } from "lucide-react";
+import { Menu, FlaskConical, Radio, Columns2, Square, Sun, Moon, Monitor } from "lucide-react";
 import { NAV_ITEMS } from "@/app/nav";
 import { useSystemStore } from "@/store/systemStore";
+import { useThemeStore, type ThemeMode } from "@/store/themeStore";
 import { useClock } from "@/hooks/useClock";
 import { formatClock } from "@/utils/format";
 import { ConnectionPill } from "@/components/layout/ConnectionPill";
@@ -89,8 +90,36 @@ export function TopBar({ onOpenNav }: { onOpenNav: () => void }) {
           ]}
           ariaLabel="View mode"
         />
+
+        <ThemeButton />
       </div>
     </header>
+  );
+}
+
+const THEME_NEXT: Record<ThemeMode, ThemeMode> = { system: "light", light: "dark", dark: "system" };
+const THEME_META: Record<ThemeMode, { icon: typeof Sun; label: string }> = {
+  system: { icon: Monitor, label: "Appearance: match system" },
+  light: { icon: Sun, label: "Appearance: light" },
+  dark: { icon: Moon, label: "Appearance: dark" },
+};
+
+/** Cycles system → light → dark, like the Maps apps' appearance setting. */
+function ThemeButton() {
+  const mode = useThemeStore((s) => s.mode);
+  const setMode = useThemeStore((s) => s.setMode);
+  const { icon: Icon, label } = THEME_META[mode];
+  return (
+    <Button
+      variant="subtle"
+      size="icon-sm"
+      onClick={() => setMode(THEME_NEXT[mode])}
+      aria-label={`${label}. Click to change.`}
+      title={label}
+      className="rounded-full"
+    >
+      <Icon key={mode} className="animate-fade-in" />
+    </Button>
   );
 }
 

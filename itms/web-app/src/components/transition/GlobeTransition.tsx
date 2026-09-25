@@ -298,7 +298,7 @@ function TransitionStage() {
     <motion.div
       ref={hostRef}
       className="fixed inset-0 z-[999] overflow-hidden bg-[#010204] text-[#e6f1f4]"
-      style={{ fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif" }}
+      style={{ fontFamily: "'Google Sans Flex', system-ui, sans-serif" }}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1, transition: { duration: ENTER_MS / 1000, ease: EASE } }}
       exit={{ opacity: 0, transition: { duration: EXIT_MS / 1000, ease: EASE } }}
@@ -338,7 +338,7 @@ function TransitionStage() {
         <div className="absolute left-8 top-0 h-px w-4 bg-[#7fe6ff]/70" />
         <div className="absolute -top-12 left-0 h-4 w-px bg-[#7fe6ff]/70" />
         <div className="absolute left-0 top-8 h-4 w-px bg-[#7fe6ff]/70" />
-        <div className="absolute left-14 -top-3 whitespace-nowrap" style={{ fontFamily: "'IBM Plex Mono', ui-monospace, monospace" }}>
+        <div className="absolute left-14 -top-3 whitespace-nowrap" style={{ fontFamily: "'Google Sans Code', ui-monospace, monospace" }}>
           <div className="text-[10px] tracking-[0.28em] text-[#7fe6ff]">VIJAYAWADA</div>
           <div className="mt-0.5 text-[10px] tracking-[0.12em] text-white/55">16.5062° N · 80.6335° E</div>
         </div>
@@ -361,7 +361,7 @@ function TransitionStage() {
       {/* HUD */}
       <div
         className="pointer-events-none absolute inset-x-6 top-[calc(8vh+20px)] flex items-start justify-between text-[10px] tracking-[0.22em] text-white/55 sm:inset-x-10"
-        style={{ fontFamily: "'IBM Plex Mono', ui-monospace, monospace" }}
+        style={{ fontFamily: "'Google Sans Code', ui-monospace, monospace" }}
       >
         <div className="flex items-center gap-2.5">
           <span className="relative flex h-1.5 w-1.5">
@@ -393,7 +393,7 @@ function TransitionStage() {
             >
               <div
                 className="flex items-center gap-3 text-[10px] tracking-[0.34em] text-[#7fe6ff]"
-                style={{ fontFamily: "'IBM Plex Mono', ui-monospace, monospace" }}
+                style={{ fontFamily: "'Google Sans Code', ui-monospace, monospace" }}
               >
                 <span className="h-px w-8 bg-[#7fe6ff]/60" />
                 {copy.kicker.toUpperCase()}
@@ -412,7 +412,7 @@ function TransitionStage() {
         {loading && (
           <motion.div
             className="pointer-events-none absolute inset-0 flex items-center justify-center text-[10px] tracking-[0.34em] text-white/45"
-            style={{ fontFamily: "'IBM Plex Mono', ui-monospace, monospace" }}
+            style={{ fontFamily: "'Google Sans Code', ui-monospace, monospace" }}
             initial={{ opacity: 0 }}
             animate={{ opacity: [0.35, 1, 0.35], transition: { duration: 1.8, repeat: Infinity } }}
             exit={{ opacity: 0, transition: { duration: 0.4 } }}
@@ -431,7 +431,7 @@ function TransitionStage() {
           type="button"
           onClick={reveal}
           className="pointer-events-auto text-[10px] tracking-[0.28em] text-white/45 transition-colors hover:text-white/90"
-          style={{ fontFamily: "'IBM Plex Mono', ui-monospace, monospace" }}
+          style={{ fontFamily: "'Google Sans Code', ui-monospace, monospace" }}
         >
           SKIP ↵
         </button>

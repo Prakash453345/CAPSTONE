@@ -1,11 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import maplibregl, { Map as MapLibreMap, type MapMouseEvent } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { AlertTriangle } from "lucide-react";
-import { BASE_STYLE } from "@/components/map/mapStyle";
+import { AlertTriangle, X } from "lucide-react";
+import { initialStyle } from "@/components/map/mapStyle";
+import { Basemap } from "@/components/map/Basemap";
+import { useThemeStore } from "@/store/themeStore";
 import { MapContext } from "@/components/map/MapContext";
 import { MapControls } from "@/components/map/MapControls";
 import { MapLegend } from "@/components/map/MapLegend";
+import { MapSearch } from "@/components/map/MapSearch";
+import { MAP_CHIP, MAP_CHIP_ACTIVE } from "@/components/map/mapChrome";
 import { RoadLayer } from "@/components/map/layers/RoadLayer";
 import { VehicleLayer } from "@/components/map/layers/VehicleLayer";
 import { SignalLayer } from "@/components/map/layers/SignalLayer";
@@ -21,7 +25,7 @@ import { EmergencyPanel } from "@/components/map/EmergencyPanel";
 import { useMapStore } from "@/store/mapStore";
 import { useTransitionStore } from "@/store/transitionStore";
 import { useIncidentStore } from "@/store/incidentStore";
-import { useEmergencyStore } from "@/store/emergencyStore";
+import { selectSelectedRequest, useEmergencyStore } from "@/store/emergencyStore";
 import { networkBounds, nearestEdge } from "@/data/network";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/utils/cn";
@@ -65,7 +69,7 @@ export function TrafficMap({ className }: { className?: string }) {
       try {
       instance = new maplibregl.Map({
         container: el,
-        style: BASE_STYLE,
+        style: initialStyle(useThemeStore.getState().resolved),
         bounds: FIT_BOUNDS,
         fitBoundsOptions: { padding: 64 },
         attributionControl: { compact: true },
@@ -79,7 +83,21 @@ export function TrafficMap({ className }: { className?: string }) {
         setMapError("The map could not initialize. Enable WebGL / hardware acceleration, then reload. Road and signal lists remain available in Traffic Management.");
         return;
       }
-      instance.on("error", () => { if (!disposed) setTileError(true); });
+      // The attribution only turns compact (and auto-expands) once the first
+      // source arrives, since the map starts with none; fold it that once.
+      const created = instance;
+      const foldWhenCompact = () => {
+        if (!el.querySelector(".maplibregl-ctrl-attrib.maplibregl-compact")) return;
+        foldAttribution(el.clientWidth);
+        created.off("sourcedata", foldWhenCompact);
+      };
+      created.on("sourcedata", foldWhenCompact);
+      instance.addControl(new maplibregl.ScaleControl({ maxWidth: 88, unit: "metric" }), "bottom-left");
+      instance.on("error", (e) => {
+        if (disposed) return;
+        console.warn("Map resource error:", e.error?.message ?? e);
+        setTileError(true);
+      });
       instance.getCanvas().setAttribute("aria-label", "Vijayawada traffic map. Use arrow keys to pan, plus and minus to zoom.");
       // Arriving via the globe cinematic: start a little further out and
       // finish the dive's zoom once the overlay lifts, so the two read as
@@ -114,11 +132,20 @@ export function TrafficMap({ className }: { className?: string }) {
       setMap(instance);
     };
 
+    // On narrow maps (split view, phones) the attribution folds into its (i)
+    // button so it can't sit on the scale bar; tapping (i) still shows it.
+    // Same class MapLibre itself drops on the first drag (_updateCompactMinimize).
+    const foldAttribution = (width: number) => {
+      if (width >= 480) return;
+      el.querySelector(".maplibregl-ctrl-attrib")?.classList.remove("maplibregl-compact-show");
+    };
+
     const ro = new ResizeObserver((entries) => {
       const box = entries[0]?.contentRect;
       if (box && box.width > 0 && box.height > 0) {
         if (instance) instance.resize();
         else create();
+        foldAttribution(box.width);
       }
     });
     ro.observe(el);
@@ -188,6 +215,10 @@ export function TrafficMap({ className }: { className?: string }) {
     };
   }, [map, ready, picking, interactionMode, setDraftPoint, setInteractionMode]);
 
+  const emergencyDraft = useEmergencyStore((s) => s.draft);
+  const emergencySelected = useEmergencyStore(selectSelectedRequest);
+  const panelOpen = creatingAnomaly || Boolean(emergencyDraft || emergencySelected);
+
   const exitCreate = () => {
     setPendingTarget(null);
     setPickHint(null);
@@ -199,7 +230,6 @@ export function TrafficMap({ className }: { className?: string }) {
       <div ref={containerRef} className="absolute inset-0" />
 
       {mapError && <div className="absolute inset-0 z-20 grid place-items-center bg-background p-8"><p role="alert" className="max-w-sm text-center text-sm leading-relaxed text-muted-foreground">{mapError}</p></div>}
-      {tileError && ready && <div role="status" className="pointer-events-none absolute bottom-16 left-3 right-3 z-10 rounded-md bg-surface/95 p-2 text-[10px] text-status-warn">Some map resources are unavailable. Bundled road geometry and received telemetry remain visible.</div>}
       {!ready && !mapError && (
         <div className="absolute inset-0 grid place-items-center bg-background">
           <div className="flex flex-col items-center gap-3">
@@ -213,6 +243,7 @@ export function TrafficMap({ className }: { className?: string }) {
 
       {map && ready && (
         <MapContext.Provider value={map}>
+          <Basemap />
           <RoadLayer visible={activeLayers.has("congestion")} />
           <SignalLayer visible={activeLayers.has("signals")} />
           <EmergencyRouteLayer visible={activeLayers.has("emergency")} />
@@ -224,26 +255,38 @@ export function TrafficMap({ className }: { className?: string }) {
         </MapContext.Provider>
       )}
 
-      {/* Create Anomaly toolbar + contextual panel (top-left) */}
+      {/* Google-style search row (search pill + chips), panels open below it */}
       <div className="map-action-stack pointer-events-none absolute left-3 top-3 flex flex-col items-start gap-2">
-        <button
-          type="button"
-          onClick={() =>
-            creatingAnomaly ? exitCreate() : setInteractionMode("create-anomaly")
-          }
-          className={cn(
-            "pointer-events-auto flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium shadow-panel backdrop-blur-sm transition-colors",
-            creatingAnomaly
-              ? "border-primary/70 bg-primary/20 text-foreground"
-              : "border-border bg-surface/90 text-muted-foreground hover:text-foreground",
+        <div className="flex max-w-full flex-wrap items-start gap-2">
+          {map && ready && (
+            <MapContext.Provider value={map}>
+              <MapSearch />
+            </MapContext.Provider>
           )}
-        >
-          <AlertTriangle className="size-3.5" />
-          {creatingAnomaly ? "Cancel" : "Create anomaly"}
-        </button>
+          <div className="map-chip-row flex h-11 max-w-full items-center gap-2 overflow-x-auto">
+            <button
+              type="button"
+              onClick={() =>
+                creatingAnomaly ? exitCreate() : setInteractionMode("create-anomaly")
+              }
+              aria-pressed={creatingAnomaly}
+              className={cn(MAP_CHIP, creatingAnomaly && MAP_CHIP_ACTIVE)}
+            >
+              {creatingAnomaly ? <X /> : <AlertTriangle />}
+              {creatingAnomaly ? "Cancel" : "Create anomaly"}
+            </button>
+            <EmergencyPanel part="chip" />
+          </div>
+        </div>
+
+        {tileError && ready && (
+          <div role="status" className="pointer-events-none max-w-[340px] animate-fade-in rounded-lg bg-surface-raised px-3 py-2 text-[11px] leading-snug text-status-warn shadow-elevation-1">
+            Some map resources are unavailable. Bundled road geometry and received telemetry remain visible.
+          </div>
+        )}
 
         {creatingAnomaly && !pendingTarget && (
-          <div className="pointer-events-none rounded-md border border-border bg-surface/90 px-2.5 py-1.5 text-[11px] text-muted-foreground shadow-panel backdrop-blur-sm">
+          <div className="pointer-events-none animate-fade-in rounded-full bg-foreground/85 px-3.5 py-1.5 text-xs text-background shadow-elevation-1">
             {pickHint ?? "Click a road to place the anomaly"}
           </div>
         )}
@@ -259,10 +302,10 @@ export function TrafficMap({ className }: { className?: string }) {
           />
         )}
 
-        <EmergencyPanel />
+        <EmergencyPanel part="panel" />
       </div>
 
-      <MapLegend />
+      <MapLegend hidden={panelOpen} />
     </div>
   );
 }

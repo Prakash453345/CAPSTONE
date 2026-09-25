@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { ChevronDown } from "lucide-react";
 import {
   ANOMALY_SEVERITY_COLOR,
@@ -8,6 +7,7 @@ import {
   VEHICLE_COLOR,
 } from "@/components/map/mapColors";
 import { cn } from "@/utils/cn";
+import { useMapChromeStore } from "@/store/mapChromeStore";
 
 const ROWS: Array<{ label: string; swatch: React.ReactNode }> = [
   { label: "Car", swatch: <Dot color={VEHICLE_COLOR.car} /> },
@@ -25,34 +25,43 @@ const ROWS: Array<{ label: string; swatch: React.ReactNode }> = [
   {
     label: "Free flow → jam",
     swatch: (
-      <span className="h-2 w-10 rounded-full bg-gradient-to-r from-[#3f6b52] via-[#e0a12a] to-[#c0392b]" />
+      <span className="h-2 w-10 rounded-full bg-gradient-to-r from-[#63d668] via-[#ff974d] via-60% to-[#811f1f]" />
     ),
   },
 ];
 
-export function MapLegend() {
-  const [open, setOpen] = useState(false);
+/**
+ * Hidden while an anomaly / emergency card is open (`hidden`) or while the
+ * search results or layers menu are showing: those own the space the legend
+ * would sit in, and Google Maps likewise tucks secondary chrome away under an
+ * open sheet. When open, the legend is capped below the search row and scrolls.
+ */
+export function MapLegend({ hidden = false }: { hidden?: boolean }) {
+  const sheet = useMapChromeStore((s) => s.sheet);
+  const toggle = useMapChromeStore((s) => s.toggle);
+  const open = sheet === "legend";
+  if (hidden || (sheet !== null && !open)) return null;
   return (
-    <div className="pointer-events-auto absolute bottom-3 left-3 w-44 overflow-hidden rounded-lg border border-border bg-surface/90 backdrop-blur-sm shadow-panel">
+    <div className="pointer-events-auto absolute bottom-10 left-3 z-[2] flex max-h-[calc(100%-10rem)] w-52 max-w-[calc(100%-4.75rem)] flex-col overflow-hidden rounded-xl bg-surface-raised shadow-elevation-1">
       <button
         type="button"
         aria-expanded={open}
         aria-label="Map legend"
-        onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center justify-between px-3 py-2 text-left"
+        onClick={() => toggle("legend")}
+        className="flex h-10 w-full shrink-0 items-center justify-between px-3.5 text-left transition-colors hover:bg-muted"
       >
-        <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+        <span className="text-sm font-medium text-foreground">
           Legend
         </span>
         <ChevronDown
           className={cn(
-            "size-3.5 text-muted-foreground transition-transform",
+            "size-4 text-muted-foreground transition-transform duration-200 ease-out",
             !open && "-rotate-90",
           )}
         />
       </button>
       {open && (
-        <div className="space-y-1.5 px-3 pb-3">
+        <div className="min-h-0 animate-fade-in space-y-2 overflow-y-auto px-3.5 pb-3.5 pt-1">
           {ROWS.map((r) => (
             <div key={r.label} className="flex items-center gap-2 text-xs">
               {r.swatch}

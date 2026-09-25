@@ -3,6 +3,8 @@ import type { GeoJSONSource } from "maplibre-gl";
 import type { FeatureCollection, LineString } from "geojson";
 import { useMapInstance } from "@/components/map/MapContext";
 import { useTrafficStore } from "@/store/trafficStore";
+import { useThemeStore } from "@/store/themeStore";
+import { CONGESTION_STOPS } from "@/components/map/mapColors";
 import { roadEdges } from "@/data/network";
 
 const SRC = "roads";
@@ -36,7 +38,7 @@ export function RoadLayer({ visible }: { visible: boolean }) {
         source: SRC,
         layout: { "line-cap": "round", "line-join": "round" },
         paint: {
-          "line-color": "#05070b",
+          "line-color": useThemeStore.getState().resolved === "dark" ? "#1f2124" : "#ffffff",
           "line-width": ["interpolate", ["linear"], ["zoom"], 12, 3, 17, 12],
           "line-opacity": 0.9,
         },
@@ -72,18 +74,18 @@ export function RoadLayer({ visible }: { visible: boolean }) {
             "interpolate",
             ["linear"],
             ["get", "congestion"],
-            0,
-            "#3f6b52",
-            0.4,
-            "#e0a12a",
-            0.7,
-            "#e0662a",
-            1,
-            "#c0392b",
+            ...CONGESTION_STOPS.flat(),
           ]
-        : "#39506a",
+        : "#9aa0a6",
     );
   }, [map, visible]);
+
+  // Google draws traffic lines on a casing the colour of the map itself.
+  const theme = useThemeStore((s) => s.resolved);
+  useEffect(() => {
+    if (!map.getLayer(CASING)) return;
+    map.setPaintProperty(CASING, "line-color", theme === "dark" ? "#1f2124" : "#ffffff");
+  }, [map, theme]);
 
   return null;
 }

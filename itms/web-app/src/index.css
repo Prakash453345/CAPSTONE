@@ -3,40 +3,90 @@
 @tailwind utilities;
 
 /*
- * TRAFFIX design tokens — dark-first control-room palette.
+ * TRAFFIX design tokens, modelled on Google Maps' Material palette.
+ * Light is the default; `.dark` on <html> (set by the theme store, following
+ * the system unless the operator picks one) swaps every role at once.
  * Values are HSL channels (no hsl() wrapper) so Tailwind can compose them with
  * alpha via `hsl(var(--token) / <alpha>)`.
  */
 :root {
-  --background: 213 33% 6%;
-  --surface: 214 26% 9%;
-  --surface-raised: 214 24% 12%;
-  --surface-sunken: 216 34% 5%;
+  --background: 210 17% 98%;
+  --surface: 0 0% 100%;
+  --surface-raised: 0 0% 100%;
+  --surface-sunken: 200 12% 95%;
 
-  --border: 213 18% 20%;
-  --input: 213 18% 22%;
-  --ring: 190 95% 55%;
+  --border: 220 9% 87%;
+  --input: 220 9% 82%;
+  --ring: 214 82% 51%;
 
-  --foreground: 210 30% 92%;
-  --muted: 214 20% 16%;
-  --muted-foreground: 214 12% 62%;
+  --foreground: 0 0% 12%;
+  --muted: 200 12% 95%;
+  --muted-foreground: 213 5% 39%;
 
-  --primary: 158 69% 67%;
-  --primary-foreground: 213 40% 6%;
-  --primary-muted: 161 36% 18%;
+  --primary: 214 82% 51%;
+  --primary-foreground: 0 0% 100%;
+  --primary-muted: 218 92% 95%;
 
-  --status-ok: 152 58% 46%;
-  --status-ok-muted: 152 44% 16%;
-  --status-warn: 38 92% 55%;
-  --status-warn-muted: 38 60% 16%;
-  --status-critical: 358 70% 57%;
-  --status-critical-muted: 358 54% 18%;
-  --status-info: 212 88% 62%;
-  --status-info-muted: 212 60% 18%;
+  --status-ok: 137 68% 30%;
+  --status-ok-muted: 135 45% 94%;
+  --status-warn: 31 100% 42%;
+  --status-warn-muted: 45 90% 94%;
+  --status-critical: 4 71% 50%;
+  --status-critical-muted: 6 76% 95%;
+  --status-info: 214 82% 51%;
+  --status-info-muted: 218 92% 95%;
+
+  /* Google's Material elevation: a tight key shadow plus a soft ambient one. */
+  --elevation-1: 0 1px 2px rgba(60, 64, 67, 0.3), 0 1px 3px 1px rgba(60, 64, 67, 0.15);
+  --elevation-2: 0 1px 2px rgba(60, 64, 67, 0.3), 0 2px 6px 2px rgba(60, 64, 67, 0.15);
+  --elevation-3: 0 4px 8px 3px rgba(60, 64, 67, 0.15), 0 1px 3px rgba(60, 64, 67, 0.3);
 
   --radius: 12px;
 
+  color-scheme: light;
+}
+
+.dark {
+  --background: 225 6% 13%;
+  --surface: 220 5% 16%;
+  --surface-raised: 225 5% 20%;
+  --surface-sunken: 0 0% 9%;
+
+  --border: 204 6% 25%;
+  --input: 204 6% 30%;
+  --ring: 217 89% 76%;
+
+  --foreground: 216 12% 92%;
+  --muted: 225 5% 20%;
+  --muted-foreground: 210 6% 63%;
+
+  --primary: 217 89% 76%;
+  --primary-foreground: 220 60% 14%;
+  --primary-muted: 217 40% 22%;
+
+  --status-ok: 137 42% 65%;
+  --status-ok-muted: 137 25% 18%;
+  --status-warn: 45 97% 69%;
+  --status-warn-muted: 45 35% 18%;
+  --status-critical: 5 81% 73%;
+  --status-critical-muted: 5 35% 20%;
+  --status-info: 217 89% 76%;
+  --status-info-muted: 217 40% 20%;
+
+  --elevation-1: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 3px 1px rgba(0, 0, 0, 0.15);
+  --elevation-2: 0 1px 2px rgba(0, 0, 0, 0.3), 0 2px 6px 2px rgba(0, 0, 0, 0.15);
+  --elevation-3: 0 4px 8px 3px rgba(0, 0, 0, 0.15), 0 1px 3px rgba(0, 0, 0, 0.3);
+
   color-scheme: dark;
+}
+
+/* Theme switches cross-fade instead of snapping; the class is only present
+   for the length of one switch so it never slows ordinary hover states. */
+.theme-switching,
+.theme-switching * {
+  transition: background-color 280ms cubic-bezier(0.2, 0, 0, 1),
+    border-color 280ms cubic-bezier(0.2, 0, 0, 1),
+    color 280ms cubic-bezier(0.2, 0, 0, 1) !important;
 }
 
 * {
@@ -54,8 +104,7 @@ body {
   background: hsl(var(--background));
   color: hsl(var(--foreground));
   font-family: theme("fontFamily.sans");
-  font-feature-settings: "cv05", "ss01";
-  letter-spacing: -0.011em;
+  letter-spacing: 0;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }

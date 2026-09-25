@@ -77,7 +77,7 @@ export function CreateAnomalyPanel({
   };
 
   return (
-    <div className="pointer-events-auto w-[300px] rounded-lg border border-border bg-surface-raised shadow-panel-lg">
+    <div className="pointer-events-auto w-[300px] max-w-full origin-top-left animate-sheet-in overflow-hidden rounded-xl bg-surface-raised shadow-elevation-3">
       <div className="flex items-center justify-between border-b border-border px-3 py-2.5">
         <div className="flex items-center gap-2">
           <AlertTriangle className="size-4 text-[color:var(--severity-high,#e5622a)]" />

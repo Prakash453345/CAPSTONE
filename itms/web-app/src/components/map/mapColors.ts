@@ -29,11 +29,12 @@ export const ANOMALY_SEVERITY_COLOR = {
   blocked: "#e5484d",
 } as const;
 
+/** Google Maps' live-traffic ramp: free flow → slow → heavy → standstill. */
 export const CONGESTION_STOPS: Array<[number, string]> = [
-  [0, "#3f6b52"],
-  [0.4, "#e0a12a"],
-  [0.7, "#e0662a"],
-  [1, "#c0392b"],
+  [0, "#63d668"],
+  [0.4, "#ff974d"],
+  [0.7, "#f23c32"],
+  [1, "#811f1f"],
 ];
 
 /** The recommended route for every emergency mission — one constant "this is

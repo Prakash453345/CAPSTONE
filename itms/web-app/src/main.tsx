@@ -4,6 +4,7 @@ import { MotionConfig } from "framer-motion";
 import { router } from "@/app/routes";
 import "@/index.css";
 import "@/product.css";
+import "@/store/themeStore";
 
 // Note: React.StrictMode is intentionally omitted. Its dev-only double-invoke of
 // effects races the imperative MapLibre source/layer lifecycle (add → remove →
