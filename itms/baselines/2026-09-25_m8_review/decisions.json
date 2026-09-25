@@ -1,0 +1,501 @@
+{
+ "estimate_ablations": {
+  "heavy_101_cur": {
+   "queue_all": {
+    "share": 1.0,
+    "mae": 0.747,
+    "bias": -0.3625
+   },
+   "queue_truncated": {
+    "share": 0.1259,
+    "mae": 0.1907,
+    "bias": 0.0376
+   },
+   "overrides": {},
+   "furniture_pcu_per_link_tick": {
+    "kept/real": 1.1859,
+    "furn/ghost": 0.306,
+    "furn/real": 0.0109,
+    "kept/ghost": 0.0011
+   }
+  },
+  "heavy_101_nohorizon": {
+   "queue_all": {
+    "share": 1.0,
+    "mae": 0.7589,
+    "bias": -0.5475
+   },
+   "queue_truncated": {
+    "share": 0.0028,
+    "mae": 0.0077,
+    "bias": -0.0006
+   },
+   "overrides": {
+    "est": {
+     "horizon_quantile": 0.0
+    }
+   },
+   "furniture_pcu_per_link_tick": {
+    "furn/ghost": 0.306,
+    "kept/real": 1.1859,
+    "furn/real": 0.0109,
+    "kept/ghost": 0.0011
+   }
+  },
+  "heavy_101_nostitch": {
+   "queue_all": {
+    "share": 1.0,
+    "mae": 0.7472,
+    "bias": -0.3642
+   },
+   "queue_truncated": {
+    "share": 0.1254,
+    "mae": 0.1919,
+    "bias": 0.0354
+   },
+   "overrides": {
+    "ground": {
+     "stitch_s": 0.0
+    }
+   },
+   "furniture_pcu_per_link_tick": {
+    "kept/real": 1.1836,
+    "furn/ghost": 0.2981,
+    "kept/ghost": 0.0034,
+    "furn/real": 0.0125
+   }
+  },
+  "heavy_102_cur": {
+   "queue_all": {
+    "share": 1.0,
+    "mae": 0.3926,
+    "bias": -0.029
+   },
+   "queue_truncated": {
+    "share": 0.1373,
+    "mae": 0.2325,
+    "bias": -0.0103
+   },
+   "overrides": {},
+   "furniture_pcu_per_link_tick": {
+    "kept/real": 1.1213,
+    "furn/ghost": 0.1517,
+    "furn/real": 0.0189,
+    "kept/ghost": 0.0001
+   }
+  },
+  "heavy_102_nohorizon": {
+   "queue_all": {
+    "share": 1.0,
+    "mae": 0.3693,
+    "bias": -0.1733
+   },
+   "queue_truncated": {
+    "share": 0.0017,
+    "mae": 0.0052,
+    "bias": -0.0036
+   },
+   "overrides": {
+    "est": {
+     "horizon_quantile": 0.0
+    }
+   },
+   "furniture_pcu_per_link_tick": {
+    "furn/ghost": 0.1517,
+    "kept/real": 1.1213,
+    "furn/real": 0.0189,
+    "kept/ghost": 0.0001
+   }
+  },
+  "heavy_102_nostitch": {
+   "queue_all": {
+    "share": 1.0,
+    "mae": 0.3899,
+    "bias": -0.033
+   },
+   "queue_truncated": {
+    "share": 0.1373,
+    "mae": 0.2295,
+    "bias": -0.014
+   },
+   "overrides": {
+    "ground": {
+     "stitch_s": 0.0
+    }
+   },
+   "furniture_pcu_per_link_tick": {
+    "kept/real": 1.1201,
+    "furn/ghost": 0.1489,
+    "furn/real": 0.0196,
+    "kept/ghost": 0.0001
+   }
+  },
+  "medium_101_cur": {
+   "queue_all": {
+    "share": 1.0,
+    "mae": 0.0496,
+    "bias": 0.0289
+   },
+   "queue_truncated": {
+    "share": 0.0108,
+    "mae": 0.0078,
+    "bias": 0.007
+   },
+   "overrides": {},
+   "furniture_pcu_per_link_tick": {
+    "kept/real": 0.3898,
+    "furn/ghost": 0.303,
+    "furn/real": 0.0056,
+    "kept/ghost": 0.0016
+   }
+  },
+  "medium_101_nostitch": {
+   "queue_all": {
+    "share": 1.0,
+    "mae": 0.05,
+    "bias": 0.0293
+   },
+   "queue_truncated": {
+    "share": 0.0108,
+    "mae": 0.0078,
+    "bias": 0.007
+   },
+   "overrides": {
+    "ground": {
+     "stitch_s": 0.0
+    }
+   },
+   "furniture_pcu_per_link_tick": {
+    "furn/ghost": 0.2934,
+    "kept/real": 0.3897,
+    "furn/real": 0.0056,
+    "kept/ghost": 0.0048
+   }
+  },
+  "medium_102_cur": {
+   "queue_all": {
+    "share": 1.0,
+    "mae": 0.0472,
+    "bias": 0.0272
+   },
+   "queue_truncated": {
+    "share": 0.0116,
+    "mae": 0.0075,
+    "bias": 0.0069
+   },
+   "overrides": {},
+   "furniture_pcu_per_link_tick": {
+    "kept/real": 0.386,
+    "furn/ghost": 0.1543,
+    "kept/ghost": 0.001,
+    "furn/real": 0.0119
+   }
+  },
+  "medium_102_nostitch": {
+   "queue_all": {
+    "share": 1.0,
+    "mae": 0.0474,
+    "bias": 0.0274
+   },
+   "queue_truncated": {
+    "share": 0.0116,
+    "mae": 0.0075,
+    "bias": 0.0069
+   },
+   "overrides": {
+    "ground": {
+     "stitch_s": 0.0
+    }
+   },
+   "furniture_pcu_per_link_tick": {
+    "kept/real": 0.386,
+    "furn/ghost": 0.1526,
+    "kept/ghost": 0.0,
+    "furn/real": 0.0118
+   }
+  },
+  "medium_1_cur": {
+   "queue_all": {
+    "share": 1.0,
+    "mae": 0.0647,
+    "bias": 0.0368
+   },
+   "queue_truncated": {
+    "share": 0.0122,
+    "mae": 0.0083,
+    "bias": 0.0077
+   },
+   "overrides": {},
+   "furniture_pcu_per_link_tick": {
+    "kept/real": 0.3962,
+    "furn/ghost": 0.2017,
+    "furn/real": 0.0071,
+    "kept/ghost": 0.0015
+   }
+  },
+  "medium_1_nodedup": {
+   "queue_all": {
+    "share": 1.0,
+    "mae": 0.0647,
+    "bias": 0.0368
+   },
+   "queue_truncated": {
+    "share": 0.0122,
+    "mae": 0.0083,
+    "bias": 0.0077
+   },
+   "overrides": {
+    "no_dedup": true
+   },
+   "furniture_pcu_per_link_tick": {
+    "furn/ghost": 0.2017,
+    "kept/real": 0.3962,
+    "furn/real": 0.0071,
+    "kept/ghost": 0.0015
+   }
+  },
+  "medium_1_nohorizon": {
+   "queue_all": {
+    "share": 1.0,
+    "mae": 0.0622,
+    "bias": 0.0339
+   },
+   "queue_truncated": null,
+   "overrides": {
+    "est": {
+     "horizon_quantile": 0.0
+    }
+   },
+   "furniture_pcu_per_link_tick": {
+    "kept/real": 0.3962,
+    "furn/ghost": 0.2017,
+    "furn/real": 0.0071,
+    "kept/ghost": 0.0015
+   }
+  },
+  "medium_1_nostitch": {
+   "queue_all": {
+    "share": 1.0,
+    "mae": 0.0534,
+    "bias": 0.0255
+   },
+   "queue_truncated": {
+    "share": 0.0122,
+    "mae": 0.0083,
+    "bias": 0.0077
+   },
+   "overrides": {
+    "ground": {
+     "stitch_s": 0.0
+    }
+   },
+   "furniture_pcu_per_link_tick": {
+    "kept/real": 0.3907,
+    "furn/ghost": 0.199,
+    "kept/ghost": 0.0006,
+    "furn/real": 0.0122
+   }
+  }
+ },
+ "closed_loop_train_horizon": {
+  "heavy_101_-1": {
+   "q": -1.0,
+   "seed": 101,
+   "level": "heavy",
+   "person_delay_s": 638597.4139999996,
+   "stops": 3.5458333333333334,
+   "wall": 23
+  },
+  "heavy_101_0.0": {
+   "q": 0.0,
+   "seed": 101,
+   "level": "heavy",
+   "person_delay_s": 460109.22099999903,
+   "stops": 2.65,
+   "wall": 311
+  },
+  "heavy_101_0.9": {
+   "q": 0.9,
+   "seed": 101,
+   "level": "heavy",
+   "person_delay_s": 560549.8519999998,
+   "stops": 2.8916666666666666,
+   "wall": 311
+  },
+  "heavy_102_-1": {
+   "q": -1.0,
+   "seed": 102,
+   "level": "heavy",
+   "person_delay_s": 458082.0309999998,
+   "stops": 3.0635416666666666,
+   "wall": 26
+  },
+  "heavy_102_0.0": {
+   "q": 0.0,
+   "seed": 102,
+   "level": "heavy",
+   "person_delay_s": 452136.4300000006,
+   "stops": 3.144791666666667,
+   "wall": 314
+  },
+  "heavy_102_0.9": {
+   "q": 0.9,
+   "seed": 102,
+   "level": "heavy",
+   "person_delay_s": 518702.5109999997,
+   "stops": 2.8854166666666665,
+   "wall": 310
+  }
+ },
+ "notes": {
+  "estimate_ablations": "finetuned_day, 1800 steps, CC-A-CAMP on truth driving the traffic, first 300 s excluded; queue_pcu error per link-tick against QueueStateSampler. 'cur' = the code at the time (occlusion horizon 0.9 ON, stitching v2 ON). Seeds 101/102 are TRAIN; seed 1 is held-out and was used only to explain a Gate 1 difference, not to choose anything.",
+  "closed_loop_train_horizon": "CC-A-CAMP on cameras (finetuned_day, trust), heavy, TRAIN seeds 101/102; q = horizon_quantile (0 = off), q = -1 = CC-A-CAMP on SUMO truth."
+ },
+ "tracking_metric_fix": {
+  "note": "Gate 1 cells scored before and after the CLEAR-MOT correspondence and distractor fixes, with otherwise the same code (both runs had the horizon on). idsw/fp/mota before -> after.",
+  "cells": {
+   "medium ideal": {
+    "idsw": [
+     984,
+     971
+    ],
+    "fp": [
+     13992,
+     13205
+    ],
+    "mota": [
+     0.8506,
+     0.8532
+    ]
+   },
+   "medium finetuned_day": {
+    "idsw": [
+     2036,
+     2036
+    ],
+    "fp": [
+     50166,
+     50126
+    ],
+    "mota": [
+     0.6269,
+     0.627
+    ]
+   },
+   "medium coco_pretrained": {
+    "idsw": [
+     3474,
+     3470
+    ],
+    "fp": [
+     123758,
+     123716
+    ],
+    "mota": [
+     0.2342,
+     0.2343
+    ]
+   },
+   "medium night_rain": {
+    "idsw": [
+     4948,
+     4945
+    ],
+    "fp": [
+     123828,
+     123796
+    ],
+    "mota": [
+     0.0536,
+     0.0537
+    ]
+   },
+   "heavy ideal": {
+    "idsw": [
+     2164,
+     2111
+    ],
+    "fp": [
+     38180,
+     23596
+    ],
+    "mota": [
+     0.8909,
+     0.9071
+    ]
+   }
+  }
+ },
+ "trace_coco_failsafe_low_confidence": {
+  "note": "Which confidence factor put links under 0.5 with the stock-detector preset, medium, held-out seed 1, CC-A-CAMP on truth driving the traffic, 2400 steps (a trace, not a gate). 'no ...' reasons are the activity check, which no longer lowers health after the fix.",
+  "result": {
+   "link_ticks": 168484,
+   "below_0.5": 749,
+   "lowest_factor": {
+    "health": 749
+   },
+   "camera_not_ok_reasons": {
+    "calibration": 107,
+    "no": 618
+   },
+   "first_not_ok": {
+    "cam_cluster_11608007559_1880441514_4393295460_6354264758_678625358#0": [
+     1610.0,
+     "DEGRADED",
+     [
+      "calibration drift"
+     ]
+    ],
+    "cam_1880441505_-177626285": [
+     2082.0,
+     "DEGRADED",
+     [
+      "no vehicle for 120 s where 4.9/min is normal"
+     ]
+    ],
+    "cam_7871074777_843775117#0": [
+     2202.0,
+     "DEGRADED",
+     [
+      "no vehicle for 120 s where 5.2/min is normal"
+     ]
+    ],
+    "cam_7871074777_-343269496": [
+     2204.0,
+     "DEGRADED",
+     [
+      "no vehicle for 120 s where 6.3/min is normal"
+     ]
+    ],
+    "cam_cluster_1880441532_4393295467_6357870905_6357870906_1230310394": [
+     2206.0,
+     "DEGRADED",
+     [
+      "no vehicle for 120 s where 6.6/min is normal"
+     ]
+    ],
+    "cam_2833253632_343269496": [
+     2223.0,
+     "DEGRADED",
+     [
+      "no vehicle for 120 s where 7.5/min is normal"
+     ]
+    ],
+    "cam_cluster_11608007559_1880441514_4393295460_6354264758_350502993#4": [
+     2264.0,
+     "DEGRADED",
+     [
+      "no vehicle for 120 s where 12.7/min is normal"
+     ]
+    ],
+    "cam_2833253632_350502993#7": [
+     2289.0,
+     "DEGRADED",
+     [
+      "no vehicle for 120 s where 12.7/min is normal"
+     ]
+    ]
+   }
+  }
+ }
+}

@@ -1,0 +1,115 @@
+{
+ "budget_false_alarms_per_h": 1.0,
+ "chosen_policy": {
+  "stuck_sibling_s": 15.0,
+  "stuck_alone_s": 45.0,
+  "midblock_s": 60.0,
+  "midblock_dwell_s": 60.0,
+  "midblock_impact_s": 15.0,
+  "void_s": 90.0,
+  "void_min_swerves": 3,
+  "void_min_from_stop_line_m": 60.0,
+  "void_min_share": 0.3,
+  "collision_s": 10.0,
+  "wrong_way_s": 3.0,
+  "persist_ticks": 5,
+  "rules": [
+   "midblock_stop"
+  ]
+ },
+ "train": {
+  "incidents": 23,
+  "in_view": 20,
+  "recall_all": 0.2608695652173913,
+  "recall_in_view": 0.3,
+  "mean_latency_s": 66.83333333333333,
+  "false_alarms": 2,
+  "hours": 3.0524999999999998,
+  "false_alarms_per_hour": 0.6552006552006553,
+  "false_alarms_by_rule": {
+   "midblock_stop": 2
+  },
+  "by_kind": {
+   "stall": {
+    "n": 10,
+    "detected": 6
+   },
+   "lane_block": {
+    "n": 10,
+    "detected": 0
+   }
+  }
+ },
+ "eval": {
+  "incidents": 35,
+  "in_view": 27,
+  "recall_all": 0.22857142857142856,
+  "recall_in_view": 0.18518518518518517,
+  "mean_latency_s": 58.2,
+  "false_alarms": 7,
+  "hours": 4.573611111111111,
+  "false_alarms_per_hour": 1.5305192833282721,
+  "false_alarms_by_rule": {
+   "midblock_stop": 7
+  },
+  "by_kind": {
+   "stall": {
+    "n": 14,
+    "detected": 5
+   },
+   "lane_block": {
+    "n": 13,
+    "detected": 0
+   }
+  }
+ },
+ "eval_hand_set_default": {
+  "incidents": 35,
+  "in_view": 27,
+  "recall_all": 0.3142857142857143,
+  "recall_in_view": 0.3333333333333333,
+  "mean_latency_s": 62.333333333333336,
+  "false_alarms": 146,
+  "hours": 4.573611111111111,
+  "false_alarms_per_hour": 31.922259337989676,
+  "false_alarms_by_rule": {
+   "midblock_stop": 10,
+   "stuck_on_green": 102,
+   "collision_cue": 33,
+   "flow_void": 1
+  },
+  "by_kind": {
+   "stall": {
+    "n": 14,
+    "detected": 6
+   },
+   "lane_block": {
+    "n": 13,
+    "detected": 3
+   }
+  }
+ },
+ "pareto_train_vs_eval": [
+  {
+   "fa_per_h_train": 0.0,
+   "recall_in_view_train": 0.0,
+   "recall_in_view_eval": 0.0,
+   "mean_latency_s_eval": null,
+   "false_alarms_per_hour_eval": 0.0
+  },
+  {
+   "fa_per_h_train": 0.328,
+   "recall_in_view_train": 0.1,
+   "recall_in_view_eval": 0.14814814814814814,
+   "mean_latency_s_eval": 61.25,
+   "false_alarms_per_hour_eval": 1.0932280595201944
+  },
+  {
+   "fa_per_h_train": 0.655,
+   "recall_in_view_train": 0.3,
+   "recall_in_view_eval": 0.18518518518518517,
+   "mean_latency_s_eval": 58.2,
+   "false_alarms_per_hour_eval": 1.5305192833282721
+  }
+ ]
+}

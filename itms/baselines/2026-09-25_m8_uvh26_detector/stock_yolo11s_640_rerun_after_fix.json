@@ -1,0 +1,195 @@
+{
+ "meta": {
+  "data": "data/uvh26",
+  "images": 250,
+  "categories": {
+   "Hatchback": "car",
+   "Sedan": "car",
+   "SUV": "car",
+   "MUV": "car",
+   "Bus": "bus",
+   "Truck": "truck",
+   "Three-wheeler": "auto_rickshaw",
+   "Two-wheeler": "motorcycle",
+   "LCV": "truck",
+   "Mini-bus": "bus",
+   "Tempo-traveller": "bus",
+   "Bicycle": "bicycle",
+   "Van": "car",
+   "Others": null
+  },
+  "op_thresh": 0.5,
+  "score_floor": 0.05,
+  "cpu": "aarch64",
+  "cpus": 4
+ },
+ "models": {
+  "stock@640": {
+   "images": 250,
+   "op_thresh": 0.5,
+   "iou_thresh": 0.5,
+   "map50": 0.3973055351564517,
+   "vehicles": 3063,
+   "vehicle_recall": 0.3196212863206007,
+   "vehicle_precision": 0.8916211293260473,
+   "false_pos_per_image": 0.476,
+   "false_pos_by_class": {
+    "car": 55,
+    "motorcycle": 38,
+    "truck": 18,
+    "bus": 7,
+    "bicycle": 1
+   },
+   "ignored_detections": 0,
+   "recall_by_height": {
+    "0-20px": [
+     null,
+     0
+    ],
+    "20-40px": [
+     0.047619047619047616,
+     63
+    ],
+    "40-80px": [
+     0.12554112554112554,
+     693
+    ],
+    "80-infpx": [
+     0.38534893801473774,
+     2307
+    ]
+   },
+   "pcu_per_image": {
+    "truth_mean": 10.163600000000002,
+    "bias": -4.425200000000001,
+    "mae": 4.9804
+   },
+   "per_class": {
+    "auto_rickshaw": {
+     "truth": 504,
+     "ap50": 0.0,
+     "recall": 0.0,
+     "found_as_some_vehicle": 0.17857142857142858,
+     "precision": NaN,
+     "reported_as": {
+      "missed": 414,
+      "truck": 42,
+      "car": 36,
+      "bus": 11,
+      "motorcycle": 1
+     }
+    },
+    "bicycle": {
+     "truth": 32,
+     "ap50": 0.3188321181742234,
+     "recall": 0.25,
+     "found_as_some_vehicle": 0.25,
+     "precision": 0.6666666666666666,
+     "reported_as": {
+      "missed": 24,
+      "bicycle": 8
+     }
+    },
+    "bus": {
+     "truth": 87,
+     "ap50": 0.4322014216438238,
+     "recall": 0.40229885057471265,
+     "found_as_some_vehicle": 0.5172413793103449,
+     "precision": 0.5555555555555556,
+     "reported_as": {
+      "missed": 42,
+      "bus": 35,
+      "truck": 10
+     }
+    },
+    "car": {
+     "truth": 694,
+     "ap50": 0.8344298107461201,
+     "recall": 0.7190201729106628,
+     "found_as_some_vehicle": 0.7507204610951008,
+     "precision": 0.8358458961474037,
+     "reported_as": {
+      "car": 499,
+      "missed": 173,
+      "truck": 22
+     }
+    },
+    "motorcycle": {
+     "truth": 1467,
+     "ap50": 0.367464851053628,
+     "recall": 0.13224267211997273,
+     "found_as_some_vehicle": 0.136332651670075,
+     "precision": 0.8290598290598291,
+     "reported_as": {
+      "missed": 1267,
+      "motorcycle": 194,
+      "bicycle": 3,
+      "car": 3
+     }
+    },
+    "truck": {
+     "truth": 279,
+     "ap50": 0.430905009320915,
+     "recall": 0.35842293906810035,
+     "found_as_some_vehicle": 0.4121863799283154,
+     "precision": 0.5208333333333334,
+     "reported_as": {
+      "missed": 164,
+      "truck": 100,
+      "bus": 10,
+      "car": 4,
+      "motorcycle": 1
+     }
+    }
+   },
+   "cpu_ms_per_image": {
+    "median": 61.03508399974089,
+    "mean": 61.58704488258184,
+    "n": 247
+   },
+   "weights": "data/uvh26/yolo11s.onnx",
+   "backend": "onnxruntime 1.23.2",
+   "imgsz": 640,
+   "class_map": {
+    "person": "person",
+    "bicycle": "bicycle",
+    "car": "car",
+    "motorcycle": "motorcycle",
+    "bus": "bus",
+    "truck": "truck"
+   }
+  }
+ },
+ "clips": {
+  "highway.avi": {
+   "stock@640": {
+    "frames": 75,
+    "frames_with_a_vehicle_box": 0,
+    "vehicle_boxes": 0,
+    "by_class": {}
+   }
+  },
+  "pbc.mp4": {
+   "stock@640": {
+    "frames": 75,
+    "frames_with_a_vehicle_box": 16,
+    "vehicle_boxes": 20,
+    "by_class": {
+     "car": 12,
+     "bicycle": 8
+    }
+   }
+  },
+  "overpass.mp4": {
+   "stock@640": {
+    "frames": 75,
+    "frames_with_a_vehicle_box": 75,
+    "vehicle_boxes": 256,
+    "by_class": {
+     "car": 255,
+     "truck": 1
+    }
+   }
+  }
+ }
+}

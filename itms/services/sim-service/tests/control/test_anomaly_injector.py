@@ -39,6 +39,7 @@ class _FakeSim:
         self.lane_max: dict[str, float] = {}
         self.set_speed_calls: list[tuple[str, float]] = []
         self.set_maxspeed_calls: list[tuple[str, float]] = []
+        self.lc_mode: dict[str, int] = {}
 
         t = injector_module.traci
         monkeypatch.setattr(
@@ -52,6 +53,10 @@ class _FakeSim:
             t.vehicle, "setSpeed",
             lambda v, s: self.set_speed_calls.append((v, s)),
         )
+        monkeypatch.setattr(t.vehicle, "getLaneChangeMode",
+                            lambda v: self.lc_mode.get(v, 1621))
+        monkeypatch.setattr(t.vehicle, "setLaneChangeMode",
+                            lambda v, m: self.lc_mode.__setitem__(v, m))
         monkeypatch.setattr(t.lane, "getMaxSpeed", lambda lane_id: self.lane_max[lane_id])
         monkeypatch.setattr(
             t.lane, "setMaxSpeed",
@@ -111,6 +116,22 @@ def test_stall_freezes_at_start_reasserts_each_tick_then_releases(sim):
     assert w.intersection_id == "J1"
     assert set(w.link_ids) == {"L0", "L1"}
     assert w.realised
+
+
+def test_a_stalled_vehicle_cannot_change_lanes_until_released(sim):
+    """setSpeed(0) alone lets SUMO keep moving a stopped car sideways; a
+    breakdown stays in its lane."""
+    sim.put_vehicle("app_a_0", "veh1", speed=8.0)
+    inj = IncidentInjector(
+        [PlannedIncident("stall", "app_a_0", start_tick=5, duration_ticks=4)],
+        link_lanes=_LINK_LANES,
+    )
+    for step in range(1, 7):
+        inj.tick(step)
+    assert sim.lc_mode["veh1"] == 0
+    for step in range(7, 12):
+        inj.tick(step)
+    assert sim.lc_mode["veh1"] == 1621  # its own mode back
 
 
 def test_stall_defers_start_until_a_vehicle_is_on_the_lane(sim):

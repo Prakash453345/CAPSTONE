@@ -40,6 +40,15 @@ Env vars:
   SIM_REALTIME_FACTOR  pacing for the demo loop (default 1.0 -- see traci_loop.run / run_live)
   SIM_STEP_LENGTH      seconds of sim time per step (default 1.0, matches the M1 gate's "1 Hz")
   SIM_MAX_STEPS         stop after N steps (unset = run to scenario end); mainly for tests
+  CONTROL_SENSOR       "sumo" (default) | "vision" -- sumo mode: where A-CA-MP's queue
+                       state comes from. "vision" takes it from the vision service's
+                       vision.link-state stream (run `make vision-dev` alongside);
+                       see sim_service/control/vision_feed.py
+  VISION_CONFIDENCE    "failsafe" (default) | "honest" | "trust" -- with CONTROL_SENSOR=vision:
+                       which camera confidence the controller is told about
+  VISION_BLIND_CHECK   "1" (default except in trust mode) | "0" -- with CONTROL_SENSOR=vision:
+                       treat a link whose stop-bar loop keeps seeing vehicles the camera
+                       does not as a failed camera (itms_domain.camera.BlindCameraCheck)
   REDIS_URL
 """
 
@@ -116,6 +125,25 @@ def _run_sumo() -> None:
         )
         for tls_id, cfg in configs.items()
     }
+
+    if os.environ.get("CONTROL_SENSOR", "sumo") == "vision":
+        from sim_service.control.vision_feed import (
+            VisionFedStrategy,
+            VisionFeed,
+            start_feed_thread,
+        )
+        from sim_service.signal_controller.detectors import StopBarLoops
+
+        mode = os.environ.get("VISION_CONFIDENCE", "failsafe")
+        feed = VisionFeed()
+        start_feed_thread(feed, REDIS_URL)
+        blind_env = os.environ.get("VISION_BLIND_CHECK")
+        blind_check = None if blind_env is None else blind_env not in ("0", "false", "no")
+        strategy = {tls: VisionFedStrategy(  # type: ignore[misc]
+                        s, feed, tls, mode, blind_check=blind_check,
+                        stopbar=StopBarLoops(link_lanes[tls]).sample if tls in link_lanes else None)
+                    for tls, s in strategy.items()}
+        log.info("A-CA-MP queue state from the cameras (vision.link-state, confidence=%s)", mode)
 
     anomaly_graph: AnomalyGraph | None = None
     try:

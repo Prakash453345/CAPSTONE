@@ -89,3 +89,27 @@ class ActuationDetector:
                 wait_times_s[link_id] = 0.0
                 self._call_started_s.pop(link_id, None)
         return has_demand, wait_times_s
+
+
+class StopBarLoops:
+    """Presence over the last `zone_m` of each approach lane -- a stop-bar
+    loop, emulated over TraCI the same way `ActuationDetector` emulates a
+    whole-lane call. It exists for M8's camera cross-check
+    (`itms_domain.camera.BlindCameraCheck`), which needs a zone the camera
+    can also see: `ActuationDetector`'s zone is the whole approach, up to
+    600 m, most of it out of any camera's view."""
+
+    def __init__(self, link_lanes: Mapping[str, str], *, zone_m: float = 20.0):
+        self._link_lanes = link_lanes
+        self._zone_m = zone_m
+        self._length: dict[str, float] = {}
+
+    def sample(self) -> dict[str, bool]:
+        out: dict[str, bool] = {}
+        for link_id, lane_id in self._link_lanes.items():
+            length = self._length.get(lane_id)
+            if length is None:
+                length = self._length[lane_id] = float(traci.lane.getLength(lane_id))
+            out[link_id] = any(traci.vehicle.getLanePosition(v) >= length - self._zone_m
+                               for v in traci.lane.getLastStepVehicleIDs(lane_id))
+        return out

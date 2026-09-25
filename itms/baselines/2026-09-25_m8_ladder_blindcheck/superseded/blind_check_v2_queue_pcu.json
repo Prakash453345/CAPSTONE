@@ -1,0 +1,407 @@
+{
+ "design": "v2: stop-bar loop vs queue+approaching > 0.1 PCU; evidence in occupied seconds (replayed on the v2 series)",
+ "grid_all_runs": {
+  "hold5_gap5": {
+   "hold_s": 5.0,
+   "gap_s": 5.0,
+   "false_alarms": 583,
+   "false_alarms_per_hour_corridor": 85.38649308380796,
+   "blind_links_caught": 32,
+   "blind_links_missed": 0,
+   "median_latency_s": 18.0,
+   "max_latency_s": 107.0
+  },
+  "hold5_gap10": {
+   "hold_s": 5.0,
+   "gap_s": 10.0,
+   "false_alarms": 582,
+   "false_alarms_per_hour_corridor": 85.240032546786,
+   "blind_links_caught": 32,
+   "blind_links_missed": 0,
+   "median_latency_s": 13.0,
+   "max_latency_s": 107.0
+  },
+  "hold5_gap20": {
+   "hold_s": 5.0,
+   "gap_s": 20.0,
+   "false_alarms": 584,
+   "false_alarms_per_hour_corridor": 85.53295362082993,
+   "blind_links_caught": 32,
+   "blind_links_missed": 0,
+   "median_latency_s": 13.0,
+   "max_latency_s": 107.0
+  },
+  "hold5_gap30": {
+   "hold_s": 5.0,
+   "gap_s": 30.0,
+   "false_alarms": 584,
+   "false_alarms_per_hour_corridor": 85.53295362082993,
+   "blind_links_caught": 32,
+   "blind_links_missed": 0,
+   "median_latency_s": 13.0,
+   "max_latency_s": 182.0
+  },
+  "hold10_gap5": {
+   "hold_s": 10.0,
+   "gap_s": 5.0,
+   "false_alarms": 202,
+   "false_alarms_per_hour_corridor": 29.585028478437753,
+   "blind_links_caught": 32,
+   "blind_links_missed": 0,
+   "median_latency_s": 23.0,
+   "max_latency_s": 105.0
+  },
+  "hold10_gap10": {
+   "hold_s": 10.0,
+   "gap_s": 10.0,
+   "false_alarms": 202,
+   "false_alarms_per_hour_corridor": 29.585028478437753,
+   "blind_links_caught": 32,
+   "blind_links_missed": 0,
+   "median_latency_s": 19.0,
+   "max_latency_s": 105.0
+  },
+  "hold10_gap20": {
+   "hold_s": 10.0,
+   "gap_s": 20.0,
+   "false_alarms": 202,
+   "false_alarms_per_hour_corridor": 29.585028478437753,
+   "blind_links_caught": 32,
+   "blind_links_missed": 0,
+   "median_latency_s": 19.0,
+   "max_latency_s": 105.0
+  },
+  "hold10_gap30": {
+   "hold_s": 10.0,
+   "gap_s": 30.0,
+   "false_alarms": 202,
+   "false_alarms_per_hour_corridor": 29.585028478437753,
+   "blind_links_caught": 32,
+   "blind_links_missed": 0,
+   "median_latency_s": 19.0,
+   "max_latency_s": 105.0
+  },
+  "hold15_gap5": {
+   "hold_s": 15.0,
+   "gap_s": 5.0,
+   "false_alarms": 138,
+   "false_alarms_per_hour_corridor": 20.21155410903173,
+   "blind_links_caught": 32,
+   "blind_links_missed": 0,
+   "median_latency_s": 28.0,
+   "max_latency_s": 109.0
+  },
+  "hold15_gap10": {
+   "hold_s": 15.0,
+   "gap_s": 10.0,
+   "false_alarms": 139,
+   "false_alarms_per_hour_corridor": 20.3580146460537,
+   "blind_links_caught": 32,
+   "blind_links_missed": 0,
+   "median_latency_s": 24.0,
+   "max_latency_s": 109.0
+  },
+  "hold15_gap20": {
+   "hold_s": 15.0,
+   "gap_s": 20.0,
+   "false_alarms": 139,
+   "false_alarms_per_hour_corridor": 20.3580146460537,
+   "blind_links_caught": 32,
+   "blind_links_missed": 0,
+   "median_latency_s": 24.0,
+   "max_latency_s": 109.0
+  },
+  "hold15_gap30": {
+   "hold_s": 15.0,
+   "gap_s": 30.0,
+   "false_alarms": 139,
+   "false_alarms_per_hour_corridor": 20.3580146460537,
+   "blind_links_caught": 32,
+   "blind_links_missed": 0,
+   "median_latency_s": 24.0,
+   "max_latency_s": 109.0
+  },
+  "hold20_gap5": {
+   "hold_s": 20.0,
+   "gap_s": 5.0,
+   "false_alarms": 100,
+   "false_alarms_per_hour_corridor": 14.646053702196907,
+   "blind_links_caught": 32,
+   "blind_links_missed": 0,
+   "median_latency_s": 37.0,
+   "max_latency_s": 151.0
+  },
+  "hold20_gap10": {
+   "hold_s": 20.0,
+   "gap_s": 10.0,
+   "false_alarms": 100,
+   "false_alarms_per_hour_corridor": 14.646053702196907,
+   "blind_links_caught": 32,
+   "blind_links_missed": 0,
+   "median_latency_s": 29.0,
+   "max_latency_s": 151.0
+  },
+  "hold20_gap20": {
+   "hold_s": 20.0,
+   "gap_s": 20.0,
+   "false_alarms": 100,
+   "false_alarms_per_hour_corridor": 14.646053702196907,
+   "blind_links_caught": 32,
+   "blind_links_missed": 0,
+   "median_latency_s": 29.0,
+   "max_latency_s": 151.0
+  },
+  "hold20_gap30": {
+   "hold_s": 20.0,
+   "gap_s": 30.0,
+   "false_alarms": 100,
+   "false_alarms_per_hour_corridor": 14.646053702196907,
+   "blind_links_caught": 32,
+   "blind_links_missed": 0,
+   "median_latency_s": 29.0,
+   "max_latency_s": 151.0
+  },
+  "hold30_gap5": {
+   "hold_s": 30.0,
+   "gap_s": 5.0,
+   "false_alarms": 63,
+   "false_alarms_per_hour_corridor": 9.227013832384051,
+   "blind_links_caught": 32,
+   "blind_links_missed": 0,
+   "median_latency_s": 46.0,
+   "max_latency_s": 509.0
+  },
+  "hold30_gap10": {
+   "hold_s": 30.0,
+   "gap_s": 10.0,
+   "false_alarms": 63,
+   "false_alarms_per_hour_corridor": 9.227013832384051,
+   "blind_links_caught": 32,
+   "blind_links_missed": 0,
+   "median_latency_s": 46.0,
+   "max_latency_s": 509.0
+  },
+  "hold30_gap20": {
+   "hold_s": 30.0,
+   "gap_s": 20.0,
+   "false_alarms": 63,
+   "false_alarms_per_hour_corridor": 9.227013832384051,
+   "blind_links_caught": 32,
+   "blind_links_missed": 0,
+   "median_latency_s": 46.0,
+   "max_latency_s": 509.0
+  },
+  "hold30_gap30": {
+   "hold_s": 30.0,
+   "gap_s": 30.0,
+   "false_alarms": 63,
+   "false_alarms_per_hour_corridor": 9.227013832384051,
+   "blind_links_caught": 32,
+   "blind_links_missed": 0,
+   "median_latency_s": 46.0,
+   "max_latency_s": 509.0
+  }
+ },
+ "grid_fault_free": {
+  "hold5_gap5": {
+   "hold_s": 5.0,
+   "gap_s": 5.0,
+   "false_alarms": 507,
+   "false_alarms_per_hour_corridor": 91.58512720156554,
+   "blind_links_caught": 0,
+   "blind_links_missed": 0,
+   "median_latency_s": null,
+   "max_latency_s": null
+  },
+  "hold5_gap10": {
+   "hold_s": 5.0,
+   "gap_s": 10.0,
+   "false_alarms": 506,
+   "false_alarms_per_hour_corridor": 91.40448592503385,
+   "blind_links_caught": 0,
+   "blind_links_missed": 0,
+   "median_latency_s": null,
+   "max_latency_s": null
+  },
+  "hold5_gap20": {
+   "hold_s": 5.0,
+   "gap_s": 20.0,
+   "false_alarms": 508,
+   "false_alarms_per_hour_corridor": 91.76576847809723,
+   "blind_links_caught": 0,
+   "blind_links_missed": 0,
+   "median_latency_s": null,
+   "max_latency_s": null
+  },
+  "hold5_gap30": {
+   "hold_s": 5.0,
+   "gap_s": 30.0,
+   "false_alarms": 508,
+   "false_alarms_per_hour_corridor": 91.76576847809723,
+   "blind_links_caught": 0,
+   "blind_links_missed": 0,
+   "median_latency_s": null,
+   "max_latency_s": null
+  },
+  "hold10_gap5": {
+   "hold_s": 10.0,
+   "gap_s": 5.0,
+   "false_alarms": 186,
+   "false_alarms_per_hour_corridor": 33.599277434893864,
+   "blind_links_caught": 0,
+   "blind_links_missed": 0,
+   "median_latency_s": null,
+   "max_latency_s": null
+  },
+  "hold10_gap10": {
+   "hold_s": 10.0,
+   "gap_s": 10.0,
+   "false_alarms": 186,
+   "false_alarms_per_hour_corridor": 33.599277434893864,
+   "blind_links_caught": 0,
+   "blind_links_missed": 0,
+   "median_latency_s": null,
+   "max_latency_s": null
+  },
+  "hold10_gap20": {
+   "hold_s": 10.0,
+   "gap_s": 20.0,
+   "false_alarms": 186,
+   "false_alarms_per_hour_corridor": 33.599277434893864,
+   "blind_links_caught": 0,
+   "blind_links_missed": 0,
+   "median_latency_s": null,
+   "max_latency_s": null
+  },
+  "hold10_gap30": {
+   "hold_s": 10.0,
+   "gap_s": 30.0,
+   "false_alarms": 186,
+   "false_alarms_per_hour_corridor": 33.599277434893864,
+   "blind_links_caught": 0,
+   "blind_links_missed": 0,
+   "median_latency_s": null,
+   "max_latency_s": null
+  },
+  "hold15_gap5": {
+   "hold_s": 15.0,
+   "gap_s": 5.0,
+   "false_alarms": 125,
+   "false_alarms_per_hour_corridor": 22.58015956646093,
+   "blind_links_caught": 0,
+   "blind_links_missed": 0,
+   "median_latency_s": null,
+   "max_latency_s": null
+  },
+  "hold15_gap10": {
+   "hold_s": 15.0,
+   "gap_s": 10.0,
+   "false_alarms": 126,
+   "false_alarms_per_hour_corridor": 22.76080084299262,
+   "blind_links_caught": 0,
+   "blind_links_missed": 0,
+   "median_latency_s": null,
+   "max_latency_s": null
+  },
+  "hold15_gap20": {
+   "hold_s": 15.0,
+   "gap_s": 20.0,
+   "false_alarms": 126,
+   "false_alarms_per_hour_corridor": 22.76080084299262,
+   "blind_links_caught": 0,
+   "blind_links_missed": 0,
+   "median_latency_s": null,
+   "max_latency_s": null
+  },
+  "hold15_gap30": {
+   "hold_s": 15.0,
+   "gap_s": 30.0,
+   "false_alarms": 126,
+   "false_alarms_per_hour_corridor": 22.76080084299262,
+   "blind_links_caught": 0,
+   "blind_links_missed": 0,
+   "median_latency_s": null,
+   "max_latency_s": null
+  },
+  "hold20_gap5": {
+   "hold_s": 20.0,
+   "gap_s": 5.0,
+   "false_alarms": 93,
+   "false_alarms_per_hour_corridor": 16.799638717446932,
+   "blind_links_caught": 0,
+   "blind_links_missed": 0,
+   "median_latency_s": null,
+   "max_latency_s": null
+  },
+  "hold20_gap10": {
+   "hold_s": 20.0,
+   "gap_s": 10.0,
+   "false_alarms": 93,
+   "false_alarms_per_hour_corridor": 16.799638717446932,
+   "blind_links_caught": 0,
+   "blind_links_missed": 0,
+   "median_latency_s": null,
+   "max_latency_s": null
+  },
+  "hold20_gap20": {
+   "hold_s": 20.0,
+   "gap_s": 20.0,
+   "false_alarms": 93,
+   "false_alarms_per_hour_corridor": 16.799638717446932,
+   "blind_links_caught": 0,
+   "blind_links_missed": 0,
+   "median_latency_s": null,
+   "max_latency_s": null
+  },
+  "hold20_gap30": {
+   "hold_s": 20.0,
+   "gap_s": 30.0,
+   "false_alarms": 93,
+   "false_alarms_per_hour_corridor": 16.799638717446932,
+   "blind_links_caught": 0,
+   "blind_links_missed": 0,
+   "median_latency_s": null,
+   "max_latency_s": null
+  },
+  "hold30_gap5": {
+   "hold_s": 30.0,
+   "gap_s": 5.0,
+   "false_alarms": 58,
+   "false_alarms_per_hour_corridor": 10.477194038837872,
+   "blind_links_caught": 0,
+   "blind_links_missed": 0,
+   "median_latency_s": null,
+   "max_latency_s": null
+  },
+  "hold30_gap10": {
+   "hold_s": 30.0,
+   "gap_s": 10.0,
+   "false_alarms": 58,
+   "false_alarms_per_hour_corridor": 10.477194038837872,
+   "blind_links_caught": 0,
+   "blind_links_missed": 0,
+   "median_latency_s": null,
+   "max_latency_s": null
+  },
+  "hold30_gap20": {
+   "hold_s": 30.0,
+   "gap_s": 20.0,
+   "false_alarms": 58,
+   "false_alarms_per_hour_corridor": 10.477194038837872,
+   "blind_links_caught": 0,
+   "blind_links_missed": 0,
+   "median_latency_s": null,
+   "max_latency_s": null
+  },
+  "hold30_gap30": {
+   "hold_s": 30.0,
+   "gap_s": 30.0,
+   "false_alarms": 58,
+   "false_alarms_per_hour_corridor": 10.477194038837872,
+   "blind_links_caught": 0,
+   "blind_links_missed": 0,
+   "median_latency_s": null,
+   "max_latency_s": null
+  }
+ }
+}

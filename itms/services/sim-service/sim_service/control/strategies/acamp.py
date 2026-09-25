@@ -716,8 +716,9 @@ class AcampConfig:
 
     # -- degradation ladder --
     use_memory_blend: bool = True
-    """Whether the "camp_blended" rung actually blends against
-    `DemandMemory`, or falls through to fixed-time the way M4's did.
+    """Whether the "camp_blended" rung actually blends (against
+    `DemandMemory` when one is configured, which with no memory is the live
+    reading itself), or falls through to fixed-time the way M4's did.
     An ablation switch for the gate, not a production setting -- the same
     role `camp.CampConfig.enable_blocking` plays for M4's θ ablation, and
     kept for the same reason: one codepath serving both arms beats two
@@ -1171,6 +1172,7 @@ class AdaptiveCamp:
             "switch_max_green": 0,
             "switch_starvation": 0,
             "blended": 0,
+            "blended_no_history": 0,
             "fallback_fixed_time": 0,
             "corridor_anticipating": 0,
             "corridor_repaying": 0,
@@ -1362,9 +1364,23 @@ class AdaptiveCamp:
         self._track_gap(cfg_t0, ctx)
 
         mode = select_mode(ctx, _all_movements(cfg_t0))
-        if mode == "camp_blended" and cfg.use_memory_blend and self.memory is not None:
+        if mode == "camp_blended" and cfg.use_memory_blend:
+            # With no demand memory there is no history to blend toward, and
+            # a blend with nothing is the live reading (`memory.blend`'s own
+            # rule, which `_blend_context` applies per movement): control on
+            # the live estimate. The first version dropped to
+            # `fixed_time.propose` here instead -- M2's min-green cycler,
+            # which cuts any green older than 7 s -- so a camera estimate at
+            # 0.7 confidence, far better than no estimate, truncated greens
+            # whenever it appeared. Measured by M8's closed loop (baselines/
+            # 2026-09-25_m8_review): +8 % person-delay at medium, +10 % at
+            # heavy, +21 % with a stock detector, against ignoring that
+            # confidence. M5's sensor-degradation finding points the same
+            # way: history helps where live data is absent, not where it is
+            # merely noisy. `use_memory_blend=False` keeps the fixed-time
+            # fallback for that experiment's ablation arm.
             ctx = self._blend_context(ctx)
-            self.stats["blended"] += 1
+            self.stats["blended" if self.memory is not None else "blended_no_history"] += 1
         elif mode != "camp_full":
             # "profile_actuated" still has no plan library to actuate
             # against -- unchanged from M4, and still the honest fallback

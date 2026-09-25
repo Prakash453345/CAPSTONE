@@ -4440,3 +4440,595 @@ comfort rather than capacity. The two candidates left in
 (53 of this corridor's 73 links share a physical lane, so phases inside one
 junction are weighted 1.0-3.0x by geometry alone) and a per-phase supervisor
 trigger.
+
+## M8 — Vision: junction cameras as a sensor the controller already understands (2026-09-23/24)
+
+**Status:** built, gated on a digital twin of the corridor's cameras, and
+smoke-tested on real footage with a real YOLO11. Runs as a service next to
+`make dev` (`make vision-dev`). Not yet: a detector trained on Indian
+traffic, Vijayawada footage, the live wiring of camera state into the
+running controller, and an incident stream good enough to use on its own
+— all four listed at the end with what each needs.
+
+**The idea.** A camera is one more sensor adapter (ADR-001). It reports
+exactly what `QueueStateSampler` reports from SUMO — `queue_pcu`,
+`approaching_pcu`, `receiving_occupancy`, `receiving_queue_pcu` per link
+`L{i}` — plus the one thing SUMO never had to: a **confidence** built from
+causes you can point to (how much of the lane is seen at usable resolution,
+camera health, how much of the traffic the tracker is coasting rather than
+seeing, how long a queue has run past the edge of the frame). Because the
+quantities are identical, every existing controller runs on cameras
+unchanged, and "the controller on truth" vs "the controller on cameras" is
+directly measurable — which is what the gates below do. The design, and
+every place the build departed from it, is `docs/vision_system_design.md`.
+
+### What exists
+
+- `packages/geo` (numpy only, 50 tests): pinhole and homography cameras
+  behind one interface, normalised DLT + RANSAC, closed-form ground
+  resolution, the SUMO network's lanes, links (numbering identical to
+  `link_lanes.py`) and phase states, lane coverage — and **calibration from
+  the lane markings a camera already sees** (`lanecal`: lane lines, four
+  dash starts and the stop line; no survey).
+- `services/vision-service` (82 tests): **SimCam**, a digital-twin camera
+  that films SUMO through each camera's geometry at 5 fps with occlusion
+  and a detector-error model (bursty misses, sticky class confusion,
+  jitter, ghosts, persistent hotspots on street furniture); YOLO11 and ONNX
+  detector adapters (our own letterbox/decode/NMS — no torch at the edge);
+  **ByteTrack written from scratch**; ground-plane tracking in metres
+  (footprint correction, frame-edge handling, two-point speed seeding, stop
+  hysteresis, stopped-track stitching); the **link-state estimator**
+  (coverage, cross-camera dedup, a learned clutter map, LWR queue
+  extrapolation past the view, the confidence model); five **phase-aware
+  incident rules** with evidence and no person rule (ADR-006); **camera
+  health** from pixels and from the traffic itself (calibration drift);
+  **redacted**, retention-bounded evidence; the running service (SimCam or
+  video mode) publishing to Redis.
+- `contracts/events`: `LinkStateEstimated` (`vision.link-state`) and
+  `CameraStatus` (`vision.camera-status`); vision candidates reuse
+  `AnomalyUpdated` with `source=VISION`. api-service relays both topics.
+- `scenarios/networks/vijayawada/cameras.json`: 19 planned cameras, one per
+  signalised approach; all 40 approach lanes seen from the stop line back
+  (96.8 m on average), 17 of 38 receiving lanes seen from their start.
+- Gates and tools: `scripts/m8_perception_gate.py`,
+  `m8_closed_loop_gate.py`, `m8_incident_gate.py` +
+  `m8_incident_analysis.py`, `m8_real_video_smoke.py`, and `m8_report.py`,
+  which prints every table in `baselines/2026-09-23_m8_vision/README.md`
+  from the gate outputs. `make test-vision`, `make m8-*`.
+
+Held-out seeds 1–5, paired, SUMO 1.27.1, 2 vCPU. The detector presets are
+assumptions about detectors, not measurements of one (`finetuned_day` = an
+in-domain model; `coco_pretrained` = stock weights with the BMD-45 domain
+gap); every number carries its preset.
+
+### Gate 1 — how far the camera estimates are from SUMO truth
+
+One seed per cell, 1,800 steps. Mean true queue per link: 0.16 PCU at
+medium, 1.37 at heavy.
+
+| level | preset | queue PCU MAE / bias / corr | MOTA / IDF1 | car recall | speed MAE (m/s) | lane acc. | confidence mean (share < 0.8) |
+|---|---|---|---|---:|---:|---:|---|
+| medium | `ideal` | 0.05 / +0.03 / 0.83 | 0.85 / 0.86 | 1.00 | 0.36 | 0.97 | 0.93 (0 %) |
+| medium | `finetuned_day` | 0.05 / +0.02 / 0.83 | 0.63 / 0.72 | 0.89 | 0.58 | 0.96 | 0.90 (0 %) |
+| medium | `coco_pretrained` | 0.08 / +0.03 / 0.78 | 0.23 / 0.53 | 0.76 | 0.92 | 0.94 | 0.86 (10 %) |
+| medium | `night_rain` | 0.08 / −0.03 / 0.70 | 0.05 / 0.40 | 0.57 | 1.45 | 0.94 | 0.82 (47 %) |
+| heavy | `ideal` | 0.40 / +0.17 / 0.81 | 0.89 / 0.89 | 1.00 | 0.27 | 0.98 | 0.93 (0 %) |
+| heavy | `finetuned_day` | 0.31 / −0.10 / 0.92 | 0.75 / 0.79 | 0.88 | 0.46 | 0.98 | 0.90 (0 %) |
+| heavy | `coco_pretrained` | 0.55 / −0.34 / 0.85 | 0.51 / 0.63 | 0.76 | 0.72 | 0.97 | 0.86 (7 %) |
+| heavy | `night_rain` | 0.86 / −0.74 / 0.72 | 0.33 / 0.48 | 0.56 | 1.05 | 0.96 | 0.82 (48 %) |
+
+- **Queue counts survive bad tracking.** MOTA falls from 0.85 to 0.05 at
+  medium while the queue error only goes from 0.05 to 0.08 PCU: a queue
+  needs vehicles *seen*, not vehicles *followed*.
+- **At heavy demand the error is geometric before it is perceptual.** A
+  perfect detector gives 0.40 PCU with a *positive* bias: queues run past
+  what a stop-line camera sees and the extrapolation over-shoots. Detector
+  misses then pull the bias negative as the preset worsens.
+- The confidence tracks the preset (0.93 → 0.82; night/rain under 0.8 on
+  nearly half of link-ticks) — it measures something real.
+- The downstream pipeline for all 19 cameras costs roughly 0.1–0.2 s of CPU
+  per second of traffic (detection excluded).
+
+### Gate 2 — the controller on cameras
+
+`VisionSensor` swaps the four queue fields in `JunctionContext`; `trust`
+withholds confidence, `honest` passes all of it, `failsafe` passes only
+values below 0.5 (a camera that has really failed). The safety kernel's
+`has_demand` and `wait_times_s` stay ground truth.
+
+| level | arm | person-delay | vs CC-A-CAMP on truth | vs Webster | ticks in the fixed-time rung |
+|---|---|---:|---|---|---:|
+| medium | Webster | 106,912 | | | |
+| | CC-A-CAMP on truth | 73,355 | — | **−31.4 %** SIG, 5/5 | |
+| | cameras, in-domain, `trust` | 75,464 | +2.9 % n.s. | **−29.4 %** SIG, 5/5 | 0 |
+| | cameras, in-domain, `honest` | 74,728 | +1.9 % n.s. | **−30.1 %** SIG, 5/5 | 1.9 % |
+| | cameras, stock COCO, `honest` | 97,073 | **+32.3 %** SIG, 0/5 | −9.2 % SIG | 43.4 % |
+| | cameras, stock COCO, `failsafe` | 77,896 | +6.2 % n.s. | **−27.1 %** SIG, 5/5 | 0 |
+| heavy | Webster | 648,447 | | | |
+| | CC-A-CAMP on truth | 457,164 | — | **−29.5 %** SIG, 5/5 | |
+| | cameras, in-domain, `trust` | 503,715 | +10.2 % n.s. | **−22.3 %** SIG, 5/5 | 0 |
+| | cameras, in-domain, `honest` | 582,109 | **+27.3 %** SIG, 0/5 | −10.2 % n.s. | 0.8 % |
+
+Zero interlock violations in every run of every arm.
+
+- **With an in-domain detector the controller keeps its win over
+  Webster** — all of it at medium (+2–3 % against truth, not significant),
+  three quarters of it at heavy (+10 %, not significant at n = 5).
+- **The confidence ladder, fed a real number for the first time, hurts —
+  and the stock-detector result shows by how much.** With no demand memory
+  configured (every M5 arm) the ladder's middle rung is M2's
+  `fixed_time.propose`, which ends any green older than 7 s on the tick it
+  is entered. `honest` with the stock detector spent 43 % of junction-ticks
+  there and cost +32 %; `failsafe` on the *same estimates* cost +6 %. About
+  four fifths of the stock detector's loss was the ladder, not the detector.
+  At heavy demand even the in-domain detector's rare sub-0.8 values (under
+  1 % of link-ticks) cost +16 % against `trust` (4/5 seeds worse). In every
+  fault-free run no link ever read below 0.5, so `failsafe` is identical to
+  `trust` there by construction.
+- **The gate found a bug in the confidence model**, and the `honest` arm
+  was re-run after the fix: the first visibility term counted vehicles
+  coasting past the frame edge and flickering hotspot false positives as
+  "unseen", and junction confidence sat below 0.8 on 20 % of ticks
+  (1.1 % after). The superseded runs are kept
+  (`closed_loop_honest_v1_visibility.json`).
+
+### Gate 3 — a camera that really fails
+
+All four cameras at the busiest junction (`cluster_1880441740_4393296791`,
+16 links) dark from 900 s to 2,700 s; medium demand, same seeds.
+
+| arm | person-delay | vs the same arm with no outage | vs `trust` in the outage |
+|---|---:|---|---|
+| `trust` (believes a dead camera: empty road) | 86,562 | **+14.7 %** SIG, 5/5 worse | — |
+| `honest` | 77,308 | | −10.7 % n.s., 4/5 better |
+| `failsafe` | 78,445 | | −9.4 % n.s., **5/5 better** |
+
+**This is what confidence is for.** A controller that believes a dead
+camera reads its junction as empty and starves it; one that is told the
+camera is gone drops that junction to fixed-time and recovers about three
+quarters of the loss (`failsafe` ends +6.9 % against truth). The t-test does
+not call 5/5 significant at n = 5 (one seed moves 25 %); the sign is
+unanimous. `failsafe` is the adapter mode the design now recommends:
+confidence only when a camera has actually failed. Getting here needed a
+second fix: lane health used to be the *worst* camera that saw the lane,
+so one dead camera zeroed lanes a neighbour's camera still covered in
+full; coverage is now computed from the cameras still working.
+
+### Gate 4 — incidents
+
+M6's own experiment, run on the vision stream: the same injector (a
+stalled vehicle, or a lane throttled to a crawl), six incidents per run,
+Webster control, the same scoring (a candidate counts if it lands on one
+of the incident's links between its start and 45 s after its end; every
+other candidate is a false alarm). Two things M6's gate never had to
+report: whether each incident was **in view** of a camera, and the
+false-alarm rate as a budget for the whole corridor. The gate logs every
+rule hit at deliberately low thresholds; `m8_incident_analysis.py` picks
+the thresholds on TRAIN seeds (101–102, 23 incidents) against a budget and
+scores the held-out seeds (1–3, 35 incidents, 27 in view) exactly once.
+
+| operating point (chosen on TRAIN) | rules | held-out recall, in view | false alarms / h | mean time to detect |
+|---|---|---:|---:|---:|
+| `quiet` (budget 1/h) | `midblock_stop` | 0.19 (5/27) | 1.5 | 58 s |
+| `assist` (budget 10/h) | `midblock_stop`, `flow_void` | **0.37** (10/27: stalls 6/14, blocked lanes 4/13) | 8.8 | 53 s |
+| hand-set defaults | all five | 0.33 | 31.9 | 62 s |
+
+**Not good enough to stand alone.** A third of the incidents a camera can
+see, at nine false alarms an hour for the corridor, a minute after they
+start. Why, from tracing the misses:
+
+- the injected incidents are short (61–120 s), and a rule that waits long
+  enough to be sure often confirms after the incident is over;
+- M6's injector freezes the moving vehicle nearest the stop line, so most
+  stalls are at the stop line — `stuck_on_green`'s case — and in heavy
+  SUMO traffic that rule fires constantly on vehicles waiting for a lane
+  change or a blocked junction box (102 false alarms in the held-out runs
+  at its hand-set threshold); every measured operating point switches it
+  off. `collision_cue` goes the same way (overlapping footprints in dense
+  queues);
+- a vehicle that decelerates into the stop line shows under 5 m of fast
+  travel in view, and fails the "drove in" test meant for billboards.
+
+The best operating point is shipped as the service default
+(`OPERATING_POINTS["assist"]`, `VISION_RULES`). Two defects found on the way
+changed these numbers: the injector's stalled vehicles were changing
+lanes while stopped, and a re-acquired stalled car restarted as furniture
+(both below). Before those fixes the same analysis gave 0.26 at 8.1 false
+alarms/h. The stopped-track stitching costs the queue estimate a little at
+medium demand (MAE 0.051 → 0.063 PCU in a spot check, same seed) and
+nothing at heavy (0.309 → 0.304); the closed-loop gates were run before it.
+
+### Real footage
+
+Stock `yolo11n.pt`, CPU only, three short public clips (details and
+images in `baselines/2026-09-23_m8_vision/real_video/`).
+
+- **A pole camera on a street approaching a junction** (640×352, 905
+  frames): 69 ms/frame; 16 tracks, none shorter than a second; the parked
+  car flagged stationary. Our ONNX path agrees with Ultralytics box for box
+  (4,717 / 4,717, IoU 0.999999) once it letterboxes the same way.
+- **Camera health on real pixels:** no alarm on either clean clip; blur, a
+  covered lens, fog, underexposure caught at once, a frozen feed in 1–2 s.
+  The first version's absolute contrast floor flagged 474 of 597 frames of
+  a perfectly good grey car park — contrast is now judged against the
+  camera's own baseline.
+- **Privacy:** people, riders and plates pixelated in stored evidence. On
+  real footage a cyclist the detector saw only below threshold was tracked
+  but not blurred; evidence now redacts what is tracked, not only what is
+  detected, and blurs the whole two-wheeler box (from above the rider is in
+  the middle of it).
+- **An overhead view defeats stock weights.** On an overhead highway clip
+  with vehicles in 43 of 75 sampled frames, YOLO11 n/s/m returned 2, 3 and
+  1 vehicle boxes; yolo11n's 85 "airplane" boxes all sit on painted road
+  markings. The class map drops them, so the camera would report an empty
+  road with full confidence — overhead cameras need fine-tuned weights, and
+  an activity check ("no vehicles where there is traffic") belongs in
+  camera health.
+
+### Found and fixed on the way (each with a test)
+
+- **Visibility counted the wrong tracks** (closed-loop gate): vehicles
+  coasting past the frame edge and flickering hotspot false positives
+  read as "unseen"; junction confidence under 0.8 on 20 % of ticks, 1.1 %
+  after. The affected arm was re-run.
+- **One dead camera blinded lanes another camera saw** (outage gate):
+  lane health was the minimum over every camera seeing the lane; coverage
+  is now computed from the cameras still working.
+- **A re-acquired stalled car looked like furniture** (tracing a missed
+  incident): a stopped vehicle whose track was lost and re-born started
+  again at `moved_m = 0`; stopped tracks are now stitched (≤ 10 s, ≤ 3 m).
+- **The M6 injector's stalled vehicles changed lanes while stopped**
+  (same trace): `setSpeed(veh, 0)` leaves SUMO's lane-change model on, and
+  one "breakdown" hopped lanes 1 → 2 → 1 → 0 within a minute, off the lane
+  the ground truth names. Lane changes are now disabled for the duration of
+  a stall (`control/anomaly/injector.py`, with a test). **This also affects
+  M6's own injection gate, whose results predate the fix.**
+- **The incident schedule ran past the end of the run**: M6's gate
+  schedules over the 6,000-tick cap, but the corridor drains after
+  ~2,350 s (medium) / ~3,100 s (heavy), so two thirds of scheduled
+  incidents never happened. The M8 gate schedules inside the run.
+- **Camera health false-alarmed on a flat scene** (real footage): an
+  absolute contrast floor flagged 474 of 597 frames of a grey car park;
+  contrast is now judged against the camera's own baseline.
+- **Evidence redaction missed a low-confidence cyclist** (real footage):
+  redaction now uses tracked boxes as well as detections, and blurs whole
+  two-wheeler boxes.
+- **Our ONNX decoder disagreed with Ultralytics on 10 % of boxes**:
+  a square letterbox against Ultralytics' minimal "rect" one. With a
+  dynamic-shape export and the same letterbox: 4,717 / 4,717.
+
+### Not built, and what each needs
+
+- **A detector trained on Indian traffic.** The adapters, class maps
+  (auto-rickshaw included) and the MOT evaluator are ready; the training is
+  a GPU job on BMD-45 / IDD / UVH-26. Until then the `finetuned_day` rows
+  are what such a model is *assumed* to do.
+- **Vijayawada footage.** One junction camera, calibrated from its lane
+  markings (`itms_geo.lanecal`), would let the twin's numbers be checked
+  against a real feed with `vision_service/eval/mot.py`.
+- **Live wiring into the controller.** `vision.link-state` is published and
+  relayed; sim-service does not consume it. The adapter to use when it
+  does is `VisionSensor` in `failsafe` mode.
+- **A controller-side fix for the ladder.** The finding above belongs to M5
+  as much as to M8: the no-memory middle rung truncates greens. Hysteresis
+  and a rung that does not cut the current green short would let the
+  controller use moderate confidence instead of having it filtered out.
+- **Incident rules good enough to stand alone** — see Gate 4. Next: judge
+  "drove in" by net displacement as well as fast travel, verify the
+  receiving lane before `stuck_on_green` fires, and fuse `vision_score` with
+  M6's graph detector rather than tuning either alone.
+- **An activity check in camera health** ("no vehicles where there is
+  traffic") — the overhead-clip failure mode.
+- **Stitch only what has stopped.** Stitching inherits "stopped" the moment
+  a track is re-born near a lost stopped one; waiting a second to confirm
+  the new track is stationary should remove its small medium-demand cost.
+- **Pedestrian and two-wheeler-swarm behaviour** beyond what SUMO's
+  vehicle classes produce.
+
+### Tests
+
+`make test-vision`: 132 (`packages/geo` 50, `vision-service` 82), plus one new
+test in `test_anomaly_injector.py`. Full suite: 738 passed, 4 skipped. ruff clean. mypy clean on
+`packages/geo`, `services/vision-service` and the injector; the 11 errors
+mypy reports elsewhere in `services/sim-service` predate M8 and are
+untouched.
+
+## 2026-09-24/25 — M8 reviewed for bugs and logic errors, the next steps built, every gate re-run
+
+The M8 code was reviewed module by module. Every defect below was fixed
+with a regression test that fails on the old code; three of the first
+baseline's "not built" items were built (the live wiring, the activity
+check, stitching that waits for the stop) and a first step taken on a
+fourth (slow arrivals count as "drove in"); and all four gates were re-run
+on the final code. New baseline: **`baselines/2026-09-25_m8_review/`** (it
+supersedes `2026-09-23_m8_vision/`; that folder now says so). Tables there
+are printed by `scripts/m8_report.py`.
+
+### Defects found and fixed
+
+- **The live wiring crashed on its first message** (found by the new live
+  end-to-end test, not by the unit tests). `decode_envelope` returns the
+  envelope's `occurred_at` as a `datetime` (Avro `timestamp-millis`); the
+  vision service divided it by 1000 and died, and sim-service's camera feed
+  swallowed the same error on every message, so the controller ran on
+  confidence 0 the whole time. The unit tests had fed integers. Fixed with
+  `itms_common.events.occurred_at_s`, tested through the real Avro encoding.
+- **Tracks survived a gap in the video.** ByteTrack counts its buffer in
+  frames, so after a 30-minute outage a car queued on the same spot
+  inherited a stop that began before it — a stall alarm on recovery.
+  Tracking now resets after any gap longer than the tracker buffer.
+- **Gate 4 under-counted false alarms.** The analysis replay allowed one
+  candidate per place per run; the engine re-raises after it clears and
+  cools down. With the replay mirroring the engine, the hand-set rules go
+  from 32 to 37 false alarms/h, and the first baseline's `assist` point
+  comes out at about 18/h on its training seeds — nearly twice the 10/h
+  budget it was chosen under.
+- **Scoring:** CLEAR-MOT re-assigned from scratch each frame (0–2.5 % of
+  counted ID switches were artefacts); boxes on vehicles too hidden to be
+  scored counted as false positives (the `ideal` preset, which has none,
+  read 0.93 detection precision; now 1.00).
+- **Video mode** dropped the *newest* frame when the detector fell behind
+  and stamped frames with processing time; a recorded file played as fast
+  as it decoded. Now: newest frame per camera, stamped at capture, files at
+  their own speed.
+- **RTSP credentials** were logged in plain text and had to sit in the
+  registry; now masked, and the source URL can name environment variables.
+- **Calibration** accepted four-point fits, which are always exact; it now
+  needs six agreeing points. A **resolved anomaly** carried its resolution
+  time as its start time. The **error model** kept every vehicle it had ever
+  seen. Evidence **purge** left empty folders.
+- **Introduced this round and caught by the re-run:** the new activity check
+  treated a camera that goes quiet as a failed one. When the gates' demand
+  ends the roads really do empty, every camera "went blind" in turn, and
+  the heavy `failsafe` arm fell to fixed-time on up to 1,359 junction-ticks
+  a run. A learned-rate silence is now reported to the operator only; a
+  camera that has never seen a vehicle is still a hard failure. A vehicle
+  standing in a long jam also stopped counting as a second arrival.
+
+### Built
+
+- **Live wiring** (`sim_service/control/vision_feed.py`): `CONTROL_SENSOR=vision`
+  runs A-CA-MP on `vision.link-state`, `failsafe` by default; a link older
+  than 3 s (judged from `occurred_at`) or never reported is a hard failure.
+  `scripts/m8_live_e2e.sh` / `make m8-live` runs both services over a real
+  Redis: 2,170 link-state messages in 300 s, 0 % of junction-ticks in hard
+  failure, zero interlock violations, no errors.
+- **Activity check** in camera health (no vehicles where there is traffic),
+  as above.
+- **Stitching that waits for the stop to be confirmed**, and "drove in" by
+  net progress as well as fast travel (a vehicle that eased into the stop
+  line and stalled could never be flagged).
+- **`failsafe` arms at every demand level**, and `scripts/m8_estimator_ablation.py`.
+
+### Built, measured, and switched off: the occlusion horizon
+
+Queue tails hide behind the vehicles in front long before the camera's
+geometric edge, and at heavy demand that under-counts. A learned per-lane
+"occlusion horizon" cut the bias on both TRAIN seeds (−0.55 → −0.36,
+−0.17 → −0.03 PCU per link; mean error 0.759 → 0.747 on one, 0.369 →
+0.393 on the other) — and CC-A-CAMP on those cameras had **21.8 % and
+14.7 % more person-delay**. A less biased estimate is not a better
+controller input: extrapolating every queue that
+reaches a learned, shorter horizon trades a steady under-count for noisy
+over-counts on the approaches the controller is choosing between. It ships
+off, tested, for a controller that can use it. The decaying hidden-queue
+growth that came with it stays (heavy `ideal` queue error 0.40 → 0.30 PCU).
+
+### The re-measured numbers (held-out seeds, paired)
+
+| | first baseline | now |
+|---|---|---|
+| medium, in-domain cameras vs truth | +2.9 % n.s. | **+0.6 % n.s.** (3/5 seeds better) |
+| medium, vs Webster | −29.4 % SIG | **−31.0 % SIG** |
+| heavy, in-domain cameras vs truth | +10.2 % n.s. | +13.1 % n.s. |
+| heavy, vs Webster | −22.3 % SIG | **−20.3 % SIG** |
+| `honest` vs `trust` (medium / heavy) | −1.0 % / +15.6 % | +7.9 % / +10.2 % (4/5, 3/5 worse) |
+| stock COCO: `honest` vs `failsafe` | +24.6 % SIG | **+21.4 % SIG**, 5/5 |
+| outage: trusting dark cameras | +14.7 % SIG | **+12.6 % SIG** |
+| outage: `failsafe` vs `trust` | −9.4 % n.s., 5/5 | −5.3 % n.s., 4/5 — recovers about half, not three quarters |
+| incidents, held-out, `quiet` | 19 % at 1.5 FA/h (2.0 counted correctly) | 19 % at 1.7 FA/h |
+| incidents, held-out, `assist` | 37 % at 8.8 FA/h (16.8 counted correctly) | 19 % at 10.3 FA/h (a different policy: TRAIN chose again) |
+| incidents, held-out, hand-set rules | 33 % at 32 FA/h (37 % at 37 counted correctly) | 37 % at 37 FA/h |
+
+In fault-free runs `failsafe` is now identical to `trust`, seed for seed, as
+designed. Heavy runs swing ±20 % per seed on small estimate changes; the
+heavy rows are best read as "the controller keeps most of its win". The
+10/h incident budget's TRAIN choice added `stuck_on_green`, which caught one
+more training incident and none held-out, for six times the alarms — so the
+service default is now `quiet`. The numbers in brackets in the left
+column re-score the first baseline's own logs and policies with the
+corrected count: the change in the hand-set row is the count, not the
+code. Gate 1:
+heavy `ideal` queue error 0.40 → 0.30 PCU (corr 0.81 → 0.93; the first
+baseline's whole +0.17 bias there came from over-shooting truncated
+queues, which the decaying growth addresses); medium in-domain 0.051 →
+0.062, mostly stitching (+0.011 in an ablation on this held-out seed, made
+with the horizon on), a cost that does not appear on the two training
+seeds (±0.0004).
+
+### Still open
+
+- **The controller-side cross-check for a silent camera.** One camera cannot
+  tell a road that emptied from a detector that stopped seeing; stop-bar
+  presence detection can, and both are known in the controller adapter.
+- **Calibration-drift false alarms under the stock detector** (health 0.5
+  puts a link under the hard-failure line with any other doubt): the stock
+  detector's `failsafe` arm fell to fixed-time on 1.7 % of junction-ticks,
+  where the first baseline had none.
+- Everything in the M8 entry's "Not built" list not named above: an
+  Indian-traffic detector, Vijayawada footage, the ladder's green-cutting
+  middle rung (M5), incident rules good enough to stand alone.
+
+### Tests
+
+`make test-vision`: 150 (`packages/geo` 50, `vision-service` 100); plus 7 in
+`test_vision_feed.py`, 1 in `packages/common`. Full suite: 764 passed,
+4 skipped. ruff clean; mypy clean on everything touched (the 11 errors
+elsewhere in `services/sim-service` predate M8).
+
+## 2026-09-25 — M8: camera confidence made useful to the controller
+
+The review round's open items, taken in order: the controller's
+degradation ladder, a camera that goes blind while still sending frames,
+and the calibration-drift alarm that misfired once with the stock detector.
+New baseline: **`baselines/2026-09-25_m8_ladder_blindcheck/`** (builds on
+`2026-09-25_m8_review/`; tables printed by `scripts/m8_report.py`).
+
+### The ladder's middle rung (`acamp.py`) — fixed
+
+A-CA-MP's ladder is full control at confidence 0.8 and above, a blend with
+the junction's demand memory between 0.5 and 0.8, and fixed-time below. With
+no memory configured (every M5 and M8 arm, and `make dev`) the middle rung
+did not blend: it dropped to M2's min-green cycler, which ends any green
+older than 7 s. That is why every M8 gate found camera confidence hurting
+the controller (+8 to +21 % person-delay for passing it on). A blend with no
+history is the live reading — `memory.blend`'s own rule — so the rung now
+controls on the live estimate; the cycler stays behind
+`use_memory_blend=False` for M5's experiment. Held out:
+
+- `honest` now makes exactly the decisions `failsafe` does, on every seed,
+  at medium and heavy, with the in-domain and the stock detector (stock was
+  +21.4 %, significant, before);
+- M5's sensor-degradation experiment on current code (confidence held at
+  0.6 on every movement): the live rung beats the old fixed-time one by
+  **34 % at light** (significant, 5/5) and 14 % at medium (4/5, n.s.). The
+  memory blend is 56–57 % *worse* than fixed-time at both levels
+  (significant) — M5's conclusion that history helps where live data is
+  absent, not where it is merely noisy, holds more strongly than when it
+  was first measured. The script now runs all three rungs
+  (`memory_on`, `memory_off` = fixed-time, `live`) and writes where `--out`
+  says; the August file is untouched.
+
+### A camera that goes blind — caught by the stop-bar loops
+
+A detector that stops finding vehicles leaves a camera sending frames and
+looking healthy, and no check inside the vision service can tell its
+"empty road" from a road that emptied (the review round's activity check
+can only tell an operator). The controller can, because it also has a
+stop-bar loop. `itms_domain.camera.BlindCameraCheck`, shared by both
+controller adapters (the swap and the confidence policy moved there too, so
+the gates and the live stack cannot drift apart): seconds the loop over the
+last 20 m is occupied while the camera tracks no vehicle anywhere on that
+approach count as evidence; 30 s of it is blindness, and the link stays a
+hard failure until the camera sees a vehicle. `vision.link-state` carries
+the new `vehicles_seen` for it (default −1, "not reported", which the check
+skips); `StopBarLoops` emulates the loops in the live stack and
+`VisionLoop.stopbar` in the gates; SimCam gained a `blind` fault and the
+closed-loop gate `...:blind` and `...:nocheck` arms.
+
+Chosen on TRAIN seeds (`scripts/m8_blind_check_calibration.py`, 8
+fault-free runs and 2 blinded): it took three designs. Comparing with
+`has_demand` — which the simulation raises for a vehicle anywhere on a lane
+up to 600 m long — false-alarmed 34 times an hour across the corridor.
+Counting "seen" as queue plus approaching missed creeping cars and cars put
+in the next lane (10.5 an hour). Counting any tracked vehicle on the
+approach: **1.6 an hour, every blinded link caught** (median 85 s), and
+all of those false alarms with the stock detector. The first held-out run
+then found the check releasing a caught link whenever its loop went quiet,
+so a blinded junction flickered in and out of fixed-time; it now latches,
+and the affected runs were re-run.
+
+Held out, medium demand, the busiest junction's detector blinded for 30
+minutes:
+
+| arm | person-delay | |
+|---|---:|---|
+| cameras, nothing wrong (`trust`) | 73,789 | |
+| blind camera, believed (`trust:blind`) | 83,111 | **+12.6 %** SIG — identical to a dark camera, seed for seed |
+| blind camera, `failsafe` without the check | 83,111 | nothing notices |
+| blind camera, `failsafe` with the check | 79,814 | −4.0 % against believing it, 4/5 seeds, n.s.; 6.9 % of junction-ticks in fixed-time (a known outage: 7.0 %) |
+| dark camera, known (`failsafe:outage`) | 78,693 | −5.3 %, 4/5 seeds, n.s. |
+
+The check recovers about a third of a blind camera's cost; knowing from the
+first second recovers about half. Most likely the difference is the time
+the check needs (a median 85 s on TRAIN seeds), though at n = 5 the two
+arms cannot be told apart (+1.4 %, n.s.). What it costs when nothing is
+wrong: with the in-domain detector, one brief false alarm on one held-out
+seed per level (4 and 8 junction-ticks of fixed-time), means +1.1 % at
+medium and +3.8 % at heavy, neither significant — the heavy figure is one
+seed that moved 20 % on 8 ticks, the kind of swing heavy runs make on any
+small nudge. With the stock detector at medium it fired on two more seeds
+(5 and 1 junction-ticks; those runs moved 0.0 % and +0.2 %). Worth
+having; not free.
+
+### The calibration-drift alarm — measured, not changed
+
+The first scripted test of a knocked camera in SimCam
+(`scripts/m8_drift_check.py`): a 3° yaw bump is flagged in 84 s
+(in-domain detector) and 101 s (stock), on the off-lane rate. Four
+fault-free TRAIN runs raised no false alarm (largest rises 2.8° and 0.12
+against thresholds of 6° and 0.2); the camera behind the one misfire on
+record had the largest off-lane rise on two of those runs and the second
+largest on the other two. With no training case to tune against, the rule
+is unchanged.
+
+### Tests
+
+New: `packages/domain/tests/test_camera_state.py` (6), the middle rung without
+memory (`test_acamp.py`), the blind fault and `vehicles_seen`
+(`vision-service`), the live adapter's cross-check (`test_vision_feed.py`).
+`make test-vision`: 152. Full suite: 774 passed, 4 skipped. ruff clean;
+mypy reports the same 11 errors in `services/sim-service` that predate M8.
+
+### Afterwards: the Indian CCTV label sets
+
+Checking the fine-tune path against the datasets it names: BMD-45 and
+UVH-26 (IISc, Bengaluru Safe City CCTV) share 14 labels, and the free-text
+class map dropped one of them — "MUV" (an Innova, an Ertiga) matched no
+rule, so a model trained on either would have left every MUV out of every
+queue count. It also sent "Tempo-traveller", a passenger van, to `truck`.
+Both fixed in `vision_service/classes.py`, with a test that maps all 14
+labels. UVH-26 also ships trained YOLO11 weights (S and X), which the
+Ultralytics adapter loads as they are (`VISION_DETECTOR=<file>.pt`) — a
+way to put an Indian-traffic detector in the pipeline without training
+one, not yet tried. `make test-vision`: 153; full suite 775 passed, 4
+skipped.
+
+## 2026-09-25 — M8: a real Indian-traffic detector, measured
+
+Every "in-domain detector" number so far was SimCam's `finetuned_day`
+assumption. IISc's UVH-26 (Bengaluru Safe City CCTV) ships a trained
+YOLO11-S; this measures it against the stock COCO YOLO11-S on 250 labelled
+UVH-26 validation frames (3,063 vehicles), through the pipeline's own
+adapters, at ByteTrack's 0.5 line. Baseline:
+`baselines/2026-09-25_m8_uvh26_detector/`.
+
+| detector | input | vehicles found | precision | queue PCU error | CPU / image |
+|---|---:|---:|---:|---:|---:|
+| stock YOLO11-S | 640 | 32 % | 0.89 | −44 % | 63 ms |
+| **UVH-26 YOLO11-S** | **640** | **71 %** | **0.92** | **−18 %** | **58 ms** |
+| UVH-26 YOLO11-S | 1280 | 76 % | 0.80 | +3 % | 279 ms |
+
+The stock model finds one two-wheeler in eight and no auto-rickshaw as an
+auto; UVH-26's finds 66 % and 75 % (precision 0.94 for both), and cars
+84 %. These are frames from the camera network it was trained on;
+Vijayawada's cameras, which it has never seen, will likely do worse, and
+only footage from there says by how much.
+
+**Found and fixed on the way: a car counted five ways.** UVH-26 splits a
+car into hatchback / sedan / SUV / MUV / van, and the model often spreads
+its confidence over them. The decoder applied the 0.5 line to the best
+single type, so confident cars were dropped (car recall 58 % against an
+AP50 of 0.85), and one car could survive NMS as two types. Scores are now
+summed per ITMS class before the threshold and before NMS
+(`detect/yolo.py`, `decode`, shared by the Ultralytics and ONNX backends):
+car recall 58 → 84 %, vehicles found 64 → 71 %, PCU error −31 → −18 %.
+COCO models decode exactly as before (re-run, identical).
+
+**SimCam's presets are optimistic about two-wheelers and autos.** For cars
+the twin's measured recall (0.89 in-domain, 0.76 stock) is close to the
+real 0.84 and 0.72. But the presets assume two-wheeler and auto recall of
+0.92 and 0.94 (`finetuned_day`) where UVH-26's model manages 0.66 and 0.75,
+and 0.82 and "55 % called car" (`coco_pretrained`) where the stock model
+manages 0.13 and none recognised. The closed-loop cost of a stock detector
+(+5.5 %) was measured with one far kinder to two-wheelers and autos than
+the real thing.
+
+How it was run without the 90 GB dataset: `scripts/m8_fetch_uvh26_sample.py`
+fetches the model, the validation labels and a seeded sample (0.8 GB) on
+any machine that reaches Hugging Face; `scripts/m8_detector_eval.py` scores
+detectors with `vision_service.eval.detection` (AP50, per-class recall and
+precision, confusions, recall by box height, per-image PCU error, CPU time).
+
+Tests: `test_detection_eval.py` (5), `test_detector_decode.py` (4).
+`make test-vision`: 162; full suite 784 passed, 4 skipped; ruff clean.

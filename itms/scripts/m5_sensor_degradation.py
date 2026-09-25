@@ -18,12 +18,18 @@ confidence at every movement to stand in for that, and compares two arms
 that are identical except for whether a historical profile is available
 to fall back on:
 
-    memory ON  -- degraded live state blended toward this junction's own
+    memory_on  -- degraded live state blended toward this junction's own
                   historical profile for this time of day
-    memory OFF -- degraded live state used as-is
+    memory_off -- no profile: M4's fixed-time fallback (`use_memory_blend`
+                  off). This is what the recorded "memory OFF" arm did (its
+                  runs report every tick as `fallback_fixed_time`), although
+                  this docstring used to call it "live state used as-is"
+    live       -- no profile, degraded live state used as-is: what the
+                  middle rung does with no memory since M8's review
+                  (baselines/2026-09-25_m8_review)
 
-Both arms are A-CA-MP with identical parameters, so the difference is
-attributable to the memory and nothing else.
+All three arms are A-CA-MP with identical parameters, so a difference is
+attributable to what the middle rung does and nothing else.
 
 **Why a wrapper rather than a `run_controlled_scenario` parameter.**
 Sensor degradation is an experimental *treatment*, not a production
@@ -61,6 +67,7 @@ from sim_service.control.strategies import acamp  # noqa: E402
 from sim_service.control.tuning import load_config  # noqa: E402
 
 _RESULTS_PATH = Path(__file__).resolve().parent / "results" / "m5_sensor_degradation_results.json"
+ARMS = ("memory_on", "memory_off", "live")
 
 
 class DegradedSensor:
@@ -94,6 +101,8 @@ def _job(args) -> dict:
     arm, level, seed, confidence, cfg_path, mem_path = args
     acamp_cfg = load_config(cfg_path) if cfg_path else None
     memory = DemandMemory.load(mem_path) if (arm == "memory_on" and mem_path) else None
+    if arm == "memory_off":
+        acamp_cfg = replace(acamp_cfg or acamp.AcampConfig(), use_memory_blend=False)
 
     inputs = H.scenario_inputs(level)
     configs, flows, _, _ = inputs
@@ -126,14 +135,17 @@ def main() -> None:
     parser.add_argument("--levels", default="light,medium")
     parser.add_argument("--seeds", type=int, default=5)
     parser.add_argument("--workers", type=int, default=max(1, os.cpu_count() or 2))
+    parser.add_argument("--out", default=str(_RESULTS_PATH),
+                        help="results file (default: the recorded one under scripts/results/)")
     args = parser.parse_args()
+    out_path = Path(args.out)
 
     levels = [x for x in args.levels.split(",") if x]
     seeds = H.EVAL_SEEDS[: args.seeds]
     jobs = [
         (arm, level, seed, args.confidence, args.tuned_config, args.memory)
         for level in levels
-        for arm in ("memory_on", "memory_off")
+        for arm in ARMS
         for seed in seeds
     ]
     print(f"sensor degradation: confidence={args.confidence} at every movement")
@@ -156,7 +168,7 @@ def main() -> None:
     summary = {}
     for level in levels:
         summary[level] = {}
-        for arm in ("memory_on", "memory_off"):
+        for arm in ARMS:
             rows = [r for r in records if r["demand_level"] == level and r["arm"] == arm]
             ci = bench_stats.confidence_interval_95([r["person_delay_s"] for r in rows])
             summary[level][arm] = {
@@ -169,7 +181,8 @@ def main() -> None:
                 "seeds": len(rows),
             }
 
-    _RESULTS_PATH.write_text(
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(
         json.dumps({"confidence": args.confidence, "summary": summary, "runs": records}, indent=2)
     )
     print("\n" + "=" * 72)
@@ -179,13 +192,15 @@ def main() -> None:
         delta = (off["person_delay_mean_s"] - on["person_delay_mean_s"]) / off[
             "person_delay_mean_s"
         ]
+        live = summary[level]["live"]
         print(
             f"{level:8s} memory ON {on['person_delay_mean_s']:>12,.0f} +/- "
-            f"{on['person_delay_ci95_half_s']:>8,.0f}   OFF "
+            f"{on['person_delay_ci95_half_s']:>8,.0f}   OFF (fixed-time) "
             f"{off['person_delay_mean_s']:>12,.0f} +/- {off['person_delay_ci95_half_s']:>8,.0f}"
-            f"   delta {delta:+.1%}"
+            f"   delta {delta:+.1%}   live {live['person_delay_mean_s']:>12,.0f} +/- "
+            f"{live['person_delay_ci95_half_s']:>8,.0f}"
         )
-    print(f"\nwrote {_RESULTS_PATH}")
+    print(f"\nwrote {out_path}")
 
 
 if __name__ == "__main__":
