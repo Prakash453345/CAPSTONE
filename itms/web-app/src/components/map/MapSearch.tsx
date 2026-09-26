@@ -1,8 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import type { GeoJSONSource, LngLatBoundsLike } from "maplibre-gl";
+import type { LngLatBoundsLike } from "maplibre-gl";
 import { MapPin, Search, TrafficCone, X } from "lucide-react";
 import { useMapInstance } from "@/components/map/MapContext";
-import { HIGHLIGHT_BLUE } from "@/components/map/mapChrome";
 import { roadEdges, signalJunctions, shortJunctionName } from "@/data/network";
 import type { LngLat } from "@/utils/geo";
 import { cn } from "@/utils/cn";
@@ -10,8 +9,8 @@ import { useMapChromeStore } from "@/store/mapChromeStore";
 
 /**
  * Google Maps' search pill, over the TRAFFIX network: roads by name or edge id
- * and signalised junctions. Picking a result flies the camera there and
- * outlines the road in Google blue, the way Maps highlights a searched street.
+ * and signalised junctions. Picking a road flies the camera there and selects
+ * it (blue outline + place card), the way Maps opens a searched street.
  */
 
 interface Result {
@@ -39,9 +38,6 @@ const ENTRIES: Result[] = [
   })),
 ];
 
-const SRC = "search-highlight";
-const CASING = "search-highlight-casing";
-const LINE = "search-highlight-line";
 
 function match(query: string): Result[] {
   const q = query.trim().toLowerCase();
@@ -59,46 +55,10 @@ export function MapSearch() {
   const closeSheet = useMapChromeStore((s) => s.close);
   const setOpen = (next: boolean) => (next ? openSheet("search") : closeSheet("search"));
   const [active, setActive] = useState(0);
-  const [picked, setPicked] = useState<Result | null>(null);
+  const selectRoad = useMapChromeStore((s) => s.selectRoad);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const listId = useId();
   const results = useMemo(() => match(query), [query]);
-
-  // Highlight source + layers, drawn above the traffic overlays.
-  useEffect(() => {
-    if (!map.getSource(SRC)) {
-      map.addSource(SRC, { type: "geojson", data: { type: "FeatureCollection", features: [] } });
-      map.addLayer({
-        id: CASING,
-        type: "line",
-        source: SRC,
-        layout: { "line-cap": "round", "line-join": "round" },
-        paint: { "line-color": "#ffffff", "line-width": ["interpolate", ["linear"], ["zoom"], 12, 7, 17, 18], "line-opacity": 0.95 },
-      });
-      map.addLayer({
-        id: LINE,
-        type: "line",
-        source: SRC,
-        layout: { "line-cap": "round", "line-join": "round" },
-        paint: { "line-color": HIGHLIGHT_BLUE, "line-width": ["interpolate", ["linear"], ["zoom"], 12, 4, 17, 11] },
-      });
-    }
-    return () => {
-      for (const id of [LINE, CASING]) if (map.getLayer(id)) map.removeLayer(id);
-      if (map.getSource(SRC)) map.removeSource(SRC);
-    };
-  }, [map]);
-
-  useEffect(() => {
-    const src = map.getSource(SRC) as GeoJSONSource | undefined;
-    src?.setData({
-      type: "FeatureCollection",
-      features:
-        picked && picked.kind === "road"
-          ? [{ type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: picked.path } }]
-          : [],
-    });
-  }, [map, picked]);
 
   useEffect(() => {
     if (!open) return;
@@ -110,13 +70,14 @@ export function MapSearch() {
   }, [open, closeSheet]);
 
   const choose = (r: Result) => {
-    setPicked(r);
     setQuery(r.title);
     setOpen(false);
     if (r.kind === "junction") {
       map.flyTo({ center: r.path[0], zoom: 17.5, duration: 1200, curve: 1.3, essential: false });
       return;
     }
+    // A road result opens its place card and blue outline (RoadHighlight).
+    selectRoad({ edgeId: r.key.slice("road:".length), at: r.path[Math.floor(r.path.length / 2)] });
     const lngs = r.path.map((p) => p[0]);
     const lats = r.path.map((p) => p[1]);
     const bounds: LngLatBoundsLike = [
@@ -128,7 +89,7 @@ export function MapSearch() {
 
   const clear = () => {
     setQuery("");
-    setPicked(null);
+    selectRoad(null);
     setActive(0);
   };
 

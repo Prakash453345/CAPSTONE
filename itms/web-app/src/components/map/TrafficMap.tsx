@@ -9,6 +9,9 @@ import { MapContext } from "@/components/map/MapContext";
 import { MapControls } from "@/components/map/MapControls";
 import { MapLegend } from "@/components/map/MapLegend";
 import { MapSearch } from "@/components/map/MapSearch";
+import { RoadHighlight } from "@/components/map/RoadHighlight";
+import { RoadPlaceCard } from "@/components/map/RoadPlaceCard";
+import { useMapChromeStore } from "@/store/mapChromeStore";
 import { MAP_CHIP, MAP_CHIP_ACTIVE } from "@/components/map/mapChrome";
 import { RoadLayer } from "@/components/map/layers/RoadLayer";
 import { VehicleLayer } from "@/components/map/layers/VehicleLayer";
@@ -215,9 +218,36 @@ export function TrafficMap({ className }: { className?: string }) {
     };
   }, [map, ready, picking, interactionMode, setDraftPoint, setInteractionMode]);
 
+  // Idle clicks select a road and open its place card, unless they land on
+  // a clickable overlay (anomaly, incident, signal, vehicle), which own the
+  // click. Clicking empty map clears the selection, as in Google Maps.
+  const selectRoad = useMapChromeStore((s) => s.selectRoad);
+  const selectedRoad = useMapChromeStore((s) => s.selectedRoad);
+  useEffect(() => {
+    if (!map || !ready || picking) return;
+    const overlays = [
+      "anomaly-mark-dot",
+      "incidents-dot",
+      "signals-dot",
+      "vehicles-icon",
+      "em-vehicles-icon",
+    ];
+    const onClick = (e: MapMouseEvent) => {
+      const layers = overlays.filter((id) => map.getLayer(id));
+      if (layers.length && map.queryRenderedFeatures(e.point, { layers }).length) return;
+      const hit = nearestEdge([e.lngLat.lng, e.lngLat.lat], 25);
+      selectRoad(hit ? { edgeId: hit.edge.id, at: hit.snapped } : null);
+    };
+    map.on("click", onClick);
+    return () => {
+      map.off("click", onClick);
+    };
+  }, [map, ready, picking, selectRoad]);
+
   const emergencyDraft = useEmergencyStore((s) => s.draft);
   const emergencySelected = useEmergencyStore(selectSelectedRequest);
-  const panelOpen = creatingAnomaly || Boolean(emergencyDraft || emergencySelected);
+  const operatorPanelOpen = creatingAnomaly || Boolean(emergencyDraft || emergencySelected);
+  const panelOpen = operatorPanelOpen || selectedRoad !== null;
 
   const exitCreate = () => {
     setPendingTarget(null);
@@ -249,6 +279,7 @@ export function TrafficMap({ className }: { className?: string }) {
         <MapContext.Provider value={map}>
           <Basemap />
           <RoadLayer visible={activeLayers.has("congestion")} />
+          <RoadHighlight />
           <SignalLayer visible={activeLayers.has("signals")} />
           <EmergencyRouteLayer visible={activeLayers.has("emergency")} />
           <EmergencyVehicleLayer visible={activeLayers.has("emergency")} />
@@ -307,6 +338,12 @@ export function TrafficMap({ className }: { className?: string }) {
         )}
 
         <EmergencyPanel part="panel" />
+
+        {!operatorPanelOpen && (
+          <RoadPlaceCard
+            onCreateAnomaly={(target) => setPendingTarget(target)}
+          />
+        )}
       </div>
 
       <MapLegend hidden={panelOpen} />

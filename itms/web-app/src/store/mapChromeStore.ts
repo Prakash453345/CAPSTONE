@@ -7,8 +7,18 @@ import { create } from "zustand";
  */
 export type MapSheet = "search" | "layers" | "legend";
 
+/** A road the operator picked on the map or in search: its place card shows. */
+export interface SelectedRoad {
+  edgeId: string;
+  /** Where on the road it was picked (click point snapped to the road). */
+  at: [number, number];
+}
+
 interface MapChromeState {
   sheet: MapSheet | null;
+  selectedRoad: SelectedRoad | null;
+  /** Selecting a road closes any open sheet, like opening a place in Maps. */
+  selectRoad: (road: SelectedRoad | null) => void;
   open: (sheet: MapSheet) => void;
   /** Closes `sheet` only if it is the one showing, so a stale close from one
    *  sheet can't dismiss another that has since opened. */
@@ -18,6 +28,8 @@ interface MapChromeState {
 
 export const useMapChromeStore = create<MapChromeState>((set) => ({
   sheet: null,
+  selectedRoad: null,
+  selectRoad: (selectedRoad) => set(selectedRoad ? { selectedRoad, sheet: null } : { selectedRoad }),
   open: (sheet) => set({ sheet }),
   close: (sheet) => set((s) => (s.sheet === sheet ? { sheet: null } : s)),
   toggle: (sheet) => set((s) => ({ sheet: s.sheet === sheet ? null : sheet })),
