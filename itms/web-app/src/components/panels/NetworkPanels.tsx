@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowUpRight, Search, RadioTower, Route, MapPin, Pause, Play, RefreshCw } from "lucide-react";
 import { roadEdges } from "@/data/network";
 import { useTrafficStore } from "@/store/trafficStore";
@@ -37,12 +37,16 @@ export function RoadConditions({ compact = false }: { compact?: boolean }) {
   );
   // The order on screen is held until the operator asks for a re-sort: rows
   // never move under the pointer (the source of the page's layout shift).
-  // The first real data sorts automatically, since nothing is shown yet.
+  // Data settles over its first few ticks, so re-sort automatically until
+  // 3 s after the first reading arrives; after that, only on request.
   const [shown, setShown] = useState(() => ({ key: bucketKey, order: sortRoads(bucketKey) }));
-  const noData = !shown.key.split(",").some((b) => b !== "3");
+  const firstDataAt = useRef<number | null>(null);
   useEffect(() => {
-    if (noData && bucketKey !== shown.key) setShown({ key: bucketKey, order: sortRoads(bucketKey) });
-  }, [noData, bucketKey, shown.key]);
+    const hasData = bucketKey.split(",").some((b) => b !== "3");
+    if (hasData && firstDataAt.current === null) firstDataAt.current = Date.now();
+    const settling = firstDataAt.current === null || Date.now() - firstDataAt.current < 3000;
+    if (settling && bucketKey !== shown.key) setShown({ key: bucketKey, order: sortRoads(bucketKey) });
+  }, [bucketKey, shown.key]);
   const changed = useMemo(() => {
     if (bucketKey === shown.key) return 0;
     const now = bucketKey.split(",");
@@ -62,7 +66,21 @@ export function RoadConditions({ compact = false }: { compact?: boolean }) {
           <span className="eyebrow">NETWORK CONDITIONS</span>
           <h2>Road intelligence</h2>
         </div>
+        {/* The right-hand group is anchored right, so the re-sort chip grows
+            leftward into empty header space: nothing already on screen moves. */}
         <div className="flex items-center gap-1">
+          {changed > 0 && !frozen && (
+            <button
+              type="button"
+              onClick={resort}
+              aria-label={`${changed} ${changed === 1 ? "road" : "roads"} changed congestion level. Re-sort the list`}
+              title={`${changed} ${changed === 1 ? "road" : "roads"} changed level · click to re-sort`}
+              className="flex h-7 shrink-0 animate-fade-in items-center gap-1 whitespace-nowrap rounded-full bg-primary-muted px-2 text-xs font-medium tabular-nums text-primary transition-colors hover:bg-primary hover:text-primary-foreground"
+            >
+              <RefreshCw size={12} />
+              {changed}
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setFrozen(frozen ? null : liveCongestion)}
@@ -88,20 +106,6 @@ export function RoadConditions({ compact = false }: { compact?: boolean }) {
         </label>
       )}
       <div className="road-list">
-        {/* Zero-height sticky slot: the pill floats over the rows instead of
-            pushing them down, so offering a re-sort causes no layout shift. */}
-        <div className="pointer-events-none sticky top-2 z-10 flex h-0 justify-center">
-          {changed > 0 && !frozen && (
-            <button
-              type="button"
-              onClick={resort}
-              className="pointer-events-auto flex h-8 animate-fade-in items-center gap-1.5 rounded-full bg-primary px-3 text-xs font-medium text-primary-foreground shadow-elevation-2"
-            >
-              <RefreshCw size={13} />
-              {changed} {changed === 1 ? "road" : "roads"} changed · Re-sort
-            </button>
-          )}
-        </div>
         {(compact ? roads.slice(0, 4) : roads).map((e) => {
           const value = congestion[e.id];
           const tone =

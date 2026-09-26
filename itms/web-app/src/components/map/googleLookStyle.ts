@@ -11,11 +11,7 @@ import type { ResolvedTheme } from "@/store/themeStore";
  * whenever no Google Map Tiles key is configured, so the dashboard looks the
  * same family either way.
  */
-// Fetched via the Vite server proxy (/ofm → tiles.openfreemap.org) so the
-// browser doesn't need to trust the container's HTTPS proxy CA directly.
-// MapLibre's transformRequest (see TrafficMap.tsx) rewrites all subsequent
-// https://tiles.openfreemap.org/* URLs to /ofm/* for the same reason.
-const SOURCE_STYLE = "/ofm/styles/liberty";
+const SOURCE_STYLE = "https://tiles.openfreemap.org/styles/liberty";
 export const OSM_ATTRIBUTION =
   '<a href="https://openfreemap.org" target="_blank">OpenFreeMap</a> &copy; <a href="https://www.openmaptiles.org/" target="_blank">OpenMapTiles</a> Data from <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a>';
 
@@ -84,61 +80,16 @@ const PALETTE: Record<ResolvedTheme, Palette> = {
   },
 };
 
-// OFM_ORIGIN is the absolute origin that transformRequest (TrafficMap.tsx)
-// rewrites to the Vite /ofm proxy for all MapLibre-internal fetches.
-const OFM_ORIGIN = "https://tiles.openfreemap.org";
-const OFM_PROXY = "/ofm";
-
 let sourceStyle: Promise<StyleSpecification> | null = null;
 
-/**
- * Fetch the OFM liberty style and expand every vector source whose TileJSON
- * `url` would normally be fetched by MapLibre. We expand it here (via the
- * Vite proxy) so MapLibre receives an inline `tiles` array and never has to
- * issue a TileJSON request itself — which would fire a map `error` event on
- * any network hiccup, replacing the whole basemap with the error banner.
- *
- * Actual tile / glyph / sprite fetches are still rewritten by transformRequest.
- */
-async function loadSourceStyle(): Promise<StyleSpecification> {
-  if (!sourceStyle) {
-    sourceStyle = (async () => {
-      const r = await fetch(SOURCE_STYLE);
-      if (!r.ok) throw new Error(`OpenFreeMap style ${r.status}`);
-      const style = await r.json() as StyleSpecification;
-
-      // Expand TileJSON `url` sources to inline `tiles` so MapLibre never
-      // issues the TileJSON request itself (which would surface as a map error).
-      const entries = await Promise.all(
-        Object.entries(style.sources).map(async ([id, src]) => {
-          if (src.type !== "vector" || !("url" in src) || typeof src.url !== "string") {
-            return [id, src] as const;
-          }
-          // Proxy the TileJSON request through Vite so Node.js (which trusts
-          // all CAs) handles the HTTPS, not the browser.
-          const tjUrl = src.url.replace(OFM_ORIGIN, OFM_PROXY);
-          const tj = await fetch(tjUrl).then((res) => res.json()) as {
-            tiles?: string[];
-            minzoom?: number;
-            maxzoom?: number;
-          };
-          const { url: _drop, ...rest } = src;
-          return [id, {
-            ...rest,
-            tiles: tj.tiles ?? [],
-            ...(tj.minzoom != null ? { minzoom: tj.minzoom } : {}),
-            ...(tj.maxzoom != null ? { maxzoom: tj.maxzoom } : {}),
-          }] as const;
-        }),
-      );
-
-      return { ...style, sources: Object.fromEntries(entries) };
-    })();
-
-    sourceStyle.catch(() => {
-      sourceStyle = null; // allow a retry on next mount / theme switch
-    });
-  }
+function loadSourceStyle(): Promise<StyleSpecification> {
+  sourceStyle ??= fetch(SOURCE_STYLE).then((r) => {
+    if (!r.ok) throw new Error(`OpenFreeMap style ${r.status}`);
+    return r.json() as Promise<StyleSpecification>;
+  });
+  sourceStyle.catch(() => {
+    sourceStyle = null; // allow a retry on the next theme switch / mount
+  });
   return sourceStyle;
 }
 

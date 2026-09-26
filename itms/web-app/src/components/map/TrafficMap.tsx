@@ -77,12 +77,6 @@ export function TrafficMap({ className }: { className?: string }) {
         maxZoom: 19,
         minZoom: 11,
         fadeDuration: 0,
-        transformRequest: (url) => {
-          if (url.startsWith("https://tiles.openfreemap.org/")) {
-            return { url: url.replace("https://tiles.openfreemap.org/", "/ofm/") };
-          }
-          return { url };
-        },
       });
       } catch {
         disposed = true;
@@ -233,7 +227,11 @@ export function TrafficMap({ className }: { className?: string }) {
 
   return (
     <div className={cn("absolute inset-0 overflow-hidden", className)}>
-      <div ref={containerRef} className="absolute inset-0" />
+      {/* Inline, not Tailwind's "absolute inset-0": maplibre-gl.css sets
+          .maplibregl-map { position: relative } at equal specificity, and since
+          routes are lazy it loads after Tailwind and wins, collapsing the map
+          to 0 px tall. Inline style can't lose that ordering race. */}
+      <div ref={containerRef} style={{ position: "absolute", inset: 0 }} />
 
       {mapError && <div className="absolute inset-0 z-20 grid place-items-center bg-background p-8"><p role="alert" className="max-w-sm text-center text-sm leading-relaxed text-muted-foreground">{mapError}</p></div>}
       {!ready && !mapError && (

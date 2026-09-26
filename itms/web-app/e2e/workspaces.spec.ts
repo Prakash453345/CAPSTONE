@@ -171,6 +171,20 @@ test("live stream freshness, incident review and source isolation", async ({
   ).toBeVisible();
 });
 
+test("map fills its panel on every map page", async ({ page }) => {
+  // Regression: lazy-loaded maplibre-gl.css once overrode the container's
+  // positioning and collapsed the map to 0 px while every control still showed.
+  for (const path of ["/console", "/console/traffic", "/console/anomalies", "/console/emergency"]) {
+    await page.goto(path);
+    const canvas = page.locator("canvas.maplibregl-canvas").first();
+    await expect(canvas).toBeVisible();
+    const map = await page.locator(".maplibregl-map").first().boundingBox();
+    const panel = await page.locator(".maplibregl-map").first().locator("..").boundingBox();
+    expect(map?.height ?? 0, `${path} map height`).toBeGreaterThan(200);
+    expect(Math.abs((map?.height ?? 0) - (panel?.height ?? 0)), `${path} map fills panel`).toBeLessThan(2);
+  }
+});
+
 test("blocked basemap does not block bundled geometry or map controls", async ({
   page,
 }) => {
