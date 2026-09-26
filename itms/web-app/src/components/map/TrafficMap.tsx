@@ -77,6 +77,12 @@ export function TrafficMap({ className }: { className?: string }) {
         maxZoom: 19,
         minZoom: 11,
         fadeDuration: 0,
+        transformRequest: (url) => {
+          if (url.startsWith("https://tiles.openfreemap.org/")) {
+            return { url: url.replace("https://tiles.openfreemap.org/", "/ofm/") };
+          }
+          return { url };
+        },
       });
       } catch {
         disposed = true;

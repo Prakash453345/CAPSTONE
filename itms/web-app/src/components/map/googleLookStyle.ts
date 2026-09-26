@@ -11,11 +11,11 @@ import type { ResolvedTheme } from "@/store/themeStore";
  * whenever no Google Map Tiles key is configured, so the dashboard looks the
  * same family either way.
  */
-const OFM_ORIGIN = "https://tiles.openfreemap.org";
 // Fetched via the Vite server proxy (/ofm → tiles.openfreemap.org) so the
 // browser doesn't need to trust the container's HTTPS proxy CA directly.
-const OFM_PROXY = "/ofm";
-const SOURCE_STYLE = `${OFM_PROXY}/styles/liberty`;
+// MapLibre's transformRequest (see TrafficMap.tsx) rewrites all subsequent
+// https://tiles.openfreemap.org/* URLs to /ofm/* for the same reason.
+const SOURCE_STYLE = "/ofm/styles/liberty";
 export const OSM_ATTRIBUTION =
   '<a href="https://openfreemap.org" target="_blank">OpenFreeMap</a> &copy; <a href="https://www.openmaptiles.org/" target="_blank">OpenMapTiles</a> Data from <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a>';
 
@@ -84,41 +84,6 @@ const PALETTE: Record<ResolvedTheme, Palette> = {
   },
 };
 
-/**
- * Rewrite all absolute OpenFreeMap URLs to go through the Vite proxy, then
- * expand any TileJSON `url` sources to inline `tiles` arrays so MapLibre never
- * fetches a tile URL whose response body still contains the raw origin.
- */
-async function proxyOFMSources(style: StyleSpecification): Promise<StyleSpecification> {
-  const rewrite = (s: string) => s.replace(new RegExp(OFM_ORIGIN, "g"), OFM_PROXY);
-  const rewritten = JSON.parse(rewrite(JSON.stringify(style))) as StyleSpecification;
-
-  const entries = await Promise.all(
-    Object.entries(rewritten.sources).map(async ([id, src]) => {
-      if (src.type === "vector" && "url" in src && typeof src.url === "string") {
-        const tj = await fetch(src.url).then((r) => r.json()) as {
-          tiles?: string[];
-          minzoom?: number;
-          maxzoom?: number;
-        };
-        const { url: _removed, ...rest } = src;
-        return [
-          id,
-          {
-            ...rest,
-            tiles: (tj.tiles ?? []).map(rewrite),
-            ...(tj.minzoom != null ? { minzoom: tj.minzoom } : {}),
-            ...(tj.maxzoom != null ? { maxzoom: tj.maxzoom } : {}),
-          },
-        ] as const;
-      }
-      return [id, src] as const;
-    }),
-  );
-
-  return { ...rewritten, sources: Object.fromEntries(entries) };
-}
-
 let sourceStyle: Promise<StyleSpecification> | null = null;
 
 function loadSourceStyle(): Promise<StyleSpecification> {
@@ -126,8 +91,7 @@ function loadSourceStyle(): Promise<StyleSpecification> {
     .then((r) => {
       if (!r.ok) throw new Error(`OpenFreeMap style ${r.status}`);
       return r.json() as Promise<StyleSpecification>;
-    })
-    .then(proxyOFMSources);
+    });
   sourceStyle.catch(() => {
     sourceStyle = null; // allow a retry on the next theme switch / mount
   });
