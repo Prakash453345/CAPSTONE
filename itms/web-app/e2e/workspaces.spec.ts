@@ -1,4 +1,5 @@
-import { test, expect, type Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
+import { test, expect } from "./fixtures";
 
 // "/" is the public landing page; the operator workspace lives under
 // "/console". These specs drive the workspace, so they enter there directly.
