@@ -41,6 +41,24 @@ export default defineConfig({
         ws: true,
         rewrite: (p) => p.replace(/^\/ws/, ""),
       },
+      // Proxy OpenFreeMap tile/style/glyph/sprite requests so the browser
+      // fetches them over trusted local HTTP rather than directly over HTTPS
+      // (the container's HTTPS proxy CA isn't trusted by Chromium).
+      "/ofm": {
+        target: "https://tiles.openfreemap.org",
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/ofm/, ""),
+      },
+    },
+  },
+  preview: {
+    port: 4173,
+    proxy: {
+      "/ofm": {
+        target: "https://tiles.openfreemap.org",
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/ofm/, ""),
+      },
     },
   },
 });
