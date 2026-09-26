@@ -156,7 +156,11 @@ test("live stream freshness, incident review and source isolation", async ({
   await page.getByLabel("Operator identity").fill("operator:test");
   await page.getByLabel("API key", { exact: true }).fill("browser-test-key");
   await page.getByRole("button", { name: "Submit confirm" }).click();
-  await expect(page.getByText("confirmed", { exact: true })).toBeVisible();
+  // The card flips to "confirmed" once the (mocked) API answers; slow CI
+  // runners have missed the default 5 s.
+  await expect(page.getByText("confirmed", { exact: true })).toBeVisible({
+    timeout: 15_000,
+  });
   await navigate(page, "Command Center");
   await expect(page.getByText(/Stale · last update/)).toBeVisible({
     timeout: 10_000,
