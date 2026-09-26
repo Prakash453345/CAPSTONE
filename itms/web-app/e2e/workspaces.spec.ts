@@ -170,7 +170,7 @@ test("live stream freshness, incident review and source isolation", async ({
 test("blocked basemap does not block bundled geometry or map controls", async ({
   page,
 }) => {
-  await page.route("https://basemaps.cartocdn.com/**", (r) => r.abort());
+  await page.route("https://tiles.openfreemap.org/**", (r) => r.abort());
   await page.goto("/console");
   await expect(
     page.getByRole("button", { name: "Zoom in", exact: true }),

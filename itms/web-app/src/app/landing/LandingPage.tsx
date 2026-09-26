@@ -1,6 +1,5 @@
 import { useEffect, useRef } from "react";
 import { useTransitionStore } from "@/store/transitionStore";
-import { preloadEarthTextures } from "@/components/transition/cinematicEarth";
 
 /**
  * The marketing landing page at "/" — ported verbatim (markup, styles, and the
@@ -1228,8 +1227,12 @@ export function LandingPage() {
     const run = new Function(LANDING_SCRIPT);
     run();
     // Warm the cinematic's Earth textures while the visitor reads, so the
-    // dive starts the instant they click through.
-    const warm = () => void preloadEarthTextures().catch(() => {});
+    // dive starts the instant they click through. Imported here rather than
+    // at the top so three.js stays out of the landing page's first download.
+    const warm = () =>
+      void import("@/components/transition/cinematicEarth")
+        .then((m) => m.preloadEarthTextures())
+        .catch(() => {});
     const idle = window.requestIdleCallback?.(warm, { timeout: 2500 });
     const fallback = idle === undefined ? window.setTimeout(warm, 1200) : undefined;
     return () => {

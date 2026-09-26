@@ -3,6 +3,7 @@ import { createBrowserRouter } from "react-router-dom";
 import { RootLayout } from "@/app/RootLayout";
 import { AppShell } from "@/components/layout/AppShell";
 import { RouteError } from "@/app/RouteError";
+import { ConsoleFallback } from "@/app/ConsoleFallback";
 
 const LandingPage = lazy(() =>
   import("@/app/landing/LandingPage").then((m) => ({ default: m.LandingPage })),
@@ -25,14 +26,6 @@ const AnalyticsPage = lazy(() =>
 const SettingsPage = lazy(() =>
   import("@/app/settings/SettingsPage").then((m) => ({ default: m.SettingsPage })),
 );
-
-function ConsoleFallback() {
-  return (
-    <div className="flex h-full items-center justify-center">
-      <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-    </div>
-  );
-}
 
 /**
  * "/" is the landing page (branding, product pitch, "Try the live demo");

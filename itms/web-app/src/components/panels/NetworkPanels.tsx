@@ -1,5 +1,5 @@
-import { useState, useMemo } from "react";
-import { ArrowUpRight, Search, RadioTower, Route, MapPin } from "lucide-react";
+import { useEffect, useState, useMemo } from "react";
+import { ArrowUpRight, Search, RadioTower, Route, MapPin, Pause, Play, RefreshCw } from "lucide-react";
 import { roadEdges } from "@/data/network";
 import { useTrafficStore } from "@/store/trafficStore";
 import { useIncidentStore } from "@/store/incidentStore";
@@ -11,29 +11,46 @@ function getBucket(v: number | undefined): 0 | 1 | 2 | 3 {
   return v > 0.6 ? 0 : v > 0.35 ? 1 : 2;
 }
 
+/** Roads by tier (worst first), then by name — from a `bucketKey` string. */
+function sortRoads(bucketKey: string) {
+  const tiers = bucketKey.split(",").map(Number);
+  const tierOf = new Map(roadEdges.map((e, i) => [e.id, tiers[i] ?? 3]));
+  return [...roadEdges].sort((a, b) => {
+    const d = (tierOf.get(a.id) ?? 3) - (tierOf.get(b.id) ?? 3);
+    return d || (a.name ?? a.id).localeCompare(b.name ?? b.id);
+  });
+}
+
 export function RoadConditions({ compact = false }: { compact?: boolean }) {
-  const congestion = useTrafficStore((s) => s.roadCongestion);
+  const liveCongestion = useTrafficStore((s) => s.roadCongestion);
   const focusOn = useMapStore((s) => s.focusOn);
   const [search, setSearch] = useState("");
+  // WCAG 2.2.2: auto-updating values can be paused; the list shows a frozen
+  // snapshot until resumed, then jumps to the current state.
+  const [frozen, setFrozen] = useState<typeof liveCongestion | null>(null);
+  const congestion = frozen ?? liveCongestion;
 
-  // Recompute sort key only when a road changes congestion tier (critical/warn/ok/none),
-  // not on every fractional update — prevents list re-ordering on each WebSocket tick.
+  // Tier per road (critical / warn / ok / no data) as one string, so the
+  // sort only recomputes when a road changes tier, not on every tick.
   const bucketKey = useTrafficStore(
     (s) => roadEdges.map((e) => getBucket(s.roadCongestion[e.id])).join(","),
   );
-  const sortedRoads = useMemo(
-    () =>
-      [...roadEdges].sort((a, b) => {
-        const ba = getBucket(congestion[a.id]);
-        const bb = getBucket(congestion[b.id]);
-        if (ba !== bb) return ba - bb;
-        return (a.name ?? a.id).localeCompare(b.name ?? b.id);
-      }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [bucketKey],
-  );
+  // The order on screen is held until the operator asks for a re-sort: rows
+  // never move under the pointer (the source of the page's layout shift).
+  // The first real data sorts automatically, since nothing is shown yet.
+  const [shown, setShown] = useState(() => ({ key: bucketKey, order: sortRoads(bucketKey) }));
+  const noData = !shown.key.split(",").some((b) => b !== "3");
+  useEffect(() => {
+    if (noData && bucketKey !== shown.key) setShown({ key: bucketKey, order: sortRoads(bucketKey) });
+  }, [noData, bucketKey, shown.key]);
+  const changed = useMemo(() => {
+    if (bucketKey === shown.key) return 0;
+    const now = bucketKey.split(",");
+    return shown.key.split(",").filter((b, i) => b !== now[i]).length;
+  }, [bucketKey, shown.key]);
+  const resort = () => setShown({ key: bucketKey, order: sortRoads(bucketKey) });
 
-  const roads = sortedRoads.filter((e) =>
+  const roads = shown.order.filter((e) =>
     `${e.name ?? "Unnamed road"} ${e.id}`
       .toLowerCase()
       .includes(search.toLowerCase()),
@@ -45,7 +62,19 @@ export function RoadConditions({ compact = false }: { compact?: boolean }) {
           <span className="eyebrow">NETWORK CONDITIONS</span>
           <h2>Road intelligence</h2>
         </div>
-        <Route size={18} className="text-primary" />
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setFrozen(frozen ? null : liveCongestion)}
+            aria-pressed={frozen !== null}
+            aria-label={frozen ? "Resume live road updates" : "Pause live road updates"}
+            title={frozen ? "Resume live updates" : "Pause live updates"}
+            className="grid size-8 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            {frozen ? <Play size={15} /> : <Pause size={15} />}
+          </button>
+          <Route size={18} className="text-primary" />
+        </div>
       </div>
       {!compact && (
         <label className="road-search">
@@ -59,6 +88,20 @@ export function RoadConditions({ compact = false }: { compact?: boolean }) {
         </label>
       )}
       <div className="road-list">
+        {/* Zero-height sticky slot: the pill floats over the rows instead of
+            pushing them down, so offering a re-sort causes no layout shift. */}
+        <div className="pointer-events-none sticky top-2 z-10 flex h-0 justify-center">
+          {changed > 0 && !frozen && (
+            <button
+              type="button"
+              onClick={resort}
+              className="pointer-events-auto flex h-8 animate-fade-in items-center gap-1.5 rounded-full bg-primary px-3 text-xs font-medium text-primary-foreground shadow-elevation-2"
+            >
+              <RefreshCw size={13} />
+              {changed} {changed === 1 ? "road" : "roads"} changed · Re-sort
+            </button>
+          )}
+        </div>
         {(compact ? roads.slice(0, 4) : roads).map((e) => {
           const value = congestion[e.id];
           const tone =

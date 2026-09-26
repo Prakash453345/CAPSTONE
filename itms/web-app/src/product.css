@@ -621,8 +621,12 @@ button:disabled {
 .road-status.muted {
   background: var(--p-neutral);
 }
+/* Fixed width + even-width digits: "51%" → "100%" must not move the row. */
 .road-load {
+  flex: none;
+  width: 64px;
   text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 .road-load b {
   font:

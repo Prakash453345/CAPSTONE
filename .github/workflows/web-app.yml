@@ -42,15 +42,11 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Bundle budget (365 KiB gzipped JS)
-        run: |
-          total=$(find dist/assets -name '*.js' -exec gzip -c {} \; | wc -c)
-          limit=$((365 * 1024))
-          echo "Gzipped JS: $((total / 1024)) KiB / 365 KiB"
-          if [ "$total" -gt "$limit" ]; then
-            echo "::error::Bundle budget exceeded: $((total / 1024)) KiB > 365 KiB"
-            exit 1
-          fi
+      # Per-page first download (entry + route + their static imports), from
+      # Vite's manifest. Summing every chunk counted lazy chunks that never
+      # load together, so it could never pass. See the script for budgets.
+      - name: Bundle budget (gzipped JS per page)
+        run: node scripts/check-bundle-budget.mjs
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4

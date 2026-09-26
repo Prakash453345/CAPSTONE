@@ -29,7 +29,9 @@ export function Basemap() {
       setGoogleSessionId(null);
       googleLookBasemap(theme)
         .then((style) => !cancelled && setBasemap(map, theme, { provider: "osm", style }))
-        .catch((err: unknown) => console.warn("Basemap unavailable; overlays still render.", err));
+        // Surface it through the map's own error event so TrafficMap shows
+        // its "Some map resources are unavailable" notice; overlays still render.
+        .catch((err: unknown) => !cancelled && map.fire("error", { error: err }));
     };
     if (!hasGoogleKey) {
       showOsm();

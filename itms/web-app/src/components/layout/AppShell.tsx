@@ -1,15 +1,20 @@
-import { useEffect, useRef, useState } from "react";
+import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { SourceBanner } from "@/components/layout/SourceBanner";
 import { Outlet } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
 import { SideNav } from "@/components/layout/SideNav";
 import { TopBar } from "@/components/layout/TopBar";
-import { SplitWorkspace } from "@/components/layout/SplitWorkspace";
 import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/notifications/Toaster";
 import { TrafficDataBridge } from "@/services/traffic/TrafficDataBridge";
 import { useSystemStore } from "@/store/systemStore";
+
+// Split view mounts two map pages, so it pulls in MapLibre; loading it on
+// demand keeps the map library out of the landing page's first download.
+const SplitWorkspace = lazy(() =>
+  import("@/components/layout/SplitWorkspace").then((m) => ({ default: m.SplitWorkspace })),
+);
 
 const COLLAPSE_KEY = "traffix.nav.collapsed";
 
@@ -123,7 +128,13 @@ export function AppShell() {
         <TopBar onOpenNav={() => setDrawerOpen(true)} />
         <SourceBanner />
         <main id="workspace" tabIndex={-1} className="min-h-0 flex-1 overflow-auto">
-          {viewMode === "split" ? <SplitWorkspace /> : <Outlet />}
+          {viewMode === "split" ? (
+            <Suspense fallback={null}>
+              <SplitWorkspace />
+            </Suspense>
+          ) : (
+            <Outlet />
+          )}
         </main>
       </div>
     </div>
