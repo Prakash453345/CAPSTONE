@@ -135,7 +135,7 @@ export function DashboardPage() {
                 <p>Vijayawada, Andhra Pradesh</p>
               </div>
             </div>
-            <Link className="text-action" to="/console/traffic">
+            <Link className="text-action" to="/console/map">
               Explore map <ArrowUpRight size={15} />
             </Link>
           </div>

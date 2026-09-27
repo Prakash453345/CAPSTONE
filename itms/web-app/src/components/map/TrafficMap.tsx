@@ -43,7 +43,17 @@ const FIT_BOUNDS: [number, number, number, number] = [
   networkBounds.maxLat,
 ];
 
-export function TrafficMap({ className }: { className?: string }) {
+export function TrafficMap({
+  className,
+  fullscreen = false,
+  onExitFullscreen,
+}: {
+  className?: string;
+  /** Rendered by the full-screen map route: controls offer "Exit full screen". */
+  fullscreen?: boolean;
+  /** Leaves full screen: shown as the search pill's back arrow and the exit control. */
+  onExitFullscreen?: () => void;
+}) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [map, setMap] = useState<MapLibreMap | null>(null);
   const [ready, setReady] = useState(false);
@@ -293,7 +303,7 @@ export function TrafficMap({ className }: { className?: string }) {
             <AnomalyLayer visible={activeLayers.has("anomalies")} />
             <VehicleLayer visible={activeLayers.has("vehicles")} />
             <WeatherLayer visible={activeLayers.has("weather")} />
-            <MapControls />
+            <MapControls fullscreen={fullscreen} onExitFullscreen={onExitFullscreen} />
           </MapContext.Provider>
         )}
 
@@ -302,7 +312,7 @@ export function TrafficMap({ className }: { className?: string }) {
           <div className="flex max-w-full flex-wrap items-start gap-2">
             {map && ready && (
               <MapContext.Provider value={map}>
-                <MapSearch />
+                <MapSearch onBack={onExitFullscreen} />
               </MapContext.Provider>
             )}
             <div className="map-chip-row flex h-11 max-w-full items-center gap-2 overflow-x-auto">

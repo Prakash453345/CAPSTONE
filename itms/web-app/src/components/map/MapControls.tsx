@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { Plus, Minus, Locate, Box, Layers } from "lucide-react";
+import { Plus, Minus, Locate, Box, Layers, Maximize2, Minimize2 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { useMapInstance } from "@/components/map/MapContext";
 import { useMapStore, type MapLayerId } from "@/store/mapStore";
 import { useMapChromeStore } from "@/store/mapChromeStore";
@@ -16,7 +17,14 @@ const LAYER_LABELS: Record<MapLayerId, string> = {
   weather: "Weather",
 };
 
-export function MapControls() {
+export function MapControls({
+  fullscreen = false,
+  onExitFullscreen,
+}: {
+  fullscreen?: boolean;
+  onExitFullscreen?: () => void;
+}) {
+  const navigate = useNavigate();
   const map = useMapInstance();
   const activeLayers = useMapStore((s) => s.activeLayers);
   const toggleLayer = useMapStore((s) => s.toggleLayer);
@@ -139,6 +147,16 @@ export function MapControls() {
         <ControlBtn label="Recenter on corridor" onClick={recenter}>
           <Locate />
         </ControlBtn>
+        <div className="mx-auto h-px w-7 bg-border" />
+        {fullscreen ? (
+          <ControlBtn label="Exit full screen" onClick={() => onExitFullscreen?.()}>
+            <Minimize2 />
+          </ControlBtn>
+        ) : (
+          <ControlBtn label="Full screen map" onClick={() => navigate("/console/map")}>
+            <Maximize2 />
+          </ControlBtn>
+        )}
       </ControlCard>
 
       <ControlCard>

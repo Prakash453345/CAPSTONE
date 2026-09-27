@@ -23,6 +23,9 @@ const EmergencyPage = lazy(() =>
 const AnalyticsPage = lazy(() =>
   import("@/app/analytics/AnalyticsPage").then((m) => ({ default: m.AnalyticsPage })),
 );
+const MapPage = lazy(() =>
+  import("@/app/map/MapPage").then((m) => ({ default: m.MapPage })),
+);
 const SettingsPage = lazy(() =>
   import("@/app/settings/SettingsPage").then((m) => ({ default: m.SettingsPage })),
 );
@@ -67,6 +70,14 @@ export const router = createBrowserRouter(
               element: (
                 <Suspense fallback={<ConsoleFallback />}>
                   <AnomaliesPage />
+                </Suspense>
+              ),
+            },
+            {
+              path: "map",
+              element: (
+                <Suspense fallback={<ConsoleFallback />}>
+                  <MapPage />
                 </Suspense>
               ),
             },

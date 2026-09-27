@@ -1,6 +1,6 @@
 import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { SourceBanner } from "@/components/layout/SourceBanner";
-import { Outlet } from "react-router-dom";
+import { Outlet, useLocation } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
 import { SideNav } from "@/components/layout/SideNav";
@@ -35,6 +35,9 @@ export function AppShell() {
   const [collapsed, setCollapsed] = useState(readCollapsed);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const viewMode = useSystemStore((s) => s.viewMode);
+  // The full-screen map route: rail and top bar step aside; data, alerts and
+  // the demo notice stay. Split view never applies there.
+  const immersive = useLocation().pathname === "/console/map";
   const drawerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -75,7 +78,7 @@ export function AppShell() {
       <a href="#workspace" className="skip-link">Skip to workspace</a>
       <TrafficDataBridge />
       <Toaster />
-      <div className="hidden lg:block">
+      <div className={immersive ? "hidden" : "hidden lg:block"}>
         <SideNav
           collapsed={collapsed}
           onToggleCollapsed={() => setCollapsed((c) => !c)}
@@ -125,10 +128,10 @@ export function AppShell() {
       </AnimatePresence>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <TopBar onOpenNav={() => setDrawerOpen(true)} />
+        {!immersive && <TopBar onOpenNav={() => setDrawerOpen(true)} />}
         <SourceBanner />
         <main id="workspace" tabIndex={-1} className="min-h-0 flex-1 overflow-auto">
-          {viewMode === "split" ? (
+          {viewMode === "split" && !immersive ? (
             <Suspense fallback={null}>
               <SplitWorkspace />
             </Suspense>

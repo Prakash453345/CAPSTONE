@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { LngLatBoundsLike } from "maplibre-gl";
-import { MapPin, Search, TrafficCone, X } from "lucide-react";
+import { ArrowLeft, MapPin, Search, TrafficCone, X } from "lucide-react";
 import { useMapInstance } from "@/components/map/MapContext";
 import { roadEdges, signalJunctions, shortJunctionName } from "@/data/network";
 import type { LngLat } from "@/utils/geo";
@@ -47,7 +47,8 @@ function match(query: string): Result[] {
   ).slice(0, 8);
 }
 
-export function MapSearch() {
+/** `onBack` adds Google Maps' back arrow at the pill's start (full-screen map). */
+export function MapSearch({ onBack }: { onBack?: () => void }) {
   const map = useMapInstance();
   const [query, setQuery] = useState("");
   const open = useMapChromeStore((s) => s.sheet === "search");
@@ -119,8 +120,14 @@ export function MapSearch() {
         className={cn(
           "relative z-[1] flex h-11 items-center gap-1 bg-surface-raised pl-4 pr-1.5 shadow-[0_2px_4px_rgba(0,0,0,0.2),0_-1px_0_rgba(0,0,0,0.02)] transition-[border-radius,box-shadow] duration-200 ease-out",
           showList ? "rounded-t-[22px] shadow-elevation-2" : "rounded-full",
+          onBack && "pl-1.5",
         )}
       >
+        {onBack && (
+          <IconBtn label="Back" onClick={onBack}>
+            <ArrowLeft />
+          </IconBtn>
+        )}
         <input
           type="text"
           value={query}

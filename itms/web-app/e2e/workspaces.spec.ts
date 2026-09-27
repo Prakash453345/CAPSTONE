@@ -233,10 +233,28 @@ test("split view maps keep their own panels", async ({ page }, info) => {
   await expect(page.locator('[aria-label="Map legend"][aria-expanded="true"]')).toHaveCount(1);
 });
 
+test("explore map opens full screen and back returns", async ({ page }) => {
+  await page.goto("/console");
+  await page.getByRole("link", { name: /Explore map/ }).click();
+  await expect(page).toHaveURL(/\/console\/map$/);
+  await expect(page.getByRole("navigation", { name: "Primary" })).toHaveCount(0);
+  // The demo notice stays visible even in full screen.
+  await expect(page.getByText("DEMO ENVIRONMENT", { exact: false })).toBeVisible();
+  const map = await page.locator(".maplibregl-map").boundingBox();
+  expect(map?.height ?? 0).toBeGreaterThan(600);
+  await page.getByRole("button", { name: "Back", exact: true }).click();
+  await expect(page).toHaveURL(/\/console$/);
+
+  // Opened directly (no history), exit falls back to the command centre.
+  await page.goto("/console/map");
+  await page.getByRole("button", { name: "Exit full screen" }).click();
+  await expect(page).toHaveURL(/\/console$/);
+});
+
 test("map fills its panel on every map page", async ({ page }) => {
   // Regression: lazy-loaded maplibre-gl.css once overrode the container's
   // positioning and collapsed the map to 0 px while every control still showed.
-  for (const path of ["/console", "/console/traffic", "/console/anomalies", "/console/emergency"]) {
+  for (const path of ["/console", "/console/traffic", "/console/anomalies", "/console/emergency", "/console/map"]) {
     await page.goto(path);
     const canvas = page.locator("canvas.maplibregl-canvas").first();
     await expect(canvas).toBeVisible();
