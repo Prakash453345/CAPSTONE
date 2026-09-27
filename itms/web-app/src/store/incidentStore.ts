@@ -22,7 +22,20 @@ interface IncidentState {
   selectedAnomalyId: string | null;
   selectedIntersectionId: string | null;
 
+  /**
+   * Operator reviews not yet reflected by the stream, by incident id. The
+   * provider re-sends its own copy of every incident each tick, still
+   * "candidate" until the backend broadcasts the change; without this a
+   * confirmation reverted on screen within a second.
+   */
+  reviews: Record<string, Incident>;
+
+  /** Replace incidents from the data layer, keeping pending reviews on top. */
   setIncidents: (incidents: Incident[]) => void;
+  /** Record an operator's confirm / reject result from the API. */
+  applyReview: (reviewed: Incident) => void;
+  /** Forget pending reviews (data source switched). */
+  clearReviews: () => void;
   setAnomalies: (anomalies: Anomaly[]) => void;
   setIntersections: (intersections: Intersection[]) => void;
 
@@ -40,7 +53,28 @@ export const useIncidentStore = create<IncidentState>((set) => ({
   selectedAnomalyId: null,
   selectedIntersectionId: null,
 
-  setIncidents: (incidents) => set({ incidents }),
+  reviews: {},
+
+  setIncidents: (incoming) =>
+    set((s) => {
+      const reviews = { ...s.reviews };
+      const incidents = incoming.map((i) => {
+        const review = reviews[i.id];
+        if (!review) return i;
+        if (i.status === "candidate") return review; // stream not caught up yet
+        delete reviews[i.id]; // stream now carries the outcome itself
+        return i;
+      });
+      const seen = new Set(incoming.map((i) => i.id));
+      for (const r of Object.values(reviews)) if (!seen.has(r.id)) incidents.push(r);
+      return { incidents, reviews };
+    }),
+  applyReview: (reviewed) =>
+    set((s) => ({
+      reviews: { ...s.reviews, [reviewed.id]: reviewed },
+      incidents: [...s.incidents.filter((i) => i.id !== reviewed.id), reviewed],
+    })),
+  clearReviews: () => set({ reviews: {} }),
   setAnomalies: (anomalies) => set({ anomalies }),
   setIntersections: (intersections) => set({ intersections }),
 

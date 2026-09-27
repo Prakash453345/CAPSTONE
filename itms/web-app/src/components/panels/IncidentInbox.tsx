@@ -120,14 +120,7 @@ export function IncidentInbox() {
                   setRegistry((old) =>
                     old.map((r) => (r.id === next.id ? next : r)),
                   );
-                  useIncidentStore
-                    .getState()
-                    .setIncidents([
-                      ...useIncidentStore
-                        .getState()
-                        .incidents.filter((r) => r.id !== next.id),
-                      next,
-                    ]);
+                  useIncidentStore.getState().applyReview(next);
                 }}
               />
             ))}
