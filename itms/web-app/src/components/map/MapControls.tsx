@@ -13,6 +13,7 @@ const LAYER_LABELS: Record<MapLayerId, string> = {
   incidents: "Incidents",
   anomalies: "Anomalies",
   emergency: "Emergency",
+  weather: "Weather",
 };
 
 export function MapControls() {
@@ -72,10 +73,10 @@ export function MapControls() {
 
   // Google Maps' arrangement: one-off tools stacked above the zoom pair,
   // bottom-right, each a 40px white card with Material elevation. The column
-  // spans the map's height so the layers menu (anchored to its bottom) can
-  // never grow past the top of the map.
+  // spans the map's height (below the weather chip) so the layers menu,
+  // anchored to its bottom, can never grow past the top of the map.
   return (
-    <div className="pointer-events-none absolute bottom-10 right-3 top-3 z-[2] flex flex-col items-end justify-end gap-2">
+    <div className="pointer-events-none absolute bottom-10 right-3 top-[4.25rem] z-[2] flex flex-col items-end justify-end gap-2">
       {showCompass && (
         <div className="animate-sheet-in">
           <ControlCard>

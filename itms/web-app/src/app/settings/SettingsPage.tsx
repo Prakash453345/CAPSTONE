@@ -11,6 +11,7 @@ const LAYER_LABELS: Record<MapLayerId, string> = {
   incidents: "Incidents",
   anomalies: "Anomalies",
   emergency: "Emergency routes & units",
+  weather: "Weather",
 };
 
 /**

@@ -1076,6 +1076,18 @@ button:disabled {
     font-size: 10px;
   }
 }
+/* Fog drifts slowly; the global reduced-motion rule below freezes it. */
+.weather-fog {
+  animation: weather-fog-drift 40s ease-in-out infinite alternate;
+}
+@keyframes weather-fog-drift {
+  from {
+    transform: translate3d(-3%, 0, 0);
+  }
+  to {
+    transform: translate3d(3%, 1%, 0);
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

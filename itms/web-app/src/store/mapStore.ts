@@ -13,7 +13,8 @@ export type MapLayerId =
   | "congestion"
   | "incidents"
   | "anomalies"
-  | "emergency";
+  | "emergency"
+  | "weather";
 
 export const DEFAULT_MAP_LAYERS: MapLayerId[] = [
   "vehicles",
@@ -22,6 +23,7 @@ export const DEFAULT_MAP_LAYERS: MapLayerId[] = [
   "incidents",
   "anomalies",
   "emergency",
+  "weather",
 ];
 
 /**

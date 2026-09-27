@@ -198,6 +198,41 @@ test("road place card opens from search and starts operator actions", async ({ p
   await expect(page.getByLabel("Destination road", { exact: true })).toHaveValue("-177626285");
 });
 
+test("weather chip shows live conditions, demo presets and a layer switch", async ({ page }) => {
+  await page.goto("/console/traffic");
+  const chip = page.getByRole("button", { name: /^Weather: Clear, 31°/ });
+  await expect(chip).toBeVisible();
+  await chip.click();
+  const panel = page.getByRole("dialog", { name: "Weather details" });
+  await expect(panel.getByText("Open-Meteo.com")).toBeVisible();
+  await expect(panel.getByRole("list", { name: "Next hours" })).toBeVisible();
+
+  // A presenter can force a storm: advice appears and rain is drawn.
+  await panel.getByRole("radio", { name: "Storm" }).click();
+  await expect(panel.getByText(/Storm: expect slower traffic/)).toBeVisible();
+  await expect(page.locator("canvas:not(.maplibregl-canvas)")).toHaveCount(1);
+  await panel.getByRole("radio", { name: "Live" }).click();
+  await page.keyboard.press("Escape");
+  await expect(page.locator("canvas:not(.maplibregl-canvas)")).toHaveCount(0);
+
+  // The Layers menu turns weather off entirely.
+  await page.getByRole("button", { name: "Map layers", exact: true }).click();
+  await page.getByRole("switch", { name: "Weather", exact: true }).click();
+  await expect(page.getByRole("button", { name: /^Weather:/ })).toHaveCount(0);
+});
+
+test("split view maps keep their own panels", async ({ page }, info) => {
+  test.skip(info.project.name === "mobile", "split view is a desktop layout");
+  await page.goto("/console/traffic");
+  await page.getByRole("radio", { name: "Split", exact: true }).click();
+  await expect(page.locator(".maplibregl-map")).toHaveCount(2);
+  await page.getByRole("button", { name: /^Weather:/ }).last().click();
+  await expect(page.getByRole("dialog", { name: "Weather details" })).toHaveCount(1);
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Map legend" }).first().click();
+  await expect(page.locator('[aria-label="Map legend"][aria-expanded="true"]')).toHaveCount(1);
+});
+
 test("map fills its panel on every map page", async ({ page }) => {
   // Regression: lazy-loaded maplibre-gl.css once overrode the container's
   // positioning and collapsed the map to 0 px while every control still showed.

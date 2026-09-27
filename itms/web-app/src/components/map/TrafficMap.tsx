@@ -11,7 +11,10 @@ import { MapLegend } from "@/components/map/MapLegend";
 import { MapSearch } from "@/components/map/MapSearch";
 import { RoadHighlight } from "@/components/map/RoadHighlight";
 import { RoadPlaceCard } from "@/components/map/RoadPlaceCard";
-import { useMapChromeStore } from "@/store/mapChromeStore";
+import { WeatherLayer } from "@/components/map/WeatherLayer";
+import { WeatherChip } from "@/components/map/WeatherChip";
+import { MapChromeContext, createMapChromeStore } from "@/store/mapChromeStore";
+import { useStore } from "zustand";
 import { MAP_CHIP, MAP_CHIP_ACTIVE } from "@/components/map/mapChrome";
 import { RoadLayer } from "@/components/map/layers/RoadLayer";
 import { VehicleLayer } from "@/components/map/layers/VehicleLayer";
@@ -46,6 +49,8 @@ export function TrafficMap({ className }: { className?: string }) {
   const [ready, setReady] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
   const [tileError, setTileError] = useState(false);
+  // This map's own sheet/selection state, so split view's two maps are independent.
+  const [chrome] = useState(createMapChromeStore);
 
   const activeLayers = useMapStore((s) => s.activeLayers);
   const focus = useMapStore((s) => s.focus);
@@ -221,8 +226,8 @@ export function TrafficMap({ className }: { className?: string }) {
   // Idle clicks select a road and open its place card, unless they land on
   // a clickable overlay (anomaly, incident, signal, vehicle), which own the
   // click. Clicking empty map clears the selection, as in Google Maps.
-  const selectRoad = useMapChromeStore((s) => s.selectRoad);
-  const selectedRoad = useMapChromeStore((s) => s.selectedRoad);
+  const selectRoad = useStore(chrome, (s) => s.selectRoad);
+  const selectedRoad = useStore(chrome, (s) => s.selectedRoad);
   useEffect(() => {
     if (!map || !ready || picking) return;
     const overlays = [
@@ -256,97 +261,101 @@ export function TrafficMap({ className }: { className?: string }) {
   };
 
   return (
-    <div className={cn("absolute inset-0 overflow-hidden", className)}>
-      {/* Inline, not Tailwind's "absolute inset-0": maplibre-gl.css sets
-          .maplibregl-map { position: relative } at equal specificity, and since
-          routes are lazy it loads after Tailwind and wins, collapsing the map
-          to 0 px tall. Inline style can't lose that ordering race. */}
-      <div ref={containerRef} style={{ position: "absolute", inset: 0 }} />
+    <MapChromeContext.Provider value={chrome}>
+      <div className={cn("absolute inset-0 overflow-hidden", className)}>
+        {/* Inline, not Tailwind's "absolute inset-0": maplibre-gl.css sets
+            .maplibregl-map { position: relative } at equal specificity, and since
+            routes are lazy it loads after Tailwind and wins, collapsing the map
+            to 0 px tall. Inline style can't lose that ordering race. */}
+        <div ref={containerRef} style={{ position: "absolute", inset: 0 }} />
 
-      {mapError && <div className="absolute inset-0 z-20 grid place-items-center bg-background p-8"><p role="alert" className="max-w-sm text-center text-sm leading-relaxed text-muted-foreground">{mapError}</p></div>}
-      {!ready && !mapError && (
-        <div className="absolute inset-0 grid place-items-center bg-background">
-          <div className="flex flex-col items-center gap-3">
-            <Skeleton className="h-40 w-64" />
-            <span className="font-mono text-xs text-muted-foreground">
-              loading map…
-            </span>
+        {mapError && <div className="absolute inset-0 z-20 grid place-items-center bg-background p-8"><p role="alert" className="max-w-sm text-center text-sm leading-relaxed text-muted-foreground">{mapError}</p></div>}
+        {!ready && !mapError && (
+          <div className="absolute inset-0 grid place-items-center bg-background">
+            <div className="flex flex-col items-center gap-3">
+              <Skeleton className="h-40 w-64" />
+              <span className="font-mono text-xs text-muted-foreground">
+                loading map…
+              </span>
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {map && ready && (
-        <MapContext.Provider value={map}>
-          <Basemap />
-          <RoadLayer visible={activeLayers.has("congestion")} />
-          <RoadHighlight />
-          <SignalLayer visible={activeLayers.has("signals")} />
-          <EmergencyRouteLayer visible={activeLayers.has("emergency")} />
-          <EmergencyVehicleLayer visible={activeLayers.has("emergency")} />
-          <IncidentLayer visible={activeLayers.has("incidents")} />
-          <AnomalyLayer visible={activeLayers.has("anomalies")} />
-          <VehicleLayer visible={activeLayers.has("vehicles")} />
-          <MapControls />
-        </MapContext.Provider>
-      )}
+        {map && ready && (
+          <MapContext.Provider value={map}>
+            <Basemap />
+            <RoadLayer visible={activeLayers.has("congestion")} />
+            <RoadHighlight />
+            <SignalLayer visible={activeLayers.has("signals")} />
+            <EmergencyRouteLayer visible={activeLayers.has("emergency")} />
+            <EmergencyVehicleLayer visible={activeLayers.has("emergency")} />
+            <IncidentLayer visible={activeLayers.has("incidents")} />
+            <AnomalyLayer visible={activeLayers.has("anomalies")} />
+            <VehicleLayer visible={activeLayers.has("vehicles")} />
+            <WeatherLayer visible={activeLayers.has("weather")} />
+            <MapControls />
+          </MapContext.Provider>
+        )}
 
-      {/* Google-style search row (search pill + chips), panels open below it */}
-      <div className="map-action-stack pointer-events-none absolute left-3 top-3 flex flex-col items-start gap-2">
-        <div className="flex max-w-full flex-wrap items-start gap-2">
-          {map && ready && (
-            <MapContext.Provider value={map}>
-              <MapSearch />
-            </MapContext.Provider>
+        {/* Google-style search row (search pill + chips), panels open below it */}
+        <div className="map-action-stack pointer-events-none absolute left-3 top-3 flex flex-col items-start gap-2">
+          <div className="flex max-w-full flex-wrap items-start gap-2">
+            {map && ready && (
+              <MapContext.Provider value={map}>
+                <MapSearch />
+              </MapContext.Provider>
+            )}
+            <div className="map-chip-row flex h-11 max-w-full items-center gap-2 overflow-x-auto">
+              <button
+                type="button"
+                onClick={() =>
+                  creatingAnomaly ? exitCreate() : setInteractionMode("create-anomaly")
+                }
+                aria-pressed={creatingAnomaly}
+                className={cn(MAP_CHIP, creatingAnomaly && MAP_CHIP_ACTIVE)}
+              >
+                {creatingAnomaly ? <X /> : <AlertTriangle />}
+                {creatingAnomaly ? "Cancel" : "Create anomaly"}
+              </button>
+              <EmergencyPanel part="chip" />
+            </div>
+          </div>
+
+          {tileError && ready && (
+            <div role="status" className="pointer-events-none max-w-[340px] animate-fade-in rounded-lg bg-surface-raised px-3 py-2 text-[11px] leading-snug text-status-warn shadow-elevation-1">
+              Some map resources are unavailable. Bundled road geometry and received telemetry remain visible.
+            </div>
           )}
-          <div className="map-chip-row flex h-11 max-w-full items-center gap-2 overflow-x-auto">
-            <button
-              type="button"
-              onClick={() =>
-                creatingAnomaly ? exitCreate() : setInteractionMode("create-anomaly")
-              }
-              aria-pressed={creatingAnomaly}
-              className={cn(MAP_CHIP, creatingAnomaly && MAP_CHIP_ACTIVE)}
-            >
-              {creatingAnomaly ? <X /> : <AlertTriangle />}
-              {creatingAnomaly ? "Cancel" : "Create anomaly"}
-            </button>
-            <EmergencyPanel part="chip" />
-          </div>
+
+          {creatingAnomaly && !pendingTarget && (
+            <div className="pointer-events-none animate-fade-in rounded-full bg-foreground/85 px-3.5 py-1.5 text-xs text-background shadow-elevation-1">
+              {pickHint ?? "Click a road to place the anomaly"}
+            </div>
+          )}
+
+          {pendingTarget && (
+            <CreateAnomalyPanel
+              target={pendingTarget}
+              onClose={exitCreate}
+              onCreated={(id) => {
+                selectAnomaly(id);
+                exitCreate();
+              }}
+            />
+          )}
+
+          <EmergencyPanel part="panel" />
+
+          {!operatorPanelOpen && (
+            <RoadPlaceCard
+              onCreateAnomaly={(target) => setPendingTarget(target)}
+            />
+          )}
         </div>
 
-        {tileError && ready && (
-          <div role="status" className="pointer-events-none max-w-[340px] animate-fade-in rounded-lg bg-surface-raised px-3 py-2 text-[11px] leading-snug text-status-warn shadow-elevation-1">
-            Some map resources are unavailable. Bundled road geometry and received telemetry remain visible.
-          </div>
-        )}
-
-        {creatingAnomaly && !pendingTarget && (
-          <div className="pointer-events-none animate-fade-in rounded-full bg-foreground/85 px-3.5 py-1.5 text-xs text-background shadow-elevation-1">
-            {pickHint ?? "Click a road to place the anomaly"}
-          </div>
-        )}
-
-        {pendingTarget && (
-          <CreateAnomalyPanel
-            target={pendingTarget}
-            onClose={exitCreate}
-            onCreated={(id) => {
-              selectAnomaly(id);
-              exitCreate();
-            }}
-          />
-        )}
-
-        <EmergencyPanel part="panel" />
-
-        {!operatorPanelOpen && (
-          <RoadPlaceCard
-            onCreateAnomaly={(target) => setPendingTarget(target)}
-          />
-        )}
+        <MapLegend hidden={panelOpen} />
+        {activeLayers.has("weather") && <WeatherChip />}
       </div>
-
-      <MapLegend hidden={panelOpen} />
-    </div>
+    </MapChromeContext.Provider>
   );
 }
