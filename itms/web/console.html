@@ -284,6 +284,8 @@ section{padding:clamp(64px,8vw,128px) 0;}
 .constatus.closed .dot{background:#C8384A;}
 .congrid{display:grid;grid-template-columns:2fr 1fr;gap:16px;position:relative;}
 #conmap{height:clamp(320px,42vw,480px);border-radius:14px;border:1px solid #232A2D;background:#0F151C;}
+.veh-ic{background:none;border:0;box-shadow:none;}
+.veh-ic svg{display:block;overflow:visible;filter:drop-shadow(0 1px 2px rgba(0,0,0,.55));}
 .conside{display:flex;flex-direction:column;gap:12px;min-height:0;}
 .constats{display:flex;gap:10px;}
 .constat{flex:1;background:#161D20;border:1px solid #232A2D;border-radius:12px;padding:12px 14px;}
@@ -1082,18 +1084,57 @@ if(svg){
     return "rgb(" + rr + "," + gg + "," + bb + ")";
   }
 
+  /* one glyph + colour per demand class (SUMO vType id on
+     VehiclePositionUpdated.payload.vehicle_type); mirrors assign_vtypes.py
+     and web/live.html. Unknown / '' -> neutral ring. */
+  var VEH_TYPES = {
+    veh_car:        { label: "Car",           color: "#7fd1ff", shape: "circle" },
+    veh_motorcycle: { label: "Two-wheeler",   color: "#57c97b", shape: "triangle" },
+    veh_auto:       { label: "Auto-rickshaw", color: "#e8b23a", shape: "diamond" },
+    veh_bus:        { label: "Bus",           color: "#e2703a", shape: "bus" }
+  };
+  var VEH_FALLBACK = { label: "Unclassified", color: "#9BAAB0", shape: "ring" };
+  function vehStyle(type){ return VEH_TYPES[type] || VEH_FALLBACK; }
+  function vehSVG(shape, color, px){
+    var s = px, m = s / 2, r = m - 1.5, body;
+    if (shape === "triangle")     body = '<path d="M' + m + ' 1 L' + (s-1) + ' ' + (s-1.5) + ' L1 ' + (s-1.5) + ' Z"/>';
+    else if (shape === "diamond") body = '<path d="M' + m + ' .5 L' + (s-.5) + ' ' + m + ' L' + m + ' ' + (s-.5) + ' L.5 ' + m + ' Z"/>';
+    else if (shape === "bus")     body = '<rect x="1" y="3" width="' + (s-2) + '" height="' + (s-6) + '" rx="2"/>';
+    else if (shape === "ring")    body = '<circle cx="' + m + '" cy="' + m + '" r="' + r + '" fill="none" stroke-width="2"/>';
+    else                          body = '<circle cx="' + m + '" cy="' + m + '" r="' + r + '"/>';
+    return '<svg width="' + s + '" height="' + s + '" viewBox="0 0 ' + s + ' ' + s + '" fill="' + color + '" stroke="' + color + '">' + body + '</svg>';
+  }
+  var vehIcons = {};
+  function vehIcon(type){
+    if (vehIcons[type]) return vehIcons[type];
+    var st = vehStyle(type);
+    return (vehIcons[type] = L.divIcon({
+      className: "veh-ic", html: vehSVG(st.shape, st.color, 14),
+      iconSize: [14, 14], iconAnchor: [7, 7], tooltipAnchor: [0, -8]
+    }));
+  }
+  function vehTip(id, type){
+    return VEH_TYPES[type] ? id + " · " + VEH_TYPES[type].label : String(id);
+  }
+
   var vehicles = new Map();
   function upsertVehicle(payload){
     var id = payload.vehicle_id;
+    var type = payload.vehicle_type || "";
     var latlng = [payload.lat, payload.lon];
     var entry = vehicles.get(id);
     if (!entry) {
-      var marker = L.circleMarker(latlng, { radius: 4, color: "#7fd1ff", weight: 1, fillColor: "#7fd1ff", fillOpacity: 0.9 })
-        .bindTooltip(id, { direction: "top" });
+      var marker = L.marker(latlng, { icon: vehIcon(type), keyboard: false })
+        .bindTooltip(vehTip(id, type), { direction: "top" });
       marker.addTo(map);
-      vehicles.set(id, { marker: marker, lastSeen: Date.now() });
+      vehicles.set(id, { marker: marker, type: type, lastSeen: Date.now() });
     } else {
       entry.marker.setLatLng(latlng);
+      if (type && type !== entry.type) {
+        entry.marker.setIcon(vehIcon(type));
+        entry.marker.setTooltipContent(vehTip(id, type));
+        entry.type = type;
+      }
       entry.lastSeen = Date.now();
     }
   }

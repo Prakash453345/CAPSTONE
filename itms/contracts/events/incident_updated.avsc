@@ -2,11 +2,15 @@
   "type": "record",
   "name": "IncidentUpdated",
   "namespace": "itms.contracts",
-  "doc": "Published when an incident's lifecycle state changes: rejected (candidate was a false alarm — feeds back into conformal calibration set), resolved (incident cleared), or escalated.",
+  "doc": "Every lifecycle transition of an incident that isn't its first raise (IncidentCandidate) or its operator confirmation (IncidentDetected): a rejection, an auto-expiry with no operator action, a periodic score refresh while confirmed, or a clear. One event per transition, same incident_id throughout, published on `incident.updated`. A rejection carried here is the feedback signal plan 4.4 relies on -- the calibrator consumes `new_state == REJECTED` as a confirmed-normal point.",
   "fields": [
-    { "name": "incident_id", "type": "string" },
-    { "name": "candidate_id", "type": "string" },
-    { "name": "new_status", "type": "string", "doc": "'rejected' | 'resolved' | 'escalated'" },
-    { "name": "reason", "type": ["null", "string"], "default": null }
+    { "name": "incident_id", "type": "string", "doc": "UUID, identical to the originating IncidentCandidate's." },
+    { "name": "updated_at", "type": { "type": "long", "logicalType": "timestamp-millis" }, "doc": "Wall-clock time of the transition. Humans/retention only." },
+    { "name": "sim_tick", "type": ["null", "long"], "default": null, "doc": "Simulation step index of the transition when the producer is the SUMO stream; null for a real-time producer." },
+    { "name": "new_state", "type": { "type": "enum", "name": "IncidentState", "symbols": ["CANDIDATE", "CONFIRMED", "REJECTED", "EXPIRED", "CLEARED"] }, "doc": "The state the incident is now in. Matches itms_domain.incident.IncidentState. REJECTED / EXPIRED / CLEARED are terminal." },
+    { "name": "actor", "type": "string", "doc": "What caused the transition -- 'operator:<id>' for a confirm/reject/clear, 'system:timeout' for an auto-expiry, 'detector' for a score refresh." },
+    { "name": "detail", "type": "string", "default": "", "doc": "Human-readable specifics -- e.g. the operator's reject reason, or 'cleared: link speed recovered'." },
+    { "name": "fused_probability", "type": ["null", "double"], "default": null, "doc": "Current fused anomaly probability at this update, set when the update is a score refresh; null for a pure state transition that didn't re-score." },
+    { "name": "chain_hash", "type": "string", "doc": "Head hash of the incident's audit chain after this transition was appended." }
   ]
 }

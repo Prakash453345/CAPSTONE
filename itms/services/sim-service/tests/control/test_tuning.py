@@ -72,7 +72,9 @@ def test_objective_ranks_violations_above_any_delay_difference():
     """A parameter set that leans on the safety net to stay safe is a bad
     parameter set even though it is never an unsafe one. No delay
     improvement may buy a single violation."""
-    clean = EvaluationResult(person_delay_s=1.5, interlock_violations=0, completed_trips=100, seeds=2)
+    clean = EvaluationResult(
+        person_delay_s=1.5, interlock_violations=0, completed_trips=100, seeds=2
+    )
     one_violation = EvaluationResult(
         person_delay_s=0.5, interlock_violations=1, completed_trips=100, seeds=2
     )
@@ -102,7 +104,9 @@ def test_violation_penalty_is_scale_free():
 def test_objective_rejects_a_gridlocked_run():
     """A run that completed no trips has an excellent-looking delay
     figure, computed over no vehicles. It must not win."""
-    gridlock = EvaluationResult(person_delay_s=0.0, interlock_violations=0, completed_trips=0, seeds=2)
+    gridlock = EvaluationResult(
+        person_delay_s=0.0, interlock_violations=0, completed_trips=0, seeds=2
+    )
     assert math.isinf(gridlock.objective)
 
 
@@ -112,22 +116,36 @@ def test_optimizer_finds_a_known_optimum():
     vector. Confirms the normalization, ask/tell wiring and bound
     handling actually cooperate, which no unit test of the pieces
     does."""
-    target = AcampConfig(eta_arrival=1.2, rho_jam=0.9, beta_gate=3.0, lambda_f=2.0, gamma=5.0,
-                         kappa_switch=4.0, alpha_switch=0.8, k=4)
+    target = AcampConfig(
+        eta_arrival=1.2,
+        rho_jam=0.9,
+        beta_gate=3.0,
+        lambda_f=2.0,
+        gamma=5.0,
+        kappa_switch=4.0,
+        alpha_switch=0.8,
+        k=4,
+    )
     target_vec = to_vector(target)
 
     def evaluate(cfg: AcampConfig) -> EvaluationResult:
         vec = to_vector(cfg)
         spans = [hi - lo for lo, hi in PARAM_SPACE.values()]
         dist = sum(((a - b) / s) ** 2 for a, b, s in zip(vec, target_vec, spans, strict=True))
-        return EvaluationResult(person_delay_s=dist, interlock_violations=0, completed_trips=1, seeds=1)
+        return EvaluationResult(
+            person_delay_s=dist, interlock_violations=0, completed_trips=1, seeds=1
+        )
 
     start = AcampConfig()
-    best, history = optimize(evaluate, base=start, generations=25, population=10, sigma0=0.3, seed=7)
+    best, history = optimize(
+        evaluate, base=start, generations=25, population=10, sigma0=0.3, seed=7
+    )
 
     def dist_to_target(cfg: AcampConfig) -> float:
         spans = [hi - lo for lo, hi in PARAM_SPACE.values()]
-        return sum(((a - b) / s) ** 2 for a, b, s in zip(to_vector(cfg), target_vec, spans, strict=True))
+        return sum(
+            ((a - b) / s) ** 2 for a, b, s in zip(to_vector(cfg), target_vec, spans, strict=True)
+        )
 
     assert dist_to_target(best) < dist_to_target(start) / 10.0
     assert len(history.entries) == 25 * 10
@@ -202,8 +220,9 @@ def test_history_records_every_evaluation_in_order():
 
     def evaluate(cfg: AcampConfig) -> EvaluationResult:
         calls["n"] += 1
-        return EvaluationResult(person_delay_s=float(calls["n"]), interlock_violations=0,
-                                completed_trips=10, seeds=1)
+        return EvaluationResult(
+            person_delay_s=float(calls["n"]), interlock_violations=0, completed_trips=10, seeds=1
+        )
 
     optimize(evaluate, generations=3, population=4, history=history, seed=11)
     assert len(history.entries) == 12

@@ -36,8 +36,9 @@ import logging
 import os
 import shutil
 import sys
+import time
 from collections.abc import Callable, Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import traci
@@ -45,12 +46,15 @@ from itms_common.bus import RedisStreamsSyncBus
 from itms_common.events import encode_envelope
 from itms_domain import JunctionContext, SignalPlan, Tier0Config
 
+from sim_service.adapters.sumo.traci_loop import publish_traffic_state as _publish_traffic_state
+from sim_service.control.anomaly.graph_features import AnomalyGraph, LinkFeatureSampler
+from sim_service.control.anomaly.injector import IncidentInjector
 from sim_service.control.memory import DemandMemory
 from sim_service.control.online_calibration import OnlineCalibration
 from sim_service.signal_controller import arbiter
+from sim_service.signal_controller.detectors import ActuationDetector
 from sim_service.signal_controller.discharge_observer import DischargeObserver
 from sim_service.signal_controller.lane_cache import LaneCache
-from sim_service.signal_controller.detectors import ActuationDetector
 from sim_service.signal_controller.queue_state import QueueStateSampler
 from sim_service.signal_controller.spillback import SpillbackTracker
 from sim_service.signal_controller.traci_cabinet import TraCICabinet
@@ -62,22 +66,31 @@ _SIGNAL_FAULTED_TOPIC = "signal.faulted"
 
 
 def _publish_decision_events(bus: RedisStreamsSyncBus, decision: arbiter.Decision) -> None:
-    """`decision.mode == "fixed_time"` is arbiter.tick()'s only success
-    branch (see its own docstring's priority list) -- every other mode is
-    a fault/degraded branch. `_changed_event`/`_faulted_event` (private to
-    arbiter.py) already build these dicts to match
-    `contracts/events/signal_changed.avsc` / `signal_faulted.avsc` field-
-    for-field, so this is a straight encode-and-publish, not a reshape."""
-    event_type = "SignalChanged" if decision.mode == "fixed_time" else "SignalFaulted"
-    topic = _SIGNAL_CHANGED_TOPIC if event_type == "SignalChanged" else _SIGNAL_FAULTED_TOPIC
+    """`_changed_event`/`_faulted_event` (private to arbiter.py) already
+    build these dicts to match `contracts/events/signal_changed.avsc` /
+    `signal_faulted.avsc` field-for-field, so this is a straight
+    encode-and-publish, not a reshape.
+
+    Routed per event rather than per decision, which it was not before
+    M7. The old form read the *mode* and typed every event in the
+    decision the same way, which was exact while a decision could only
+    ever carry one event. Rung 3 broke that: a denied preemption
+    (`preempt_denied`) rides along with whatever the strategy below it
+    then produced, so one successful decision can carry a fault event.
+    Typing that pair by mode would have published a `SignalFaulted`
+    payload onto `signal.changed` under a `SignalChanged` header -- a
+    schema mismatch that a consumer would decode as garbage rather than
+    reject. The payloads are distinguishable by shape, so they are
+    distinguished by shape."""
     for payload in decision.events:
+        faulted = "fault_type" in payload
         raw = encode_envelope(
-            event_type=event_type,
+            event_type="SignalFaulted" if faulted else "SignalChanged",
             source="sim-service",
             payload=payload,
             partition_key=payload["intersection_id"],
         )
-        bus.publish(topic, raw)
+        bus.publish(_SIGNAL_FAULTED_TOPIC if faulted else _SIGNAL_CHANGED_TOPIC, raw)
 
 Strategy = Callable[[Tier0Config, JunctionContext], SignalPlan]
 # A single Strategy applies uniformly to every junction (fine for
@@ -191,7 +204,32 @@ def _recover_from_fault(
     movements` (populated only for `failsafe_interlock_rejected`), resume
     into whichever ring phase actually serves one of those movements
     instead, falling back to `ring_order[0]` only when there isn't one
-    (every other fault mode, or a violation naming no specific movement)."""
+    (every other fault mode, or a violation naming no specific movement).
+
+    **Recovery now goes through the same yellow -> all-red -> green
+    sequence every nominal transition uses**, closing the "not maximally
+    rigorous" gap the paragraph above admitted to. The earlier version
+    called `cabinet.command(recovery_phase)` directly, in the same tick
+    in which `arbiter.tick` had just called `command_all_red()`. Both
+    writes landed before the next `simulationStep`, so the signal heads
+    never displayed either the yellow or the all-red: physically, the
+    junction jumped straight from the outgoing green to the recovery
+    green. When those two phases conflict -- the normal case, since the
+    recovery phase is chosen precisely because it serves a movement the
+    outgoing phase did not -- that is an I1/I2 violation on the road,
+    committed by the fail-safe path itself, on every single interlock
+    rejection. The safety kernel could not see it because it checks
+    *plans*, and no plan was involved.
+
+    So: if the recovery phase differs from the phase that was green,
+    re-assert that phase's yellow (overriding the arbiter's snap-to-red,
+    which is strictly less safe for a vehicle already committed to the
+    stop line) and schedule an ordinary `_Transition` carrying the
+    junction's full `yellow_s` + `all_red_s`; `_advance_transition` then
+    commands the recovery green and resets `elapsed` to 0.0 exactly as it
+    does for every other switch. Only when the recovery phase *is* the
+    phase that was already green -- nothing to clear from -- is the green
+    re-commanded immediately, as before."""
     recovery_phase = js.cfg.ring_order[0]
     if violated_movements:
         recovery_phase = next(
@@ -202,9 +240,102 @@ def _recover_from_fault(
             ),
             recovery_phase,
         )
+    outgoing = js.ctx.current_phase_id
+    if outgoing != recovery_phase and outgoing in js.cfg.phases:
+        js.cabinet.set_raw_state(js.cabinet.yellow_state_for(outgoing))
+        js.transition = _Transition(
+            outgoing_phase=outgoing,
+            incoming_phase=recovery_phase,
+            remaining_yellow_s=js.cfg.yellow_s,
+            remaining_all_red_s=js.cfg.all_red_s,
+            stage="yellow",
+        )
+        # The stale context is kept until `_advance_transition` rebuilds
+        # it: while mid-transition the runner does not arbitrate this
+        # junction, so nothing reads it, and the incoming phase must not
+        # be reported as "current" before the cabinet actually shows it.
+        js.ctx = JunctionContext(
+            intersection_id=tls_id, current_phase_id=outgoing, current_phase_elapsed_s=0.0
+        )
+        return
     js.cabinet.command(recovery_phase)
     js.ctx = JunctionContext(
         intersection_id=tls_id, current_phase_id=recovery_phase, current_phase_elapsed_s=0.0
+    )
+
+
+def _apply_decision(
+    js: _JunctionState, tls_id: str, plan: SignalPlan, step_length: float
+) -> None:
+    """Apply one commanded plan to the junction's bookkeeping: either
+    extend the current green by one tick, or begin the yellow -> all-red
+    -> next-green transition.
+
+    Factored out of the main loop so the *contract between a plan and
+    what the runner physically does with it* can be unit-tested without
+    SUMO. That contract was previously implicit, and two places relied on
+    it being something it was not:
+
+    1. **A one-step plan's `green_s` is not time that elapses.** The loop
+       used to advance `current_phase_elapsed_s` by `steps[0].green_s`.
+       Every strategy returns `green_s == tick_s` for an extend, so this
+       was invisible -- until `corridor/junction.py`'s ENTRY_HOLD branch
+       returned `green_s = max(tick_s, remaining_ped_s)` (a *commitment*
+       for the budget interlock to price, not a claim about the clock).
+       One tick then inflated `elapsed` by the whole remaining pedestrian
+       interval, and every later I3 check (`elapsed >= min_green`) was
+       made against a green the junction had not actually shown. Only
+       `step_length` of simulated time passes per tick, so only
+       `step_length` is added.
+
+    2. **A two-step plan whose first step asks for more green than one
+       tick is a request to hold, not to clear.** `interlocks.
+       min_green_satisfied` accepts a transition plan when
+       `elapsed + steps[0].green_s >= min_green` -- i.e. it reads
+       `steps[0].green_s` as "how much longer the current phase will be
+       held before the yellow starts". The loop ignored that number and
+       set the yellow immediately. `live/green_corridor.py`'s
+       `preemption_plan` builds exactly such a plan (`green_s =
+       min_green - elapsed`, documented as "a corridor can delay a green,
+       never truncate one"), the interlock passed it, and the runner then
+       truncated the green anyway -- an I3 violation that the plan-level
+       checker structurally cannot see, on the emergency-preemption path.
+       `tests/live/test_green_corridor.py::test_interlocks_reject_a_switch_
+       that_would_truncate_min_green` asserts the plan is legal, which it
+       is; nothing asserted the runner honoured it. Now it does: when
+       `steps[0].green_s` exceeds one tick, the current phase is held this
+       tick and the requester is asked again next tick, exactly as the
+       plan said.
+
+    Every strategy in `control/strategies/` already emits `green_s ==
+    tick_s` on extends and either `tick_s` or `0.0` (faulted exit) as the
+    first step of a transition, so their behaviour under this function is
+    identical to before."""
+    if len(plan.steps) == 1:
+        js.ctx = replace(
+            js.ctx,
+            current_phase_id=plan.steps[0].phase_id,
+            current_phase_elapsed_s=js.ctx.current_phase_elapsed_s + step_length,
+        )
+        return
+
+    step0, step1 = plan.steps[0], plan.steps[1]
+    if step0.green_s > step_length + 1e-9:
+        # The plan promised the interlocks this green would run longer
+        # before clearing. Keep that promise: hold, and let the requester
+        # re-propose next tick with a larger `elapsed`.
+        js.ctx = replace(
+            js.ctx, current_phase_elapsed_s=js.ctx.current_phase_elapsed_s + step_length
+        )
+        return
+
+    js.cabinet.set_raw_state(js.cabinet.yellow_state_for(step0.phase_id))
+    js.transition = _Transition(
+        outgoing_phase=step0.phase_id,
+        incoming_phase=step1.phase_id,
+        remaining_yellow_s=step0.yellow_s,
+        remaining_all_red_s=step0.all_red_s,
+        stage="yellow",
     )
 
 
@@ -225,6 +356,18 @@ def run_controlled_scenario(
     bottleneck_lane_speeds_mps: Mapping[str, float] | None = None,
     demand_memory: DemandMemory | None = None,
     calibration: OnlineCalibration | None = None,
+    incident_injector: IncidentInjector | None = None,
+    anomaly_graph: AnomalyGraph | None = None,
+    anomaly_feature_sink: Callable[[int, float, list[list[float]]], None] | None = None,
+    corridor: arbiter.CorridorPort | None = None,
+    ev_reporter: Callable[[float], None] | None = None,
+    extra_sumo_args: Iterable[str] | None = None,
+    traci_retries: int | None = None,
+    publish_traffic_state: bool = False,
+    realtime_factor: float | None = None,
+    on_tick: Callable[[int, float], None] | None = None,
+    pace_realtime_factor: float | None = None,
+    preempt_source: arbiter.PreemptSource | None = None,
 ) -> dict:
     """Run one full scenario with `strategy` governing every junction in
     `configs`. Returns run stats: step count, how many times the arbiter
@@ -285,6 +428,91 @@ def run_controlled_scenario(
     strategy *uses* memory: a training run records without blending, and
     an evaluation run against a frozen profile blends without recording,
     depending on what the caller passes where.
+
+    `incident_injector` (M6), if given, has `tick(step)` called once per
+    simulation step -- right after the step advances, before any sampler
+    reads -- and `finalize(step)` called once the loop ends, so a scheduled
+    stall / lane-block is applied, maintained and cleanly reversed inside the
+    run, with the exact tick window recorded for
+    `scripts/m6_incident_injection_gate.py` to score recall and detection
+    latency against. Left `None` (the default), no incident is injected and
+    every existing caller is unaffected -- the same additive pattern as every
+    parameter above it.
+
+    `anomaly_graph` + `anomaly_feature_sink` (M6), given together, wire a
+    `LinkFeatureSampler` over the anomaly graph and call
+    `anomaly_feature_sink(step, sim_time, feature_matrix)` once per tick,
+    after every junction's decision, where `feature_matrix` is the
+    `[num_nodes][N_FEATURES]` list for that tick. This is the one stream both
+    `scripts/m6_record_features.py` (recording normal traffic to train on) and
+    the live detector (Phase 5) consume. Either left `None` and no feature
+    sampling happens.
+
+    `corridor` (M7), if given, wires the Green Corridor Engine
+    (`control/corridor/`, the benchmarked path) as one of the two rung-3
+    requesters `arbiter.tick` accepts (see its own docstring for why there
+    are two). Two things happen here that the arbiter cannot do for
+    itself, because both are about the corridor rather than about one
+    junction:
+
+    - `begin_tick` is called once per simulation step, before any
+      junction is arbitrated, so "which vehicle holds which junction" is
+      decided from one consistent view. Deciding it per junction as each
+      is reached is exactly how D11 happens -- neighbouring junctions
+      granting conflicting emergency vehicles, each correct on its own
+      information.
+    - `JunctionContext.preempt_seconds_last_hour` is populated from the
+      engine's rolling-hour ledger. That field has existed since M2 and
+      has been zero in every run ever made, so `interlocks.
+      preempt_budget_ok` -- written specifically for this requester --
+      was correct and structurally unable to fire. It fires now.
+
+    `ev_reporter` is called once per step with the simulation time,
+    before `begin_tick`, and is how emergency-vehicle observations reach
+    the engine. A callback rather than something the engine does itself,
+    so this function stays ignorant of how vehicles are detected: the
+    benchmark's TraCI-derived reporter and a real detection feed are the
+    same shape from here.
+
+    `preempt_source` is the *other* rung-3 requester: a plain callable
+    (`arbiter.PreemptSource`) rather than a `CorridorPort`, wired by the
+    live command-driven service (`sim_service.live`) instead of the
+    benchmark path -- the green corridor's
+    `CorridorController.preemption_plan` is what it passes here. No
+    caller wires both `corridor` and `preempt_source` at once today. Left
+    `None`, that rung-3 path is absent exactly as before. A commanded
+    preemption from either is `mode == "corridor_preemption"` (a success
+    branch, not a fault); an interlock-rejected `preempt_source` proposal
+    shows up in `Decision.notes` while the junction keeps running its
+    normal strategy (a rejected `corridor` proposal instead raises a
+    `SignalFaulted` event -- see `arbiter.tick`'s docstring for why the two
+    requesters record a denial differently).
+
+    `publish_traffic_state`, given together with `bus`, additionally
+    publishes `VehiclePositionUpdated`/`ApproachState` every tick --
+    `traci_loop.publish_traffic_state`, the same function and the same
+    event shapes `traci_loop.run` (the M1-only, no-control live loop) has
+    always published. This is what lets both `sim_service/main.py`'s
+    A-CA-MP demo and the live command-driven service call this function
+    instead of `traci_loop.run` and keep the live map working while
+    *also* getting real signal control, `bus`'s
+    `SignalChanged`/`SignalFaulted` events, and (via `anomaly_feature_sink`)
+    live incident detection -- one stepping loop owning the TraCI
+    connection, not two competing for it. `False` by default because every
+    gate/bench script publishes tripinfo-scored KPIs instead and has no use
+    for a live map. `realtime_factor` paces the loop the same way
+    `traci_loop.run`'s does (1.0 = roughly real time); `None` (the default)
+    runs as fast as TraCI allows, which is what every gate/bench script
+    wants and a live demo does not. `pace_realtime_factor` is the live
+    service's own equivalent pacing knob (see below) -- callers use one or
+    the other, never both.
+
+    `on_tick(step, sim_time)`, if given, is called once per step after any
+    injector tick and before this tick's sampling -- the live service
+    drains its `commands.*` topic and applies operator actions
+    (anomaly create/clear, emergency vehicle, green corridor) there. Left
+    `None` for every batch caller (gates, smoke scripts), so this is
+    additive exactly like every parameter above it.
     """
     _ensure_sumo_home()
     sumo_binary = _resolve_sumo_binary()
@@ -305,8 +533,22 @@ def run_controlled_scenario(
         args += ["--random"]
     if tripinfo_output is not None:
         args += ["--tripinfo-output", tripinfo_output]
+    if extra_sumo_args is not None:
+        # Appended last so a caller can override any default above --
+        # SUMO takes the final occurrence of a repeated option. Exists for
+        # `scripts/m7_demo.py`, which needs sumo-gui's `--start`,
+        # `--delay` and `--gui-settings-file`; every other caller leaves
+        # it None and gets exactly the argument list it always had.
+        args += list(extra_sumo_args)
 
-    traci.start(args)
+    # `traci.start` defaults to 60 retries, one per second, and its
+    # failure message names only the port it could not reach -- the
+    # simulator's own complaint is discarded. That is a reasonable
+    # default for a batch run on a machine where SUMO is known good, and
+    # a bad one for an interactive session where the binary may simply
+    # not start: a minute of "Connection refused" says nothing about why.
+    # Callers that would rather fail fast pass a smaller count.
+    traci.start(args, **({} if traci_retries is None else {"numRetries": traci_retries}))
     if bottleneck_lane_speeds_mps is not None:
         for lane_id, speed_mps in bottleneck_lane_speeds_mps.items():
             traci.lane.setMaxSpeed(lane_id, speed_mps)
@@ -316,6 +558,14 @@ def run_controlled_scenario(
     # `lane_cache.LaneCache` for the profile that made this necessary --
     # 972 TraCI round-trips per simulation step, 90% of run wall-clock.
     lane_cache = LaneCache(vtype_pcu or {})
+    # M6 feature stream: built only when a caller wants the per-link anomaly
+    # feature matrix recorded/scored, and only if `vtype_pcu` is available for
+    # the PCU terms. Shares `lane_cache` so it adds almost no TraCI traffic.
+    feature_sampler: LinkFeatureSampler | None = None
+    if anomaly_graph is not None and anomaly_feature_sink is not None and vtype_pcu:
+        feature_sampler = LinkFeatureSampler(
+            anomaly_graph, configs, vtype_pcu, lane_cache=lane_cache
+        )
     spillback = SpillbackTracker(spillback_lane_ids) if spillback_lane_ids is not None else None
     try:
         for tls_id, cfg in configs.items():
@@ -361,16 +611,60 @@ def run_controlled_scenario(
 
         step = 0
         fault_events: list[tuple[str, int, str]] = []
+        # Only ever populated when publish_traffic_state is set -- see that
+        # parameter's docstring. A vehicle's vType never changes over its
+        # life, so this is one getTypeID call per vehicle for the whole run.
+        vtype_cache: dict[str, str] = {}
+
+        pace_budget_s = (
+            step_length / pace_realtime_factor
+            if pace_realtime_factor and pace_realtime_factor > 0
+            else 0.0
+        )
 
         while traci.simulation.getMinExpectedNumber() > 0:
+            tick_start = time.monotonic()
             traci.simulationStep()
             step += 1
             # Invalidate the per-tick memo exactly once, right after the
             # simulation advances and before any sampler reads.
             lane_cache.advance(float(step))
 
+            if incident_injector is not None:
+                # Applied right after the step advances and before any
+                # sampler/detector reads, so an injected stall/lane-block is
+                # visible to the same tick's feature vector -- the injection
+                # tick and the detection tick share one clock, which is what
+                # makes the M6 gate's latency figure exact.
+                incident_injector.tick(step)
+
+            if on_tick is not None:
+                # The live command hook: the command-driven service drains its
+                # `commands.*` topic here and applies operator actions
+                # (anomaly create/clear, emergency vehicle, green corridor)
+                # against the live TraCI connection, before this tick's
+                # sampling and before the state is published downstream. Left
+                # `None` for every batch caller (gates, smoke scripts), so
+                # this is additive exactly like every parameter above it.
+                on_tick(step, traci.simulation.getTime())
+
             if spillback is not None:
                 spillback.sample()
+
+            # `ev_reporter` runs whether or not a corridor engine is
+            # wired, and that independence is load-bearing for the
+            # benchmark rather than incidental: the control arm has to
+            # put the *same* emergency vehicles into the *same* traffic
+            # and simply not preempt for them. Gating the reporter on
+            # `corridor is not None`, as this first did, silently gave
+            # the no-preemption arm no emergency vehicles at all and an
+            # emergency travel time of zero -- a comparison against
+            # nothing, reported as if it were a comparison against
+            # something.
+            if ev_reporter is not None:
+                ev_reporter(traci.simulation.getTime())
+            if corridor is not None:
+                corridor.begin_tick(traci.simulation.getTime())
 
             for tls_id, js in junctions.items():
                 if js.transition is not None:
@@ -387,7 +681,9 @@ def run_controlled_scenario(
                 # the pairing wrong.
                 time_aware = hasattr(junction_strategy, "set_sim_time")
                 if time_aware:
-                    junction_strategy.set_sim_time(traci.simulation.getTime())
+                    junction_strategy.set_sim_time(  # type: ignore[attr-defined]
+                        traci.simulation.getTime()
+                    )
 
                 if js.detector is not None or js.queue_sampler is not None:
                     has_demand: Mapping[str, bool] = {}
@@ -424,6 +720,7 @@ def run_controlled_scenario(
                         receiving_occupancy=receiving_occupancy,
                         receiving_queue_pcu=receiving_queue_pcu,
                         approaching_pcu=approaching_pcu,
+                        preempt_seconds_last_hour=js.ctx.preempt_seconds_last_hour,
                     )
                     if js.discharge is not None and calibration is not None:
                         # Driven from the *live* sample, and only for a
@@ -461,36 +758,101 @@ def run_controlled_scenario(
                             tls_id, traci.simulation.getTime(), queue_pcu, approaching_pcu
                         )
 
-                decision = arbiter.tick(js.cfg, js.ctx, js.cabinet, strategy=junction_strategy)
+                if corridor is not None:
+                    # Set on the context the interlocks will actually be
+                    # checked against, immediately before the check, so
+                    # the budget the plan is measured against is the one
+                    # that is true at the moment of the decision. Written
+                    # via `replace` rather than by threading another
+                    # argument through both context-construction paths
+                    # above -- there are two of them (sampled and
+                    # unsampled) and only one is on the M4/M5 hot path.
+                    js.ctx = replace(
+                        js.ctx,
+                        preempt_seconds_last_hour=corridor.preempt_seconds_last_hour(
+                            tls_id, traci.simulation.getTime()
+                        ),
+                    )
+
+                decision = arbiter.tick(
+                    js.cfg, js.ctx, js.cabinet,
+                    strategy=junction_strategy, corridor=corridor, preempt=preempt_source,
+                )
                 if bus is not None:
                     _publish_decision_events(bus, decision)
-                if decision.mode not in ("fixed_time",):
+                for note in decision.notes:
+                    log.info("junction %s at step %d: %s", tls_id, step, note)
+                if decision.mode not in arbiter.SUCCESS_MODES:
                     fault_events.append((tls_id, step, decision.mode))
                     log.warning("junction %s took %s at step %d", tls_id, decision.mode, step)
                     _recover_from_fault(js, tls_id, decision.violated_movements)
                     continue
-                assert decision.plan is not None  # "fixed_time" mode always carries a plan
+                assert decision.plan is not None  # a commanding mode always carries a plan
+                _apply_decision(js, tls_id, decision.plan, step_length)
 
-                if len(decision.plan.steps) == 1:
-                    step0 = decision.plan.steps[0]
-                    js.ctx = JunctionContext(
-                        intersection_id=tls_id,
-                        current_phase_id=step0.phase_id,
-                        current_phase_elapsed_s=js.ctx.current_phase_elapsed_s + step0.green_s,
+            if feature_sampler is not None:
+                # Sampled after every junction's decision for the tick, so the
+                # phase state the detector sees is the one now commanded --
+                # exactly what a live consumer of the signal.changed stream
+                # would have. `assert` narrows the Optional for the type
+                # checker; the outer guard already established it is not None.
+                assert anomaly_feature_sink is not None
+                sim_time = traci.simulation.getTime()
+                phase_by_tls = {
+                    tls_id: (js.ctx.current_phase_id, js.ctx.current_phase_elapsed_s)
+                    for tls_id, js in junctions.items()
+                }
+                anomaly_feature_sink(
+                    step, sim_time, feature_sampler.sample(sim_time, phase_by_tls)
+                )
+
+            if publish_traffic_state and bus is not None:
+                # Emit the M1 stream (VehiclePositionUpdated / ApproachState)
+                # so this controlled loop is a drop-in producer for the
+                # api-service fan-out -- byte-for-byte the same events
+                # `adapters/sumo/traci_loop.run` publishes. Only paid when a
+                # caller explicitly asks (the live service and the A-CA-MP
+                # demo do; no gate does).
+                _publish_traffic_state(bus, step_length=step_length, vtype_cache=vtype_cache)
+
+            if realtime_factor is not None:
+                # Same pacing traci_loop.run uses: sleep off whatever's left
+                # of this tick's wall-clock budget, or log a dropped tick if
+                # the tick's own work (control decisions, publishing) already
+                # ran over it. No-op cost when unset (every gate/bench
+                # script), which is why this isn't the default.
+                target_wall_s = step_length / realtime_factor if realtime_factor else 0.0
+                elapsed = time.monotonic() - tick_start
+                if elapsed > target_wall_s:
+                    log.warning(
+                        "step %d took %.3fs, budget was %.3fs at %.1fx real time -- "
+                        "dropped tick",
+                        step,
+                        elapsed,
+                        target_wall_s,
+                        realtime_factor,
                     )
-                else:
-                    step0, step1 = decision.plan.steps
-                    js.cabinet.set_raw_state(js.cabinet.yellow_state_for(step0.phase_id))
-                    js.transition = _Transition(
-                        outgoing_phase=step0.phase_id,
-                        incoming_phase=step1.phase_id,
-                        remaining_yellow_s=step0.yellow_s,
-                        remaining_all_red_s=step0.all_red_s,
-                        stage="yellow",
-                    )
+                elif target_wall_s > 0:
+                    time.sleep(target_wall_s - elapsed)
+            elif pace_budget_s:
+                # Live-service pacing only: hold each tick to roughly
+                # step_length / pace_realtime_factor seconds of wall clock so
+                # the operator watches it unfold. A tick that already ran over
+                # budget is simply not slept on (never sped up). No batch
+                # caller sets this, so gate/smoke throughput is unchanged.
+                slack = pace_budget_s - (time.monotonic() - tick_start)
+                if slack > 0:
+                    time.sleep(slack)
 
             if max_steps is not None and step >= max_steps:
                 break
+
+        if incident_injector is not None:
+            # Inside the `try`, before `traci.close()`: `finalize` restores
+            # any lane still throttled and releases any vehicle still frozen,
+            # which needs the TraCI connection live. A run that raised mid-
+            # loop skips this and closes with SUMO about to exit anyway.
+            incident_injector.finalize(step)
     finally:
         traci.close()
 
@@ -511,6 +873,7 @@ def run_controlled_scenario(
         "interlock_violations": interlock_violations,
         "fault_events": fault_events,
         "spillback_events": spillback.episode_count if spillback is not None else None,
+        "corridor": corridor.stats() if corridor is not None else None,
     }
 
 

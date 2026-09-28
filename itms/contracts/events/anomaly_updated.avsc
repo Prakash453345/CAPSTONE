@@ -1,0 +1,22 @@
+{
+  "type": "record",
+  "name": "AnomalyUpdated",
+  "namespace": "itms.contracts",
+  "doc": "The live state of one anomaly on the network, published by sim-service every time it changes (created ACTIVE, auto-expired, cleared, cancelled) and re-published periodically while active so a client that connects late is caught up. This is the normalised itms_domain.anomaly.Anomaly on the wire -- the operator path and (later) the M6 graph/vision path both emit this shape, distinguished only by `source`. Consumed by the api-service fan-out and rendered by the frontend AnomalyLayer; also an input to the emergency routing cost model.",
+  "fields": [
+    { "name": "anomaly_id", "type": "string" },
+    { "name": "source", "type": { "type": "enum", "name": "AnomalyEventSource", "symbols": ["OPERATOR", "SUMO_INJECTOR", "GRAPH_MODEL", "VISION"] } },
+    { "name": "anomaly_type", "type": "string", "doc": "Lower-case itms_domain.anomaly.AnomalyType value (accident, lane_blockage, stalled_vehicle, ...)." },
+    { "name": "severity", "type": "string", "doc": "low | medium | high | blocked." },
+    { "name": "status", "type": { "type": "enum", "name": "AnomalyLifecycle", "symbols": ["ACTIVE", "RESOLVED", "CANCELLED"] } },
+    { "name": "edge_id", "type": "string" },
+    { "name": "lane_id", "type": ["null", "string"], "default": null },
+    { "name": "estimated_impact", "type": "double", "doc": "0..1 fraction of the edge's normal speed/capacity lost. 1.0 == BLOCKED." },
+    { "name": "position_m", "type": ["null", "double"], "default": null },
+    { "name": "start_time_ms", "type": { "type": "long", "logicalType": "timestamp-millis" } },
+    { "name": "expires_at_ms", "type": ["null", { "type": "long", "logicalType": "timestamp-millis" }], "default": null, "doc": "When a time-boxed anomaly auto-clears; null for open-ended." },
+    { "name": "sim_tick", "type": ["null", "long"], "default": null, "doc": "Simulation step the change happened on." },
+    { "name": "detail", "type": "string", "default": "" },
+    { "name": "operator", "type": "string", "default": "" }
+  ]
+}

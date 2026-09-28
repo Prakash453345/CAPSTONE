@@ -71,6 +71,7 @@ class FakeCabinet:
         self._hardware_override = False
         self._booting = False
         self._comms_ok = True
+        self.raw_states = []
 
     def read_state(self) -> CabinetReadback:
         if not self._comms_ok:
@@ -91,6 +92,7 @@ class FakeCabinet:
             return False
         self._reported_phase = phase_id
         self._booting = False  # a defined command is the resume C4 asks for
+        self.raw_states.append(f"green:{phase_id}")
         return True
 
     def command_all_red(self) -> None:
@@ -98,6 +100,31 @@ class FakeCabinet:
             return
         self._reported_phase = None
         self._booting = False
+        self.raw_states.append(self.all_red_state())
+
+    # -- runner-only helpers, mirroring `TraCICabinet`'s ------------------
+    #
+    # `control/runner.py` sequences yellow -> all-red itself (see that
+    # module's docstring) through three methods that sit deliberately
+    # outside `CabinetPort`. Providing them here lets the runner's
+    # decision-application and fault-recovery logic be unit-tested against
+    # this fake, so the *contract* between a plan and what the runner
+    # physically does with it is checked without a SUMO process.
+    # `raw_states` is the recorded display sequence a test asserts on.
+
+    raw_states: list[str]
+
+    def yellow_state_for(self, phase_id: str) -> str:
+        return f"yellow:{phase_id}"
+
+    def all_red_state(self) -> str:
+        return "all_red"
+
+    def set_raw_state(self, state: str) -> None:
+        # A raw yellow/all-red display is not a known green phase, exactly
+        # as `TraCICabinet._phase_id_for_state` reads it back as None.
+        self._reported_phase = None
+        self.raw_states.append(state)
 
     # -- fault injection, test-only ---------------------------------------
 

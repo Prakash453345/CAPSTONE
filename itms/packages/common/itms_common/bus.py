@@ -56,10 +56,10 @@ class RedisStreamsBus:
         message_id = await self._redis.xadd(topic, {"raw": raw})
         return message_id.decode() if isinstance(message_id, bytes) else message_id
 
-    async def _ensure_group(self, topic: str, group: str) -> None:
+    async def _ensure_group(self, topic: str, group: str, *, start_id: str = "0") -> None:
         try:
             await self._redis.xgroup_create(
-                name=topic, groupname=group, id="0", mkstream=True
+                name=topic, groupname=group, id=start_id, mkstream=True
             )
         except redis.ResponseError as exc:
             if "BUSYGROUP" not in str(exc):
@@ -72,9 +72,10 @@ class RedisStreamsBus:
         group: str,
         consumer: str,
         block_ms: int = 5000,
+        start_id: str = "0",
     ) -> AsyncIterator[Message]:
         for topic in topics:
-            await self._ensure_group(topic, group)
+            await self._ensure_group(topic, group, start_id=start_id)
 
         streams = {topic: ">" for topic in topics}
         while True:
@@ -103,7 +104,18 @@ class RedisStreamsBus:
                 if "NOGROUP" not in str(exc):
                     raise
                 for topic in topics:
-                    await self._ensure_group(topic, group)
+                    await self._ensure_group(topic, group, start_id=start_id)
+                continue
+            except (redis.TimeoutError, redis.ConnectionError):
+                # A blocking XREADGROUP that elapses with nothing to return is a
+                # normal poll timeout, not a failure -- but under some event
+                # loops (notably WindowsSelectorEventLoop, which uvicorn forces
+                # on Windows) redis-py surfaces it as TimeoutError rather than an
+                # empty response. Treat it, and a transient connection blip, the
+                # same as "no messages": back off briefly and retry, so the
+                # consumer is genuinely forever instead of dying on the first
+                # quiet interval.
+                await asyncio.sleep(0.1)
                 continue
             if not response:
                 await asyncio.sleep(0)  # yield control; caller can cancel us here
@@ -151,6 +163,83 @@ class RedisStreamsSyncBus:
     def publish(self, topic: str, raw: bytes) -> str:
         message_id = self._redis.xadd(topic, {"raw": raw})
         return message_id.decode() if isinstance(message_id, bytes) else message_id
+
+    def close(self) -> None:
+        self._redis.close()
+
+
+class RedisStreamsSyncConsumer:
+    """Synchronous, NON-blocking consumer-group reader -- the consume-side
+    counterpart to RedisStreamsSyncBus, for a consumer that is itself a
+    blocking loop (the controlled SUMO tick loop, which calls
+    `traci.simulationStep()` every tick regardless).
+
+    `drain()` returns every message currently pending for this consumer and
+    returns immediately when the stream is quiet, so it costs one cheap
+    XREADGROUP per simulation step. Same wire format, same consumer-group
+    semantics (XREADGROUP / XACK), same ADR-003 bus contract as the async
+    RedisStreamsBus -- only the transport call isn't async.
+    """
+
+    def __init__(
+        self,
+        topics: list[str],
+        *,
+        group: str,
+        consumer: str,
+        url: str = "redis://localhost:6379/0",
+    ):
+        self._redis = redis_sync.from_url(url)
+        self._topics = list(topics)
+        self._group = group
+        self._consumer = consumer
+        for topic in self._topics:
+            self._ensure_group(topic)
+
+    def _ensure_group(self, topic: str) -> None:
+        try:
+            self._redis.xgroup_create(
+                name=topic, groupname=self._group, id="0", mkstream=True
+            )
+        except redis_sync.ResponseError as exc:
+            if "BUSYGROUP" not in str(exc):
+                raise
+
+    def drain(self, *, max_messages: int = 500) -> list[Message]:
+        """Read up to `max_messages` new messages across all topics without
+        blocking. A group that vanished (Redis restart with no persistence, a
+        stream recreated) is recreated and this call returns [] -- the next
+        `drain()` picks up from there, same recovery as the async bus."""
+        streams = {topic: ">" for topic in self._topics}
+        try:
+            response = cast(
+                list[tuple[Any, list[tuple[Any, dict[Any, Any]]]]] | None,
+                self._redis.xreadgroup(
+                    groupname=self._group,
+                    consumername=self._consumer,
+                    streams=cast(Any, streams),
+                    count=max_messages,
+                    block=None,  # non-blocking: return whatever is available now
+                ),
+            )
+        except redis_sync.ResponseError as exc:
+            if "NOGROUP" not in str(exc):
+                raise
+            for topic in self._topics:
+                self._ensure_group(topic)
+            return []
+
+        out: list[Message] = []
+        for stream_name, entries in response or []:
+            topic = stream_name.decode() if isinstance(stream_name, bytes) else stream_name
+            for message_id, fields in entries:
+                mid = message_id.decode() if isinstance(message_id, bytes) else message_id
+                raw = cast(bytes, fields.get(b"raw") or fields.get("raw"))
+                out.append(Message(topic=topic, message_id=mid, raw=raw))
+        return out
+
+    def ack(self, topic: str, message_id: str) -> None:
+        self._redis.xack(topic, self._group, message_id)
 
     def close(self) -> None:
         self._redis.close()

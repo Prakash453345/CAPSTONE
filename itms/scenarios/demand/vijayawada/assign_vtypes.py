@@ -45,6 +45,12 @@ physical dynamics (and therefore realistic queuing/gap behaviour under
 actuated strategies) change. Run once, checked in like the rest of the
 demand -- not run automatically by `build.sh`, since `build.sh` alone must
 still reproduce a valid (if homogeneous) demand file on its own.
+
+Each new `<vType>` also carries a `guiShape` and `color` (see `_GUI_SHAPE`
+/ `_COLOR`) so the four classes are visually distinct in `sumo-gui` and,
+via the `vehicle_type` field the sim-service copies onto
+`VehiclePositionUpdated`, in the operator console. Both attributes are
+GUI-only: headless `sumo` ignores them, so no measured number moves.
 """
 
 from __future__ import annotations
@@ -102,6 +108,29 @@ _VCLASS = {
     "veh_bus": "bus",
 }
 
+# Purely presentational: `guiShape` + `color` give each class a distinct
+# silhouette and hue in `sumo-gui` (and let the operator console pick a
+# per-class marker shape via the `vehicle_type` on VehiclePositionUpdated).
+# Headless `sumo` parses and ignores both, so every non-GUI run --
+# sim-service's TraCI loop included -- is byte-for-byte unaffected.
+# `guiShape` values are from SUMO's fixed vocabulary; there is no
+# three-wheeler shape, so the auto-rickshaw borrows `moped` (small,
+# clearly not a car and not the `motorcycle` silhouette). Colours match
+# the web console legend so the two views read the same.
+_GUI_SHAPE = {
+    "veh_motorcycle": "motorcycle",
+    "veh_car": "passenger/sedan",
+    "veh_auto": "moped",
+    "veh_bus": "bus",
+}
+
+_COLOR = {
+    "veh_motorcycle": "87,201,123",   # green
+    "veh_car": "127,209,255",         # cyan-blue
+    "veh_auto": "232,178,58",         # amber
+    "veh_bus": "226,112,58",          # orange
+}
+
 _SEED = 7  # fixed, documented, like every other seed in this project
 
 
@@ -125,7 +154,13 @@ def assign_vtypes(rou_path: Path = _ROU_PATH, *, seed: int = _SEED) -> None:
     # every run, so the diff is stable across regenerations.
     for type_id in ("veh_car", "veh_motorcycle", "veh_auto", "veh_bus"):
         vtype_el = ET.Element(
-            "vType", {"id": type_id, "vClass": _VCLASS[type_id]}
+            "vType",
+            {
+                "id": type_id,
+                "vClass": _VCLASS[type_id],
+                "guiShape": _GUI_SHAPE[type_id],
+                "color": _COLOR[type_id],
+            },
         )
         ET.SubElement(
             vtype_el, "param", {"key": "occupancy", "value": str(_OCCUPANCY[type_id])}

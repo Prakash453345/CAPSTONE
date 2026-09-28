@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- sumo-gui view settings for the Vijayawada corridor.
+
+     Purpose: make the four demand classes (car / motorcycle / auto-rickshaw
+     / bus, defined in vijayawada_corridor.rou.xml by assign_vtypes.py) tell
+     themselves apart on screen instead of all rendering as one shape in one
+     colour.
+
+       * vehicleQuality="2"  -> draw each vType's `guiShape` silhouette
+                               (sedan / motorcycle / moped / bus) rather than
+                               the default triangle.
+       * colorScheme "given vehicle/type/route color"
+                            -> colour each vehicle by its vType `color`
+                               (green / cyan / amber / orange).
+       * vehicle_exaggeration bumps the two-wheelers up to a visible size.
+
+     Load it with:  sumo-gui -c vijayawada_corridor_gui.sumocfg
+     (that .sumocfg wires this file in via <gui_only>; the plain
+     vijayawada_corridor.sumocfg stays GUI-free for headless / TraCI runs). -->
+<viewsettings>
+    <scheme name="itms-by-type">
+        <opengl dither="1" fps="0"/>
+        <background backgroundColor="16,20,22" showGrid="0"
+                    gridXSize="100.00" gridYSize="100.00"/>
+        <vehicles vehicleQuality="2"
+                  vehicle_minSize="1.00" vehicle_exaggeration="1.50"
+                  vehicle_constantSize="0"
+                  vehicleName_show="0" vehicleValue_show="0" vehicleText_show="0"
+                  showBlinker="1" drawLaneChangePreference="0"
+                  showBTRange="0" showRouteIndex="0">
+            <colorScheme name="given vehicle/type/route color"/>
+        </vehicles>
+        <junctions junctionMode="0" drawLinkTLIndex="0" drawLinkJunctionIndex="0"
+                   junctionName_show="0" internalJunctionName_show="0"/>
+    </scheme>
+    <delay value="50"/>
+</viewsettings>

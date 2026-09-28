@@ -2,13 +2,18 @@
   "type": "record",
   "name": "IncidentDetected",
   "namespace": "itms.contracts",
-  "doc": "Published when an incident_candidate is confirmed by an operator or automated rule. This is the event that downstream services (dispatch, routing, corridor engine) consume.",
+  "doc": "Emitted when an operator confirms an IncidentCandidate -- the moment a candidate becomes a real incident that dispatch and the green corridor (M6/M7) may act on. This is the ADR-006 human gate: the confirming operator's identity is on the event, and no automated path produces this record. Same incident_id as the originating candidate. Published on `incident.detected`.",
   "fields": [
-    { "name": "incident_id", "type": "string", "doc": "UUID, unique per confirmed incident." },
-    { "name": "candidate_id", "type": "string", "doc": "The candidate this confirmation is for." },
-    { "name": "link_id", "type": "string" },
-    { "name": "intersection_id", "type": ["null", "string"], "default": null },
-    { "name": "confirmed_by", "type": "string", "doc": "'operator' or 'auto_vision' (M8)." },
-    { "name": "severity", "type": "string", "default": "unknown", "doc": "Operator-assigned or auto-inferred severity." }
+    { "name": "incident_id", "type": "string", "doc": "UUID, identical to the originating IncidentCandidate's." },
+    { "name": "confirmed_at", "type": { "type": "long", "logicalType": "timestamp-millis" }, "doc": "Wall-clock time the operator confirmed. Humans/retention only -- not for latency arithmetic." },
+    { "name": "candidate_detected_at", "type": { "type": "long", "logicalType": "timestamp-millis" }, "doc": "The originating candidate's detected_at, copied here so a consumer has the verification lag (confirmed_at - candidate_detected_at) without joining back to the candidate event." },
+    { "name": "confirmed_by", "type": "string", "doc": "Operator identity that confirmed -- 'operator:<id>'. ADR-006: the human gate is named, not anonymous." },
+    { "name": "intersection_id", "type": "string", "doc": "The signal-controlled junction owning the link, copied from the candidate." },
+    { "name": "link_id", "type": "string", "doc": "Localized link id (`L{index}`), copied from the candidate." },
+    { "name": "classification", "type": { "type": "enum", "name": "IncidentClassification", "symbols": ["STALL", "LANE_BLOCK", "DEBRIS", "WRONG_WAY", "QUEUE_SPILLBACK", "UNKNOWN"] }, "doc": "The operator's call at confirmation time. UNKNOWN is allowed -- the operator confirms 'something is wrong here' without being forced to name it. STALL / LANE_BLOCK are the two the M6 injector produces as ground truth; the rest exist for real footage (M8)." },
+    { "name": "graph_score", "type": "double", "doc": "The fused-layer's graph_score at confirmation." },
+    { "name": "vision_score", "type": ["null", "double"], "default": null, "doc": "Vision-rule score at confirmation, or null before M8." },
+    { "name": "fused_probability", "type": "double", "doc": "Fused anomaly probability at confirmation, [0,1]." },
+    { "name": "chain_hash", "type": "string", "doc": "Head hash of this incident's audit chain at confirmation (itms_domain.incident's hash-linked transition log). A downstream store records this and can later prove its held history is the same tamper-evident sequence." }
   ]
 }

@@ -62,7 +62,9 @@ def main() -> None:
     levels = [x for x in args.levels.split(",") if x]
     seeds = H.EVAL_SEEDS[: args.seeds]
     jobs = [(w, lv, s, args.tuned_config) for lv in levels for w in weights for s in seeds]
-    print(f"lost_time_weight sweep: {weights} x {levels} x {seeds} = {len(jobs)} runs\n", flush=True)
+    print(
+        f"lost_time_weight sweep: {weights} x {levels} x {seeds} = {len(jobs)} runs\n", flush=True
+    )
 
     rows = []
     with ProcessPoolExecutor(max_workers=args.workers, max_tasks_per_child=1) as pool:

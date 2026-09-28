@@ -87,11 +87,36 @@ def test_receiving_occupancy_reads_the_downstream_lane_not_the_approach_lane(mon
         lane_vehicles={},
         speeds={},
         types={},
-        occupancies={"downstream_0": 42.0},
+        occupancies={"downstream_0": 0.42},  # TraCI returns a fraction, not a percent
     )
     sampler = QueueStateSampler({"L0": "approach_0"}, {"L0": "downstream_0"}, _PCU_BY_VTYPE)
     _, receiving_occupancy = sampler.sample()
     assert receiving_occupancy == {"L0": 0.42}
+
+
+def test_receiving_occupancy_is_the_raw_traci_fraction_not_a_percentage(monkeypatch):
+    """Regression guard for the 2026-09-18 unit fix. `getLastStepOccupancy`
+    already returns the occupied fraction of the lane (measured on this
+    corridor: 0.625 on a 599 m lane holding 81 vehicles), so dividing it by
+    100 again pinned every occupancy under 0.01 and left `acamp.gate`
+    permanently open. This test fails if the division comes back."""
+    from sim_service.control.strategies.acamp import AcampConfig, gate
+
+    _fake_traci(
+        monkeypatch,
+        lane_vehicles={},
+        speeds={},
+        types={},
+        occupancies={"downstream_0": 0.62},
+    )
+    sampler = QueueStateSampler({"L0": "approach_0"}, {"L0": "downstream_0"}, _PCU_BY_VTYPE)
+    _, receiving_occupancy = sampler.sample()
+    assert receiving_occupancy["L0"] == 0.62
+    # ... and at that occupancy the spillback discount must actually bite.
+    # (With the old double division the same lane read 0.0062 and the gate
+    # returned 0.99999, i.e. no discount at all.)
+    assert gate(receiving_occupancy["L0"], AcampConfig()) < 0.9
+    assert gate(0.0062, AcampConfig()) > 0.999
 
 
 def test_link_with_no_receiving_lane_entry_is_simply_absent(monkeypatch):
@@ -107,7 +132,7 @@ def test_multiple_links_are_independent(monkeypatch):
         lane_vehicles={"approach_0": ["v1"], "approach_1": ["v2"]},
         speeds={"v1": 0.0, "v2": 0.0},
         types={"v1": "car", "v2": "bus"},
-        occupancies={"downstream_0": 10.0, "downstream_1": 90.0},
+        occupancies={"downstream_0": 0.10, "downstream_1": 0.90},
     )
     sampler = QueueStateSampler(
         {"L0": "approach_0", "L1": "approach_1"},

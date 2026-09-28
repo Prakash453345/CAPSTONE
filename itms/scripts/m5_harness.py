@@ -34,7 +34,7 @@ from pathlib import Path
 
 from itms_domain import Tier0Config
 from sim_service.control import metrics
-from sim_service.control.memory import DemandMemory
+from sim_service.control.memory import DemandMemory, LoadBaseline
 from sim_service.control.online_calibration import OnlineCalibration
 from sim_service.control.runner import run_controlled_scenario
 from sim_service.control.strategies import acamp, camp, webster
@@ -102,7 +102,9 @@ def build_camp(configs: Mapping[str, Tier0Config], flows, **_):
     for tls_id, cfg in configs.items():
         timing = webster.compute_timing(cfg, flows.get(tls_id, {}))
         strategy[tls_id] = partial(
-            camp.propose, camp_cfg=camp.CampConfig(enable_blocking=True), nominal_cycle_s=timing.cycle_s
+            camp.propose,
+            camp_cfg=camp.CampConfig(enable_blocking=True),
+            nominal_cycle_s=timing.cycle_s,
         )
     return strategy
 
@@ -114,18 +116,24 @@ def build_acamp(
     acamp_cfg: acamp.AcampConfig | None = None,
     demand_memory: DemandMemory | None = None,
     calibration: OnlineCalibration | None = None,
+    load_baseline: LoadBaseline | None = None,
     **_,
 ):
     """One `AdaptiveCamp` instance per junction -- stateful, so instances
     must not be shared between junctions or between runs. The same
     `DemandMemory` object *is* shared across junctions on purpose: it is
-    the corridor's profile, keyed by junction internally."""
+    the corridor's profile, keyed by junction internally. `load_baseline`
+    follows the identical pattern for `AcampConfig.baseline_halflife_s`'s
+    slow EWMA -- each junction's `AdaptiveCamp` is seeded from
+    `load_baseline.get(tls_id)` (0.0, unchanged, when `load_baseline` is
+    `None`) instead of always starting cold."""
     return {
         tls_id: acamp.AdaptiveCamp(
             acamp_cfg,
             nominal_cycle_s=webster.compute_timing(cfg, flows.get(tls_id, {})).cycle_s,
             demand_memory=demand_memory,
             calibration=calibration,
+            initial_baseline_load=load_baseline.get(tls_id) if load_baseline is not None else 0.0,
         )
         for tls_id, cfg in configs.items()
     }
@@ -151,8 +159,10 @@ def run_one(
     acamp_cfg: acamp.AcampConfig | None = None,
     demand_memory: DemandMemory | None = None,
     calibration: OnlineCalibration | None = None,
+    load_baseline: LoadBaseline | None = None,
     record_memory: bool = False,
     record_calibration: bool = True,
+    record_baseline: bool = False,
     max_steps: int | None = None,
     inputs=None,
 ) -> dict:
@@ -164,13 +174,25 @@ def run_one(
     separate switches: a training run records without blending, an
     evaluation run blends against a frozen profile without recording, and
     conflating them is how a gate result quietly becomes self-referential.
+
+    `load_baseline` follows the same split, `record_baseline` playing
+    `record_memory`'s role: every run reads it (to seed
+    `AdaptiveCamp._baseline_load_ewma`), but only a warm-up run writes its
+    ending value back -- an evaluation run must score a *frozen* baseline,
+    the same reason `record_calibration` distinguishes reading a learned
+    model from updating one.
     """
     configs, flows, vtype_pcu, paths = inputs or scenario_inputs(demand_level)
     link_lanes = link_to_lane_map(NET_PATH)
     receiving_lanes = link_to_receiving_lane_map(NET_PATH)
 
     strategy = CONTROLLERS[controller](
-        configs, flows, acamp_cfg=acamp_cfg, demand_memory=demand_memory, calibration=calibration
+        configs,
+        flows,
+        acamp_cfg=acamp_cfg,
+        demand_memory=demand_memory,
+        calibration=calibration,
+        load_baseline=load_baseline,
     )
     tripinfo_dir.mkdir(parents=True, exist_ok=True)
     tripinfo_path = tripinfo_dir / f"{controller}_{demand_level}_seed{seed}.xml"
@@ -225,6 +247,18 @@ def run_one(
             for key, value in ctrl.stats.items():
                 totals[key] = totals.get(key, 0) + value
         record["decision_stats"] = totals
+        if record_baseline and load_baseline is not None:
+            # Harvest each junction's ending slow-EWMA as the value the
+            # *next* run for that junction starts from -- see
+            # `LoadBaseline.update`'s docstring for why this overwrites
+            # rather than blends. Deliberately unconditional on
+            # `use_relative_congestion_gate`: `_update_load` folds every
+            # tick into both EWMAs regardless of whether the gate reads
+            # the ratio, so a warm-up run's *decisions* are identical to
+            # an ordinary frozen-default run -- only the harvested number
+            # differs.
+            for tls_id, ctrl in strategy.items():
+                load_baseline.update(tls_id, ctrl.baseline_load)
     try:
         tripinfo_path.unlink()  # scorecard extracted; the XML is large
     except OSError:

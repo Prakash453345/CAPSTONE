@@ -15,10 +15,16 @@ feeds it valid plans could pass with a checker that does nothing.
 
 from __future__ import annotations
 
+import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 from itms_domain import JunctionContext, Phase, PlanStep, SignalPlan, Tier0Config
 from sim_service.control.safety import interlocks
+
+# Slow (10 000 cases x 8 invariants, ~55s), not flaky -- this is the actual
+# M2 gate the build guide specifies, so `make test` still runs it. Marked
+# only so `make test-fast` can skip it for a quick dev loop.
+pytestmark = pytest.mark.slow_property
 
 N_CASES = 10_000
 

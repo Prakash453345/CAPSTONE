@@ -15,14 +15,14 @@ fi
 BBOX="80.6131,16.4972,80.6586,16.5113"   # Benz Circle <-> PNBS, padded for cross streets
 ARTERIAL="MG Road"
 
-echo "1/3  downloading OSM extract for bbox $BBOX ..."
+echo "1/4  downloading OSM extract for bbox $BBOX ..."
 python3 "$SUMO_HOME/tools/osmGet.py" --bbox "$BBOX" -p vijayawada_corridor
 mv vijayawada_corridor_bbox.osm.xml raw_osm.xml
 
-echo "2/3  filtering to '$ARTERIAL' + real cross streets ..."
+echo "2/4  filtering to '$ARTERIAL' + real cross streets ..."
 python3 filter_corridor.py raw_osm.xml filtered_corridor.osm.xml --arterial "$ARTERIAL"
 
-echo "3/3  building the SUMO network ..."
+echo "3/4  building the SUMO network ..."
 # Junctions forced to traffic_light are the 7 highest-degree (4+) real
 # crossroads on this corridor -- see README.md "Why these 7 are signalized".
 # Regenerate this list (junction degree) if the arterial/bbox changes.
@@ -35,5 +35,12 @@ netconvert --osm-files filtered_corridor.osm.xml -o vijayawada_corridor.net.xml 
   --tls.guess-signals --tls.discard-simple --tls.join \
   --roundabouts.guess --ramps.guess \
   --tls.set "$TLS_IDS"
+
+echo "4/4  capping speed limits at the urban-arterial design speed ..."
+# netconvert takes its limits from the OSM typemap, which labels this corridor
+# 80-100 km/h -- inter-urban defaults on a signalised city arterial. See
+# cap_speeds.py for the reasoning and for what reads the limit (the kinematic
+# yellow, and timeLoss's free-flow reference).
+python3 cap_speeds.py vijayawada_corridor.net.xml
 
 echo "done -> vijayawada_corridor.net.xml"

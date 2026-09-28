@@ -1,0 +1,47 @@
+{
+  "type": "record",
+  "name": "EmergencyRequestUpdated",
+  "namespace": "itms.contracts",
+  "doc": "The live state of one EmergencyRequest, published by sim-service every time it changes (routing, route ready, re-routed, green corridor active, in transit, completed, cancelled) and re-published periodically while active. Carries the current best route with the full cost breakdown so the frontend can render the route-preview panel and explain 'why this route'. This is itms_domain.emergency.EmergencyRequest + itms_domain.RouteResult on the wire; the reserved name `route_calculated.avsc` is folded in here as the `route` field.",
+  "fields": [
+    { "name": "request_id", "type": "string" },
+    { "name": "vehicle_id", "type": "string" },
+    { "name": "vehicle_kind", "type": "string", "doc": "ambulance | fire_truck | police." },
+    { "name": "state", "type": { "type": "enum", "name": "EmergencyRequestLifecycle", "symbols": ["CREATED", "ROUTING", "ROUTE_READY", "GREEN_CORRIDOR_ACTIVE", "IN_TRANSIT", "COMPLETED", "CANCELLED"] } },
+    { "name": "source_edge", "type": "string" },
+    { "name": "destination_edge", "type": "string" },
+    { "name": "eta_s", "type": ["null", "double"], "default": null, "doc": "Estimated seconds to arrival on the current route; null before a route exists." },
+    { "name": "green_corridor_id", "type": ["null", "string"], "default": null },
+    { "name": "route", "type": ["null", {
+        "type": "record",
+        "name": "RouteSummary",
+        "fields": [
+          { "name": "edges", "type": { "type": "array", "items": "string" }, "doc": "Ordered SUMO edge ids, source to destination." },
+          { "name": "rank", "type": "int", "default": 0, "doc": "0 = recommended, 1.. = alternative." },
+          { "name": "total_distance_m", "type": "double" },
+          { "name": "total_travel_time_s", "type": "double" },
+          { "name": "eta_s", "type": "double", "doc": "travel time + expected signal delay." },
+          { "name": "n_intersections", "type": "int" },
+          { "name": "signalised_intersections", "type": { "type": "array", "items": "string" } },
+          { "name": "congested_segments", "type": { "type": "array", "items": "string" } },
+          { "name": "anomalous_segments_avoided", "type": { "type": "array", "items": "string" } },
+          { "name": "forced_through", "type": { "type": "array", "items": "string" }, "default": [], "doc": "Edges this route had to cross despite being flagged BLOCKED, because no alternative existed at all. Non-empty implies reliable=false; the UI should show this as an explicit warning, not a failure." },
+          { "name": "reliable", "type": "boolean" },
+          { "name": "cost_travel_time_s", "type": "double" },
+          { "name": "cost_congestion", "type": "double" },
+          { "name": "cost_anomaly", "type": "double" },
+          { "name": "cost_signal_delay_s", "type": "double" },
+          { "name": "cost_disruption", "type": "double" },
+          { "name": "cost_reliability", "type": "double" },
+          { "name": "route_score", "type": "double", "doc": "The final score the planner minimised; lower is better." },
+          { "name": "weights_used", "type": { "type": "map", "values": "double" }, "doc": "The cost weights in force -- for the audit trail and the explanation panel." }
+        ]
+      }], "default": null },
+    { "name": "alternatives", "type": { "type": "array", "items": "RouteSummary" }, "default": [], "doc": "Other candidate routes, for the UI's Alternative Route toggle." },
+    { "name": "chain_hash", "type": "string", "doc": "Head of the request's audit chain after this transition." },
+    { "name": "actor", "type": "string", "doc": "Who caused it -- 'operator:<id>' | 'system:router' | 'system:monitor'." },
+    { "name": "detail", "type": "string", "default": "" },
+    { "name": "sim_tick", "type": ["null", "long"], "default": null },
+    { "name": "updated_at", "type": { "type": "long", "logicalType": "timestamp-millis" } }
+  ]
+}

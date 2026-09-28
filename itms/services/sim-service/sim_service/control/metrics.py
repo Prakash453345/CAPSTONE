@@ -44,22 +44,38 @@ checked and rejected:
 (default 600s, matching §8.2's "discard the first ~600 s (network
 filling)") are excluded from person-delay, wait-time, and stops --
 a controller that hasn't reached steady state yet shouldn't count against
-or for it. Person-throughput is *not* warm-up-filtered: "persons
-completing trips per hour" is naturally a whole-scenario figure (a
-50-minute run that includes a 10-minute ramp-up is still a real 50-minute
-run), and filtering it would make throughput numbers depend on a choice
-(where the window ends) that delay/wait/stops don't need to make. A
-cool-down exclusion ("don't count vehicles still in the network at the
-end") needs no code here: `--tripinfo-output` only ever records vehicles
-that actually arrived, so an in-progress vehicle at the run's end is
-already absent from the file by construction.
+or for it. A cool-down exclusion ("don't count vehicles still in the
+network at the end") needs no code here: `--tripinfo-output` only ever
+records vehicles that actually arrived, so an in-progress vehicle at the
+run's end is already absent from the file by construction.
+
+**The warm-up window is measured on *scheduled* departure, not on when
+SUMO managed to insert the vehicle** (fixed 2026-09-18). `<tripinfo
+depart=...>` is the actual insertion time, which a congested arm pushes
+later -- so the same 600 s cut kept a different set of trips for each
+controller (measured at heavy demand: 9,680 / 9,766 / 9,755 trips out of
+the same 14,400 for webster / ceiling / ccacamp). A paired comparison has
+to score the same population in every arm, so `compute_run_metrics` reads
+each vehicle's intended `depart` from the route file and filters on that;
+`score_trips` falls back to the tripinfo time when no schedule is passed,
+which keeps every existing unit test meaningful.
+
+**Person-throughput is measured over the window it is scored on** (fixed
+2026-09-18). It used to divide by a hard-coded `scenario_duration_s =
+1800.0` that no caller ever overrode, while the runs themselves last
+2,000-3,600 s -- so the figure was inflated, and because every arm clears
+the same fixed demand it came out *identical for every controller at every
+demand level* (2,717 / 5,203 / 10,282 persons/h), which is not a
+measurement. It is now `persons completing after the warm-up / (last
+arrival - warmup)`, so a controller that clears the same demand sooner
+scores higher, which is the whole point of the metric.
 """
 
 from __future__ import annotations
 
 import statistics
 import xml.etree.ElementTree as ET
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -149,20 +165,38 @@ def score_trips(
     occupancy_by_vtype: dict[str, float],
     *,
     warmup_s: float = 600.0,
-    scenario_duration_s: float = 1800.0,
+    scheduled_depart_s: Mapping[str, float] | None = None,
 ) -> RunMetrics:
     """Pure aggregation over already-parsed trips -- see module docstring
     for why `timeLoss`/`waitingTime`/warm-up-only-filtering were each
-    chosen over the more obvious alternative."""
-    scored = [t for t in trips if t.depart_s >= warmup_s]
+    chosen over the more obvious alternative, and for the two 2026-09-18
+    corrections (scheduled-departure filtering, measured throughput
+    window).
+
+    `scheduled_depart_s` maps vehicle id to its *intended* departure from
+    the route file. When given, the warm-up cut uses it, so every arm
+    scores the identical trip population however late congestion pushed
+    the actual insertion. Without it the tripinfo departure is used, which
+    is what the unit tests (and any caller with no route file) rely on."""
+    def _depart(t: TripRecord) -> float:
+        if scheduled_depart_s is None:
+            return t.depart_s
+        return scheduled_depart_s.get(t.vehicle_id, t.depart_s)
+
+    scored = [t for t in trips if _depart(t) >= warmup_s]
 
     person_delay_s = sum(
         occupancy_by_vtype.get(t.vtype, 1.0) * t.time_loss_s for t in scored
     )
-    total_persons_completed = sum(occupancy_by_vtype.get(t.vtype, 1.0) for t in trips)
-    scenario_duration_hours = scenario_duration_s / 3600.0
+    # Throughput over the window actually scored: the last arrival among
+    # the scored trips, minus the warm-up cut. Dividing by a fixed nominal
+    # duration made this identical for every controller (see module
+    # docstring); this version rewards clearing the same demand sooner.
+    persons_completed = sum(occupancy_by_vtype.get(t.vtype, 1.0) for t in scored)
+    last_arrival_s = max((t.depart_s + t.duration_s for t in scored), default=warmup_s)
+    scored_window_s = max(0.0, last_arrival_s - warmup_s)
     person_throughput_per_hour = (
-        total_persons_completed / scenario_duration_hours if scenario_duration_hours > 0 else 0.0
+        persons_completed / (scored_window_s / 3600.0) if scored_window_s > 0 else 0.0
     )
 
     waits = sorted(t.waiting_time_s for t in scored)
@@ -188,18 +222,42 @@ def score_trips(
     )
 
 
+def load_scheduled_departures(route_path: str | Path) -> dict[str, float]:
+    """`{vehicle id: scheduled depart_s}` from the route file -- what the
+    demand *asked* for, as against the `depart` SUMO records once it has
+    found room to insert the vehicle. Vehicles with a non-numeric depart
+    (`triggered`, `containerTriggered`) are skipped; their tripinfo
+    departure stays the fallback."""
+    root = ET.parse(route_path).getroot()
+    scheduled: dict[str, float] = {}
+    for vehicle in root.iter("vehicle"):
+        veh_id = vehicle.get("id")
+        depart = vehicle.get("depart")
+        if veh_id is None or depart is None:
+            continue
+        try:
+            scheduled[veh_id] = float(depart)
+        except ValueError:
+            continue
+    return scheduled
+
+
 def compute_run_metrics(
     tripinfo_path: str | Path,
     route_path: str | Path,
     *,
     warmup_s: float = 600.0,
-    scenario_duration_s: float = 1800.0,
 ) -> RunMetrics:
     """Convenience wrapper: parse both files, then score. Kept thin on
     purpose -- `parse_tripinfo`/`load_vtype_occupancy` (I/O) and
-    `score_trips` (pure math) are each unit-tested independently."""
+    `score_trips` (pure math) are each unit-tested independently.
+
+    Reads the route file twice, for occupancy and for scheduled departures:
+    two small passes over one file, against the alternative of every arm
+    scoring a slightly different trip population (see module docstring)."""
     trips = parse_tripinfo(tripinfo_path)
     occupancy = load_vtype_occupancy(route_path)
+    scheduled = load_scheduled_departures(route_path)
     return score_trips(
-        trips, occupancy, warmup_s=warmup_s, scenario_duration_s=scenario_duration_s
+        trips, occupancy, warmup_s=warmup_s, scheduled_depart_s=scheduled
     )

@@ -27,8 +27,12 @@ def test_unsaturated_greens_are_refused():
     cal = _cal()
     for _ in range(50):
         residual = cal.observe_green(
-            "J", "m0", baseline_sat_flow=0.4,
-            discharged_pcu=20.0, effective_green_s=20.0, queue_remained=False,
+            "J",
+            "m0",
+            baseline_sat_flow=0.4,
+            discharged_pcu=20.0,
+            effective_green_s=20.0,
+            queue_remained=False,
         )
         assert residual is None
     assert cal.sat_flow_for("J", 0.4, "m0") == 0.4
@@ -40,11 +44,29 @@ def test_tiny_and_short_observations_are_refused():
     saturation rate, and a green shorter than the start-up wave measures
     lost time rather than capacity."""
     cal = _cal()
-    assert cal.observe_green("J", "m0", baseline_sat_flow=0.4,
-                             discharged_pcu=1.0, effective_green_s=20.0, queue_remained=True) is None
+    assert (
+        cal.observe_green(
+            "J",
+            "m0",
+            baseline_sat_flow=0.4,
+            discharged_pcu=1.0,
+            effective_green_s=20.0,
+            queue_remained=True,
+        )
+        is None
+    )
     assert cal.models["J\x1fm0"].rejected_too_small == 1
-    assert cal.observe_green("J", "m0", baseline_sat_flow=0.4,
-                             discharged_pcu=20.0, effective_green_s=2.0, queue_remained=True) is None
+    assert (
+        cal.observe_green(
+            "J",
+            "m0",
+            baseline_sat_flow=0.4,
+            discharged_pcu=20.0,
+            effective_green_s=2.0,
+            queue_remained=True,
+        )
+        is None
+    )
     assert cal.models["J\x1fm0"].rejected_too_short == 1
     assert cal.models["J\x1fm0"].saturated_samples == 0
 
@@ -55,9 +77,14 @@ def test_it_converges_toward_the_true_rate():
     cal = _cal(alpha=0.2)
     true_rate = 0.30
     for _ in range(60):
-        cal.observe_green("J", "m0", baseline_sat_flow=0.5,
-                          discharged_pcu=true_rate * 20.0, effective_green_s=20.0,
-                          queue_remained=True)
+        cal.observe_green(
+            "J",
+            "m0",
+            baseline_sat_flow=0.5,
+            discharged_pcu=true_rate * 20.0,
+            effective_green_s=20.0,
+            queue_remained=True,
+        )
     assert abs(cal.sat_flow_for("J", 0.5, "m0") - true_rate) < 0.02
 
 
@@ -68,8 +95,14 @@ def test_the_five_placeholder_movements_are_exactly_the_case_this_helps():
     them, and the band is wide enough to let it."""
     cal = _cal(alpha=0.2)
     for _ in range(60):
-        cal.observe_green("J", "L4", baseline_sat_flow=0.5,
-                          discharged_pcu=0.32 * 20.0, effective_green_s=20.0, queue_remained=True)
+        cal.observe_green(
+            "J",
+            "L4",
+            baseline_sat_flow=0.5,
+            discharged_pcu=0.32 * 20.0,
+            effective_green_s=20.0,
+            queue_remained=True,
+        )
     learned = cal.sat_flow_for("J", 0.5, "L4")
     assert 0.30 < learned < 0.36, learned
     assert learned < 0.5 * 2.0 and learned > 0.5 * 0.5  # inside the band, not clamped by it
@@ -82,8 +115,14 @@ def test_the_band_clamps_an_implausible_estimate():
     the term that multiplies the whole pressure function."""
     cal = _cal(alpha=0.5)
     for _ in range(100):
-        cal.observe_green("J", "m0", baseline_sat_flow=0.4,
-                          discharged_pcu=2.0 * 20.0, effective_green_s=20.0, queue_remained=True)
+        cal.observe_green(
+            "J",
+            "m0",
+            baseline_sat_flow=0.4,
+            discharged_pcu=2.0 * 20.0,
+            effective_green_s=20.0,
+            queue_remained=True,
+        )
     assert cal.sat_flow_for("J", 0.4, "m0") == 0.4 * cal.max_factor
     assert cal.report()["at_upper_bound"] == 1
 
@@ -103,8 +142,7 @@ def test_arrival_reliability_learns_the_shortfall():
     movement's claim on green, and the learned ratio is the correction."""
     cal = _cal(arrival_alpha=0.2)
     for _ in range(80):
-        cal.observe_arrivals("J", "m0", baseline_sat_flow=0.4,
-                             predicted_pcu=10.0, arrived_pcu=7.0)
+        cal.observe_arrivals("J", "m0", baseline_sat_flow=0.4, predicted_pcu=10.0, arrived_pcu=7.0)
     assert abs(cal.arrival_reliability_for("J", "m0") - 0.7) < 0.02
 
 
@@ -115,8 +153,7 @@ def test_arrival_reliability_never_exceeds_one():
     actually observed on the lane."""
     cal = _cal(arrival_alpha=0.5)
     for _ in range(50):
-        cal.observe_arrivals("J", "m0", baseline_sat_flow=0.4,
-                             predicted_pcu=5.0, arrived_pcu=50.0)
+        cal.observe_arrivals("J", "m0", baseline_sat_flow=0.4, predicted_pcu=5.0, arrived_pcu=50.0)
     assert cal.arrival_reliability_for("J", "m0") <= 1.0
 
 
@@ -125,12 +162,30 @@ def test_report_separates_rejection_causes():
     enough to measure" from "the thresholds are wrong" -- the first is a
     fact about the corridor and the second is a bug."""
     cal = _cal()
-    cal.observe_green("J", "a", baseline_sat_flow=0.4, discharged_pcu=20.0,
-                      effective_green_s=20.0, queue_remained=False)
-    cal.observe_green("J", "b", baseline_sat_flow=0.4, discharged_pcu=0.5,
-                      effective_green_s=20.0, queue_remained=True)
-    cal.observe_green("J", "c", baseline_sat_flow=0.4, discharged_pcu=20.0,
-                      effective_green_s=1.0, queue_remained=True)
+    cal.observe_green(
+        "J",
+        "a",
+        baseline_sat_flow=0.4,
+        discharged_pcu=20.0,
+        effective_green_s=20.0,
+        queue_remained=False,
+    )
+    cal.observe_green(
+        "J",
+        "b",
+        baseline_sat_flow=0.4,
+        discharged_pcu=0.5,
+        effective_green_s=20.0,
+        queue_remained=True,
+    )
+    cal.observe_green(
+        "J",
+        "c",
+        baseline_sat_flow=0.4,
+        discharged_pcu=20.0,
+        effective_green_s=1.0,
+        queue_remained=True,
+    )
     r = cal.report()
     assert r["rejected_unsaturated"] == 1
     assert r["rejected_too_small"] == 1
@@ -140,8 +195,14 @@ def test_report_separates_rejection_causes():
 def test_save_load_round_trip(tmp_path):
     cal = _cal(alpha=0.15)
     for _ in range(30):
-        cal.observe_green("J", "m0", baseline_sat_flow=0.4, discharged_pcu=6.0,
-                          effective_green_s=20.0, queue_remained=True)
+        cal.observe_green(
+            "J",
+            "m0",
+            baseline_sat_flow=0.4,
+            discharged_pcu=6.0,
+            effective_green_s=20.0,
+            queue_remained=True,
+        )
         cal.observe_arrivals("J", "m0", baseline_sat_flow=0.4, predicted_pcu=8.0, arrived_pcu=6.0)
     path = tmp_path / "cal.json"
     cal.save(path)
@@ -165,10 +226,16 @@ def test_overrides_cover_every_configured_movement():
     or a movement would silently drop out of the pressure function."""
     cal = _cal()
     for _ in range(30):
-        cal.observe_green("J", "m1", baseline_sat_flow=0.4, discharged_pcu=6.0,
-                          effective_green_s=20.0, queue_remained=True)
+        cal.observe_green(
+            "J",
+            "m1",
+            baseline_sat_flow=0.4,
+            discharged_pcu=6.0,
+            effective_green_s=20.0,
+            queue_remained=True,
+        )
     config = {"m0": 0.4, "m1": 0.4, "m2": 0.35}
     out = cal.sat_flow_overrides("J", config)
     assert set(out) == set(config)
-    assert out["m0"] == 0.4 and out["m2"] == 0.35   # untouched
-    assert out["m1"] != 0.4                          # learned
+    assert out["m0"] == 0.4 and out["m2"] == 0.35  # untouched
+    assert out["m1"] != 0.4  # learned
