@@ -53,6 +53,13 @@ LATENCY_GRACE_S = 45
 # inside the run, with M6's warm-up, cool-down, gap and durations, puts all
 # six on the road.
 SCHEDULE_TICKS = {"light": 2000, "medium": 2300, "heavy": 2950}
+# per-link camera estimates recorded with --features-dir: LinkEstimate fields,
+# the incident engine's per-link vision score, then what the tracker reports on
+# the link's approach lane -- tracks in view, tracks stopped, tracks moving
+# (> 1.5 m/s, velocity measured), their mean speed (m/s; -1 with none measured)
+CAM_FEATURES = ("queue_pcu", "approaching_pcu", "receiving_occupancy", "receiving_queue_pcu",
+                "confidence", "vehicles_seen", "vision_score",
+                "tracks", "tracks_stopped", "tracks_moving", "mean_speed_mps")
 
 # The run logs every rule hit at deliberately low thresholds, with the
 # measured duration behind it, so the operating thresholds can be chosen
@@ -67,7 +74,8 @@ LOGGING_RULES = RuleConfig(
 
 
 def _job(args) -> dict:
-    preset, level, seed, fps, inject = args
+    preset, level, seed, fps, inject, *rest = args
+    features_dir = rest[0] if rest else None
     t0 = time.time()
     approach, receiving = M.link_maps()
     rig = M.rig()
@@ -82,6 +90,17 @@ def _job(args) -> dict:
     world = TraciWorld()
     signal = TraciSignalState(approach.keys())
     st: dict = {"vs": None, "prev": None, "cands": [], "stall_pos": {}, "hits": []}
+    cam: list = []
+    cam_nodes = None
+    graph = None
+    if features_dir:
+        from sim_service.control.anomaly.graph_features import AnomalyGraph  # noqa: PLC0415
+
+        graph = AnomalyGraph.from_network(H.NET_PATH)
+        cam_nodes = [(tls, lk) for tls, lk in zip(graph.tls_of, graph.link_of, strict=True)]
+        lane_nodes: dict[str, list[int]] = {}
+        for j, ln in enumerate(graph.approach_lane_of):
+            lane_nodes.setdefault(ln, []).append(j)
 
     def on_tick(step: int, t: float) -> None:
         snap = world.snapshot()
@@ -93,8 +112,34 @@ def _job(args) -> dict:
         vs = st["vs"]
         signal.refresh(t)
         vs.step_world(st["prev"], snap)
-        vs.tick(t)
+        res = vs.tick(t, keep_tracks=cam_nodes is not None)
         st["prev"] = snap
+        if cam_nodes is not None:
+            # what the cameras themselves report per link this tick -- the
+            # traffic features a deployment without lane sensors would have
+            row = np.zeros((len(cam_nodes), len(CAM_FEATURES)), dtype=np.float32)
+            for j, key in enumerate(cam_nodes):
+                e = res.links.get(key)
+                if e is not None:
+                    row[j, :6] = (e.queue_pcu, e.approaching_pcu, e.receiving_occupancy,
+                                  e.receiving_queue_pcu, e.confidence, e.vehicles_seen)
+                row[j, 6] = res.vision_scores.get(key, 0.0)
+            per_lane: dict[str, list[float]] = {}
+            for g in res.tracks:
+                if g.coasting or g.lane_id not in lane_nodes:
+                    continue
+                acc = per_lane.setdefault(g.lane_id, [0.0, 0.0, 0.0, 0.0, 0.0])
+                acc[0] += 1
+                acc[1] += bool(g.stopped)
+                if g.speed_known:
+                    acc[2] += g.speed > 1.5
+                    acc[3] += g.speed
+                    acc[4] += 1
+            for ln, (n, n_stop, n_move, v_sum, n_v) in per_lane.items():
+                for j in lane_nodes[ln]:
+                    row[j, 7:11] = (n, n_stop, n_move, v_sum / n_v if n_v else -1.0)
+            row[[j for j in range(len(cam_nodes)) if row[j, 7] == 0], 10] = -1.0
+            cam.append((t, row))
         for h in vs.incidents.hits:
             ev = h.evidence
             anchor = ev.get("track") or ev.get("tracks") or int(h.s // 20.0)
@@ -119,9 +164,30 @@ def _job(args) -> dict:
                     st["stall_pos"][vid] = {"lane": snap.lane_id[i], "s": s,
                                             "covered": covered}
 
+    runner_kwargs = None
+    frames: list = []
+    if features_dir:
+        # M6's per-link traffic features on the same run, for the fusion study
+        # (scripts/m8_incident_fusion.py); read-only TraCI queries, nothing the run depends on
+        inputs = H.scenario_inputs(level)
+        runner_kwargs = {"anomaly_graph": graph, "receiving_lanes": receiving,
+                         "vtype_pcu": inputs[2],
+                         "anomaly_feature_sink": lambda _s, t, m: frames.append(
+                             (t, np.asarray(m, dtype=np.float32)))}
     run = M.run_scenario("webster", level, seed, inputs=H.scenario_inputs(level),
                          on_tick=on_tick, max_steps=MAX_STEPS, incident_injector=injector,
-                         tag=f"inc_{preset}_{int(inject)}")
+                         tag=f"inc_{preset}_{int(inject)}", runner_kwargs=runner_kwargs)
+    features_file = None
+    if features_dir and frames:
+        Path(features_dir).mkdir(parents=True, exist_ok=True)
+        features_file = str(Path(features_dir)
+                            / f"{preset}_{level}_seed{seed}_inj{int(inject)}.npz")
+        np.savez_compressed(features_file, t=np.array([f[0] for f in frames], dtype=np.float32),
+                            x=np.stack([f[1] for f in frames]).astype(np.float16),
+                            node_ids=np.array(graph.node_ids),
+                            cam_t=np.array([c[0] for c in cam], dtype=np.float32),
+                            cam=np.stack([c[1] for c in cam]).astype(np.float32),
+                            cam_features=np.array(CAM_FEATURES))
     windows = []
     for w in (injector.realised_windows() if injector is not None else []):
         if w.kind == "stall":
@@ -137,7 +203,7 @@ def _job(args) -> dict:
                         if w.kind == "stall" else None})
     return {
         "preset": preset, "level": level, "seed": seed, "inject": inject, "fps": fps,
-        "run": run, "windows": windows, "hits": st["hits"],
+        "run": run, "windows": windows, "hits": st["hits"], "features_file": features_file,
         "sim_hours": run["steps"] / 3600.0, "wall_s": round(time.time() - t0, 1),
     }
 
@@ -285,12 +351,14 @@ def main() -> None:
     ap.add_argument("--no-twins", action="store_true", help="skip the incident-off twin runs")
     ap.add_argument("--workers", type=int, default=os.cpu_count() or 2)
     ap.add_argument("--out", required=True)
+    ap.add_argument("--features-dir", default=None,
+                    help="also record M6's per-link traffic features of every run here (.npz)")
     ap.add_argument("--resume", action="store_true",
                     help="keep the runs already in --out and run only the missing ones")
     args = ap.parse_args()
     seeds = (M.EVAL_SEEDS if args.seed_set == "eval" else M.TRAIN_SEEDS)[: args.seeds]
     injects = (True,) if args.no_twins else (True, False)
-    jobs = [(p, lv, s, args.fps, inj) for lv in args.levels.split(",")
+    jobs = [(p, lv, s, args.fps, inj, args.features_dir) for lv in args.levels.split(",")
             for p in args.presets.split(",") for s in seeds for inj in injects]
     out: list[dict] = M.previous_runs(args.out, "runs") if args.resume else []
     done = {(r["preset"], r["level"], r["seed"], r["inject"]) for r in out}

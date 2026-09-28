@@ -98,9 +98,12 @@ def run_scenario(
     incident_injector=None,
     tripinfo_dir: Path = Path("/tmp/m8_tripinfo"),
     tag: str = "",
+    runner_kwargs: dict | None = None,
 ) -> dict:
     """One scenario, scored with the project's own metrics (person delay,
-    stops, throughput, waits), plus the runner's interlock count."""
+    stops, throughput, waits), plus the runner's interlock count.
+    `runner_kwargs` go straight to `run_controlled_scenario` (for instance
+    M6's `anomaly_graph` and `anomaly_feature_sink`)."""
     if inputs is None:
         inputs = ccacamp_inputs(level) if controller != "webster" else H.scenario_inputs(level)
     configs, flows, vtype_pcu, paths = inputs
@@ -122,6 +125,7 @@ def run_scenario(
         kwargs["vtype_pcu"] = vtype_pcu
     if incident_injector is not None:
         kwargs["incident_injector"] = incident_injector
+    kwargs.update(runner_kwargs or {})
     t0 = time.time()
     result = run_controlled_scenario(str(paths["sumocfg"]), configs, **kwargs)
     m = metrics.compute_run_metrics(trip, paths["route"])
