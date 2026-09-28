@@ -5032,3 +5032,489 @@ precision, confusions, recall by box height, per-image PCU error, CPU time).
 
 Tests: `test_detection_eval.py` (5), `test_detector_decode.py` (4).
 `make test-vision`: 162; full suite 784 passed, 4 skipped; ruff clean.
+
+## 2026-09-26 — M8: the controller on measured detectors; fine-tuning set up
+
+Baseline: `baselines/2026-09-26_m8_measured_detectors/`.
+
+**Fine-tuning, ready to run** (`notebooks/m8_uvh26_finetune.ipynb`, Google
+Colab, T4). Transfer learning from IISc's UVH-26 YOLO11-S to the six types
+the controller counts, on a seeded 3,000-frame sample of UVH-26's training
+split (plus 300 held out to decide when to stop), at 640 and 960 px. It
+handles these edge cases:
+- **Keeping the test frames out:** the 250 test frames never reach
+  training, whether matched by name, by checksum, or by a 256-bit image
+  fingerprint within 72 bits (checked by eye: six test pairs from 32 to 70
+  bits apart were all the same camera).
+- **Labels:** an unknown label stops the run; "Others", crowd, empty,
+  duplicate and out-of-image boxes are dropped and counted; boxes are
+  clipped; images that do not open or disagree with their label file are
+  skipped.
+- **Class head:** the new 6-way layer starts from IISc's rows for the
+  matching labels. Ultralytics matches rows by name only, so car,
+  auto-rickshaw and two-wheeler would otherwise start random. Before any
+  training, the warm-started head already found 35 of IISc's 52 boxes on 5
+  frames, every one with the right type.
+- **Reproducibility:** fixed seeds, a pinned Ultralytics version, and
+  checksums for the model file and the labels.
+- **Disconnects:** Drive checkpoints, and a dataset tarball, so a
+  disconnect resumes. A finished run is recognised by its missing optimizer
+  state.
+- **The export is checked:** the ONNX model loads and has the right outputs.
+
+The whole notebook was run here on CPU with a fake repository that holds
+every one of those cases, including the resume. The results arrive as a
+zip for `data/uvh26/finetune/`.
+
+**The detector test is ready to judge it.** Per-image counts and every
+labelled box's height and outcome; `scripts/m8_detector_compare.py` pairs
+two runs image by image (95 % interval from 10,000 image resamples) and
+applies a bar set in advance. A new model is adopted only if all of these
+hold:
+- more vehicles found, interval above zero;
+- a smaller queue PCU error per image, interval below zero;
+- precision at least 0.90;
+- at most 1.25× the CPU time.
+
+IISc's model at 960 px finds more than at 640 (0.775 against 0.711) at
+precision 0.85 and 2.9× the CPU time. It beats 1280 on everything but the
+average bias.
+
+**SimCam fitted to the real detectors.** `scripts/m8_simcam_calibrate.py`
+gives three new presets:
+- `uvh26_640` and `uvh26_1280`: IISc's model at 640 and 1280 px input;
+- `stock_640`: the stock model.
+
+Each has a base recall and a size curve per vehicle type (a new
+`size_h50_by_class` field), plus confusions as measured. The old presets'
+draws are unchanged, and a test checks it. The furthest-off assumption was
+the size curve: recall was assumed to halve at 14 px, while the real model
+at 640 px halves it at 53 px for a car and 59 px for a two-wheeler.
+
+**The controller on them** (held-out seeds, `failsafe`, against perfect
+data):
+
+| detector | medium | heavy | vs Webster (medium / heavy) |
+|---|---|---|---|
+| assumed well-trained (`finetuned_day`) | +1.7 % n.s. | +17.3 % SIG | −30.2 % SIG / −17.3 % n.s. |
+| **IISc, 1280 px** | **+2.3 % n.s.** | **+8.0 % n.s.** | **−29.8 % / −23.9 %** SIG |
+| IISc, 640 px | +9.3 % n.s. | +16.8 % n.s. | −25.0 % / −17.6 % SIG |
+| stock, 640 px | +17.2 % SIG | — | −19.6 % SIG |
+
+- **A real in-domain detector at 1280 px input keeps nearly the whole win**
+  over Webster.
+- **At 640 px input the controller loses more**: it was worse than at 1280
+  on 5/5 medium seeds and 4/5 heavy seeds, though not significant at n = 5.
+- **The real stock detector costs three times the old assumption** (+17.2 %
+  against +5.5 %).
+- **Deployment:** IISc's model at 1280 px input, which for 19 cameras is a
+  GPU's work. 960 did better than 1280 on still frames but has not been run
+  in the loop.
+
+**Found, not fixed: a standing jam can look like a blind camera.**
+- **What happened:** on heavy seed 1 with `uvh26_640`, the stop-line check
+  latched one junction into fixed-time for 555 junction-ticks.
+- **Why:** in a long jam, vehicles hidden for more than 10 s come back as
+  new tracks that have "never moved". The furniture rule drops them after
+  90 s, or at once in a spot the clutter map has learned. When every track
+  on the approach had gone that way, the camera "saw" nothing over an
+  occupied loop.
+- **Cost:** about 3.5 % on that run (597,910 with the check off, 618,910
+  with it on). The same mechanism undercounts a standing queue.
+- **Next:**
+  1. Count every track the camera holds, furniture included, as "seen" for
+     the check.
+  2. Stop the clutter map learning spots where a vehicle that drove in was
+     lost.
+  3. Choose both on TRAIN seeds with `uvh26_640` at heavy demand.
+  4. Re-run every `failsafe` arm.
+
+Tests: `test_detection_eval.py` (paired bootstrap, per-box records), and
+`test_simcam.py` (the measured presets; old presets unchanged).
+`make test-vision`: 165; full suite 787 passed, 4 skipped. ruff clean;
+notebooks are excluded from ruff and tested by running them.
+
+## 2026-09-26 — M8: the first fine-tune scored; IISc's BatchNorm statistics are broken
+
+Baseline: `baselines/2026-09-26_m8_finetune_v1_bn/`.
+
+**The first Colab run is not adopted.** On the 250 test frames at 640 px:
+- **Vehicles found:** 0.711 → 0.820, interval [+0.096, +0.122].
+- **PCU error per image:** 2.63 → 1.91, interval below zero.
+- **CPU time:** 0.86×.
+- **Precision:** 0.917 → 0.876, under the 0.90 bar set in advance. It
+  adds 0.64 false boxes per image.
+
+At 640 px every type was found as its right type more often; two-wheelers
+went 0.66 → 0.78 and trucks 0.55 → 0.68. At 960 px it failed precision
+(0.842) and its PCU-error gain was not significant.
+
+**Its training had broken down.** Every loss was `nan`, and the hold-out
+mAP was 0 for the first 7 epochs (640 px) and 5 epochs (960 px). After
+that the hold-out figures were identical from epoch 17 to 27 (640 px) and
+from 7 to 17 (960 px): the model stopped changing, and early stopping
+ended both runs.
+
+The cause is IISc's model file:
+- **584 BatchNorm channels store an infinite variance.** Their true
+  variances reach about 2.5 × 10⁷, far past half precision's 65,504.
+- **How:** IISc trained in full precision, but Ultralytics saves
+  checkpoints in half precision. Today's Ultralytics clips such values to
+  65,504 instead. The v1 fine-tunes have 405 and 417 channels sitting at
+  exactly that value.
+- **At inference:** an infinite variance switches its channel off, and a
+  clipped one leaves the channel's output up to about 20 times too large.
+- **In training** (inferred; the logs do not show the sequence):
+  - Mixed-precision training most likely overflowed on this network's
+    large layer outputs, which reach about 38,000.
+  - An infinite running variance cannot heal by averaging. It became
+    finite only when Ultralytics' NaN recovery reloaded a half-precision
+    checkpoint, where it had been clipped.
+
+**Repairing the statistics.** Diagnostic: they were re-estimated in full
+precision on half the test frames and scored on the other half. This
+chose the method; it is not a result.
+- **IISc's model with the repair made through Ultralytics' training
+  pipeline:**
+  - vehicles found 0.706 → 0.743;
+  - precision 0.902 → 0.928;
+  - false boxes per image 0.94 → 0.70;
+  - AP50 0.693 → 0.755.
+- **Version 1's fine-tune:** precision rose 0.868 → 0.892, still under
+  0.90, with recall unchanged.
+- **Fine-tuning still gains when both models are repaired:** +0.076
+  vehicles found and −0.49 PCU error, both significant. It costs 0.037
+  precision, also significant.
+
+**Notebook version 2** (`notebooks/m8_uvh26_finetune.ipynb`; version 1 is
+in the baseline's `superseded/`):
+- **Control first:** it repairs IISc's statistics on 1,024 training
+  frames, augmented as IISc trained, at each input size. The result is
+  exported as a control, `iisc_bnfix_*`, and is also the start of
+  training.
+- **Full precision throughout:**
+  - training runs with `amp=False`;
+  - a check before the first epoch, and a NaN guard during training;
+  - full-precision copies of the best and last epochs;
+  - a resume from those copies, with no precision lost;
+  - ONNX exported from the full-precision model and checked against it.
+- **A zip after each size.**
+
+`scripts/m8_notebook_dryrun.py` runs the notebook's own cells on CPU
+against a fake repository. It covers:
+- every dataset guard;
+- a disconnect, and a resume with no precision lost;
+- the fallback;
+- the NaN guard.
+
+Repeating the repair gives the same statistics to within float rounding.
+
+**Judged by rules set now** (baseline §5): the unchanged bar, at 640 and
+960 px, for three comparisons:
+1. the repair alone against IISc's model as released;
+2. the fine-tune against IISc's model as released;
+3. the fine-tune against the repair.
+
+The deciding rule:
+- If only one of the two candidates passes its comparison with IISc's
+  model (1 or 2), it is adopted.
+- If both pass, the fine-tune is adopted only if it also passes 3.
+  Otherwise the repaired control is adopted.
+- If neither passes, IISc's model as released stays.
+
+The rule is applied to each input size on its own.
+
+`UltralyticsDetector` now warns about a model file with non-finite or
+clipped BatchNorm statistics (`batchnorm_health`).
+
+Tests: `test_detector_decode.py` +2. They need torch, so they skip in the
+project venv and were run in a torch environment.
+
+## 2026-09-27 — M8: the fine-tune adopted
+
+Baseline: `baselines/2026-09-27_m8_finetune_v2/`.
+
+**Training.** Notebook version 2 ran in Colab without trouble:
+- finite losses every epoch;
+- 61 min at 640 px and 139 min at 960 px, 25 epochs each;
+- best epochs 17 and 19;
+- hold-out mAP50 0.860 and 0.874 (version 1: 0.842 and 0.763).
+
+The models keep 350 and 369 BatchNorm variances above half precision's
+limit, in full precision, with none clipped.
+
+**Scored by the rules set in advance** (250 PNG test frames; all six
+models run in one session on the laptop, so CPU times compare):
+
+| model | input | vehicles found | precision | PCU error / image | CPU |
+|---|---:|---:|---:|---:|---:|
+| IISc as released | 640 | 0.711 | 0.917 | 2.63 | 47 ms |
+| IISc, statistics repaired | 640 | 0.731 | 0.937 | 2.54 | 49 ms |
+| **fine-tune** | **640** | **0.790** | **0.914** | **2.02** | 51 ms |
+| IISc as released | 960 | 0.775 | 0.851 | 2.32 | 146 ms |
+| IISc, statistics repaired | 960 | 0.870 | 0.838 | 2.03 | 152 ms |
+| **fine-tune** | **960** | **0.823** | **0.908** | **1.90** | 136 ms |
+
+- **The fine-tune passes against IISc's model at both sizes.**
+  - 640 px: vehicles found +0.080 and PCU error −0.61, both intervals
+    clear of zero.
+  - 960 px: vehicles found +0.048 and PCU error −0.42, both clear of zero.
+- **The repaired control fails at both sizes.**
+  - 640 px: its PCU-error gain is not significant.
+  - 960 px: precision 0.838.
+- **So the fine-tune is adopted at both sizes.** The rule consults the
+  fine-tune-against-control comparison only when both candidates pass. At
+  960 px the control finds more vehicles (0.870) at far lower precision.
+- **Where it gains most:** at 640 px the fine-tune finds the smallest boxes
+  (20–40 px) 0.44 of the time against IISc's 0.19. By type (found as the
+  right type), bicycles go 0.25 → 0.44 (only 32 boxes), trucks
+  0.55 → 0.67 and two-wheelers 0.66 → 0.75.
+
+**SimCam presets** `itms6_640` and `itms6_960` are fitted to it. For the
+63 smallest boxes the fit is pessimistic (0.26 fitted against 0.44
+measured at 640 px).
+
+**The controller on it** (held-out seeds, `failsafe`, against perfect
+data):
+
+| detector | medium | heavy (mean) | heavy (median) |
+|---|---|---|---|
+| IISc, 640 px | +9.3 % n.s. | +16.8 % n.s. | 518k |
+| IISc, 1280 px | +2.3 % n.s. | +8.0 % n.s. | 494k |
+| **fine-tune, 640 px** | **+4.7 % SIG** (seeds 74–79k) | +17.0 % n.s. | 494k |
+| fine-tune, 960 px | +4.8 % n.s. | +18.4 % n.s. | 494k |
+
+(Truth's heavy median is 454k.)
+
+- **Medium demand:** the 640 px fine-tune costs about half what IISc's
+  model did at 640 px (+4.7 % against +9.3 %). The direct comparison
+  between the two, −4.2 %, is not significant. It gets within 2.4 % (n.s.)
+  of IISc's model at 1280 px, for about a fifth of the CPU.
+- **Heavy demand:** each fine-tune had one run go into a long jam (SUMO
+  teleported gridlocked vehicles during the new runs):
+  - 640 px, seed 5: 728,941;
+  - 960 px, seed 2: 720,081.
+
+  Their other runs matched IISc's at 1280 px.
+  - Perfect data never jammed (longest wait 557 s).
+  - Every camera arm is worse than perfect data on at least 4 of 5 heavy
+    seeds, the optimistic assumed detector included.
+  - So at heavy demand the camera path still costs a lot, and a better
+    still-frame detector did not reduce that measurably.
+  - What turns a heavy run into a jam was not traced.
+- A fresh run of `vision:uvh26_640:failsafe` (medium, seed 1) reproduced
+  its earlier record.
+
+**Deployment:** the 640 px fine-tune on a CPU. The 960 px one is better on
+still frames but was not better in the loop.
+
+**Next:**
+1. Trace what turns a heavy run into a jam with cameras in the loop
+   (fine-tune seeds 5 and 2), then choose any fix on TRAIN seeds.
+2. The jam/blind-camera fix from 2026-09-26.
+3. Vijayawada footage, which the model has never seen.
+
+Tests: `test_simcam.py` (the new presets follow their fits; the fine-tune's
+fit finds at least as much as IISc's). `make test-vision`: 168 (2 skip
+without torch); full suite 788 passed, 6 skipped; ruff clean.
+
+## 2026-09-27 — M8: a fire and smoke detector, set up (not yet trained)
+
+The vision incident rules read vehicle tracks, and none of them can see a
+fire. This adds the one incident type that needs its own detector.
+
+**`notebooks/m8_fire_smoke.ipynb` (Colab):**
+- **The model:** YOLO11-S from Ultralytics' COCO weights, two classes (fire,
+  smoke), 640 px, up to 30 epochs.
+- **The data:**
+  - D-Fire: 21,527 images, CC0, 9,838 of them with neither fire nor smoke;
+  - 1,500 Bengaluru traffic frames with no fire as extra negatives, since
+    orange autos, red buses, brake lights, sodium lamps and dust are what
+    fool fire detectors on Indian roads;
+  - 300 more Bengaluru frames in validation.
+- **Getting D-Fire:** a zip in Drive, else Kaggle, else OneDrive; if none
+  works, the notebook stops with instructions.
+- **Edge cases handled:**
+  - D-Fire test images, and training images identical to or within 40 bits
+    (of 256) of one, are kept out of training;
+  - which label id is fire is decided from the boxes' colours and checked
+    against the dataset's names file, and a disagreement stops the run;
+  - clipped, degenerate, malformed and non-finite boxes, unknown class ids,
+    missing label files and unreadable images are all counted;
+  - validation is carved from training (seeded) when the download has
+    none;
+  - a download with no split at all is split by groups of near-copies,
+    so no video straddles train and test;
+  - it warns if keeping the test clean removes more than a quarter of the
+    training images, and stops if it removes all of them.
+- **Resuming:** it resumes after a disconnect, and the dataset is reused
+  from Drive.
+- **Export:** ONNX, checked against the full-precision model.
+
+**The bar, set now, before training:**
+- **Threshold:** the alarm threshold is chosen on validation. It is the
+  lowest threshold that keeps false alarms on the Bengaluru validation
+  frames at or under 1 %.
+- **Recall:** at least 85 % of D-Fire's test images with fire or smoke must
+  then raise an alarm.
+- **False alarms:** at most 1 % of the 250 Bengaluru test frames may
+  (`scripts/m8_fire_eval.py`). None of them shows a fire. They were never
+  used to train or tune the model, and the Bengaluru negatives used in
+  training exclude these frames' cameras.
+- **Review:** a frame that alarms is looked at by eye, and a real fire or
+  smoke in it is recorded as such, not as a false alarm.
+
+**Not measurable yet:**
+- fire in Indian junction footage (no labelled clips);
+- the persistence settings, which need video.
+
+**Dry run:** `scripts/m8_fire_notebook_dryrun.py` runs the notebook's own
+cells on CPU against a fake D-Fire painted onto real frames (orange flames,
+grey smoke, D-Fire's ids with smoke = 0 and fire = 1). It covers:
+- the class ids read from colour and from the names file, and a names file
+  that disagrees (the run stops);
+- every broken-label case, a missing label, an unreadable image;
+- a training copy and a training near-copy of a test image;
+- a download with no split (grouped split, no near-copies across it);
+- the Bengaluru negatives;
+- a disconnect after epoch 1 and the resume;
+- the threshold, the test scored once, the export check;
+- a session with nothing left to do, and a changed setting.
+
+It passed. `m8_fire_eval.py` was run on the dry run's model.
+
+
+## 2026-09-27/28 — M8 + M6: incident detection with a normal baseline and a trained combiner
+
+The vision incident rules on their own catch about one in five in-view
+incidents (19 %, Gate 4; 14–17 % under the stricter count used here) at
+under 2 false alarms an hour. This tests three additions:
+
+1. **what is normal here:** z-scores against the same link's own behaviour,
+   at the same demand level and in the same 10-minute slot, from
+   incident-free TRAIN runs;
+2. **contrast features:**
+   - stopped while it has green;
+   - slower than the sibling lanes on the same green;
+   - halted while the road ahead is empty;
+   - the queue never cleared in a cycle;
+3. **a trained combiner:** a logistic regression over those features and
+   the rules' evidence. It raises candidates with a tuned persistence and
+   the rules' own clear and cooldown.
+
+The details are in `baselines/2026-09-27_m8_incident_fusion/`.
+
+**Built:**
+- `m8_incident_gate.py --features-dir` also records, each second:
+  - M6's per-link features from SUMO;
+  - the cameras' per-link estimates;
+  - the tracker's per-lane counts.
+
+  All of it is read-only, and a re-recording was bit-identical.
+- `m8_harness.run_scenario(runner_kwargs=)`.
+- `scripts/m8_incident_fusion.py`: the study, with a self-test of the
+  candidate logic against `candidates_under`.
+
+**Setup:** TRAIN seeds 101–105; held-out seeds 1–5 and then fresh seeds
+6–10; medium and heavy demand; each with an incident-free twin. Scoring is
+stricter than Gate 4's: any candidate not on an incident counts as a false
+alarm.
+
+**Results** (in-view recall and false alarms/h, at the point TRAIN chose
+for 1 alarm/h, fresh seeds 6–10):
+
+| | recall in view | false alarms/h | stalls found |
+|---|---|---|---|
+| rules, re-tuned | 11 % | 1.69 | 3/19 |
+| rules, `quiet` | 17 % | 1.82 | 6/19 |
+| lane sensors + rules, learned (corrected) | 43 % | 0.19 | 9/19 |
+| cameras + tracker + rules, learned | 28 % | 0.06 | 8/19 |
+
+- **With lane-wide speed and halting it finds about four times what the
+  re-tuned rules find, and two to three times `quiet`.**
+  - The sensors are SUMO's, noise-free and whole-lane: an upper bound.
+  - On seeds 6–10 it catches 37–43 % of in-view incidents at 0.19–0.26
+    false alarms/h, and 9–11 of 19 stalled vehicles.
+  - With the post-hoc seeds 1–5 included: 37–45 % at up to 0.85/h.
+  - F1 (in view) is 0.52–0.60, against 0.14–0.24 for the rules.
+- **A SUMO artefact inflated these numbers at first.** The fact-check found
+  that SUMO reports an *empty* lane's mean speed as its current limit, so a
+  blocked lane read as crawling with nobody on it. The runs set in advance
+  showed 57–64 %. `--empty-lane-free` removes the artefact. It does not
+  arise for stalls, and the camera arms do not read these features.
+- **The normal baseline is the largest gain that was ablated:** +29 to +30
+  points (corrected), with the interval above zero on both seed sets.
+- **The cameras alone fail the bar that was set in advance, twice:**
+  - **v1:** 3.1 false alarms/h held-out, against a cap of 2.
+  - **v2:** 13 of 46 in-view incidents found with 1 false alarm in 15.4 h.
+    The re-tuned rules found 5 with 26. The recall gain is +17 points with a
+    95 % interval of [0.0, +37], and the bar wants it above zero.
+  - **At 5 alarms/h** the camera model beats the rules by +24 points
+    [+8.5, +40].
+  - **The same model without the tracker** would have met the bar on seeds
+    6–10. It was not the arm named in advance, so that is not a test.
+- **Why v2 exists.** Most of version 1's held-out false alarms were counting
+  faults:
+  - the links of one lane each raised an alarm for the same event;
+  - alarms were raised while the network was still filling at the start of
+    a run.
+
+  They were fixed (one candidate per lane, none in the first 300 s, for the
+  rules too) and judged on fresh seeds.
+- **Decision.** `quiet` stays the default, and the camera-only combiner is
+  not adopted. The layered design is the direction for M6's fusion wherever
+  lane- or link-wide speed exists.
+
+**Caveats:**
+- noise-free whole-lane sensors;
+- SUMO's blocked lane crawls along its whole length;
+- small samples (42–46 in-view incidents per evaluation);
+- the artefact fix and the seeds 1–5 re-scoring are post hoc;
+- EVAL seeds 1–10 are now used up for this corridor.
+
+**Cost:** about 0.1 ms per second of traffic for all 73 links.
+
+**Next:**
+- a larger test with a joint criterion (recall at no more false alarms than
+  the rules), on a new seed set declared in advance;
+- a real source of link-wide speed;
+- wiring the lane feature set into M6's `FusionLayer`.
+
+## 2026-09-28 — M8: the fire and smoke detector, version 1, failed
+
+The details are in `baselines/2026-09-28_m8_fire_v1/`.
+
+**Verdict:** version 1 fails both bars that were set before training, and it
+is not adopted.
+
+- **Bengaluru false alarms:** it alarmed on **32 of the 250 Bengaluru
+  traffic test frames (12.8 %)**, against a bar of at most 1 %. Every frame
+  was checked by eye, and none shows fire or smoke. The alarms were on:
+  - orange trucks, autos, signs and clothing;
+  - hazy road, read as smoke;
+  - one corrupted grey frame;
+  - night lights.
+- **D-Fire test recall:** it found **79 %** of the test images with fire or
+  smoke (fire 89 %, smoke 72 %), against a bar of at least 85 %. It missed
+  mostly tiny distant night fires and faint hillside smoke; D-Fire is
+  largely wildfire surveillance.
+
+**Why it failed:**
+- **No Bengaluru frames.** `My Drive/itms_uvh26_finetune/dataset.tar` was not
+  found, and the notebook carried on with D-Fire alone. It chose its
+  threshold (0.29) on D-Fire's own negatives, a fallback that should not
+  have existed.
+- **Half the training data was dropped.** The test-leakage filter removed
+  6,821 training and 1,464 validation images as near-copies of test images.
+  This D-Fire copy splits frames of one video across train and test.
+
+**Version 2 of the notebook:**
+- **The Bengaluru frames.** The vehicle notebook's Drive folder no longer
+  exists, so version 2 downloads 1,800 Bengaluru frames itself from UVH-26
+  on Hugging Face. It never takes a test frame or a frame from a test
+  camera, and it keeps a copy in Drive.
+- **The stops.** It stops if it ends up without the frames, or if the
+  dataset it finds in Drive was built without them.
+- **Otherwise unchanged.** It works in a fresh Drive folder, `itms_fire_v2`,
+  and both bars stay as they were.
+- **Dry run.** The dry run covers the download's edge cases and both stops.

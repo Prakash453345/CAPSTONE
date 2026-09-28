@@ -136,16 +136,40 @@ it has not seen Vijayawada footage.**
   almost no vehicles. On 250 labelled Bengaluru CCTV frames, IISc's
   UVH-26-trained YOLO11-S finds 71 % of vehicles at the tracker's line
   against the stock model's 32 %, and three quarters of auto-rickshaws,
-  which the stock model cannot name; next is Vijayawada footage.
+  which the stock model cannot name. With the digital twin's cameras fitted
+  to it, the controller on IISc's model at 1280 px input costs +2.3 %
+  (medium) and +8.0 % (heavy) against perfect data, neither significant;
+  at 640 px +9.3 % and +16.8 %; the stock model +17.2 %. A fine-tune of
+  IISc's model (`notebooks/m8_uvh26_finetune.ipynb`, version 2, trained in
+  full precision after version 1 broke on IISc's half-precision-overflowing
+  BatchNorm statistics) passed the adoption bar at 640 and 960 px. At
+  640 px it finds 79 % of vehicles at precision 0.91. The controller on it
+  costs +4.7 % against perfect data at medium demand, where IISc's model
+  at 640 px cost +9.3 %. Heavy demand did not improve: one run in five
+  jammed. Next is Vijayawada footage.
   Design: [`docs/vision_system_design.md`](docs/vision_system_design.md);
   numbers: `baselines/2026-09-25_m8_review/`,
-  `baselines/2026-09-25_m8_ladder_blindcheck/` and
-  `baselines/2026-09-25_m8_uvh26_detector/`.
+  `baselines/2026-09-25_m8_ladder_blindcheck/`,
+  `baselines/2026-09-25_m8_uvh26_detector/`,
+  `baselines/2026-09-26_m8_measured_detectors/`,
+  `baselines/2026-09-26_m8_finetune_v1_bn/` and
+  `baselines/2026-09-27_m8_finetune_v2/`.
+  - **A trained incident combiner** was tested
+    (`baselines/2026-09-27_m8_incident_fusion/`). It uses each link's
+    normal behaviour, contrast features and the rules' evidence.
+  - With whole-lane speed and halting (SUMO's, noise-free: an upper bound)
+    it catches 37–43 % of in-view incidents on fresh test seeds at under
+    0.3 false alarms/h, against 11 % for the re-tuned rules.
+  - With the cameras alone it catches 28 % with 1 false alarm in 15 h,
+    against the rules' 11 % with 26. It missed its advance bar and was not
+    adopted.
 
 The 23 September merge commit (`9ab9a44`) records 621 Python tests and 139
-web-app unit tests passing; with M8 the Python suite is 784 passed, 4 skipped
+web-app unit tests passing; with M8 the Python suite is 788 passed, 6 skipped
 (774 at `baselines/2026-09-25_m8_ladder_blindcheck/pytest_full.txt`, plus
-the Indian CCTV label-set, detector-decoding and detector-evaluation tests). A plain-language version of all of this is in
+the Indian CCTV label-set, detector-decoding, detector-evaluation and
+measured-preset tests; the two BatchNorm-check tests need torch and skip
+in the project venv). A plain-language version of all of this is in
 [`docs/project_status_report.md`](docs/project_status_report.md).
 
 ## Quick start
