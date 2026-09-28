@@ -29,12 +29,17 @@ other. A one-to-one map (COCO) is decoded exactly as before.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Mapping, Sequence
 
 import numpy as np
 
 from vision_service.classes import COCO_TO_VCLASS, VClass, vclass_from_name
 from vision_service.records import Detection
+
+log = logging.getLogger("vision.detect")
+
+FP16_MAX = 65504.0   # the largest half-precision number
 
 # The 80 COCO names, in id order -- what an exported model carries when its
 # metadata is missing.
@@ -80,6 +85,29 @@ def merge_matrix(class_map: Mapping[int, VClass], n_classes: int
     for i in range(n_classes):
         m[i, groups.index(class_map[i]) if i in class_map else len(groups)] = 1.0
     return groups, m
+
+
+def batchnorm_health(module) -> dict[str, int]:  # noqa: ANN001 -- a torch module; torch is optional
+    """BatchNorm statistics a detector cannot work with, in a torch model:
+    channels whose running mean or variance is not finite, and channels whose
+    variance sits exactly at half precision's largest number (65,504), the
+    mark a half-precision save leaves on a larger variance.
+
+    Ultralytics saves checkpoints in half precision. IISc's released UVH-26
+    YOLO11-S has 584 channels of the first kind (its true variances reach
+    about 2.5e7), and a fine-tune saved from it has the second kind; either
+    way those channels are normalised wrongly and detections degrade
+    (`baselines/2026-09-26_m8_finetune_v1_bn/`)."""
+    import torch  # noqa: PLC0415
+
+    channels = nonfinite = clipped = 0
+    for m in module.modules():
+        if isinstance(m, torch.nn.modules.batchnorm._BatchNorm) and m.running_var is not None:
+            rv, rm = m.running_var.detach().float(), m.running_mean.detach().float()
+            channels += rv.numel()
+            nonfinite += int((~(torch.isfinite(rv) & torch.isfinite(rm))).sum())
+            clipped += int((rv == FP16_MAX).sum())
+    return {"channels": channels, "nonfinite": nonfinite, "at_fp16_max": clipped}
 
 
 def letterbox(frame: np.ndarray, size: int, *, rect: bool, stride: int = 32
@@ -175,6 +203,13 @@ class UltralyticsDetector:
 
         self.model = YOLO(weights)
         self.conf, self.iou, self.imgsz, self.device = conf, iou, imgsz, device
+        self.bn_health = batchnorm_health(self.model.model)
+        if self.bn_health["nonfinite"] or self.bn_health["at_fp16_max"]:
+            log.warning("%s: %d BatchNorm channels have non-finite statistics and %d were "
+                        "clipped to 65,504 by a half-precision save; its detections are "
+                        "degraded. Re-estimate the statistics in full precision "
+                        "(notebooks/m8_uvh26_finetune.ipynb does).",
+                        weights, self.bn_health["nonfinite"], self.bn_health["at_fp16_max"])
         self.class_map = class_map_for(self.model.names)
         self.name = f"ultralytics:{weights}"
         self._raw = merge_matrix(self.class_map, len(self.model.names)) is not None

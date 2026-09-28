@@ -1,0 +1,60 @@
+== medium
+  truth                              n=5 delay     73,355  p95 wait   59.4  stops 1.75  viol 0  conf None  fallback 0.0%  blind-check junction-ticks 0
+  vision:coco_pretrained:failsafe    n=5 delay     77,358  p95 wait   62.4  stops 1.82  viol 0  conf 0.86  fallback 1.7%  blind-check junction-ticks 6
+  vision:finetuned_day:failsafe      n=5 delay     74,580  p95 wait   64.2  stops 1.70  viol 0  conf 0.9  fallback 0.0%  blind-check junction-ticks 4
+  vision:itms6_640:failsafe          n=5 delay     76,798  p95 wait   59.8  stops 1.85  viol 0  conf 0.87  fallback 0.2%  blind-check junction-ticks 8
+  vision:itms6_960:failsafe          n=5 delay     76,841  p95 wait   65.4  stops 1.76  viol 0  conf 0.87  fallback 0.1%  blind-check junction-ticks 31
+  vision:stock_640:failsafe          n=5 delay     85,982  p95 wait   70.0  stops 2.12  viol 0  conf 0.84  fallback 0.1%  blind-check junction-ticks 75
+  vision:uvh26_1280:failsafe         n=5 delay     75,023  p95 wait   64.0  stops 1.81  viol 0  conf 0.86  fallback 0.0%  blind-check junction-ticks 16
+  vision:uvh26_640:failsafe          n=5 delay     80,141  p95 wait   68.6  stops 1.95  viol 0  conf 0.86  fallback 0.0%  blind-check junction-ticks 4
+  webster                            n=5 delay    106,912  p95 wait   83.8  stops 2.24  viol 0  conf None  fallback 0.0%  blind-check junction-ticks 0
+  truth                              vs webster                             -31.4% [-32.8, -30.0] SIG 5/5 lower
+  vision:itms6_640:failsafe          vs truth                                +4.7% [+2.0, +7.3] SIG 0/5 lower
+  vision:itms6_960:failsafe          vs truth                                +4.8% [-2.3, +11.8] n.s. 1/5 lower
+  vision:uvh26_640:failsafe          vs truth                                +9.3% [-1.6, +20.1] n.s. 1/5 lower
+  vision:uvh26_1280:failsafe         vs truth                                +2.3% [-5.2, +9.8] n.s. 2/5 lower
+  vision:finetuned_day:failsafe      vs truth                                +1.7% [-8.1, +11.5] n.s. 2/5 lower
+  vision:itms6_640:failsafe          vs vision:uvh26_640:failsafe            -4.2% [-15.3, +7.0] n.s. 3/5 lower
+  vision:itms6_640:failsafe          vs vision:uvh26_1280:failsafe           +2.4% [-5.7, +10.4] n.s. 1/5 lower
+  vision:itms6_960:failsafe          vs vision:uvh26_1280:failsafe           +2.4% [-3.1, +8.0] n.s. 2/5 lower
+  vision:itms6_960:failsafe          vs vision:itms6_640:failsafe            +0.1% [-6.8, +6.9] n.s. 3/5 lower
+  vision:itms6_640:failsafe          vs webster                             -28.2% [-29.3, -27.0] SIG 5/5 lower
+  vision:itms6_960:failsafe          vs webster                             -28.1% [-32.9, -23.3] SIG 5/5 lower
+  per seed (person delay):
+    truth                              1:   72,354  2:   73,383  3:   73,558  4:   74,415  5:   73,065
+    vision:coco_pretrained:failsafe    1:   75,954  2:   79,201  3:   73,771  4:   78,156  5:   79,711
+    vision:finetuned_day:failsafe      1:   70,838  2:   82,691  3:   67,251  4:   75,769  5:   76,352
+    vision:itms6_640:failsafe          1:   77,018  2:   74,403  3:   76,258  4:   78,683  5:   77,629
+    vision:itms6_960:failsafe          1:   71,265  2:   74,196  3:   80,227  4:   76,541  5:   81,975
+    vision:stock_640:failsafe          1:   84,094  2:   88,820  3:   86,615  4:   79,814  5:   90,567
+    vision:uvh26_1280:failsafe         1:   68,201  2:   72,506  3:   81,036  4:   78,171  5:   75,200
+    vision:uvh26_640:failsafe          1:   70,543  2:   81,980  3:   84,290  4:   88,406  5:   75,486
+    webster                            1:  106,263  2:  106,064  3:  105,611  4:  108,512  5:  108,109
+== heavy
+  truth                              n=5 delay    457,164  p95 wait  270.6  stops 2.73  viol 0  conf None  fallback 0.0%  blind-check junction-ticks 0
+  vision:finetuned_day:failsafe      n=5 delay    536,460  p95 wait  380.2  stops 3.15  viol 0  conf 0.9  fallback 0.0%  blind-check junction-ticks 8
+  vision:itms6_640:failsafe          n=5 delay    534,887  p95 wait  365.6  stops 3.34  viol 0  conf 0.87  fallback 0.0%  blind-check junction-ticks 0
+  vision:itms6_960:failsafe          n=5 delay    541,458  p95 wait  355.0  stops 3.24  viol 0  conf 0.87  fallback 0.0%  blind-check junction-ticks 17
+  vision:uvh26_1280:failsafe         n=5 delay    493,570  p95 wait  342.2  stops 2.98  viol 0  conf 0.86  fallback 0.0%  blind-check junction-ticks 0
+  vision:uvh26_640:failsafe          n=5 delay    534,132  p95 wait  359.8  stops 3.19  viol 0  conf 0.86  fallback 0.8%  blind-check junction-ticks 559
+  webster                            n=5 delay    648,447  p95 wait  427.0  stops 3.23  viol 0  conf None  fallback 0.0%  blind-check junction-ticks 0
+  truth                              vs webster                             -29.5% [-38.1, -20.9] SIG 5/5 lower
+  vision:itms6_640:failsafe          vs truth                               +17.0% [-15.7, +49.7] n.s. 1/5 lower
+  vision:itms6_960:failsafe          vs truth                               +18.4% [-15.2, +52.1] n.s. 1/5 lower
+  vision:uvh26_640:failsafe          vs truth                               +16.8% [-0.9, +34.6] n.s. 0/5 lower
+  vision:uvh26_1280:failsafe         vs truth                                +8.0% [-5.6, +21.5] n.s. 1/5 lower
+  vision:finetuned_day:failsafe      vs truth                               +17.3% [+0.3, +34.3] SIG 0/5 lower
+  vision:itms6_640:failsafe          vs vision:uvh26_640:failsafe            +0.1% [-31.6, +31.9] n.s. 3/5 lower
+  vision:itms6_640:failsafe          vs vision:uvh26_1280:failsafe           +8.4% [-26.9, +43.7] n.s. 2/5 lower
+  vision:itms6_960:failsafe          vs vision:uvh26_1280:failsafe           +9.7% [-11.6, +31.0] n.s. 2/5 lower
+  vision:itms6_960:failsafe          vs vision:itms6_640:failsafe            +1.2% [-35.0, +37.4] n.s. 2/5 lower
+  vision:itms6_640:failsafe          vs webster                             -17.5% [-39.9, +4.9] n.s. 4/5 lower
+  vision:itms6_960:failsafe          vs webster                             -16.5% [-31.9, -1.1] SIG 4/5 lower
+  per seed (person delay):
+    truth                              1:  442,070  2:  422,179  3:  479,473  4:  487,961  5:  454,138
+    vision:finetuned_day:failsafe      1:  594,613  2:  423,071  3:  520,491  4:  559,370  5:  584,754
+    vision:itms6_640:failsafe          1:  435,699  2:  534,184  3:  481,620  4:  493,992  5:  728,941
+    vision:itms6_960:failsafe          1:  522,837  2:  720,081  3:  484,061  4:  486,648  5:  493,660
+    vision:uvh26_1280:failsafe         1:  517,427  2:  525,870  3:  485,877  4:  493,531  5:  445,145
+    vision:uvh26_640:failsafe          1:  618,910  2:  518,031  3:  503,770  4:  501,626  5:  528,321
+    webster                            1:  639,311  2:  685,933  3:  647,607  4:  631,855  5:  637,528

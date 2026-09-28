@@ -67,6 +67,7 @@ class ErrorPreset:
     p_bad_to_good: float = 1.0
     bad_recall_factor: float = 1.0
     confusion_flicker: float = 0.05  # per-frame chance a sticky label is re-drawn
+    size_h50_by_class: dict[VClass, float] = field(default_factory=dict)  # overrides size_h50_px
 
 
 _ALL = tuple(VClass)
@@ -150,6 +151,80 @@ PRESETS["night_rain"] = replace(
     bad_recall_factor=0.2,
 )
 
+# ---- measured detectors -------------------------------------------------------------
+#
+# Fitted by `scripts/m8_simcam_calibrate.py` to real detectors scored on 250
+# labelled UVH-26 validation frames (Bengaluru Safe City CCTV, 1080p) at
+# ByteTrack's 0.5 line: recall per class and its size curve by maximum
+# likelihood, confusion from what each found vehicle was called
+# (`baselines/2026-09-26_m8_measured_detectors/simcam_fit.json`). A still
+# image cannot measure bursts, false positives or person recall, so those
+# stay as the preset each starts from. The labels do not say how hidden a
+# vehicle was, so occlusion misses are inside `base_recall` and SimCam's
+# visibility curve applies on top: a little pessimistic, by construction.
+_C, _A, _M, _B, _T, _BI, _P = (VClass.CAR, VClass.AUTO_RICKSHAW, VClass.MOTORCYCLE, VClass.BUS,
+                               VClass.TRUCK, VClass.BICYCLE, VClass.PERSON)
+
+# IISc's UVH-26 YOLO11-S, ITMS-class scores merged, 640 px input (56 ms a frame on a laptop CPU)
+PRESETS["uvh26_640"] = replace(
+    PRESETS["finetuned_day"],
+    name="uvh26_640",
+    base_recall={_C: 0.92, _A: 0.864, _M: 0.78, _B: 0.73, _T: 0.702, _BI: 0.464, _P: 0.85},
+    size_h50_px=55.0,
+    size_h50_by_class={_C: 53.0, _A: 48.0, _M: 58.75, _B: 55.0, _T: 86.0, _BI: 55.0},
+    confusion={_A: {_C: 0.015, _M: 0.003, _T: 0.015}, _BI: {_M: 0.429}, _B: {_T: 0.052},
+               _C: {_A: 0.002, _B: 0.003, _T: 0.002}, _M: {_C: 0.001},
+               _T: {_A: 0.025, _B: 0.006, _C: 0.025}},
+)
+# the same model at 1280 px input (272 ms a frame on that CPU: a GPU's job for 19 cameras)
+PRESETS["uvh26_1280"] = replace(
+    PRESETS["finetuned_day"],
+    name="uvh26_1280",
+    base_recall={_C: 0.88, _A: 0.794, _M: 0.758, _B: 0.54, _T: 0.608, _BI: 0.532, _P: 0.85},
+    size_h50_px=5.0,
+    size_h50_by_class={_C: 31.0, _A: 5.0, _M: 5.0, _B: 5.0, _T: 51.25, _BI: 5.0},
+    confusion={_A: {_B: 0.003, _C: 0.022, _M: 0.003, _T: 0.015}, _BI: {_M: 0.353},
+               _B: {_T: 0.021}, _C: {_A: 0.003, _B: 0.003, _T: 0.008}, _M: {_A: 0.001, _C: 0.001},
+               _T: {_A: 0.019, _B: 0.019, _C: 0.025}},
+)
+# The adopted fine-tune (notebook version 2; `baselines/2026-09-27_m8_finetune_v2/`):
+# IISc's model trained further on 3,000 UVH-26 frames to the six ITMS types, in full precision.
+# Fitted the same way; bus and bicycle (under 100 boxes each) share the pooled size curve. The
+# fit undershoots the 20-40 px boxes (measured 0.44, fitted 0.26 at 640 px; 0.63 and 0.43 at
+# 960, 63 boxes), so for distant vehicles these presets are pessimistic.
+# 640 px input, 51 ms a frame on the laptop's CPU
+PRESETS["itms6_640"] = replace(
+    PRESETS["finetuned_day"],
+    name="itms6_640",
+    base_recall={_C: 0.94, _A: 0.866, _M: 0.804, _B: 0.792, _T: 0.79, _BI: 0.708, _P: 0.85},
+    size_h50_px=43.75,
+    size_h50_by_class={_C: 42.5, _A: 40.75, _M: 42.75, _B: 43.75, _T: 66.0, _BI: 43.75},
+    confusion={_A: {_B: 0.002, _C: 0.007, _M: 0.005, _T: 0.012}, _BI: {_M: 0.364},
+               _B: {_T: 0.108}, _C: {_A: 0.005, _B: 0.006, _T: 0.002},
+               _T: {_A: 0.025, _B: 0.02, _C: 0.025}},
+)
+# the same recipe trained at 960 px input (136 ms a frame on that CPU)
+PRESETS["itms6_960"] = replace(
+    PRESETS["finetuned_day"],
+    name="itms6_960",
+    base_recall={_C: 0.956, _A: 0.892, _M: 0.802, _B: 0.786, _T: 0.78, _BI: 0.70, _P: 0.85},
+    size_h50_px=37.5,
+    size_h50_by_class={_C: 38.5, _A: 37.25, _M: 29.75, _B: 37.5, _T: 57.25, _BI: 37.5},
+    confusion={_A: {_B: 0.005, _C: 0.014, _M: 0.002, _T: 0.009}, _BI: {_M: 0.227},
+               _B: {_T: 0.076}, _C: {_A: 0.005, _B: 0.005, _T: 0.002},
+               _T: {_A: 0.034, _B: 0.02, _C: 0.034}},
+)
+# stock COCO YOLO11-S, 640 px: no auto-rickshaw class, so an auto it finds is always another type
+PRESETS["stock_640"] = replace(
+    PRESETS["coco_pretrained"],
+    name="stock_640",
+    base_recall={_C: 0.86, _A: 0.596, _M: 0.33, _B: 0.718, _T: 0.678, _BI: 0.306, _P: 0.8},
+    size_h50_px=88.5,
+    size_h50_by_class={_C: 63.75, _A: 209.25, _M: 148.25, _B: 88.5, _T: 162.5, _BI: 88.5},
+    confusion={_A: {_B: 0.122, _C: 0.4, _M: 0.011, _T: 0.467}, _B: {_T: 0.222}, _C: {_T: 0.042},
+               _M: {_BI: 0.015, _C: 0.015}, _T: {_B: 0.087, _C: 0.035, _M: 0.009}},
+)
+
 
 @dataclass
 class _Hotspot:
@@ -218,8 +293,9 @@ class PerceptionErrorModel:
         p = self.preset
         base = np.array([p.base_recall.get(c, 0.9) for c in filmed.vclass])
         h = filmed.boxes[:, 3] - filmed.boxes[:, 1]
-        size = _sigmoid((h - p.size_h50_px) / max(1.0, 0.25 * p.size_h50_px)) if p.size_h50_px \
-            else np.ones(len(h))
+        h50 = np.array([p.size_h50_by_class.get(c, p.size_h50_px) for c in filmed.vclass],
+                       dtype=np.float64).reshape(len(h))
+        size = np.where(h50 > 0, _sigmoid((h - h50) / np.maximum(1.0, 0.25 * h50)), 1.0)
         vis_eff = filmed.visible * filmed.in_frame
         vis = _sigmoid((vis_eff - p.vis_50) / 0.08)
         return base * size * vis

@@ -126,3 +126,57 @@ def test_the_error_model_forgets_vehicles_long_gone(network, camera) -> None:
                                                   [(vid, VClass.AUTO_RICKSHAW, 150.0, 0.0)])))
     assert len(m._bad) <= 2 * _PRUNE_EVERY // 50 + 1
     assert set(m._label) <= set(m._bad) and "v0" not in m._bad
+
+
+def test_measured_presets_follow_their_fits() -> None:
+    """The measured presets reproduce what the fit says about the size curve,
+    and the stock one never calls an auto-rickshaw an auto (COCO has no such
+    class): the confusion row sums to one."""
+    from vision_service.simcam.errors import _sigmoid
+
+    for name in ("uvh26_640", "uvh26_1280", "stock_640", "itms6_640", "itms6_960"):
+        p = PRESETS[name]
+        for c, h50 in p.size_h50_by_class.items():
+            assert 0 < p.base_recall[c] <= 1 and h50 > 0
+        for c, row in p.confusion.items():
+            assert sum(row.values()) <= 1.0 + 1e-9, (name, c)
+    stock = PRESETS["stock_640"]
+    assert abs(sum(stock.confusion[VClass.AUTO_RICKSHAW].values()) - 1.0) < 1e-9
+    # a 30 px car (about 110 m away on a planned camera) under each fit
+    for name, lo, hi in (("uvh26_640", 0.1, 0.25), ("uvh26_1280", 0.4, 0.6),
+                         ("itms6_640", 0.1, 0.25), ("itms6_960", 0.25, 0.4)):
+        p = PRESETS[name]
+        h50 = p.size_h50_by_class[VClass.CAR]
+        s = float(_sigmoid(np.array([(30.0 - h50) / max(1.0, 0.25 * h50)]))[0])
+        assert lo < s < hi, (name, s)
+
+
+def test_a_per_class_size_curve_leaves_the_other_presets_unchanged(network, camera) -> None:
+    """Adding `size_h50_by_class` must not move a single draw of the presets
+    every earlier result was measured with."""
+    from dataclasses import replace
+
+    from vision_service.simcam.errors import ErrorPreset
+
+    snap = vehicles_on(network, "in_0", [(f"v{i}", vc, 60.0 + 9 * i, 0.0) for i, vc in
+                                        enumerate([VClass.CAR, VClass.MOTORCYCLE, VClass.BUS] * 4)])
+    f = film(camera, snap)
+    for name in ("finetuned_day", "coco_pretrained", "night_rain"):
+        p: ErrorPreset = PRESETS[name]
+        same = replace(p, size_h50_by_class={c: p.size_h50_px for c in VClass})
+        a = PerceptionErrorModel(p, seed=2, camera_id="c")
+        b = PerceptionErrorModel(same, seed=2, camera_id="c")
+        np.testing.assert_array_equal(a._recall(f), b._recall(f))
+        da = [(d.truth_id, d.vclass, d.box) for _ in range(5) for d in a.detect(camera, f)]
+        db = [(d.truth_id, d.vclass, d.box) for _ in range(5) for d in b.detect(camera, f)]
+        assert da == db
+
+
+def test_the_adopted_fine_tune_is_fitted_better_than_the_model_it_came_from() -> None:
+    """The fine-tune's fit finds more of every vehicle type than IISc's model's fit, and its
+    size curve halves recall at a smaller box: what the test frames measured."""
+    ft, iisc = PRESETS["itms6_640"], PRESETS["uvh26_640"]
+    for c in (VClass.CAR, VClass.AUTO_RICKSHAW, VClass.MOTORCYCLE, VClass.BUS, VClass.TRUCK,
+              VClass.BICYCLE):
+        assert ft.base_recall[c] >= iisc.base_recall[c], c
+        assert ft.size_h50_by_class[c] <= iisc.size_h50_by_class[c], c

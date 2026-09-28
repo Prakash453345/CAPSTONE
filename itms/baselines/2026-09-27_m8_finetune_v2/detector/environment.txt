@@ -1,0 +1,10 @@
+Scored 2026-09-27 on the laptop (MacBook Air, Apple silicon) in the Cowork Linux VM:
+aarch64, 4 cores, Python 3.10.12, onnxruntime 1.23.2 (CPUExecutionProvider), opencv.
+All six runs (IISc's model as released, the repaired control, the fine-tune; 640 and 960 px) in
+one session, one after another, so their CPU times are comparable with each other. They are not
+comparable with earlier baselines' times (IISc's model at 640 px took 56 ms there, 47 ms here).
+Frames: the 250 PNG test frames in data/uvh26/val_sample (scripts/m8_fetch_uvh26_sample.py).
+Models: data/uvh26/finetune_v2/ (sha256 in ../colab_v2/train_report_v2.json) and
+data/uvh26/UVH-26-MV-YOLOv11-S.onnx (sha256 b25158aa3b0c43bea18f3bcee5ef19c467b24780b0e8a0c8349ce79e61961e63).
+cmp_ft_v1_vs_v2_*.json pairs version 1's fine-tunes (scored 2026-09-26 on the same frames) with
+version 2's: detection outcomes are comparable, CPU times are not.

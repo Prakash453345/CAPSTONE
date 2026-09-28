@@ -64,3 +64,27 @@ def test_recall_by_box_height() -> None:
            [[50, 0, 60, 100]], [0.9], [CAR])
     by = ev.summary()["recall_by_height"]
     assert by["0-20px"] == (0.0, 1) and by["80-infpx"] == (1.0, 1)
+    assert ev.per_box == [("car", 15.0, False, False), ("car", 100.0, True, True)]
+
+
+def test_per_image_counts_and_the_paired_bootstrap() -> None:
+    from vision_service.eval.detection import paired_bootstrap
+
+    def run(found_every: int) -> list[dict]:
+        ev = DetectionEval()
+        for i in range(40):
+            truth = [[10 * k, 0, 10 * k + 8, 20] for k in range(5)]
+            pred = [b for k, b in enumerate(truth) if k % found_every == 0]
+            ev.add(truth, [CAR] * 5, pred, [0.9] * len(pred), [CAR] * len(pred), image=f"im{i}")
+        return ev.per_image
+
+    a, b = run(2), run(1)             # A finds 3 of 5 cars per image, B all 5
+    assert a[0] == {"image": "im0", "truth": 5, "found": 3, "correct": 3, "false_pos": 0,
+                    "pcu_truth": 5.0, "pcu_found": 3.0}
+    cmp = paired_bootstrap(a, b, n=500)
+    assert cmp["vehicle_recall"]["diff"] == pytest.approx(0.4)
+    assert cmp["vehicle_recall"]["excludes_zero"]           # the same gain on every image
+    assert cmp["pcu_mae"]["diff"] == pytest.approx(-2.0)
+    assert not cmp["false_pos_per_image"]["excludes_zero"]  # both have none
+    with pytest.raises(ValueError):
+        paired_bootstrap(a, b[:-1])
