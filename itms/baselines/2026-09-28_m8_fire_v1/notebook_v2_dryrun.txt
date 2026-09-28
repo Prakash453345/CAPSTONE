@@ -1,0 +1,448 @@
+250 Bengaluru test frames, and anything within 72 bits of them, kept out
+D-Fire from: Drive zip D-Fire.zip
+64 labelled images; {'no label file': 1}
+splits in the download: {'test': 16, 'train': 48}
+median flame-coloured share of box pixels, by label id: {1: 0.851, 0: 0.0}
+class names file: D-Fire/data.yaml {0: 'smoke', 1: 'fire'}
+label ids -> {1: 'fire', 0: 'smoke'}
+split: the download's train / test split; validation = a seeded 10% of train
+counts: {
+ "train": {
+  "fire": 22,
+  "images": 41,
+  "images with fire or smoke": 30,
+  "smoke": 18,
+  "images with neither": 11,
+  "Bengaluru frames with no fire": 6
+ },
+ "val": {
+  "smoke": 4,
+  "images": 4,
+  "images with fire or smoke": 4,
+  "fire": 1,
+  "Bengaluru frames with no fire": 4
+ },
+ "test": {
+  "smoke": 8,
+  "fire": 8,
+  "images": 16,
+  "images with fire or smoke": 12,
+  "images with neither": 4
+ }
+}
+skipped: {'no label file': 1, 'does not open': 1, 'train: near-copy of a test image': 1, 'train: identical to a test image': 1}
+boxes: {'box clipped to the image': 2, 'box empty, tiny or outside the image': 1, 'malformed line': 1, 'non-finite box': 1, 'box with an unknown class id dropped': 1}
+New https://pypi.org/project/ultralytics/8.4.164 available 😃 Update with 'pip install -U ultralytics'
+Ultralytics 8.4.160 🚀 Python-3.11.15 torch-2.14.0+cu130 CPU (Intel Xeon Processor @ 2.10GHz)
+[34m[1mengine/trainer: [0magnostic_nms=False, amp=True, angle=1.0, augment=False, auto_augment=randaugment, batch=4, bgr=0.0, box=7.5, cache=False, cfg=None, channels_last=None, classes=None, close_mosaic=5, cls=0.5, cls_pw=0.0, cls_remap=True, compile=False, conf=None, copy_paste=0.0, copy_paste_mode=flip, cos_lr=True, cutmix=0.0, data=/tmp/fire_dryrun_d6cfd0al/work/fire.yaml, degrees=0.0, deterministic=True, device=, dfl=1.5, dgrad=0.5, dis=6.0, distill_model=None, dlam=1.0, dlog=1.0, dnn=False, dropout=0.0, dynamic=False, embed=None, epochs=2, erasing=0.4, exist_ok=True, fliplr=0.5, flipud=0.0, format=torchscript, fraction=1.0, freeze=None, hsv_h=0.015, hsv_s=0.7, hsv_v=0.4, imgsz=320, iou=0.7, keras=False, kobj=1.0, line_width=None, lr0=0.01, lrf=0.01, mask_ratio=4, max_det=300, mixup=0.0, mode=train, model=/home/claude/uvh/yolo11s.pt, momentum=0.937, mosaic=1.0, multi_scale=0.0, name=fire_320, nbs=64, nms=None, opset=None, optimize=False, optimizer=auto, overlap_mask=True, patience=5, perspective=0.0, plots=True, pose=12.0, pretrained=True, profile=False, project=/tmp/fire_dryrun_d6cfd0al/drive/itms_fire/runs, quantize=None, rect=False, resume=False, retina_masks=False, rle=1.0, save=True, save_conf=False, save_crop=False, save_dir=/tmp/fire_dryrun_d6cfd0al/drive/itms_fire/runs/fire_320, save_frames=False, save_json=False, save_period=-1, save_txt=False, scale=0.5, seed=26, shear=0.0, show=False, show_boxes=True, show_conf=True, show_labels=True, simplify=True, single_cls=False, source=None, split=val, stream_buffer=False, task=detect, time=None, tracker=tracktrack.yaml, translate=0.1, val=True, verbose=True, vid_stride=1, visualize=False, warmup_bias_lr=0.1, warmup_epochs=3.0, warmup_momentum=0.8, weight_decay=0.0005, workers=0, workspace=None
+Overriding model.yaml nc=80 with nc=2
+                   from  n    params  module                                       arguments                     
+  0                  -1  1       928  ultralytics.nn.modules.conv.Conv             [3, 32, 3, 2]                 
+  1                  -1  1     18560  ultralytics.nn.modules.conv.Conv             [32, 64, 3, 2]                
+  2                  -1  1     26080  ultralytics.nn.modules.block.C3k2            [64, 128, 1, False, 0.25]     
+  3                  -1  1    147712  ultralytics.nn.modules.conv.Conv             [128, 128, 3, 2]              
+  4                  -1  1    103360  ultralytics.nn.modules.block.C3k2            [128, 256, 1, False, 0.25]    
+  5                  -1  1    590336  ultralytics.nn.modules.conv.Conv             [256, 256, 3, 2]              
+  6                  -1  1    346112  ultralytics.nn.modules.block.C3k2            [256, 256, 1, True]           
+  7                  -1  1   1180672  ultralytics.nn.modules.conv.Conv             [256, 512, 3, 2]              
+  8                  -1  1   1380352  ultralytics.nn.modules.block.C3k2            [512, 512, 1, True]           
+  9                  -1  1    656896  ultralytics.nn.modules.block.SPPF            [512, 512, 5]                 
+ 10                  -1  1    990976  ultralytics.nn.modules.block.C2PSA           [512, 512, 1]                 
+ 11                  -1  1         0  torch.nn.modules.upsampling.Upsample         [None, 2, 'nearest']          
+ 12             [-1, 6]  1         0  ultralytics.nn.modules.conv.Concat           [1]                           
+ 13                  -1  1    443776  ultralytics.nn.modules.block.C3k2            [768, 256, 1, False]          
+ 14                  -1  1         0  torch.nn.modules.upsampling.Upsample         [None, 2, 'nearest']          
+ 15             [-1, 4]  1         0  ultralytics.nn.modules.conv.Concat           [1]                           
+ 16                  -1  1    127680  ultralytics.nn.modules.block.C3k2            [512, 128, 1, False]          
+ 17                  -1  1    147712  ultralytics.nn.modules.conv.Conv             [128, 128, 3, 2]              
+ 18            [-1, 13]  1         0  ultralytics.nn.modules.conv.Concat           [1]                           
+ 19                  -1  1    345472  ultralytics.nn.modules.block.C3k2            [384, 256, 1, False]          
+ 20                  -1  1    590336  ultralytics.nn.modules.conv.Conv             [256, 256, 3, 2]              
+ 21            [-1, 10]  1         0  ultralytics.nn.modules.conv.Concat           [1]                           
+ 22                  -1  1   1511424  ultralytics.nn.modules.block.C3k2            [768, 512, 1, True]           
+ 23        [16, 19, 22]  1    820182  ultralytics.nn.modules.head.Detect           [2, 16, None, [128, 256, 512]]
+YOLO11s summary: 181 layers, 9,428,566 parameters, 9,428,550 gradients, 21.7 GFLOPs
+Transferred 493/499 items from pretrained weights
+Freezing layer 'model.23.dfl.conv.weight'
+[34m[1mtrain: [0mFast image access ✅ (ping: 0.0±0.0 ms, read: 3000.6±1572.6 MB/s, size: 118.9 KB)
+[K[34m[1mtrain: [0mScanning /tmp/fire_dryrun_d6cfd0al/work/ds/labels/train... 47 images, 17 backgrounds, 0 corrupt: 100% ━━━━━━━━━━━━ 47/47 3.8Kit/s 0.0s
+[34m[1mtrain: [0mNew cache created: /tmp/fire_dryrun_d6cfd0al/work/ds/labels/train.cache
+[34m[1mval: [0mFast image access ✅ (ping: 0.0±0.0 ms, read: 3556.4±594.5 MB/s, size: 274.4 KB)
+[K[34m[1mval: [0mScanning /tmp/fire_dryrun_d6cfd0al/work/ds/labels/val... 8 images, 4 backgrounds, 0 corrupt: 100% ━━━━━━━━━━━━ 8/8 3.2Kit/s 0.0s
+[34m[1mval: [0mNew cache created: /tmp/fire_dryrun_d6cfd0al/work/ds/labels/val.cache
+[34m[1moptimizer:[0m 'optimizer=auto' found, ignoring 'lr0=0.01' and 'momentum=0.937' and determining best 'optimizer', 'lr0' and 'momentum' automatically... 
+[34m[1moptimizer:[0m AdamW(lr=0.001667, momentum=0.9) with parameter groups 81 weight(decay=0.0), 88 weight(decay=0.0005), 87 bias(decay=0.0)
+WARNING ⚠️ module 'IPython' has no attribute 'get_ipython'
+Using 47 train, 8 val images for fraction=1.0 at imgsz=320
+Using 0 dataloader workers
+Logging results to [1m/tmp/fire_dryrun_d6cfd0al/drive/itms_fire/runs/fire_320[0m
+Starting training for 2 epochs...
+Closing dataloader mosaic
+      Epoch    GPU_mem   box_loss   cls_loss   dfl_loss  Instances       Size
+[K        1/2         0G          0      30.51          0          0        320: 0% ──────────── 0/12  1.6s[K        1/2         0G      1.117      18.68      1.126          2        320: 8% ━─────────── 1/12 4.2s/it 2.8s<46.3s[K        1/2         0G      1.631      14.33       1.47          5        320: 16% ━━────────── 2/12 2.0s/it 3.7s<20.3s[K        1/2         0G      1.949      12.69      1.657          3        320: 25% ━━━───────── 3/12 1.6s/it 4.8s<14.1s[K        1/2         0G      2.024      11.77      1.682          2        320: 33% ━━━━──────── 4/12 1.3s/it 5.7s<10.3s[K        1/2         0G      2.186       11.6      1.803          2        320: 41% ━━━━━─────── 5/12 1.2s/it 6.6s<8.1s[K        1/2         0G      2.345      10.74      1.894          4        320: 50% ━━━━━━────── 6/12 1.1s/it 7.7s<6.8s[K        1/2         0G      2.464      10.18      2.005          6        320: 58% ━━━━━━━───── 7/12 1.1s/it 8.8s<5.7s[K        1/2         0G       2.52      9.705      2.012          5        320: 66% ━━━━━━━━──── 8/12 1.2s/it 10.1s<4.7s[K        1/2         0G      2.557      9.272      2.049          4        320: 75% ━━━━━━━━━─── 9/12 1.2s/it 11.3s<3.5s[K        1/2         0G      2.583      8.933      2.068          4        320: 83% ━━━━━━━━━━── 10/12 1.2s/it 12.5s<2.4s[K        1/2         0G       2.56      8.836      2.107          2        320: 91% ━━━━━━━━━━━─ 11/12 1.1s/it 13.5s<1.1s[K        1/2         0G       2.56      8.836      2.107          2        320: 100% ━━━━━━━━━━━━ 12/12 1.1s/it 13.5s
+[K                 Class     Images  Instances      Box(P          R      mAP50  mAP50-95): 100% ━━━━━━━━━━━━ 1/1 1.3it/s 0.7s
+                   all          8          5    0.00033        0.5   0.000427   8.54e-05
+== simulated disconnect after epoch 1
+id map: {'1': 'fire', '0': 'smoke'} | flame share by id: {'1': 0.851, '0': 0.0}
+split: the download's train / test split; validation = a seeded 10% of train
+counts: {'train': {'fire': 22, 'images': 41, 'images with fire or smoke': 30, 'smoke': 18, 'images with neither': 11, 'Bengaluru frames with no fire': 6}, 'val': {'smoke': 4, 'images': 4, 'images with fire or smoke': 4, 'fire': 1, 'Bengaluru frames with no fire': 4}, 'test': {'smoke': 8, 'fire': 8, 'images': 16, 'images with fire or smoke': 12, 'images with neither': 4}}
+skipped: {'no label file': 1, 'does not open': 1, 'train: near-copy of a test image': 1, 'train: identical to a test image': 1}
+boxes: {'box clipped to the image': 2, 'box empty, tiny or outside the image': 1, 'malformed line': 1, 'non-finite box': 1, 'box with an unknown class id dropped': 1}
+250 Bengaluru test frames, and anything within 72 bits of them, kept out
+the prepared dataset is in Drive; nothing to download
+restoring the prepared dataset from Drive...
+split: the download's train / test split; validation = a seeded 10% of train
+counts: {
+ "train": {
+  "fire": 22,
+  "images": 41,
+  "images with fire or smoke": 30,
+  "smoke": 18,
+  "images with neither": 11,
+  "Bengaluru frames with no fire": 6
+ },
+ "val": {
+  "smoke": 4,
+  "images": 4,
+  "images with fire or smoke": 4,
+  "fire": 1,
+  "Bengaluru frames with no fire": 4
+ },
+ "test": {
+  "smoke": 8,
+  "fire": 8,
+  "images": 16,
+  "images with fire or smoke": 12,
+  "images with neither": 4
+ }
+}
+skipped: {'no label file': 1, 'does not open': 1, 'train: near-copy of a test image': 1, 'train: identical to a test image': 1}
+boxes: {'box clipped to the image': 2, 'box empty, tiny or outside the image': 1, 'malformed line': 1, 'non-finite box': 1, 'box with an unknown class id dropped': 1}
+New https://pypi.org/project/ultralytics/8.4.164 available 😃 Update with 'pip install -U ultralytics'
+Ultralytics 8.4.160 🚀 Python-3.11.15 torch-2.14.0+cu130 CPU (Intel Xeon Processor @ 2.10GHz)
+[34m[1mengine/trainer: [0magnostic_nms=False, amp=True, angle=1.0, augment=False, auto_augment=randaugment, batch=4, bgr=0.0, box=7.5, cache=False, cfg=None, channels_last=None, classes=None, close_mosaic=5, cls=0.5, cls_pw=0.0, cls_remap=True, compile=False, conf=None, copy_paste=0.0, copy_paste_mode=flip, cos_lr=True, cutmix=0.0, data=/tmp/fire_dryrun_d6cfd0al/work/fire.yaml, degrees=0.0, deterministic=True, device=, dfl=1.5, dgrad=0.5, dis=6.0, distill_model=None, dlam=1.0, dlog=1.0, dnn=False, dropout=0.0, dynamic=False, embed=None, epochs=2, erasing=0.4, exist_ok=True, fliplr=0.5, flipud=0.0, format=torchscript, fraction=1.0, freeze=None, hsv_h=0.015, hsv_s=0.7, hsv_v=0.4, imgsz=320, iou=0.7, keras=False, kobj=1.0, line_width=None, lr0=0.01, lrf=0.01, mask_ratio=4, max_det=300, mixup=0.0, mode=train, model=/tmp/fire_dryrun_d6cfd0al/drive/itms_fire/runs/fire_320/weights/last.pt, momentum=0.937, mosaic=1.0, multi_scale=0.0, name=fire_320, nbs=64, nms=None, opset=None, optimize=False, optimizer=auto, overlap_mask=True, patience=5, perspective=0.0, plots=True, pose=12.0, pretrained=True, profile=False, project=/tmp/fire_dryrun_d6cfd0al/drive/itms_fire/runs, quantize=None, rect=False, resume=/tmp/fire_dryrun_d6cfd0al/drive/itms_fire/runs/fire_320/weights/last.pt, retina_masks=False, rle=1.0, save=True, save_conf=False, save_crop=False, save_dir=/tmp/fire_dryrun_d6cfd0al/drive/itms_fire/runs/fire_320, save_frames=False, save_json=False, save_period=-1, save_txt=False, scale=0.5, seed=26, shear=0.0, show=False, show_boxes=True, show_conf=True, show_labels=True, simplify=True, single_cls=False, source=None, split=val, stream_buffer=False, task=detect, time=None, tracker=tracktrack.yaml, translate=0.1, val=True, verbose=True, vid_stride=1, visualize=False, warmup_bias_lr=0.0, warmup_epochs=3.0, warmup_momentum=0.8, weight_decay=0.0005, workers=0, workspace=None
+                   from  n    params  module                                       arguments                     
+  0                  -1  1       928  ultralytics.nn.modules.conv.Conv             [3, 32, 3, 2]                 
+  1                  -1  1     18560  ultralytics.nn.modules.conv.Conv             [32, 64, 3, 2]                
+  2                  -1  1     26080  ultralytics.nn.modules.block.C3k2            [64, 128, 1, False, 0.25]     
+  3                  -1  1    147712  ultralytics.nn.modules.conv.Conv             [128, 128, 3, 2]              
+  4                  -1  1    103360  ultralytics.nn.modules.block.C3k2            [128, 256, 1, False, 0.25]    
+  5                  -1  1    590336  ultralytics.nn.modules.conv.Conv             [256, 256, 3, 2]              
+  6                  -1  1    346112  ultralytics.nn.modules.block.C3k2            [256, 256, 1, True]           
+  7                  -1  1   1180672  ultralytics.nn.modules.conv.Conv             [256, 512, 3, 2]              
+  8                  -1  1   1380352  ultralytics.nn.modules.block.C3k2            [512, 512, 1, True]           
+  9                  -1  1    656896  ultralytics.nn.modules.block.SPPF            [512, 512, 5]                 
+ 10                  -1  1    990976  ultralytics.nn.modules.block.C2PSA           [512, 512, 1]                 
+ 11                  -1  1         0  torch.nn.modules.upsampling.Upsample         [None, 2, 'nearest']          
+ 12             [-1, 6]  1         0  ultralytics.nn.modules.conv.Concat           [1]                           
+ 13                  -1  1    443776  ultralytics.nn.modules.block.C3k2            [768, 256, 1, False]          
+ 14                  -1  1         0  torch.nn.modules.upsampling.Upsample         [None, 2, 'nearest']          
+ 15             [-1, 4]  1         0  ultralytics.nn.modules.conv.Concat           [1]                           
+ 16                  -1  1    127680  ultralytics.nn.modules.block.C3k2            [512, 128, 1, False]          
+ 17                  -1  1    147712  ultralytics.nn.modules.conv.Conv             [128, 128, 3, 2]              
+ 18            [-1, 13]  1         0  ultralytics.nn.modules.conv.Concat           [1]                           
+ 19                  -1  1    345472  ultralytics.nn.modules.block.C3k2            [384, 256, 1, False]          
+ 20                  -1  1    590336  ultralytics.nn.modules.conv.Conv             [256, 256, 3, 2]              
+ 21            [-1, 10]  1         0  ultralytics.nn.modules.conv.Concat           [1]                           
+ 22                  -1  1   1511424  ultralytics.nn.modules.block.C3k2            [768, 512, 1, True]           
+ 23        [16, 19, 22]  1    820182  ultralytics.nn.modules.head.Detect           [2, 16, None, [128, 256, 512]]
+YOLO11s summary: 181 layers, 9,428,566 parameters, 9,428,550 gradients, 21.7 GFLOPs
+Transferred 499/499 items from pretrained weights
+Freezing layer 'model.23.dfl.conv.weight'
+[34m[1mtrain: [0mFast image access ✅ (ping: 0.0±0.0 ms, read: 3014.8±1223.8 MB/s, size: 118.9 KB)
+[K[34m[1mtrain: [0mScanning /tmp/fire_dryrun_d6cfd0al/work/ds/labels/train... 47 images, 17 backgrounds, 0 corrupt: 100% ━━━━━━━━━━━━ 47/47 4.0Kit/s 0.0s
+[34m[1mtrain: [0mNew cache created: /tmp/fire_dryrun_d6cfd0al/work/ds/labels/train.cache
+[34m[1mval: [0mFast image access ✅ (ping: 0.0±0.0 ms, read: 3917.7±678.4 MB/s, size: 274.4 KB)
+[K[34m[1mval: [0mScanning /tmp/fire_dryrun_d6cfd0al/work/ds/labels/val... 8 images, 4 backgrounds, 0 corrupt: 100% ━━━━━━━━━━━━ 8/8 3.0Kit/s 0.0s
+[34m[1mval: [0mNew cache created: /tmp/fire_dryrun_d6cfd0al/work/ds/labels/val.cache
+[34m[1moptimizer:[0m 'optimizer=auto' found, ignoring 'lr0=0.01' and 'momentum=0.937' and determining best 'optimizer', 'lr0' and 'momentum' automatically... 
+[34m[1moptimizer:[0m AdamW(lr=0.001667, momentum=0.9) with parameter groups 81 weight(decay=0.0), 88 weight(decay=0.0005), 87 bias(decay=0.0)
+Plotting labels to /tmp/fire_dryrun_d6cfd0al/drive/itms_fire/runs/fire_320/labels.jpg... 
+Resuming training /tmp/fire_dryrun_d6cfd0al/drive/itms_fire/runs/fire_320/weights/last.pt from epoch 2 to 2 total epochs
+Using 47 train, 8 val images for fraction=1.0 at imgsz=320
+Using 0 dataloader workers
+Logging results to [1m/tmp/fire_dryrun_d6cfd0al/drive/itms_fire/runs/fire_320[0m
+Starting training for 2 epochs...
+Closing dataloader mosaic
+      Epoch    GPU_mem   box_loss   cls_loss   dfl_loss  Instances       Size
+[K        2/2         0G          0      30.52          0          0        320: 0% ──────────── 0/12  1.2s[K        2/2         0G      1.117      18.69      1.126          2        320: 8% ━─────────── 1/12 3.8s/it 2.3s<41.4s[K        2/2         0G      1.631      14.33       1.47          5        320: 16% ━━────────── 2/12 2.1s/it 3.4s<21.1s[K        2/2         0G      1.949      12.69      1.657          3        320: 25% ━━━───────── 3/12 1.6s/it 4.5s<14.8s[K        2/2         0G      2.015      11.36      1.629          2        320: 33% ━━━━──────── 4/12 1.4s/it 5.4s<10.9s[K        2/2         0G      2.112      10.92      1.738          2        320: 41% ━━━━━─────── 5/12 1.2s/it 6.3s<8.2s[K        2/2         0G       2.19      10.25      1.766          4        320: 50% ━━━━━━────── 6/12 1.1s/it 7.2s<6.5s[K        2/2         0G      2.278      9.585      1.902          6        320: 58% ━━━━━━━───── 7/12 1.1s/it 8.3s<5.3s[K        2/2         0G      2.332      9.128      1.941          5        320: 66% ━━━━━━━━──── 8/12 1.0s/it 9.3s<4.2s[K        2/2         0G      2.395      8.749       2.02          4        320: 75% ━━━━━━━━━─── 9/12 1.0s/it 10.2s<3.0s[K        2/2         0G      2.387      8.442      2.011          4        320: 83% ━━━━━━━━━━── 10/12 1.0s/it 11.2s<2.0s[K        2/2         0G      2.375      8.231      2.058          2        320: 91% ━━━━━━━━━━━─ 11/12 1.1it/s 12.0s<0.9s[K        2/2         0G      2.375      8.231      2.058          2        320: 100% ━━━━━━━━━━━━ 12/12 1.0s/it 12.0s
+[K                 Class     Images  Instances      Box(P          R      mAP50  mAP50-95): 100% ━━━━━━━━━━━━ 1/1 2.3it/s 0.4s
+                   all          8          5   0.000375        0.5     0.0207     0.0027
+1 epochs completed in 0.004 hours.
+Optimizer stripped from /tmp/fire_dryrun_d6cfd0al/drive/itms_fire/runs/fire_320/weights/last.pt, 19.1MB
+Optimizer stripped from /tmp/fire_dryrun_d6cfd0al/drive/itms_fire/runs/fire_320/weights/best.pt, 19.1MB
+Validating /tmp/fire_dryrun_d6cfd0al/drive/itms_fire/runs/fire_320/weights/best.pt...
+Ultralytics 8.4.160 🚀 Python-3.11.15 torch-2.14.0+cu130 CPU (Intel Xeon Processor @ 2.10GHz)
+YOLO11s summary (fused): 100 layers, 9,413,574 parameters, 0 gradients, 21.4 GFLOPs
+[K                 Class     Images  Instances      Box(P          R      mAP50  mAP50-95): 100% ━━━━━━━━━━━━ 1/1 2.2it/s 0.4s
+                   all          8          5   0.000376        0.5     0.0207    0.00269
+                  fire          1          1   0.000751          1     0.0415    0.00539
+                 smoke          4          4          0          0          0          0
+Speed: 0.3ms preprocess, 49.5ms inference, 0.0ms loss, 0.8ms postprocess per image
+Results saved to [1m/tmp/fire_dryrun_d6cfd0al/drive/itms_fire/runs/fire_320[0m
+alarm threshold (chosen on validation): {'t': 0.27, 'recall': 0.25, 'fa_dfire_negatives': None, 'fa_bengaluru': 0.0}
+WARNING ⚠️ 'half' is deprecated and will be removed in the future. Use 'quantize' instead.
+Ultralytics 8.4.160 🚀 Python-3.11.15 torch-2.14.0+cu130 CPU (Intel Xeon Processor @ 2.10GHz)
+YOLO11s summary (fused): 100 layers, 9,413,574 parameters, 0 gradients, 21.4 GFLOPs
+[34m[1mval: [0mFast image access ✅ (ping: 0.0±0.0 ms, read: 2469.3±726.3 MB/s, size: 118.4 KB)
+[K[34m[1mval: [0mScanning /tmp/fire_dryrun_d6cfd0al/work/ds/labels/test... 16 images, 4 backgrounds, 0 corrupt: 100% ━━━━━━━━━━━━ 16/16 3.2Kit/s 0.0s
+[34m[1mval: [0mNew cache created: /tmp/fire_dryrun_d6cfd0al/work/ds/labels/test.cache
+[K                 Class     Images  Instances      Box(P          R      mAP50  mAP50-95): 100% ━━━━━━━━━━━━ 1/1 1.1it/s 0.9s
+                   all         16         16      0.107      0.188     0.0817     0.0115
+Speed: 1.1ms preprocess, 49.3ms inference, 0.0ms loss, 0.7ms postprocess per image
+test (scored once): {
+ "images": 16,
+ "with_fire_or_smoke": 12,
+ "recall_any": 0.0,
+ "recall_fire": 0.0,
+ "recall_smoke": 0.0,
+ "false_alarms_on_negatives": 0.0,
+ "box_ap50": {
+  "fire": 0.1631,
+  "smoke": 0.0002
+ },
+ "box_map50": 0.0817,
+ "bar": {
+  "recall_any_at_least": 0.85,
+  "passes_in_colab": false,
+  "still_to_check_on_the_laptop": "false alarms on the 250 Bengaluru test frames <= 1 %"
+ }
+}
+WARNING ⚠️ 'half' is deprecated and will be removed in the future. Use 'quantize' instead.
+Ultralytics 8.4.160 🚀 Python-3.11.15 torch-2.14.0+cu130 CPU (Intel Xeon Processor @ 2.10GHz)
+YOLO11s summary (fused): 100 layers, 9,413,574 parameters, 0 gradients, 5.3 GFLOPs
+[34m[1mPyTorch:[0m starting from '/tmp/fire_dryrun_d6cfd0al/drive/itms_fire/itms_fire_320.pt' with input shape (1, 3, 320, 320) BCHW and output shape(s) (1, 6, 2100) (36.3 MB)
+[34m[1mONNX:[0m starting export with onnx 1.23.0 opset 18...
+[34m[1mONNX:[0m slimming with onnxslim 0.1.96...
+[34m[1mONNX:[0m export success ✅ 3.4s, saved as '/tmp/fire_dryrun_d6cfd0al/drive/itms_fire/itms_fire_320.onnx' (36.3 MB)
+Export complete (3.7s)
+Results saved to [1m/tmp/fire_dryrun_d6cfd0al/drive/itms_fire/itms_fire_320.onnx[0m
+Predict:         yolo predict task=detect model=/tmp/fire_dryrun_d6cfd0al/drive/itms_fire/itms_fire_320.onnx imgsz=320 
+Validate:        yolo val task=detect model=/tmp/fire_dryrun_d6cfd0al/drive/itms_fire/itms_fire_320.onnx imgsz=320 data=/tmp/fire_dryrun_d6cfd0al/work/fire.yaml  
+Visualize:       https://netron.app
+export checked: 4.36e-07
+saved /tmp/fire_dryrun_d6cfd0al/drive/itms_fire/itms_fire_v2_results.zip (56 MB)
+Download it from Drive: folder itms_fire
+threshold: 0.27 validation, fa_bengaluru <= 0.01 {'t': 0.27, 'recall': 0.25, 'fa_dfire_negatives': None, 'fa_bengaluru': 0.0}
+test: {'images': 16, 'with_fire_or_smoke': 12, 'recall_any': 0.0, 'recall_fire': 0.0, 'recall_smoke': 0.0, 'false_alarms_on_negatives': 0.0, 'box_ap50': {'fire': 0.1631, 'smoke': 0.0002}, 'box_map50': 0.0817} {'recall_any_at_least': 0.85, 'passes_in_colab': False, 'still_to_check_on_the_laptop': 'false alarms on the 250 Bengaluru test frames <= 1 %'}
+onnx check: 4.36e-07 | bn: {'bn_layers': 81, 'channels': 14992, 'nonfinite_channels': 0, 'channels_over_fp16_max': 0, 'channels_at_fp16_max': 0} | sessions: [{'minutes': 0, 'batch_used': 4}]
+zip: ['bengaluru_negatives_review.jpg', 'fire_manifest.json', 'fire_report.json', 'itms_fire_320.onnx', 'itms_fire_320.pt', 'label_check.jpg', 'runs/fire_320/args.yaml', 'runs/fire_320/confusion_matrix.png', 'runs/fire_320/results.csv', 'runs/fire_320/results.png', 'test_misses.jpg']
+onnx names: {0: 'fire', 1: 'smoke'}
+250 Bengaluru test frames, and anything within 72 bits of them, kept out
+the prepared dataset is in Drive; nothing to download
+restoring the prepared dataset from Drive...
+split: the download's train / test split; validation = a seeded 10% of train
+counts: {
+ "train": {
+  "fire": 22,
+  "images": 41,
+  "images with fire or smoke": 30,
+  "smoke": 18,
+  "images with neither": 11,
+  "Bengaluru frames with no fire": 6
+ },
+ "val": {
+  "smoke": 4,
+  "images": 4,
+  "images with fire or smoke": 4,
+  "fire": 1,
+  "Bengaluru frames with no fire": 4
+ },
+ "test": {
+  "smoke": 8,
+  "fire": 8,
+  "images": 16,
+  "images with fire or smoke": 12,
+  "images with neither": 4
+ }
+}
+skipped: {'no label file': 1, 'does not open': 1, 'train: near-copy of a test image': 1, 'train: identical to a test image': 1}
+boxes: {'box clipped to the image': 2, 'box empty, tiny or outside the image': 1, 'malformed line': 1, 'non-finite box': 1, 'box with an unknown class id dropped': 1}
+training already finished
+alarm threshold (chosen on validation): {'t': 0.27, 'recall': 0.25, 'fa_dfire_negatives': None, 'fa_bengaluru': 0.0}
+test (scored once): {
+ "images": 16,
+ "with_fire_or_smoke": 12,
+ "recall_any": 0.0,
+ "recall_fire": 0.0,
+ "recall_smoke": 0.0,
+ "false_alarms_on_negatives": 0.0,
+ "box_ap50": {
+  "fire": 0.1631,
+  "smoke": 0.0002
+ },
+ "box_map50": 0.0817,
+ "bar": {
+  "recall_any_at_least": 0.85,
+  "passes_in_colab": false,
+  "still_to_check_on_the_laptop": "false alarms on the 250 Bengaluru test frames <= 1 %"
+ }
+}
+export checked: 4.36e-07
+saved /tmp/fire_dryrun_d6cfd0al/drive/itms_fire/itms_fire_v2_results.zip (56 MB)
+Download it from Drive: folder itms_fire
+250 Bengaluru test frames, and anything within 72 bits of them, kept out
+the prepared dataset is in Drive; nothing to download
+changed setting refused
+median flame-coloured share of box pixels, by label id: {1: 0.851, 0: 0.0}
+class names file: D-Fire/data.yaml {0: 'fire', 1: 'smoke'}
+wrong names file refused
+250 Bengaluru test frames, and anything within 72 bits of them, kept out
+D-Fire from: Drive zip D-Fire.zip
+64 labelled images; {'no label file': 1}
+splits in the download: {None: 64}
+median flame-coloured share of box pixels, by label id: {1: 0.851, 0: 0.0}
+class names file: None None
+label ids -> {1: 'fire', 0: 'smoke'}
+WARNING: one group of near-copies holds 10 of 63 images; the split is lumpy
+split: no split in the download: a seeded one by groups of near-copies (10 groups), test 20 %, validation 10%
+counts: {
+ "train": {
+  "smoke": 18,
+  "fire": 20,
+  "images": 36,
+  "images with fire or smoke": 28,
+  "images with neither": 8,
+  "Bengaluru frames with no fire": 6
+ },
+ "val": {
+  "fire": 3,
+  "images": 7,
+  "images with fire or smoke": 5,
+  "smoke": 3,
+  "images with neither": 2,
+  "Bengaluru frames with no fire": 4
+ },
+ "test": {
+  "images": 20,
+  "images with neither": 5,
+  "smoke": 10,
+  "fire": 10,
+  "images with fire or smoke": 15
+ }
+}
+skipped: {'no label file': 1, 'does not open': 1}
+boxes: {'box clipped to the image': 2, 'box empty, tiny or outside the image': 1, 'malformed line': 1, 'non-finite box': 1, 'box with an unknown class id dropped': 1}
+flat download: no split in the download: a seeded one by groups of near-copies (10 groups), test 20 %, validation 10% | D-Fire images: {'train': 36, 'val': 7, 'test': 20} | skipped: {'no label file': 1, 'does not open': 1}
+250 Bengaluru test frames, and anything within 72 bits of them, kept out
+D-Fire from: Drive zip D-Fire.zip
+64 labelled images; {'no label file': 1}
+splits in the download: {'test': 16, 'train': 48}
+median flame-coloured share of box pixels, by label id: {1: 0.851, 0: 0.0}
+class names file: D-Fire/data.yaml {0: 'smoke', 1: 'fire'}
+label ids -> {1: 'fire', 0: 'smoke'}
+No Bengaluru frames in Drive (/tmp/fire_dryrun_d6cfd0al/drive/nowhere/dataset.tar); downloading them from iisc-aim/UVH-26 ...
+the download failed: RuntimeError('no network in the dry run')
+missing Bengaluru frames (building): stops
+250 Bengaluru test frames, and anything within 72 bits of them, kept out
+D-Fire from: Drive zip D-Fire.zip
+64 labelled images; {'no label file': 1}
+splits in the download: {'test': 16, 'train': 48}
+median flame-coloured share of box pixels, by label id: {1: 0.851, 0: 0.0}
+class names file: D-Fire/data.yaml {0: 'smoke', 1: 'fire'}
+label ids -> {1: 'fire', 0: 'smoke'}
+No Bengaluru frames in Drive (/tmp/fire_dryrun_d6cfd0al/drive/nowhere/dataset.tar); downloading them from iisc-aim/UVH-26 ...
+the download failed: RuntimeError('no network in the dry run')
+NOTE: no Bengaluru frames - training on D-Fire alone (REQUIRE_BENGALURU is off); the threshold is then chosen on D-Fire's own negatives.
+split: the download's train / test split; validation = a seeded 10% of train
+counts: {
+ "train": {
+  "fire": 22,
+  "images": 41,
+  "images with fire or smoke": 30,
+  "smoke": 18,
+  "images with neither": 11
+ },
+ "val": {
+  "smoke": 4,
+  "images": 4,
+  "images with fire or smoke": 4,
+  "fire": 1
+ },
+ "test": {
+  "smoke": 8,
+  "fire": 8,
+  "images": 16,
+  "images with fire or smoke": 12,
+  "images with neither": 4
+ }
+}
+skipped: {'no label file': 1, 'does not open': 1, 'train: near-copy of a test image': 1, 'train: identical to a test image': 1}
+boxes: {'box clipped to the image': 2, 'box empty, tiny or outside the image': 1, 'malformed line': 1, 'non-finite box': 1, 'box with an unknown class id dropped': 1}
+250 Bengaluru test frames, and anything within 72 bits of them, kept out
+the prepared dataset is in Drive; nothing to download
+restoring the prepared dataset from Drive...
+missing Bengaluru frames (restoring): stops
+250 Bengaluru test frames, and anything within 72 bits of them, kept out
+D-Fire from: Drive zip D-Fire.zip
+64 labelled images; {'no label file': 1}
+splits in the download: {'test': 16, 'train': 48}
+median flame-coloured share of box pixels, by label id: {1: 0.851, 0: 0.0}
+class names file: D-Fire/data.yaml {0: 'smoke', 1: 'fire'}
+label ids -> {1: 'fire', 0: 'smoke'}
+No Bengaluru frames in Drive (/tmp/fire_dryrun_d6cfd0al/drive/nowhere/dataset.tar); downloading them from iisc-aim/UVH-26 ...
+  Bengaluru frames: 10/10 kept, 4 skipped, 1 s
+split: the download's train / test split; validation = a seeded 10% of train
+counts: {
+ "train": {
+  "fire": 22,
+  "images": 41,
+  "images with fire or smoke": 30,
+  "smoke": 18,
+  "images with neither": 11,
+  "Bengaluru frames with no fire": 6
+ },
+ "val": {
+  "smoke": 4,
+  "images": 4,
+  "images with fire or smoke": 4,
+  "fire": 1,
+  "Bengaluru frames with no fire": 4
+ },
+ "test": {
+  "smoke": 8,
+  "fire": 8,
+  "images": 16,
+  "images with fire or smoke": 12,
+  "images with neither": 4
+ }
+}
+skipped: {'no label file': 1, 'does not open': 1, 'train: near-copy of a test image': 1, 'train: identical to a test image': 1}
+boxes: {'box clipped to the image': 2, 'box empty, tiny or outside the image': 1, 'malformed line': 1, 'non-finite box': 1, 'box with an unknown class id dropped': 1}
+downloaded Bengaluru frames: Hugging Face iisc-aim/UVH-26 UVH-26-Train/data | skipped: {'identical to a test frame': 1, 'looks like a test camera': 1, 'does not open': 1, 'file missing': 1} | {'train': 6, 'val': 4}
+250 Bengaluru test frames, and anything within 72 bits of them, kept out
+D-Fire from: Drive zip D-Fire.zip
+64 labelled images; {'no label file': 1}
+splits in the download: {'test': 16, 'train': 48}
+median flame-coloured share of box pixels, by label id: {1: 0.851, 0: 0.0}
+class names file: D-Fire/data.yaml {0: 'smoke', 1: 'fire'}
+label ids -> {1: 'fire', 0: 'smoke'}
+split: the download's train / test split; validation = a seeded 10% of train
+counts: {
+ "train": {
+  "fire": 22,
+  "images": 41,
+  "images with fire or smoke": 30,
+  "smoke": 18,
+  "images with neither": 11,
+  "Bengaluru frames with no fire": 6
+ },
+ "val": {
+  "smoke": 4,
+  "images": 4,
+  "images with fire or smoke": 4,
+  "fire": 1,
+  "Bengaluru frames with no fire": 4
+ },
+ "test": {
+  "smoke": 8,
+  "fire": 8,
+  "images": 16,
+  "images with fire or smoke": 12,
+  "images with neither": 4
+ }
+}
+skipped: {'no label file': 1, 'does not open': 1, 'train: near-copy of a test image': 1, 'train: identical to a test image': 1}
+boxes: {'box clipped to the image': 2, 'box empty, tiny or outside the image': 1, 'malformed line': 1, 'non-finite box': 1, 'box with an unknown class id dropped': 1}
+Bengaluru frames: downloaded once, reused from Drive
+DRY RUN OK
