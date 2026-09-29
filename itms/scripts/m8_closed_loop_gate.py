@@ -22,6 +22,8 @@ Arms, all on the same held-out seeds (paired):
                          but with a detector that finds nothing
     ...:nocheck          without the stop-bar cross-check for blind cameras
                          (on by default in honest and failsafe)
+    ...:nogap            without counting the queue past the camera's view
+                         (`vision_service/state/gap_count.py`; on by default)
 
 `vision_service/sim/closed_loop.py` does the swap inside the unmodified
 runner; see its docstring for exactly which inputs change (the four queue
@@ -90,7 +92,12 @@ def _job(args) -> dict:
         inputs = M.ccacamp_inputs(level)
         base = M.build_strategy("ccacamp", inputs)
         approach, _ = M.link_maps()
-        factory = M.vision_factory(preset, seed, fps)
+        kw = {}
+        if "nogap" in extra:
+            from vision_service.state import EstimatorConfig  # noqa: PLC0415
+
+            kw["estimator_config"] = EstimatorConfig(gap_counting=False)
+        factory = M.vision_factory(preset, seed, fps, **kw)
         if "outage" in extra:
             factory = _with_fault(factory, "offline")
         if "blind" in extra:
@@ -149,6 +156,8 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--levels", default="medium,heavy")
     ap.add_argument("--seeds", type=int, default=5)
+    ap.add_argument("--seed-list", help="explicit seeds, e.g. 101,102 (TRAIN seeds, for "
+                                        "development); overrides --seeds")
     ap.add_argument("--arms", default="webster,truth,vision:finetuned_day:trust,"
                                       "vision:finetuned_day:failsafe,vision:finetuned_day:honest,"
                                       "vision:coco_pretrained:failsafe,"
@@ -161,7 +170,8 @@ def main() -> None:
     args = ap.parse_args()
     arms = [a for a in args.arms.split(",") if a]
     levels = [lv for lv in args.levels.split(",") if lv]
-    seeds = M.EVAL_SEEDS[: args.seeds]
+    seeds = ([int(v) for v in args.seed_list.split(",")] if args.seed_list
+             else M.EVAL_SEEDS[: args.seeds])
     # expensive vision runs first, so the cheap ones fill the tail
     jobs = sorted(((a, lv, s, args.fps) for lv in levels for a in arms for s in seeds),
                   key=lambda j: (not j[0].startswith("vision"), j[1] != "heavy"))

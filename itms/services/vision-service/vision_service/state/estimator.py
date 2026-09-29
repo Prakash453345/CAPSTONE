@@ -29,6 +29,18 @@ from how fast the back of the queue was moving just before it left the view
 at the density measured in the visible part, capped at the lane's length.
 The longer that lasts, the less the estimate is trusted.
 
+That rule rarely fires on the lanes that need it: vehicles at the back hide
+behind the ones in front, so a visible queue ends 45-70 m back while the
+real one runs to hundreds of metres. So the queue past the view is also
+**counted** (`gap_count.py`): vehicles in at the upstream junction's view of
+the lane (or, on an entry, the arrival rate learned while nothing queued),
+out at the near view, less what can be seen in between and what is still
+driving through. An edge's counted queue above 10 PCU replaces the growth
+extrapolation on its queued lanes; below that the lane is left as this rule
+made it. It exists for the runaway: heavy seed 5, whose lane really held
+20-65 halted vehicles against 11 PCU or less seen, went from 729k s
+person-delay to 585k.
+
 **Furniture.** Roadside clutter the detector keeps calling a vehicle (a
 billboard, a parked cart, a shadow) produces tracks that never move -- and,
 because a flickering false detection keeps losing its track, tracks that are
@@ -71,6 +83,7 @@ from itms_geo.coverage import LaneCoverage, merge_coverage
 
 from vision_service.cameras import CameraRig
 from vision_service.records import GroundTrack
+from vision_service.state.gap_count import EdgeGap, GapConfig, build_gaps, update_gap
 
 
 @dataclass(frozen=True)
@@ -119,6 +132,11 @@ class EstimatorConfig:
     # use it; see baselines/2026-09-25_m8_review/.
     horizon_quantile: float = 0.0
     horizon_min_samples: int = 120
+    # Queue past the view, counted rather than extrapolated (`gap_count.py`):
+    # every approach edge filmed at both ends, and the entries by their
+    # learned arrival rate. Only a large counted queue is reported.
+    gap_counting: bool = True
+    gap: GapConfig = field(default_factory=GapConfig)
     trunc_conf_start: float = 0.95
     trunc_conf_floor: float = 0.7
     trunc_conf_decay_s: float = 180.0
@@ -214,6 +232,11 @@ class LinkStateEstimator:
         self._clutter: dict[tuple[str, int, int], float] = {}
         self._cov_cache: dict[tuple[str, tuple[str, ...]], LaneCoverage] = {}
         self._clutter_t: float | None = None
+        self._clean: dict[str, list[GroundTrack]] = {}
+        self.gaps: dict[str, EdgeGap] = {}
+        if self.cfg.gap_counting:
+            lanes = {ln for links in approach_links.values() for ln in links.values()}
+            self.gaps = build_gaps(rig.network, rig.coverage_by_camera, lanes, self.cfg.gap)
 
     # ---- lanes ----------------------------------------------------------------
 
@@ -323,6 +346,7 @@ class LinkStateEstimator:
             if t - g.born_t >= cfg.min_track_age_s and not self._is_furniture(t, g)
         ]
         tracks = self._dedup(tracks)
+        self._clean[lane_id] = tracks
         est.n_tracks = len(tracks)
         mem = self._memory.setdefault(lane_id, _LaneMemory())
         # Visibility: the share of real vehicles *inside* the frame that the
@@ -409,6 +433,34 @@ class LinkStateEstimator:
         slope = float(np.polyfit(ts, bs, 1)[0])
         return float(np.clip(slope, 0.0, self.cfg.max_growth_mps))
 
+    def _count_gaps(self, t: float, health: Mapping[str, float]) -> None:
+        """The counted queue past the view (`gap_count.py`), where it is
+        reported, replaces the growth extrapolation on that lane; anywhere
+        else the lane is left exactly as the estimator made it. An edge whose
+        count-line camera is down is left alone, and its count restarts when
+        the camera is back."""
+        cfg = self.cfg
+        for gap in self.gaps.values():
+            if health.get(gap.cam_a, 1.0) <= 0.0 or health.get(gap.cam_b, 1.0) <= 0.0:
+                gap.anchored = False
+                gap.hidden = 0.0
+                continue
+            update_gap(gap, t, {ln: self._clean.get(ln, []) for ln in gap.lanes}, cfg.gap)
+            share = gap.share(t, cfg.gap)
+            for ln in gap.lanes:
+                est = self.lanes.get(ln)
+                if est is None:
+                    continue
+                pcu = share.get(ln, 0.0)
+                if pcu > 0.0:
+                    stopped = [g for g in self._clean.get(ln, []) if g.stopped]
+                    density = sum(g.pcu for g in stopped) / max(est.queue_back_m, 1.0) \
+                        if est.queue_back_m > 0 else cfg.gap.jam_pcu_per_m
+                    est.hidden_pcu = pcu
+                    est.hidden_m = pcu / max(density, 0.05)
+                    est.truncated = True
+                    est.c_truncation = cfg.trunc_conf_start
+
     # ---- main --------------------------------------------------------------
 
     def update(
@@ -439,6 +491,7 @@ class LinkStateEstimator:
             if lid in self.rig.network.lanes
         }
         self.lane_tracks = by_lane
+        self._count_gaps(t, health)
         self.links = {}
         cfg = self.cfg
         net = self.rig.network

@@ -5556,3 +5556,119 @@ a fire, and neither bar can tell.
 
 **Next for fire:** the training needs fires in street or traffic scenes.
 Pasted fires in the training would need a new independent test.
+
+## 2026-09-29 — M8: the fine-tuned detector in the live system; the heavy-demand jam traced
+
+Baseline: `baselines/2026-09-29_m8_heavy_jam/`.
+
+**The fine-tune is the live default.** `vision_service.main`:
+- video mode reads `data/models/itms_six_fp32_640.onnx`. `make vision-model`
+  copies it there from the fine-tune's results. If it is missing, the service
+  stops with that instruction rather than falling back to a weaker model.
+- SimCam mode's default preset is `itms6_640`.
+- `VISION_DETECTOR` and `VISION_PRESET` still override both.
+
+`scripts/m8_live_e2e.sh` passed: link state both ways, no errors, and the
+controller used the feed. The detector reads the ONNX file's own class names
+(the six ITMS classes).
+
+**The jam, traced** (`scripts/m8_jam_trace.py`; heavy seed 5, the 728,941 s
+run).
+- **Where:** `cluster_1880441740_4393296791`, on its shared lane
+  `470178558_2` (L5 in P0, L6–L7 in P1).
+- **How far off:** the lane is 599 m long and the camera films its last
+  98 m. It held 20–65 halted vehicles (26 PCU on average over 600–1,800 s)
+  while the camera's estimate stayed at 11 PCU or less.
+- **Why:** up to 54 of 65 halted vehicles were beyond the view, and a few
+  more were in view but hidden behind others. The visible queue mostly ended
+  45–70 m back. The truncation rule needs it within 8 m of the view's end,
+  and fired only once, briefly (1.4 PCU).
+- **Result:** the controller favoured the approaches it could see in full,
+  and the lane spilled back to the junction upstream.
+- **Confirmed by an oracle:** giving the controller the true out-of-view
+  queue removed the jam (506,303).
+
+**The fix: count the queue past the view** (`vision_service/state/gap_count.py`).
+- **Edges filmed at both ends** (9 of 19 approach edges): a long approach lane
+  is usually the upstream junction's receiving lane, so its first ~100 m are
+  filmed too. Vehicles are counted in there and out in the near view. Of what
+  is between, less what is visible and what is still driving through, the
+  rest is queued out of sight.
+- **Entries** (8 edges nobody films upstream): the inflow is the arrival rate
+  learned while nothing queues.
+- **Drift:** the count is thrown away whenever the near view shows that no
+  queue reaches past it.
+- **Reporting:** only an edge's excess over 10 PCU is reported. Below that,
+  the estimate is exactly what it was.
+- **Accuracy (open loop):** on lane-ticks with 15 PCU or more really
+  standing, the estimate's bias went from −8.5 to −3.7 PCU. That was with
+  every counted PCU reported; the adopted version, which reports only the
+  excess over 10, lands between the two.
+
+**In the loop at heavy demand** (`failsafe`, the fine-tune at 640 px):
+
+| | EVAL 1–10: mean | vs no count | worst run | longest wait | TRAIN 101–110: mean | worst |
+|---|---:|---|---:|---:|---:|---:|
+| Webster | 645,098 | | 686,492 | 727 s | 664,035 | 681,674 |
+| perfect data | 475,779 | | 546,084 | 613 s | 504,153 | 638,597 |
+| no count (before) | 508,718 | | 728,941 | 1,150 s | 555,790 | 701,979 |
+| **count, adopted (v3)** | **504,052** | **−0.9 % n.s.** (4/10 lower) | **593,316** | 822 s | 554,801 | **602,174** |
+
+- **Adopted by a rule written before any of its held-out results came in.**
+  The rule: on the held-out seeds, no worse on the mean and a better worst
+  run, with medium demand unchanged. TRAIN showed the same. Its effect is on the tail
+  (seed 5: 728,941 → 584,516; TRAIN 109: 701,979 → 602,174), not on the
+  average.
+- **Against perfect data:** +5.9 % n.s. (was +6.9 % n.s.; TRAIN +10.0 %,
+  significant, against +10.2 % n.s. without counting). The held-out worst
+  run fell because seed 5 fell, and seed 5 is the traced seed. TRAIN 109 is
+  the cleaner evidence. Against Webster:
+  −21.9 %, better on 10/10 seeds.
+- **Medium demand:** bit-identical on seeds 1–5. No edge ever counted 10 PCU.
+- **Two earlier versions failed:**
+  - v1: counted edges only, all reported. It unbalanced partly counted
+    junctions: +28.5 % on seed 4.
+  - v2: entries modelled, all reported. +4.4 % n.s. on EVAL 1–10.
+
+  §4 of the baseline has both.
+
+**The larger finding: heavy demand is chaotic, with perfect data too.**
+- **The bottleneck is at capacity.** The four-phase junction runs at Webster
+  degree of saturation **0.996**.
+- **Perfect data varies widely.** Over TRAIN seeds 101–110 it spans
+  409k–639k, with waits up to 821 s. Seed 101 came within 2 % of Webster.
+- **A tiny change moves runs a lot.** A probe that changed 12–22 signal
+  decisions per run moved single perfect-data runs by −17 % to +37 %.
+  It was not adopted (mean +3.5 %).
+- **Five seeds are not enough.** Over 10 EVAL seeds the camera system was
+  +6.9 % n.s. against perfect data, and −2.4 % on the five seeds no camera arm
+  had run before. So the 2026-09-27 "one heavy run in five jams" was one run
+  in ten (seed 7 was also poor: +31 % against perfect data). "Perfect data never jammed (longest wait 557 s)" held only on
+  seeds 1–5. On TRAIN seeds its longest waits reached 821 s, and one run
+  (101) came within 2 % of Webster.
+- **So at heavy demand, a difference under about 10 % on five seeds is noise,
+  and a two-seed verdict of any size cannot be told from it.** That includes
+  the two-seed verdict that switched the occlusion horizon off (+21.8 % and
+  +14.7 %). Future heavy-demand gates need 10 seeds or more.
+
+**Next:**
+1. The bottleneck junction itself: shared lane `470178558_2` serves two
+   phases, and P2's single lane is capped at 28.6 s. A controller that is
+   stable there at degree of saturation 1 would need its own study, with 20
+   or more seeds.
+2. The jam/blind-camera fix from 2026-09-26 (still open).
+3. Vijayawada footage.
+
+Tests: `test_gap_count.py` (7: count lines, conservation, jitter,
+re-anchoring, lane shares and caps, entries, the estimator hook);
+`test_service_and_io.py` (the adopted detector is the default, no silent
+fallback). The live end-to-end check (`scripts/m8_live_e2e.sh`) passed with counting on. Full suite: 796 passed, 6 skipped. ruff clean.
+
+New scripts:
+- `m8_jam_trace.py`: per-junction trace, with an oracle option;
+- `m8_lane_undercount.py`: where the missing queue is;
+- `m8_gap_count_accuracy.py`: the count's accuracy, open loop;
+- `m8_split_floor_probe.py`;
+- `m8_gap_report.py`.
+
+`m8_closed_loop_gate.py` gains `--seed-list` and the `:nogap` arm modifier.

@@ -299,6 +299,51 @@ and a pressure controller minds the second more. It ships switched off
 A less biased estimate is not automatically a better input: the closed
 loop is the judge.
 
+**Queue past the view, counted (built 2026-09-29, on by default).** The
+heavy-demand jam that five seeds had shown as one run in five
+(`baselines/2026-09-29_m8_heavy_jam/`) was this under-count.
+- **Where:** a 599 m shared lane at the four-phase junction, filmed for its
+  last 98 m, really held 20–65 halted vehicles while the camera's estimate
+  stayed at 11 PCU or less.
+- **Confirmed:** an oracle that added the true out-of-view queue removed the
+  jam.
+
+`state/gap_count.py` counts that queue instead of extrapolating it:
+- **Edges filmed at both ends** (9 of the 19 approach edges; a long
+  approach is usually the upstream junction's receiving lane): vehicles are
+  counted in across the middle of the upstream view and out across the
+  middle of the near view. What is between, less what is visible and what is
+  still driving through, is queued out of sight. That includes what hides
+  behind other vehicles inside the view.
+- **Entries:** the inflow is the arrival rate learned while nothing queues.
+- **Drift:** the count is thrown away whenever the near view proves no queue
+  reaches past it.
+- **Reporting:** only an edge's excess over 10 PCU reaches the lane
+  estimate, so ordinary runs are left exactly as they were. Reporting
+  everything was +4.4 % (n.s.) against no counting over ten held-out heavy
+  seeds.
+
+**Results** (heavy demand, ten seeds each set):
+- held-out: mean −0.9 % (n.s.) against no counting; worst run 593k against
+  729k;
+- TRAIN: mean −0.2 %; worst run 602k against 702k;
+- medium demand: bit-identical.
+
+It guards against the runaway. It does not close the camera's gap to
+perfect data at heavy demand (+5.9 %, not significant).
+
+**How far to trust heavy-demand comparisons.** The same study found heavy
+demand chaotic:
+- **The bottleneck is at capacity.** The four-phase junction runs at Webster
+  degree of saturation 0.996.
+- **Perfect data varies widely.** Over ten TRAIN seeds it spans 409k–639k.
+- **A tiny change moves runs a lot.** 12–22 changed decisions per run moved
+  single runs by up to 37 %.
+
+So a heavy-demand difference under about 10 % on five seeds is noise, and a
+two-seed verdict of any size cannot be told from it. That includes the
+occlusion horizon's "+21.8 % and +14.7 %" above.
+
 **Confidence** = coverage × camera health × visibility × truncation ×
 (0.9 + 0.1 × receiving-lane coverage), each factor in [0, 1] and each
 reported separately in the event. Coverage compares the metres seen from the

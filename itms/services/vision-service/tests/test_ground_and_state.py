@@ -177,7 +177,8 @@ def test_cross_camera_duplicates_are_merged(network, rig, links) -> None:
 
 
 def test_queue_past_the_view_is_extrapolated_and_trusted_less(network, rig, links) -> None:
-    cfg = EstimatorConfig()
+    # the growth rule, for a lane the queue count (`test_gap_count.py`) does not cover
+    cfg = EstimatorConfig(gap_counting=False)
     est = LinkStateEstimator(rig, links[0], links[1], cfg)
     lane = network.lanes["in_0"]
     view = rig.coverage("in_0").covered_from_end_m
@@ -229,7 +230,8 @@ def test_a_queue_hidden_by_occlusion_is_still_seen_as_truncated(network, rig, li
             k += 1
         return out
 
-    est = LinkStateEstimator(rig, links[0], links[1], EstimatorConfig(horizon_quantile=0.9))
+    est = LinkStateEstimator(rig, links[0], links[1],
+                             EstimatorConfig(horizon_quantile=0.9, gap_counting=False))
     t = 0.0
     for _cycle in range(6):           # red phases: queues build to 20-40 m, then clear
         for back in np.linspace(10.0, 40.0, 30):
