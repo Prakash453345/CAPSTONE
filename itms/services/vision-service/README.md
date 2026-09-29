@@ -61,7 +61,12 @@ make vision-dev     # in another shell: SimCam mode on the live position stream
 
 `VISION_MODE=video` reads every registry camera whose `source` is a file or
 `rtsp://` URL through a real detector (`pip install -e
-'services/vision-service[yolo]'`, `VISION_DETECTOR=yolo11n.pt`). A source
+'services/vision-service[onnx]'`). The default detector is the adopted
+fine-tune of IISc's UVH-26 model, `data/models/itms_six_fp32_640.onnx`
+(`make vision-model` copies it from the fine-tune results;
+`baselines/2026-09-27_m8_finetune_v2/`); `VISION_DETECTOR` picks another
+(`yolo11n.pt` is the stock COCO model). SimCam mode's default error preset,
+`itms6_640`, is the one fitted to that detector. A source
 may name environment variables (`rtsp://${CAM_USER}:${CAM_PASS}@10.0.0.12/s1`)
 so the registry holds no password; logs show URLs with the user-info
 masked. A detector slower than the cameras skips frames (the newest frame

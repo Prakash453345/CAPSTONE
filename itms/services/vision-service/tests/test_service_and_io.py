@@ -324,6 +324,21 @@ def test_a_slow_detector_gets_the_newest_frame_of_every_camera() -> None:
     assert latest.take(0.0) is None and latest.dropped == 1
 
 
+def test_the_service_defaults_to_the_adopted_detector(monkeypatch, tmp_path) -> None:
+    import vision_service.main as vm
+    from vision_service.simcam.errors import PRESETS
+
+    assert vm.DEFAULT_PRESET == "itms6_640" and vm.DEFAULT_PRESET in PRESETS
+    monkeypatch.setenv("VISION_DETECTOR", "yolo11n.pt")          # an explicit choice wins
+    assert vm.detector_path() == "yolo11n.pt"
+    monkeypatch.delenv("VISION_DETECTOR")
+    monkeypatch.setattr(vm, "DEFAULT_DETECTOR", tmp_path / "missing.onnx")
+    with pytest.raises(SystemExit, match="make vision-model"):   # no silent fallback
+        vm.detector_path()
+    (tmp_path / "missing.onnx").write_bytes(b"x")
+    assert vm.detector_path() == str(tmp_path / "missing.onnx")
+
+
 def test_a_box_on_a_barely_visible_vehicle_is_not_scored() -> None:
     from vision_service.eval.twin import _without_distractors
 
