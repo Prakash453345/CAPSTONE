@@ -376,7 +376,7 @@ The link's `vision_score` is the maximum rule score, and goes straight into
 candidates — which still only become incidents through an operator
 (ADR-006). There is no person rule.
 
-**Fire and smoke (version 1 failed; version 2 to train).** No rule over
+**Fire and smoke (version 2 passed its bars but failed the street probe; not wired in).** No rule over
 vehicle tracks can see a fire, so this is the one incident type with its own
 detector.
 - **The model:** a two-class YOLO11-S (fire, smoke), trained in Colab
@@ -407,6 +407,18 @@ detector.
   - Its training never got the Bengaluru frames: the notebook carried on
     without them. Version 2 downloads them itself from UVH-26 (never a
     test frame or test camera), and stops if it cannot.
+- **Version 2 passes both bars** (`baselines/2026-09-28_m8_fire_v2/`).
+  - It found 93 % of D-Fire's test fires and smoke.
+  - It alarmed on 0.4 % of the Bengaluru frames: one orange container.
+  - At its threshold (0.05) it also alarms on 28 % of D-Fire's no-fire
+    images, yet it scores Bengaluru frames near zero. So it may have learned
+    that a Bengaluru CCTV picture is never a fire.
+  - `scripts/m8_fire_paste_probe.py` pasted D-Fire test flames into the
+    Bengaluru frames and onto grey to check this. **It failed.** Fire was
+    found about half as often in the street at 128 px (0.48 against 0.94),
+    and at 256 px 0.67 against 0.92. The bar, set before the run, was a
+    ratio of at least 0.8. So the detector is not wired in. It needs street
+    fires in its training.
 - **Not yet measured:**
   - fire in Indian junction footage, of which there is none labelled;
   - the persistence settings, which need video.

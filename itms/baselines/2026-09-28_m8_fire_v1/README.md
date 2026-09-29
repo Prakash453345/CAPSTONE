@@ -129,12 +129,14 @@ version 1 did, and the Bengaluru frames from Hugging Face.
 | `superseded/m8_fire_smoke_v1.ipynb` | the version-1 notebook that produced this run |
 | `notebook_v2_dryrun.txt` | the version-2 notebook's CPU dry run (passed) |
 
-The weights (`itms_fire_640.pt`, `.onnx`, 38 MB each) are not in git. They
-are in `itms_fire_results/` beside the repository, with SHA-256 checksums in
-`fire_report.json`.
+The weights (`itms_fire_640.pt`, `.onnx`, 38 MB each) were never in git.
+They were deleted on 2026-09-28 because the model failed and was replaced
+by version 2. Their SHA-256 checksums are in `fire_report.json`.
+
+The laptop score was made with this command, from the device's venv with
+onnxruntime and opencv:
 
 ```bash
-# the laptop score (device venv with onnxruntime and opencv)
 python scripts/m8_fire_eval.py --model ../itms_fire_results/itms_fire_640.onnx \
     --report ../itms_fire_results/fire_report.json --frames data/uvh26/val_sample \
     --sheet bengaluru_top_scores.jpg --out fire_false_alarms.json

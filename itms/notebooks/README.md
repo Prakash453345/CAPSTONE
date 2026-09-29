@@ -68,7 +68,19 @@ scores the test split once.
 counts false alarms on the 250 Bengaluru test frames, and the bar for both
 numbers is in `docs/vision_system_design.md` §3.7.
 
-**Dry run:** `scripts/m8_fire_notebook_dryrun.py` runs the notebook's cells
+## `m8_fire_crops.ipynb` (Google Colab, no GPU)
+
+This notebook cuts 400 fire and 400 smoke boxes out of D-Fire's test images,
+which no model trained on. It reads them from the fire notebook's dataset in
+Drive (`itms_fire_v2`), or, if that is gone, downloads the same Kaggle copy of
+D-Fire. It checks that it has the same 4,306 test images and the same label
+ids, then saves the boxes as `fire_crops.zip`, in about 5–10 minutes.
+
+`scripts/m8_fire_paste_probe.py` pastes the boxes into the Bengaluru test
+frames. It checks that the fire detector still finds fire in a street, not
+only in D-Fire's landscapes.
+
+**Dry run:** `scripts/m8_fire_notebook_dryrun.py` runs the fire notebook's cells
 on CPU against a fake D-Fire painted onto real frames. It covers every edge
 case, a disconnect and resume, a changed setting, and a names file that
 disagrees with the colours.

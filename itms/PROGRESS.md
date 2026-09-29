@@ -5518,3 +5518,41 @@ is not adopted.
 - **Otherwise unchanged.** It works in a fresh Drive folder, `itms_fire_v2`,
   and both bars stay as they were.
 - **Dry run.** The dry run covers the download's edge cases and both stops.
+
+## 2026-09-28 — M8: the fire and smoke detector, version 2: passes its bars, fails the street probe
+
+The details are in `baselines/2026-09-28_m8_fire_v2/`.
+
+**Both bars that were set before training are met:**
+- **D-Fire test recall:** it found **93.1 %** of the test images with fire
+  or smoke (fire 97.9 %, smoke 89.5 %), against a bar of at least 85 %.
+- **Bengaluru false alarms:** it alarmed on **1 of the 250 Bengaluru
+  traffic test frames (0.4 %)**, against a bar of at most 1 %. The one
+  alarm is an orange truck container with no fire.
+
+**What changed from version 1:** the notebook downloaded 1,800 Bengaluru
+frames itself from UVH-26. It skipped 138 frames that looked like the test
+cameras.
+
+**The threshold** came out at 0.05, the bottom of its grid.
+
+**Why it was checked further:** at that threshold the model alarms on 28 %
+of D-Fire's no-fire test images, yet it scores Bengaluru frames near zero
+(median 0.0007). It may have learned that a Bengaluru CCTV picture is never
+a fire, and neither bar can tell.
+
+**The street probe fails, and the model is not adopted:**
+- `notebooks/m8_fire_crops.ipynb` cut 400 fire and 400 smoke boxes from
+  D-Fire's test split.
+- `scripts/m8_fire_paste_probe.py` pasted them into the 250 Bengaluru test
+  frames and onto plain grey.
+- **Fire found in the street against on grey:**
+  - 0.48 against 0.94 at 128 px (ratio 0.52);
+  - 0.67 against 0.92 at 256 px (ratio 0.73).
+
+  The bar, set before the run, was a ratio of at least 0.8.
+- The street hides fires the model sees on grey. It partly learned
+  "Bengaluru CCTV means no fire".
+
+**Next for fire:** the training needs fires in street or traffic scenes.
+Pasted fires in the training would need a new independent test.
