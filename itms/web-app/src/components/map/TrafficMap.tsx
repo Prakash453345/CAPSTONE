@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import maplibregl, { Map as MapLibreMap, type MapMouseEvent } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { AlertTriangle, X } from "lucide-react";
 import { initialStyle } from "@/components/map/mapStyle";
 import { Basemap } from "@/components/map/Basemap";
 import { useThemeStore } from "@/store/themeStore";
@@ -15,7 +14,7 @@ import { WeatherLayer } from "@/components/map/WeatherLayer";
 import { WeatherChip } from "@/components/map/WeatherChip";
 import { MapChromeContext, createMapChromeStore } from "@/store/mapChromeStore";
 import { useStore } from "zustand";
-import { MAP_CHIP, MAP_CHIP_ACTIVE } from "@/components/map/mapChrome";
+import { MapNewMenu } from "@/components/map/MapNewMenu";
 import { RoadLayer } from "@/components/map/layers/RoadLayer";
 import { VehicleLayer } from "@/components/map/layers/VehicleLayer";
 import { SignalLayer } from "@/components/map/layers/SignalLayer";
@@ -315,19 +314,8 @@ export function TrafficMap({
                 <MapSearch onBack={onExitFullscreen} />
               </MapContext.Provider>
             )}
-            <div className="map-chip-row flex h-11 max-w-full items-center gap-2 overflow-x-auto">
-              <button
-                type="button"
-                onClick={() =>
-                  creatingAnomaly ? exitCreate() : setInteractionMode("create-anomaly")
-                }
-                aria-pressed={creatingAnomaly}
-                className={cn(MAP_CHIP, creatingAnomaly && MAP_CHIP_ACTIVE)}
-              >
-                {creatingAnomaly ? <X /> : <AlertTriangle />}
-                {creatingAnomaly ? "Cancel" : "Create anomaly"}
-              </button>
-              <EmergencyPanel part="chip" />
+            <div className="map-chip-row flex h-11 max-w-full items-center gap-2">
+              <MapNewMenu onCancelAnomaly={exitCreate} />
             </div>
           </div>
 

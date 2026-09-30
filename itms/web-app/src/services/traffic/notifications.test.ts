@@ -226,7 +226,7 @@ describe("classifyCorridorEvent", () => {
     );
     expect(n?.kind).toBe("junction-passed");
     expect(n?.intersectionId).toBe("1880441505");
-    expect(n?.message).toContain("Junction 1505");
+    expect(n?.message).toContain("MG Road at Eat Street");
   });
 
   it("does not fire for junction_passed without a junction id", () => {

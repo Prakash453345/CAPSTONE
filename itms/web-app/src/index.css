@@ -10,75 +10,74 @@
  * alpha via `hsl(var(--token) / <alpha>)`.
  */
 :root {
-  --background: 210 17% 98%;
+  /* Quiet neutrals with a faint cool cast; one indigo-blue accent. Status
+     colours are tuned so small text keeps >= 4.5:1 on their muted fills. */
+  --background: 220 20% 97.5%;
   --surface: 0 0% 100%;
   --surface-raised: 0 0% 100%;
-  --surface-sunken: 200 12% 95%;
+  --surface-sunken: 220 18% 95.5%;
 
-  --border: 220 9% 87%;
-  --input: 220 9% 82%;
-  --ring: 217 90% 43%;
+  --border: 220 14% 91%;
+  --input: 220 12% 85%;
+  --ring: 228 76% 56%;
 
-  --foreground: 0 0% 12%;
-  --muted: 200 12% 95%;
-  --muted-foreground: 213 8% 30%;
+  --foreground: 224 24% 12%;
+  --muted: 220 18% 95.5%;
+  --muted-foreground: 220 9% 40%;
 
-  /* #0b57d0 is Google's current blue; warning amber is darkened to #9a5300
-     so small text keeps ≥ 4.5:1 even on the warm-tinted banner (WCAG 1.4.3).
-     The older #1a73e8 / #e37400 fell short. */
-  --primary: 217 90% 43%;
+  --primary: 228 72% 52%;
   --primary-foreground: 0 0% 100%;
-  --primary-muted: 218 92% 95%;
+  --primary-muted: 228 90% 96%;
 
-  --status-ok: 137 68% 30%;
-  --status-ok-muted: 135 45% 94%;
-  --status-warn: 33 100% 30%;
-  --status-warn-muted: 45 90% 94%;
-  --status-critical: 4 71% 50%;
-  --status-critical-muted: 6 76% 95%;
-  --status-info: 217 90% 43%;
-  --status-info-muted: 218 92% 95%;
+  --status-ok: 152 64% 30%;
+  --status-ok-muted: 150 55% 94%;
+  --status-warn: 32 95% 33%;
+  --status-warn-muted: 42 95% 93%;
+  --status-critical: 357 70% 48%;
+  --status-critical-muted: 355 85% 96%;
+  --status-info: 228 72% 52%;
+  --status-info-muted: 228 90% 96%;
 
-  /* Google's Material elevation: a tight key shadow plus a soft ambient one. */
-  --elevation-1: 0 1px 2px rgba(60, 64, 67, 0.3), 0 1px 3px 1px rgba(60, 64, 67, 0.15);
-  --elevation-2: 0 1px 2px rgba(60, 64, 67, 0.3), 0 2px 6px 2px rgba(60, 64, 67, 0.15);
-  --elevation-3: 0 4px 8px 3px rgba(60, 64, 67, 0.15), 0 1px 3px rgba(60, 64, 67, 0.3);
+  /* Soft, layered shadows with a hairline ring instead of a hard border. */
+  --elevation-1: 0 1px 2px rgba(15, 23, 42, 0.05), 0 0 0 1px rgba(15, 23, 42, 0.05);
+  --elevation-2: 0 6px 16px -4px rgba(15, 23, 42, 0.1), 0 0 0 1px rgba(15, 23, 42, 0.06);
+  --elevation-3: 0 20px 44px -12px rgba(15, 23, 42, 0.22), 0 0 0 1px rgba(15, 23, 42, 0.07);
 
-  --radius: 12px;
+  --radius: 14px;
 
   color-scheme: light;
 }
 
 .dark {
-  --background: 225 6% 13%;
-  --surface: 220 5% 16%;
-  --surface-raised: 225 5% 20%;
-  --surface-sunken: 0 0% 9%;
+  --background: 225 14% 6.5%;
+  --surface: 225 12% 9%;
+  --surface-raised: 225 11% 12%;
+  --surface-sunken: 225 14% 5%;
 
-  --border: 204 6% 25%;
-  --input: 204 6% 30%;
-  --ring: 217 89% 76%;
+  --border: 225 9% 16%;
+  --input: 225 8% 23%;
+  --ring: 228 90% 72%;
 
-  --foreground: 216 12% 92%;
-  --muted: 225 5% 20%;
-  --muted-foreground: 210 6% 63%;
+  --foreground: 220 15% 93%;
+  --muted: 225 10% 13%;
+  --muted-foreground: 220 8% 62%;
 
-  --primary: 217 89% 76%;
-  --primary-foreground: 220 60% 14%;
-  --primary-muted: 217 40% 22%;
+  --primary: 228 92% 72%;
+  --primary-foreground: 228 50% 10%;
+  --primary-muted: 228 42% 17%;
 
-  --status-ok: 137 42% 65%;
-  --status-ok-muted: 137 25% 18%;
-  --status-warn: 45 97% 69%;
-  --status-warn-muted: 45 35% 18%;
-  --status-critical: 5 81% 73%;
-  --status-critical-muted: 5 35% 20%;
-  --status-info: 217 89% 76%;
-  --status-info-muted: 217 40% 20%;
+  --status-ok: 150 55% 58%;
+  --status-ok-muted: 150 35% 13%;
+  --status-warn: 40 92% 62%;
+  --status-warn-muted: 40 40% 13%;
+  --status-critical: 358 85% 68%;
+  --status-critical-muted: 358 40% 15%;
+  --status-info: 228 92% 72%;
+  --status-info-muted: 228 42% 17%;
 
-  --elevation-1: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 3px 1px rgba(0, 0, 0, 0.15);
-  --elevation-2: 0 1px 2px rgba(0, 0, 0, 0.3), 0 2px 6px 2px rgba(0, 0, 0, 0.15);
-  --elevation-3: 0 4px 8px 3px rgba(0, 0, 0, 0.15), 0 1px 3px rgba(0, 0, 0, 0.3);
+  --elevation-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.04);
+  --elevation-2: 0 8px 20px -6px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  --elevation-3: 0 24px 56px -14px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.06);
 
   color-scheme: dark;
 }

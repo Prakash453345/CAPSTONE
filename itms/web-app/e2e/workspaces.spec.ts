@@ -4,6 +4,16 @@ import { test, expect } from "./fixtures";
 // "/" is the public landing page; the operator workspace lives under
 // "/console". These specs drive the workspace, so they enter there directly.
 
+/** The data-status chip in the top bar (and floating on the full-screen map). */
+function statusChip(page: Page) {
+  return page.getByRole("button", { name: /Data and connection/ }).first();
+}
+
+async function openStatus(page: Page) {
+  await statusChip(page).click();
+  await expect(page.getByRole("dialog", { name: "Data and connection" })).toBeVisible();
+}
+
 async function navigate(page: Page, label: string) {
   const menu = page.getByRole("button", {
     name: "Open navigation",
@@ -22,12 +32,8 @@ test("map, operational routes, analytics and CSV stay integrated", async ({
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto("/console");
-  await expect(
-    page.getByRole("heading", { name: "A city in motion. In view." }),
-  ).toBeVisible();
-  await expect(
-    page.getByText("DEMO ENVIRONMENT", { exact: false }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
+  await expect(statusChip(page)).toContainText("Demo data");
   await expect(
     page.getByRole("button", { name: "Map layers", exact: true }),
   ).toBeVisible();
@@ -42,31 +48,23 @@ test("map, operational routes, analytics and CSV stay integrated", async ({
     path: `test-results/overview-${info.project.name}.png`,
     fullPage: true,
   });
-  await navigate(page, "Traffic Management");
-  await page
-    .getByRole("textbox", { name: "Search roads" })
-    .fill("no-such-road");
-  await expect(
-    page.getByText("No matching roads.", { exact: false }),
-  ).toBeVisible();
-  await page.getByRole("textbox", { name: "Search roads" }).fill("177626285");
-  await expect(
-    page.getByRole("button", { name: /Road -177626285/ }),
-  ).toBeVisible();
-  await navigate(page, "Anomaly Detection");
+  await navigate(page, "Traffic");
+  await page.getByRole("textbox", { name: "Find a street" }).fill("no-such-road");
+  await expect(page.getByText("No matching streets")).toBeVisible();
+  await page.getByRole("textbox", { name: "Find a street" }).fill("eat");
+  await expect(page.getByRole("button", { name: /Eat Street/ })).toBeVisible();
+  await navigate(page, "Incidents");
   await expect(
     page.getByRole("heading", { name: "Incident review" }),
   ).toBeVisible();
   await expect(
-    page.getByText("Demo report · review disabled").first(),
+    page.getByText("Demo report. Review is disabled.").first(),
   ).toBeVisible();
-  await navigate(page, "Emergency Response");
+  await navigate(page, "Emergency");
   await expect(
     page.getByRole("heading", { name: "Emergency requests" }),
   ).toBeVisible();
-  await page
-    .getByRole("button", { name: "Emergency response", exact: true })
-    .click();
+  await page.getByRole("button", { name: "Dispatch", exact: true }).click();
   await page
     .getByLabel("Source road", { exact: true })
     .selectOption("-177626285");
@@ -82,12 +80,12 @@ test("map, operational routes, analytics and CSV stay integrated", async ({
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
   await navigate(page, "Analytics");
   await expect(
-    page.getByRole("heading", { name: "Patterns in motion." }),
+    page.getByRole("heading", { name: "Session analytics" }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "15 min", exact: true }).click();
+  await page.getByRole("radio", { name: "15 min", exact: true }).click();
   await expect(
-    page.getByRole("button", { name: "15 min", exact: true }),
-  ).toHaveAttribute("aria-pressed", "true");
+    page.getByRole("radio", { name: "15 min", exact: true }),
+  ).toHaveAttribute("aria-checked", "true");
   const download = page.waitForEvent("download");
   await page.getByRole("button", { name: "Export observations" }).click();
   expect((await download).suggestedFilename()).toContain("simulation-session");
@@ -129,11 +127,11 @@ test("live stream freshness, incident review and source isolation", async ({
     },
   );
   await page.goto("/console");
+  await openStatus(page);
   await page.getByRole("radio", { name: "Live", exact: true }).click();
+  await page.keyboard.press("Escape");
   await expect.poll(() => Boolean(send)).toBe(true);
-  await expect(
-    page.getByText("Awaiting telemetry", { exact: false }),
-  ).toBeVisible();
+  await expect(statusChip(page)).toHaveAccessibleName(/Awaiting telemetry/);
   send!(
     JSON.stringify({
       event_type: "ApproachState",
@@ -151,8 +149,8 @@ test("live stream freshness, incident review and source isolation", async ({
       },
     }),
   );
-  await expect(page.getByText(/Updated \ds ago/)).toBeVisible();
-  await navigate(page, "Anomaly Detection");
+  await expect(statusChip(page)).toHaveAccessibleName(/Updated (just now|\d+s ago)/);
+  await navigate(page, "Incidents");
   await page.getByRole("button", { name: "Review & confirm" }).click();
   await page.getByLabel("Operator identity").fill("operator:test");
   await page.getByLabel("API key", { exact: true }).fill("browser-test-key");
@@ -162,13 +160,14 @@ test("live stream freshness, incident review and source isolation", async ({
   await expect(page.getByText("confirmed", { exact: true })).toBeVisible({
     timeout: 15_000,
   });
-  await navigate(page, "Command Center");
-  await expect(page.getByText(/Stale · last update/)).toBeVisible({
-    timeout: 10_000,
+  await navigate(page, "Overview");
+  await expect(statusChip(page)).toHaveAccessibleName(/Stale data/, {
+    timeout: 15_000,
   });
+  await openStatus(page);
   await page.getByRole("radio", { name: "Demo", exact: true }).click();
   await expect(
-    page.getByText("DEMO ENVIRONMENT", { exact: false }),
+    page.getByText("Demo environment.", { exact: false }),
   ).toBeVisible();
 });
 
@@ -177,7 +176,7 @@ test("road place card opens from search and starts operator actions", async ({ p
   const search = page.getByRole("combobox", { name: "Search the road network" });
   await search.fill("177626285");
   await search.press("Enter");
-  const card = page.getByRole("region", { name: "Road -177626285 details" });
+  const card = page.getByRole("region", { name: "Eat Street details" });
   await expect(card).toBeVisible();
   await expect(card.getByText(/Traffic is flowing|Slow traffic|Heavy traffic|No live data/)).toBeVisible();
   await page.keyboard.press("Escape");
@@ -224,6 +223,7 @@ test("weather chip shows live conditions, demo presets and a layer switch", asyn
 test("split view maps keep their own panels", async ({ page }, info) => {
   test.skip(info.project.name === "mobile", "split view is a desktop layout");
   await page.goto("/console/traffic");
+  await openStatus(page);
   await page.getByRole("radio", { name: "Split", exact: true }).click();
   await expect(page.locator(".maplibregl-map")).toHaveCount(2);
   await page.getByRole("button", { name: /^Weather:/ }).last().click();
@@ -235,11 +235,11 @@ test("split view maps keep their own panels", async ({ page }, info) => {
 
 test("explore map opens full screen and back returns", async ({ page }) => {
   await page.goto("/console");
-  await page.getByRole("link", { name: /Explore map/ }).click();
+  await page.getByRole("button", { name: "Full screen map", exact: true }).click();
   await expect(page).toHaveURL(/\/console\/map$/);
   await expect(page.getByRole("navigation", { name: "Primary" })).toHaveCount(0);
-  // The demo notice stays visible even in full screen.
-  await expect(page.getByText("DEMO ENVIRONMENT", { exact: false })).toBeVisible();
+  // The data status stays visible even in full screen.
+  await expect(statusChip(page)).toContainText("Demo data");
   const map = await page.locator(".maplibregl-map").boundingBox();
   expect(map?.height ?? 0).toBeGreaterThan(600);
   await page.getByRole("button", { name: "Back", exact: true }).click();

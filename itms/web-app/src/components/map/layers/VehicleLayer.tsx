@@ -97,17 +97,19 @@ export function VehicleLayer({ visible }: { visible: boolean }) {
     if (!map.getLayer(ICON)) {
       // A tiny colour backplate keeps the fleet legible over light and dark
       // basemap tiles. The detailed silhouette is painted above it.
+      // At city zoom a vehicle is a small, crisp dot: the road stays readable
+      // and the fleet reads as flow. Silhouettes take over once you zoom in.
       map.addLayer({
         id: BACKPLATE,
         type: "circle",
         source: SRC,
         paint: {
-          "circle-radius": ["interpolate", ["linear"], ["zoom"], 11, 1.6, 16, 3.2, 18, 4],
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 11, 1.8, 14, 2.8, 16, 3.6, 18, 4],
           "circle-color": ["get", "color"],
-          "circle-opacity": 0.64,
-          "circle-blur": 0.14,
-          "circle-stroke-color": "rgba(6, 10, 16, 0.9)",
-          "circle-stroke-width": 0.8,
+          "circle-opacity": ["interpolate", ["linear"], ["zoom"], 15.6, 1, 16.4, 0],
+          "circle-stroke-color": "rgba(255,255,255,0.9)",
+          "circle-stroke-width": ["interpolate", ["linear"], ["zoom"], 11, 0.6, 15, 1.2],
+          "circle-stroke-opacity": ["interpolate", ["linear"], ["zoom"], 15.6, 1, 16.4, 0],
         },
       });
       map.addLayer({
@@ -130,23 +132,7 @@ export function VehicleLayer({ visible }: { visible: boolean }) {
             VEHICLE_ICON_ID.ambulance,
             VEHICLE_ICON_ID.car,
           ],
-          "icon-size": [
-            // Keep the base expression deliberately simple. MapLibre then
-            // evaluates it reliably on every pan/zoom/pitch change; vehicle
-            // distinction comes from the silhouette itself and selection is
-            // shown by the dedicated ring layer.
-            "interpolate",
-            ["linear"],
-            ["zoom"],
-            11,
-            0.52,
-            13,
-            0.74,
-            16,
-            1.02,
-            18,
-            1.18,
-          ],
+          "icon-size": ["interpolate", ["linear"], ["zoom"], 15.5, 0.5, 17, 0.72, 19, 0.95],
           "icon-rotate": ["get", "heading"],
           "icon-rotation-alignment": "map",
           "icon-pitch-alignment": "map",
@@ -154,6 +140,9 @@ export function VehicleLayer({ visible }: { visible: boolean }) {
           "icon-allow-overlap": true,
           "icon-ignore-placement": true,
           "icon-padding": 0,
+        },
+        paint: {
+          "icon-opacity": ["interpolate", ["linear"], ["zoom"], 15.6, 0, 16.4, 1],
         },
       });
     }

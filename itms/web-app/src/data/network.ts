@@ -1,6 +1,7 @@
 import rawNetwork from "../../../scenarios/networks/vijayawada/vijayawada_corridor.geojson?raw";
 import type { FeatureCollection } from "geojson";
 import { cumulativeLengths, haversineMeters, type LngLat } from "@/utils/geo";
+import { ROAD_NAMES } from "@/data/roadNames";
 
 /** Geometry from the same checked-in network used by the SUMO exporter. */
 const network = JSON.parse(rawNetwork) as FeatureCollection;
@@ -21,7 +22,7 @@ export const roadEdges: RoadEdge[] = network.features.flatMap((f) => {
   return [
     {
       id: String(f.properties.edge_id),
-      name: f.properties.name as string | null,
+      name: (f.properties.name as string | null) ?? ROAD_NAMES[String(f.properties.edge_id)] ?? null,
       numLanes: Number(f.properties.num_lanes),
       speedLimitMps: Number(f.properties.speed_limit_mps),
       path,
@@ -52,8 +53,35 @@ export const networkBounds = {
   minLat: Math.min(...points.map((p) => p[1])),
   maxLat: Math.max(...points.map((p) => p[1])),
 };
+/** A road's display name: its street, or "Service road" when unnamed. */
+export function roadLabel(edgeOrId: RoadEdge | string | undefined | null): string {
+  const e = typeof edgeOrId === "string" ? edgeById.get(edgeOrId) : edgeOrId;
+  if (!e) return typeof edgeOrId === "string" ? "Unknown road" : "Unknown road";
+  return e.name ?? "Service road";
+}
+
+const junctionNames = new Map<string, string>();
+/** Name a junction after the streets that meet there: "MG Road at Eat Street". */
 export function shortJunctionName(id: string): string {
-  return `Junction ${id.slice(-4)}`;
+  const cached = junctionNames.get(id);
+  if (cached) return cached;
+  const j = junctionById.get(id);
+  let name = `Junction ${id.slice(-4)}`;
+  if (j) {
+    const here: LngLat = [j.lng, j.lat];
+    const streets = new Set<string>();
+    for (const e of roadEdges) {
+      if (!e.name) continue;
+      const a = e.path[0];
+      const b = e.path[e.path.length - 1];
+      if (haversineMeters(here, a) < 30 || haversineMeters(here, b) < 30) streets.add(e.name);
+    }
+    const list = [...streets].sort((x, y) => (x === "MG Road" ? -1 : y === "MG Road" ? 1 : x.localeCompare(y)));
+    if (list.length >= 2) name = `${list[0]} at ${list[1]}`;
+    else if (list.length === 1) name = `${list[0]} junction`;
+  }
+  junctionNames.set(id, name);
+  return name;
 }
 
 /** Geographic adjacency for the illustrative browser demo only, NOT emergency routing. */
