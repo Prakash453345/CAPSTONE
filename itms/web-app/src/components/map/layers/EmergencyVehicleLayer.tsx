@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { prefersReducedMotion } from "@/utils/motion";
-import type { GeoJSONSource } from "maplibre-gl";
+import type { ExpressionSpecification, GeoJSONSource } from "maplibre-gl";
 import type { Feature, FeatureCollection, Point } from "geojson";
 import { useMapInstance } from "@/components/map/MapContext";
 import { isMapAlive } from "@/components/map/mapSafe";
@@ -20,6 +20,7 @@ import type { EmergencyVehicleKind } from "@/types";
 const SRC = "em-vehicles";
 const HALO = "em-vehicles-halo";
 const ICON = "em-vehicles-icon";
+const SELECTED_BOOST: ExpressionSpecification = ["case", [">", ["to-number", ["get", "selected"]], 0], 1.35, 1];
 
 /**
  * Every active emergency vehicle, fed by the `emergency.vehicle-updated`
@@ -114,10 +115,16 @@ export function EmergencyVehicleLayer({ visible }: { visible: boolean }) {
               EMERGENCY_ICON_ID.ambulance,
             ],
           ],
+          // A zoom curve must be the top-level expression, so the selected
+          // boost multiplies inside each stop rather than around the curve.
           "icon-size": [
-            "*",
-            ["interpolate", ["linear"], ["zoom"], 11, 0.62, 13, 0.85, 16, 1.12, 18, 1.32],
-            ["case", [">", ["to-number", ["get", "selected"]], 0], 1.35, 1],
+            "interpolate",
+            ["linear"],
+            ["zoom"],
+            11, ["*", 0.62, SELECTED_BOOST],
+            13, ["*", 0.85, SELECTED_BOOST],
+            16, ["*", 1.12, SELECTED_BOOST],
+            18, ["*", 1.32, SELECTED_BOOST],
           ],
           "icon-rotate": ["to-number", ["get", "heading"]],
           "icon-rotation-alignment": "map",

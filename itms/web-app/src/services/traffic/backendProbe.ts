@@ -21,7 +21,12 @@ export async function isBackendReachable(
       signal: controller.signal,
       cache: "no-store",
     });
-    return res.ok;
+    if (!res.ok) return false;
+    // The Vite preview/dev server returns index.html (text/html) for any path
+    // not found in dist/, so res.ok alone is not sufficient. A real backend
+    // health endpoint always returns JSON. Reject HTML to avoid a false positive
+    // that would switch the app out of simulation mode in CI/preview.
+    return (res.headers.get("content-type") ?? "").includes("application/json");
   } catch {
     return false;
   } finally {

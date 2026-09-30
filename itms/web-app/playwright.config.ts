@@ -4,9 +4,14 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   timeout: 40_000,
+  // CI runners are 2-3x slower than a laptop: retry once there, and
+  // Playwright reports any test that needed it as "flaky" rather than
+  // hiding it. The HTML report (screenshots + traces) is what the workflow
+  // uploads when a run fails.
+  retries: process.env.CI ? 1 : 0,
+  reporter: process.env.CI ? [["line"], ["html", { open: "never" }]] : "list",
   use: {
     baseURL: "http://127.0.0.1:4173",
-    channel: "chrome",
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
   },

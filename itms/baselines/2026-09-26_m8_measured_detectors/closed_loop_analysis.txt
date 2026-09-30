@@ -1,0 +1,37 @@
+== medium
+  truth                              n=5 delay     73,355  stops 1.75  viol 0  conf None  fallback 0.0%
+  vision:coco_pretrained:failsafe    n=5 delay     77,358  stops 1.82  viol 0  conf 0.86  fallback 1.6%
+  vision:finetuned_day:failsafe      n=5 delay     74,580  stops 1.70  viol 0  conf 0.9  fallback 0.0%
+  vision:stock_640:failsafe          n=5 delay     85,982  stops 2.12  viol 0  conf 0.84  fallback 0.1%
+  vision:uvh26_1280:failsafe         n=5 delay     75,023  stops 1.81  viol 0  conf 0.86  fallback 0.0%
+  vision:uvh26_640:failsafe          n=5 delay     80,141  stops 1.95  viol 0  conf 0.86  fallback 0.0%
+  webster                            n=5 delay    106,912  stops 2.24  viol 0  conf None  fallback None%
+  truth                              vs webster                           -31.4% [-32.8, -30.0] SIG 5/5 lower
+  vision:finetuned_day:failsafe      vs truth                              +1.7% [-8.1, +11.5] n.s. 2/5 lower
+  vision:uvh26_1280:failsafe         vs truth                              +2.3% [-5.2, +9.8] n.s. 2/5 lower
+  vision:uvh26_640:failsafe          vs truth                              +9.3% [-1.6, +20.1] n.s. 1/5 lower
+  vision:stock_640:failsafe          vs truth                             +17.2% [+9.4, +25.0] SIG 0/5 lower
+  vision:coco_pretrained:failsafe    vs truth                              +5.5% [+1.2, +9.7] SIG 0/5 lower
+  vision:uvh26_1280:failsafe         vs vision:finetuned_day:failsafe      +0.6% [-14.0, +15.2] n.s. 3/5 lower
+  vision:uvh26_640:failsafe          vs vision:finetuned_day:failsafe      +7.5% [-6.9, +21.8] n.s. 3/5 lower
+  vision:uvh26_640:failsafe          vs vision:uvh26_1280:failsafe         +6.8% [-0.6, +14.2] n.s. 0/5 lower
+  vision:stock_640:failsafe          vs vision:coco_pretrained:failsafe   +11.1% [+4.3, +18.0] SIG 0/5 lower
+  vision:stock_640:failsafe          vs vision:uvh26_640:failsafe          +7.3% [-7.5, +22.1] n.s. 1/5 lower
+  vision:uvh26_1280:failsafe         vs webster                           -29.8% [-35.6, -24.1] SIG 5/5 lower
+  vision:uvh26_640:failsafe          vs webster                           -25.0% [-33.2, -16.9] SIG 5/5 lower
+  vision:stock_640:failsafe          vs webster                           -19.6% [-25.1, -14.0] SIG 5/5 lower
+== heavy
+  truth                              n=5 delay    457,164  stops 2.73  viol 0  conf None  fallback 0.0%
+  vision:finetuned_day:failsafe      n=5 delay    536,460  stops 3.15  viol 0  conf 0.9  fallback 0.0%
+  vision:uvh26_1280:failsafe         n=5 delay    493,570  stops 2.98  viol 0  conf 0.86  fallback 0.0%
+  vision:uvh26_640:failsafe          n=5 delay    534,132  stops 3.19  viol 0  conf 0.86  fallback 0.9%
+  webster                            n=5 delay    648,447  stops 3.23  viol 0  conf None  fallback None%
+  truth                              vs webster                           -29.5% [-38.1, -20.9] SIG 5/5 lower
+  vision:finetuned_day:failsafe      vs truth                             +17.3% [+0.3, +34.3] SIG 0/5 lower
+  vision:uvh26_1280:failsafe         vs truth                              +8.0% [-5.6, +21.5] n.s. 1/5 lower
+  vision:uvh26_640:failsafe          vs truth                             +16.8% [-0.9, +34.6] n.s. 0/5 lower
+  vision:uvh26_1280:failsafe         vs vision:finetuned_day:failsafe      -8.0% [-28.8, +12.8] n.s. 4/5 lower
+  vision:uvh26_640:failsafe          vs vision:finetuned_day:failsafe      -0.4% [-15.2, +14.4] n.s. 3/5 lower
+  vision:uvh26_640:failsafe          vs vision:uvh26_1280:failsafe         +8.2% [-4.0, +20.4] n.s. 1/5 lower
+  vision:uvh26_1280:failsafe         vs webster                           -23.9% [-29.0, -18.8] SIG 5/5 lower
+  vision:uvh26_640:failsafe          vs webster                           -17.6% [-28.5, -6.8] SIG 5/5 lower

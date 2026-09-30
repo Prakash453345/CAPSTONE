@@ -1,0 +1,204 @@
+{
+ "meta": {
+  "data": "data/uvh26",
+  "images": 250,
+  "categories": {
+   "Hatchback": "car",
+   "Sedan": "car",
+   "SUV": "car",
+   "MUV": "car",
+   "Bus": "bus",
+   "Truck": "truck",
+   "Three-wheeler": "auto_rickshaw",
+   "Two-wheeler": "motorcycle",
+   "LCV": "truck",
+   "Mini-bus": "bus",
+   "Tempo-traveller": "bus",
+   "Bicycle": "bicycle",
+   "Van": "car",
+   "Others": null
+  },
+  "op_thresh": 0.5,
+  "score_floor": 0.05,
+  "cpu": "aarch64",
+  "cpus": 4
+ },
+ "models": {
+  "uvh26@640": {
+   "images": 250,
+   "op_thresh": 0.5,
+   "iou_thresh": 0.5,
+   "map50": 0.7177765353047006,
+   "vehicles": 3063,
+   "vehicle_recall": 0.6412014365001633,
+   "vehicle_precision": 0.9212007504690432,
+   "false_pos_per_image": 0.672,
+   "false_pos_by_class": {
+    "motorcycle": 59,
+    "truck": 43,
+    "car": 33,
+    "auto_rickshaw": 17,
+    "bus": 16
+   },
+   "ignored_detections": 0,
+   "recall_by_height": {
+    "0-20px": [
+     null,
+     0
+    ],
+    "20-40px": [
+     0.15873015873015872,
+     63
+    ],
+    "40-80px": [
+     0.4357864357864358,
+     693
+    ],
+    "80-infpx": [
+     0.7160814911140009,
+     2307
+    ]
+   },
+   "pcu_per_image": {
+    "truth_mean": 10.163600000000002,
+    "bias": -3.1652000000000005,
+    "mae": 3.549200000000001
+   },
+   "per_class": {
+    "auto_rickshaw": {
+     "truth": 504,
+     "ap50": 0.8523523841370981,
+     "recall": 0.748015873015873,
+     "found_as_some_vehicle": 0.7619047619047619,
+     "precision": 0.9448621553884712,
+     "reported_as": {
+      "auto_rickshaw": 377,
+      "missed": 120,
+      "truck": 5,
+      "car": 1,
+      "motorcycle": 1
+     }
+    },
+    "bicycle": {
+     "truth": 32,
+     "ap50": 0.4667455808080808,
+     "recall": 0.25,
+     "found_as_some_vehicle": 0.4375,
+     "precision": 1.0,
+     "reported_as": {
+      "missed": 18,
+      "bicycle": 8,
+      "motorcycle": 6
+     }
+    },
+    "bus": {
+     "truth": 87,
+     "ap50": 0.6813943047693455,
+     "recall": 0.5977011494252874,
+     "found_as_some_vehicle": 0.6091954022988506,
+     "precision": 0.7323943661971831,
+     "reported_as": {
+      "bus": 52,
+      "missed": 34,
+      "truck": 1
+     }
+    },
+    "car": {
+     "truth": 694,
+     "ap50": 0.8521152579336897,
+     "recall": 0.5821325648414986,
+     "found_as_some_vehicle": 0.5878962536023055,
+     "precision": 0.9181818181818182,
+     "reported_as": {
+      "car": 404,
+      "missed": 286,
+      "bus": 2,
+      "auto_rickshaw": 1,
+      "truck": 1
+     }
+    },
+    "motorcycle": {
+     "truth": 1467,
+     "ap50": 0.8622236359492053,
+     "recall": 0.6584867075664622,
+     "found_as_some_vehicle": 0.6584867075664622,
+     "precision": 0.936046511627907,
+     "reported_as": {
+      "motorcycle": 966,
+      "missed": 501
+     }
+    },
+    "truck": {
+     "truth": 279,
+     "ap50": 0.5918280482307843,
+     "recall": 0.4731182795698925,
+     "found_as_some_vehicle": 0.4982078853046595,
+     "precision": 0.7252747252747253,
+     "reported_as": {
+      "missed": 140,
+      "truck": 132,
+      "auto_rickshaw": 4,
+      "car": 2,
+      "bus": 1
+     }
+    }
+   },
+   "cpu_ms_per_image": {
+    "median": 53.26920900006371,
+    "mean": 56.89030653032201,
+    "n": 247
+   },
+   "weights": "data/uvh26/UVH-26-MV-YOLOv11-S.onnx",
+   "backend": "onnxruntime 1.23.2",
+   "imgsz": 640,
+   "class_map": {
+    "Hatchback": "car",
+    "Sedan": "car",
+    "SUV": "car",
+    "MUV": "car",
+    "Bus": "bus",
+    "Truck": "truck",
+    "Three-wheeler": "auto_rickshaw",
+    "Two-wheeler": "motorcycle",
+    "LCV": "truck",
+    "Mini-bus": "bus",
+    "tempo-traveller": "bus",
+    "bicycle": "bicycle",
+    "Van": "car",
+    "Others": null
+   }
+  }
+ },
+ "clips": {
+  "highway.avi": {
+   "uvh26@640": {
+    "frames": 75,
+    "frames_with_a_vehicle_box": 0,
+    "vehicle_boxes": 0,
+    "by_class": {}
+   }
+  },
+  "pbc.mp4": {
+   "uvh26@640": {
+    "frames": 75,
+    "frames_with_a_vehicle_box": 15,
+    "vehicle_boxes": 21,
+    "by_class": {
+     "car": 12,
+     "bicycle": 7,
+     "motorcycle": 2
+    }
+   }
+  },
+  "overpass.mp4": {
+   "uvh26@640": {
+    "frames": 75,
+    "frames_with_a_vehicle_box": 57,
+    "vehicle_boxes": 117,
+    "by_class": {
+     "car": 117
+    }
+   }
+  }
+ }
+}

@@ -1,0 +1,19 @@
+Evaluation (every number in this baseline)
+  machine      the laptop: Apple silicon, 4 cores, in the Claude desktop app's Linux VM (aarch64), 3 GB RAM
+  python       3.10.12 (vision_service needs enum.StrEnum from 3.11; a 10-line sitecustomize shim
+               outside the repository supplied it for this run only)
+  onnxruntime  1.23.2, CPUExecutionProvider
+  opencv       5.0.0 (opencv-python-headless)
+  numpy        2.2.6
+
+ONNX export and the parity check (5 frames)
+  machine      cloud container, x86_64, 2 vCPU
+  ultralytics  8.4.163, torch 2.14.0 (CPU)
+  export       yolo export format=onnx dynamic=True imgsz=640 (both models)
+
+Model files (not in the repository; data/ is git-ignored)
+  UVH-26-MV-YOLOv11-S.pt   sha256 in checkpoint.json
+  UVH-26-MV-YOLOv11-S.onnx md5 9773f8cbff7d3fb307ea060ff0defb7c
+  yolo11s.onnx             md5 5278b829c181ea82f608bc4a342922b0
+
+Tests after the change: make test-vision 162 passed; full suite 784 passed, 4 skipped; ruff clean.

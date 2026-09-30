@@ -48,6 +48,15 @@ _HALTING_SPEED_MPS = 0.1
 # returns the vehicle to the car-following model.
 _RELEASE_SPEED = -1.0
 
+# A stalled vehicle must stay in its lane. `setSpeed(veh, 0)` alone does not
+# do that: SUMO's lane-change model keeps moving a stationary vehicle
+# sideways (observed in the M8 incident gate: one stall hopped lanes
+# 1 -> 2 -> 1 -> 0 within a minute), which no broken-down car does and
+# which moves the obstruction off the lane the ground truth names. Mode 0
+# disables every autonomous lane change for the duration of the stall; the
+# vehicle's own mode is restored on release.
+_NO_LANE_CHANGES = 0
+
 
 @dataclass(frozen=True)
 class PlannedIncident:
@@ -106,6 +115,7 @@ class _ActiveStall:
     plan: PlannedIncident
     vehicle_id: str
     started_tick: int
+    lane_change_mode: int | None = None
 
 
 @dataclass
@@ -299,8 +309,10 @@ class IncidentInjector:
         if candidate is None:
             return False
         traci.vehicle.setSpeed(candidate, 0.0)
+        mode = traci.vehicle.getLaneChangeMode(candidate)
+        traci.vehicle.setLaneChangeMode(candidate, _NO_LANE_CHANGES)
         self._active_stalls[plan.lane_id] = _ActiveStall(
-            plan=plan, vehicle_id=candidate, started_tick=step
+            plan=plan, vehicle_id=candidate, started_tick=step, lane_change_mode=mode
         )
         return True
 
@@ -332,6 +344,8 @@ class IncidentInjector:
         if reason != "vehicle_gone":
             try:
                 traci.vehicle.setSpeed(active.vehicle_id, _RELEASE_SPEED)
+                if active.lane_change_mode is not None:
+                    traci.vehicle.setLaneChangeMode(active.vehicle_id, active.lane_change_mode)
             except traci.TraCIException:
                 pass
         self._close_window(

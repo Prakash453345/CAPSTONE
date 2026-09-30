@@ -29,6 +29,8 @@ once there's more than one event type to break compatibility with.
 | `emergency_vehicle_updated.avsc` | Position + status of one emergency vehicle while it drives through SUMO, on `emergency.vehicle-updated` | M7 |
 | `green_corridor_updated.avsc` | Green corridor lifecycle on `emergency.corridor-updated` — the time-boxed movement reservations the Signal Controller turns into `corridor_preemption` proposals (it never commands a signal itself) | M7 |
 | `emergency_dispatched.avsc` | The alert raised when `IncidentResponseOrchestrator` auto-dispatches authorities to a sufficiently severe anomaly — anomaly type + GPS + which units (one EmergencyRequest per responding kind), on `emergency.dispatched`. The wire shape a future dashboard subscribes to for "notify the authorities" | M7+ |
+| `link_state_estimated.avsc` | The vision service's per-link state for one junction -- the four `QueueSample` quantities measured by cameras, same units and keys, plus a confidence per link and the factors it is built from, and the link's `vision_score`, on `vision.link-state` | M8 |
+| `camera_status.avsc` | Health of one camera (OK / DEGRADED / FAILED, score, reasons, pixel and calibration-drift metrics) on `vision.camera-status` | M8 |
 
 Both M2 schemas are defined and their payload shape is real (matches `signal_controller/arbiter.py`'s `Decision.events` exactly) but **not yet published onto the bus** — M2 built and property-tested the safety kernel and arbitration ladder in isolation, against a fake cabinet; wiring a real producer into the running simulation is scoped to M3 (see `arbiter.py`'s module docstring for why).
 
@@ -42,7 +44,7 @@ More arrive as the milestone that needs them lands:
 - M2 (remaining): `signal_plan_proposed.avsc`, `signal_override_*.avsc` — no real proposer (M4 CA-MP) or overrider (M6) exists yet, same reasoning as M1's deferred `sensor_reading.avsc`
 - M6: `unit_reserved.avsc`, `route_calculated.avsc` (`emergency_dispatched.avsc` itself is now built — see the table above — as part of the M7+ incident-response orchestrator, not the M6 candidate/confirm pipeline this line originally scoped it to)
 - M7: `corridor_reservation_*.avsc`, `fleet_position_updated.avsc` — still true even though M7 itself is done: the corridor engine and dispatcher (`control/corridor/`, `control/dispatch/`) are pure in-process simulation logic with zero bus involvement. Nothing about M7's verified benchmark result depends on these schemas existing; they'd only matter for a real multi-service deployment.
-- M8: YOLO / vision detections feeding the same `anomaly_updated.avsc` shape
+- M8: built -- `link_state_estimated.avsc`, `camera_status.avsc` above, and vision-raised anomalies on the existing `anomaly_updated.avsc` with `source = VISION`
 
 (The M1 `approach_state.avsc` already covers the `traffic.updated` topic — no separate M5 schema was ever needed; an earlier version of this list said otherwise.)
 

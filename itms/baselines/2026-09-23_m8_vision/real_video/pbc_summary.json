@@ -1,0 +1,69 @@
+{
+ "video": "pbc.mp4",
+ "frames": 647,
+ "fps": 12.0,
+ "size": [
+  768,
+  432
+ ],
+ "weights": "yolo11n.pt",
+ "imgsz": 640,
+ "detector": {
+  "backend": "ultralytics",
+  "ms_per_frame_cpu": 71.0,
+  "detections_per_frame": 0.71,
+  "confident_per_frame": 0.44,
+  "by_class_conf50": {
+   "person": 172,
+   "car": 74,
+   "bicycle": 38
+  }
+ },
+ "image_tracking": {
+  "tracks": 8,
+  "tracks_by_class": {
+   "person": 4,
+   "car": 2,
+   "bicycle": 2
+  },
+  "track_seconds_median": 5.125,
+  "tracks_under_1s": 0,
+  "tracks_over_10s": 0,
+  "stationary_tracks": 0
+ },
+ "pixel_health": {
+  "clean_non_ok_frames": 0,
+  "clean_frames": 597,
+  "faults_on_second_half": {
+   "blur": {
+    "detected": true,
+    "latency_s": 0.0,
+    "status": "FAILED"
+   },
+   "lens_covered": {
+    "detected": true,
+    "latency_s": 0.0,
+    "status": "FAILED"
+   },
+   "spray_or_fog": {
+    "detected": true,
+    "latency_s": 0.0,
+    "status": "FAILED"
+   },
+   "frozen": {
+    "detected": true,
+    "latency_s": 2.08,
+    "status": "FAILED"
+   },
+   "night_underexposed": {
+    "detected": true,
+    "latency_s": 0.0,
+    "status": "FAILED"
+   }
+  }
+ },
+ "redaction": {
+  "frame": 72,
+  "redacted_regions": 2
+ }
+}

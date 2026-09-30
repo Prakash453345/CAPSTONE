@@ -1,168 +1,201 @@
 import { useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { CheckCircle2, Columns2, Loader2, MapPin, Plus, TrafficCone, TriangleAlert } from "lucide-react";
 import { IncidentInbox } from "@/components/panels/IncidentInbox";
-import { AlertTriangle, Columns2, Loader2, MapPin, X } from "lucide-react";
 import { TrafficMap } from "@/components/map/TrafficMap";
+import { WorkspaceLayout } from "@/components/console/WorkspaceLayout";
+import { Button, EmptyState, Meter, Pill, Segmented } from "@/components/console/kit";
+import { EASE_OUT, listMotion } from "@/components/console/motion";
+import { ago, useNow } from "@/components/console/hooks";
+import { toneBg, toneText, type Tone } from "@/components/console/tone";
+import { anomalyWord, SOURCE_WORDS } from "@/components/console/words";
 import { useIncidentStore } from "@/store/incidentStore";
 import { useMapStore } from "@/store/mapStore";
 import { useSystemStore } from "@/store/systemStore";
-import { edgeById } from "@/data/network";
-import { ANOMALY_SEVERITY_COLOR } from "@/components/map/mapColors";
-import { formatRelative } from "@/utils/format";
+import { edgeById, roadLabel } from "@/data/network";
 import { cn } from "@/utils/cn";
 import { CommandError, postCommand } from "@/services/traffic/commands";
 import type { Anomaly } from "@/types";
 
+type Tab = "review" | "active" | "resolved";
+
+const SEVERITY: Record<Anomaly["severity"], { word: string; tone: Tone }> = {
+  low: { word: "Minor", tone: "warn" },
+  medium: { word: "Moderate", tone: "warn" },
+  high: { word: "Serious", tone: "critical" },
+  blocked: { word: "Road blocked", tone: "critical" },
+};
+
+function focusEdge(edgeId: string, zoom = 16.5) {
+  const e = edgeById.get(edgeId);
+  if (!e) return;
+  const mid = e.path[Math.floor(e.path.length / 2)]!;
+  useMapStore.getState().focusOn({ longitude: mid[0], latitude: mid[1] }, zoom);
+}
+
 /**
- * Anomaly Detection workspace: the roster of anomalies on the network (operator
- * and, later, model / vision sources), with severity, impact, source and
- * status. Selecting one drives the shared `selectedAnomalyId` and pans the map.
+ * Incidents: what the detector wants a person to check, what is disrupting
+ * the road right now, and what has been cleared.
  */
 export function AnomaliesPage() {
   const anomalies = useIncidentStore((s) => s.anomalies);
+  const candidates = useIncidentStore((s) => s.incidents.filter((i) => i.status === "candidate").length);
   const selectedId = useIncidentStore((s) => s.selectedAnomalyId);
   const selectAnomaly = useIncidentStore((s) => s.selectAnomaly);
-  const focusOn = useMapStore((s) => s.focusOn);
+  const setInteractionMode = useMapStore((s) => s.setInteractionMode);
+  const creating = useMapStore((s) => s.interactionMode === "create-anomaly");
   const setViewMode = useSystemStore((s) => s.setViewMode);
+  const now = useNow(15_000);
 
   const active = anomalies.filter((a) => a.status === "active");
-  const sorted = [...anomalies].sort((a, b) => {
-    if ((a.status === "active") !== (b.status === "active")) {
-      return a.status === "active" ? -1 : 1;
-    }
-    return (Date.parse(b.startTime) || 0) - (Date.parse(a.startTime) || 0);
-  });
+  const done = anomalies.filter((a) => a.status !== "active");
+  const [tab, setTab] = useState<Tab>(() => (active.length && !candidates ? "active" : "review"));
 
-  const focusEdge = (edgeId: string, zoom?: number) => {
-    const e = edgeById.get(edgeId);
-    if (e) {
-      const mid = e.path[Math.floor(e.path.length / 2)];
-      focusOn({ longitude: mid[0], latitude: mid[1] }, zoom);
-    }
-  };
+  const byTime = (a: Anomaly, b: Anomaly) => (Date.parse(b.startTime) || 0) - (Date.parse(a.startTime) || 0);
+  const list = (tab === "active" ? active : done).sort(byTime);
 
-  const select = (a: Anomaly) => {
-    selectAnomaly(a.id === selectedId ? null : a.id);
-    focusEdge(a.edgeId);
-  };
-
-  // Phase 8 cross-focus: jump into Split View with the Traffic Management
-  // pane centred on this anomaly's location. Both panes' `TrafficMap`s read
-  // the same `mapStore.focus`, so this `focusOn` is all that's needed to
-  // move the traffic pane too -- no anomaly<->traffic-specific plumbing.
-  const viewTrafficHere = (a: Anomaly) => {
-    focusEdge(a.edgeId, 16);
-    setViewMode("split");
-  };
-
-  return (
-    <div className="operational-workspace flex h-full">
-      <aside className="workspace-roster flex w-[340px] shrink-0 flex-col border-r border-border bg-surface">
-        <div className="border-b border-border px-4 py-3">
-          <h2 className="text-sm font-semibold">Anomalies</h2>
-          <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">
-            {active.length} active · {anomalies.length} total
+  const panel = (
+    <div className="flex h-full min-h-0 flex-col">
+      <header className="flex items-center justify-between gap-3 px-5 pb-3 pt-4">
+        <div>
+          <h2 className="text-[15px] font-semibold text-foreground">Road disruptions</h2>
+          <p className="text-[13px] text-muted-foreground">
+            {active.length} on the road · {candidates} to review
           </p>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto p-2">
-          <IncidentInbox />
-          {anomalies.length === 0 && (
-            <p className="px-2 py-8 text-center text-xs text-muted-foreground">
-              No anomalies on the network. Use{" "}
-              <span className="text-foreground">Create anomaly</span> on the map to add one.
-            </p>
-          )}
-          <ul className="space-y-1">
-            {sorted.map((a) => {
-              const terminal = a.status !== "active";
-              const isSel = a.id === selectedId;
-              return (
-                <li
-                  key={a.id}
-                  className={cn(
-                    "rounded-md border transition-colors",
-                    isSel
-                      ? "border-primary/70 bg-primary/10"
-                      : "border-transparent hover:border-border hover:bg-muted",
-                    terminal && "opacity-55",
-                  )}
-                >
-                  <button
-                    type="button"
-                    onClick={() => select(a)}
-                    className="w-full px-2.5 py-2 text-left"
-                  >
-                    <div className="flex items-center gap-2">
-                      <AlertTriangle
-                        className="size-4 shrink-0"
-                        style={{ color: ANOMALY_SEVERITY_COLOR[a.severity] }}
-                      />
-                      <span className="truncate text-xs font-medium">
-                        {label(a.kind)}
-                      </span>
-                      <span className="ml-auto shrink-0 font-mono text-[10px] text-muted-foreground">
-                        {formatRelative(a.startTime)}
-                      </span>
-                    </div>
-                    <div className="mt-1 flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-muted-foreground">
-                      <span style={{ color: ANOMALY_SEVERITY_COLOR[a.severity] }}>
-                        {a.severity}
-                      </span>
-                      <span>·</span>
-                      <span>{a.source.replace(/_/g, " ")}</span>
-                      {terminal && <span>· {a.status}</span>}
-                    </div>
-                    <div className="mt-1 flex items-center gap-1 font-mono text-[10px] text-muted-foreground">
-                      <MapPin className="size-3" />
-                      {a.edgeId}
-                      <span className="ml-auto">{Math.round(a.estimatedImpact * 100)}% impact</span>
-                    </div>
-                    {a.detail && (
-                      <p className="mt-1 truncate text-[11px] text-muted-foreground">{a.detail}</p>
-                    )}
-                  </button>
-                  {isSel && (
-                    <div className="border-t border-border/60 px-2.5 py-1.5">
+        <Button
+          variant={creating ? "secondary" : "primary"}
+          size="sm"
+          icon={creating ? undefined : Plus}
+          onClick={() => setInteractionMode(creating ? "idle" : "create-anomaly")}
+        >
+          {creating ? "Cancel" : "Report"}
+        </Button>
+      </header>
+      <AnimatePresence>
+        {creating && (
+          <motion.p
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="mx-5 mb-3 overflow-hidden rounded-xl bg-primary-muted px-3.5 py-2.5 text-[13px] text-primary"
+          >
+            Click the road on the map where the disruption is.
+          </motion.p>
+        )}
+      </AnimatePresence>
+      <div className="px-4 pb-3">
+        <Segmented<Tab>
+          value={tab}
+          onChange={setTab}
+          ariaLabel="Show"
+          className="w-full"
+          size="sm"
+          options={[
+            { value: "review", label: `To review${candidates ? ` (${candidates})` : ""}` },
+            { value: "active", label: `On the road${active.length ? ` (${active.length})` : ""}` },
+            { value: "resolved", label: "Resolved" },
+          ]}
+        />
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-4">
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div key={tab} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.2, ease: EASE_OUT }}>
+            {tab === "review" ? (
+              <IncidentInbox />
+            ) : list.length === 0 ? (
+              tab === "active" ? (
+                <EmptyState
+                  icon={CheckCircle2}
+                  title="The road is clear"
+                  body="No disruptions right now. Report one if you see it before the detector does."
+                  action={
+                    <Button icon={Plus} onClick={() => setInteractionMode("create-anomaly")}>
+                      Report a disruption
+                    </Button>
+                  }
+                />
+              ) : (
+                <EmptyState icon={TrafficCone} title="Nothing resolved yet" body="Cleared disruptions collect here for the session." />
+              )
+            ) : (
+              <motion.ul variants={listMotion.container} initial="hidden" animate="show" className="space-y-2">
+                {list.map((a) => {
+                  const sev = SEVERITY[a.severity];
+                  const sel = a.id === selectedId;
+                  const live = a.status === "active";
+                  return (
+                    <motion.li
+                      key={a.id}
+                      variants={listMotion.item}
+                      className={cn("rounded-2xl bg-surface p-3.5 shadow-elevation-1 transition-shadow", sel && "ring-2 ring-primary/40", !live && "opacity-70")}
+                    >
                       <button
                         type="button"
-                        onClick={() => viewTrafficHere(a)}
-                        className="flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground"
+                        className="flex w-full items-start gap-3 text-left"
+                        onClick={() => {
+                          selectAnomaly(sel ? null : a.id);
+                          focusEdge(a.edgeId);
+                        }}
                       >
-                        <Columns2 className="size-3" />
-                        View traffic in this area
+                        <span className={cn("grid size-9 shrink-0 place-items-center rounded-xl", toneBg(sev.tone), toneText(sev.tone))}>
+                          {a.severity === "blocked" ? <TrafficCone size={17} /> : <TriangleAlert size={17} />}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="flex items-center justify-between gap-2">
+                            <span className="truncate text-[13.5px] font-medium text-foreground">
+                              {anomalyWord(a.kind)} on {roadLabel(a.edgeId)}
+                            </span>
+                            <Pill tone={live ? sev.tone : "neutral"}>{live ? sev.word : a.status === "resolved" ? "Resolved" : "Cancelled"}</Pill>
+                          </span>
+                          <span className="mt-0.5 block text-[12.5px] text-muted-foreground">
+                            {SOURCE_WORDS[a.source] ?? a.source} · {ago(Date.parse(a.startTime), now)}
+                          </span>
+                          {a.detail && <span className="mt-1 block text-[12.5px] text-foreground/80">{a.detail}</span>}
+                          <span className="mt-2.5 flex items-center gap-2 text-[12px] text-muted-foreground">
+                            <Meter value={a.estimatedImpact} tone={sev.tone} className="flex-1" />
+                            {Math.round(a.estimatedImpact * 100)}% capacity lost
+                          </span>
+                        </span>
                       </button>
-                    </div>
-                  )}
-                  {a.status === "active" && (
-                    <div className="border-t border-border/60 px-2.5 py-1.5">
-                      <ClearAnomalyControl anomaly={a} />
-                    </div>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      </aside>
-
-      <div className="relative min-h-0 flex-1">
-        <TrafficMap />
+                      {live && (
+                        <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-border pt-3">
+                          <Button variant="ghost" size="sm" icon={MapPin} onClick={() => focusEdge(a.edgeId, 17)}>
+                            Show on map
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            icon={Columns2}
+                            onClick={() => {
+                              focusEdge(a.edgeId, 16);
+                              setViewMode("split");
+                            }}
+                          >
+                            Compare traffic
+                          </Button>
+                          <ClearAnomalyControl anomaly={a} />
+                        </div>
+                      )}
+                    </motion.li>
+                  );
+                })}
+              </motion.ul>
+            )}
+          </motion.div>
+        </AnimatePresence>
       </div>
     </div>
   );
-}
 
-function label(kind: string): string {
-  return kind.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
+  return <WorkspaceLayout label="Incidents" panel={panel} map={<TrafficMap />} />;
 }
 
 /**
- * Manual clear for an active anomaly (Phase 7) — the operator picks whether
- * the disruption genuinely ended (`RESOLVED`) or it was reported in error
- * (`CANCELLED`), matching `AnomalyClearRequested`'s own two meanings. Always
- * a two-step confirm; a failed POST shows inline (the request never left the
- * browser). A *successful* clear doesn't need its own success toast here —
- * once it round-trips through `AnomalyUpdated`, the notification layer
- * (Phase 5) already surfaces "Anomaly cleared" and the row updates itself.
+ * Manual clear for an active anomaly: the operator says whether it genuinely
+ * ended or was reported in error, matching the two meanings of
+ * `AnomalyClearRequested`. Always two steps; a failed request shows inline.
  */
 function ClearAnomalyControl({ anomaly }: { anomaly: Anomaly }) {
   const [confirming, setConfirming] = useState(false);
@@ -187,7 +220,7 @@ function ClearAnomalyControl({ anomaly }: { anomaly: Anomaly }) {
       setError(
         err instanceof CommandError
           ? err.status === 0
-            ? "Backend unreachable — is the live simulation running?"
+            ? "Backend unreachable. Is the live simulation running?"
             : err.detail
           : "Could not clear the anomaly.",
       );
@@ -196,53 +229,30 @@ function ClearAnomalyControl({ anomaly }: { anomaly: Anomaly }) {
     }
   };
 
-  if (!confirming) {
+  if (!confirming)
     return (
-      <button
-        type="button"
-        onClick={() => setConfirming(true)}
-        className="text-[11px] text-muted-foreground hover:text-foreground"
-      >
-        Clear anomaly…
-      </button>
+      <Button variant="ghost" size="sm" className="ml-auto" onClick={() => setConfirming(true)}>
+        Clear
+      </Button>
     );
-  }
 
   return (
-    <div className="space-y-1.5">
-      <div className="flex items-center justify-between">
-        <span className="text-[11px] text-muted-foreground">Clear this anomaly?</span>
-        <button
-          type="button"
-          onClick={() => setConfirming(false)}
-          disabled={busy != null}
-          aria-label="Keep active"
-          className="grid size-4 place-items-center rounded text-muted-foreground hover:text-foreground"
-        >
-          <X className="size-3" />
-        </button>
-      </div>
-      <div className="flex gap-1.5">
-        <button
-          type="button"
-          onClick={() => clear("RESOLVED")}
-          disabled={busy != null}
-          className="flex flex-1 items-center justify-center gap-1 rounded-md bg-status-ok-muted px-2 py-1 text-[11px] font-medium text-status-ok transition-opacity hover:opacity-90 disabled:opacity-60"
-        >
-          {busy === "RESOLVED" && <Loader2 className="size-3 animate-spin" />}
-          Resolved
-        </button>
-        <button
-          type="button"
-          onClick={() => clear("CANCELLED")}
-          disabled={busy != null}
-          className="flex flex-1 items-center justify-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:text-foreground disabled:opacity-60"
-        >
-          {busy === "CANCELLED" && <Loader2 className="size-3 animate-spin" />}
+    <div className="mt-1 w-full space-y-2">
+      <p className="text-[12.5px] text-muted-foreground">How did it end?</p>
+      <div className="flex gap-2">
+        <Button size="sm" className="flex-1" onClick={() => clear("RESOLVED")} disabled={busy != null}>
+          {busy === "RESOLVED" && <Loader2 className="size-3.5 animate-spin" />}
+          It's resolved
+        </Button>
+        <Button size="sm" variant="ghost" className="flex-1" onClick={() => clear("CANCELLED")} disabled={busy != null}>
+          {busy === "CANCELLED" && <Loader2 className="size-3.5 animate-spin" />}
           Reported in error
-        </button>
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => setConfirming(false)} disabled={busy != null}>
+          Keep
+        </Button>
       </div>
-      {error && <p className="text-[11px] text-status-critical">{error}</p>}
+      {error && <p className="text-[12.5px] text-status-critical">{error}</p>}
     </div>
   );
 }

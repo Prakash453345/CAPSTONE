@@ -1,0 +1,28 @@
+{
+ "clip": "andrewssobral/simple_vehicle_counting dataset/video.avi (320x176, 30 fps, overhead view of a 2-lane road)",
+ "frames_sampled": 75,
+ "conf_threshold": 0.25,
+ "imgsz": 640,
+ "labels_by_model": {
+  "yolo11n.pt": {
+   "airplane": 85,
+   "train": 3,
+   "toilet": 2,
+   "truck": 1,
+   "bus": 1
+  },
+  "yolo11s.pt": {
+   "car": 3,
+   "suitcase": 2
+  },
+  "yolo11m.pt": {
+   "airplane": 8,
+   "toilet": 2,
+   "person": 1,
+   "car": 1
+  }
+ },
+ "frames_with_a_vehicle": 43,
+ "frames_with_a_vehicle_method": "background subtraction against the per-pixel median of 60 frames; a connected blob > 300 px",
+ "reading": "yolo11n's 85 'airplane' boxes all sit on static road paint (the same boxes appear on the empty-road median image); none is on a vehicle. Across the three model sizes the stock COCO weights find almost none of the vehicles in an overhead view. The pipeline drops non-road classes, so the camera would report an empty road with full confidence -- the argument for fine-tuned weights on overhead/drone-angle cameras and for an activity-based health check."
+}

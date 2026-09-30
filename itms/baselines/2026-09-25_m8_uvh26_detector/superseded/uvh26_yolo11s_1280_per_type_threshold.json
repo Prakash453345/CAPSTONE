@@ -1,0 +1,176 @@
+{
+ "meta": {
+  "data": "data/uvh26",
+  "images": 250,
+  "categories": {
+   "Hatchback": "car",
+   "Sedan": "car",
+   "SUV": "car",
+   "MUV": "car",
+   "Bus": "bus",
+   "Truck": "truck",
+   "Three-wheeler": "auto_rickshaw",
+   "Two-wheeler": "motorcycle",
+   "LCV": "truck",
+   "Mini-bus": "bus",
+   "Tempo-traveller": "bus",
+   "Bicycle": "bicycle",
+   "Van": "car",
+   "Others": null
+  },
+  "op_thresh": 0.5,
+  "score_floor": 0.05,
+  "cpu": "aarch64",
+  "cpus": 4
+ },
+ "models": {
+  "uvh26@1280": {
+   "images": 250,
+   "op_thresh": 0.5,
+   "iou_thresh": 0.5,
+   "map50": 0.68861277335133,
+   "vehicles": 3063,
+   "vehicle_recall": 0.6960496245510936,
+   "vehicle_precision": 0.8315132605304212,
+   "false_pos_per_image": 1.728,
+   "false_pos_by_class": {
+    "motorcycle": 154,
+    "truck": 95,
+    "car": 80,
+    "auto_rickshaw": 74,
+    "bus": 26,
+    "bicycle": 3
+   },
+   "ignored_detections": 0,
+   "recall_by_height": {
+    "0-20px": [
+     null,
+     0
+    ],
+    "20-40px": [
+     0.746031746031746,
+     63
+    ],
+    "40-80px": [
+     0.6911976911976911,
+     693
+    ],
+    "80-infpx": [
+     0.6961421759861292,
+     2307
+    ]
+   },
+   "pcu_per_image": {
+    "truth_mean": 10.163600000000002,
+    "bias": -1.7124000000000001,
+    "mae": 2.9492000000000003
+   },
+   "per_class": {
+    "auto_rickshaw": {
+     "truth": 504,
+     "ap50": 0.7791312303258542,
+     "recall": 0.7619047619047619,
+     "found_as_some_vehicle": 0.7817460317460317,
+     "precision": 0.8275862068965517,
+     "reported_as": {
+      "auto_rickshaw": 384,
+      "missed": 110,
+      "truck": 6,
+      "car": 2,
+      "bus": 1,
+      "motorcycle": 1
+     }
+    },
+    "bicycle": {
+     "truth": 32,
+     "ap50": 0.6743247293893846,
+     "recall": 0.34375,
+     "found_as_some_vehicle": 0.53125,
+     "precision": 0.7857142857142857,
+     "reported_as": {
+      "missed": 15,
+      "bicycle": 11,
+      "motorcycle": 6
+     }
+    },
+    "bus": {
+     "truth": 87,
+     "ap50": 0.5226677864953135,
+     "recall": 0.4942528735632184,
+     "found_as_some_vehicle": 0.5057471264367817,
+     "precision": 0.581081081081081,
+     "reported_as": {
+      "missed": 43,
+      "bus": 43,
+      "truck": 1
+     }
+    },
+    "car": {
+     "truth": 694,
+     "ap50": 0.7832079918356825,
+     "recall": 0.5951008645533141,
+     "found_as_some_vehicle": 0.6051873198847262,
+     "precision": 0.8326612903225806,
+     "reported_as": {
+      "car": 413,
+      "missed": 274,
+      "truck": 4,
+      "auto_rickshaw": 2,
+      "bus": 1
+     }
+    },
+    "motorcycle": {
+     "truth": 1467,
+     "ap50": 0.8696798180057668,
+     "recall": 0.7573278800272665,
+     "found_as_some_vehicle": 0.7580095432856169,
+     "precision": 0.8734276729559748,
+     "reported_as": {
+      "motorcycle": 1111,
+      "missed": 355,
+      "auto_rickshaw": 1
+     }
+    },
+    "truck": {
+     "truth": 279,
+     "ap50": 0.5026650840559783,
+     "recall": 0.4946236559139785,
+     "found_as_some_vehicle": 0.5197132616487455,
+     "precision": 0.5655737704918032,
+     "reported_as": {
+      "truck": 138,
+      "missed": 134,
+      "bus": 3,
+      "auto_rickshaw": 3,
+      "car": 1
+     }
+    }
+   },
+   "cpu_ms_per_image": {
+    "median": 249.19537500045408,
+    "mean": 256.4285933764843,
+    "n": 247
+   },
+   "weights": "data/uvh26/UVH-26-MV-YOLOv11-S.onnx",
+   "backend": "onnxruntime 1.23.2",
+   "imgsz": 1280,
+   "class_map": {
+    "Hatchback": "car",
+    "Sedan": "car",
+    "SUV": "car",
+    "MUV": "car",
+    "Bus": "bus",
+    "Truck": "truck",
+    "Three-wheeler": "auto_rickshaw",
+    "Two-wheeler": "motorcycle",
+    "LCV": "truck",
+    "Mini-bus": "bus",
+    "tempo-traveller": "bus",
+    "bicycle": "bicycle",
+    "Van": "car",
+    "Others": null
+   }
+  }
+ },
+ "clips": {}
+}

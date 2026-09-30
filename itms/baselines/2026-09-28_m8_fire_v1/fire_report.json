@@ -1,0 +1,607 @@
+{
+ "ultralytics": "8.4.163",
+ "torch": "2.11.0+cu128",
+ "gpu": "Tesla T4",
+ "seed": 26,
+ "settings": {
+  "SIZE": 640,
+  "EPOCHS": 30,
+  "PATIENCE": 8,
+  "BATCH": 32,
+  "BASE_WEIGHTS": "yolo11s.pt",
+  "FA_TARGET": 0.01,
+  "RECALL_BAR": 0.85
+ },
+ "sessions": [
+  {
+   "minutes": 76,
+   "batch_used": 32
+  }
+ ],
+ "bn": {
+  "bn_layers": 81,
+  "channels": 14992,
+  "nonfinite_channels": 0,
+  "channels_over_fp16_max": 0,
+  "channels_at_fp16_max": 0
+ },
+ "threshold": {
+  "t": 0.29,
+  "chosen_on": "validation, fa_dfire_negatives <= 0.05",
+  "at_t": {
+   "t": 0.29,
+   "recall": 0.9370437956204379,
+   "fa_dfire_negatives": 0.04267161410018553,
+   "fa_bengaluru": null
+  },
+  "curve": [
+   {
+    "t": 0.05,
+    "recall": 0.9881386861313869,
+    "fa_dfire_negatives": 0.19666048237476808,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.06,
+    "recall": 0.9872262773722628,
+    "fa_dfire_negatives": 0.17810760667903525,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.07,
+    "recall": 0.9863138686131386,
+    "fa_dfire_negatives": 0.16326530612244897,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.08,
+    "recall": 0.9863138686131386,
+    "fa_dfire_negatives": 0.15213358070500926,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.09,
+    "recall": 0.9844890510948905,
+    "fa_dfire_negatives": 0.137291280148423,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.1,
+    "recall": 0.9826642335766423,
+    "fa_dfire_negatives": 0.1280148423005566,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.11,
+    "recall": 0.9808394160583942,
+    "fa_dfire_negatives": 0.12244897959183673,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.12,
+    "recall": 0.9799270072992701,
+    "fa_dfire_negatives": 0.12059369202226346,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.13,
+    "recall": 0.9799270072992701,
+    "fa_dfire_negatives": 0.10204081632653061,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.14,
+    "recall": 0.9762773722627737,
+    "fa_dfire_negatives": 0.09090909090909091,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.15,
+    "recall": 0.9735401459854015,
+    "fa_dfire_negatives": 0.08905380333951762,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.16,
+    "recall": 0.9708029197080292,
+    "fa_dfire_negatives": 0.08348794063079777,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.17,
+    "recall": 0.9671532846715328,
+    "fa_dfire_negatives": 0.07977736549165121,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.18,
+    "recall": 0.9644160583941606,
+    "fa_dfire_negatives": 0.07606679035250463,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.19,
+    "recall": 0.9625912408759124,
+    "fa_dfire_negatives": 0.07235621521335807,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.2,
+    "recall": 0.9625912408759124,
+    "fa_dfire_negatives": 0.07050092764378478,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.21,
+    "recall": 0.9625912408759124,
+    "fa_dfire_negatives": 0.06679035250463822,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.22,
+    "recall": 0.9607664233576643,
+    "fa_dfire_negatives": 0.06493506493506493,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.23,
+    "recall": 0.958941605839416,
+    "fa_dfire_negatives": 0.06493506493506493,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.24,
+    "recall": 0.958029197080292,
+    "fa_dfire_negatives": 0.061224489795918366,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.25,
+    "recall": 0.9571167883211679,
+    "fa_dfire_negatives": 0.059369202226345084,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.26,
+    "recall": 0.9571167883211679,
+    "fa_dfire_negatives": 0.055658627087198514,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.27,
+    "recall": 0.948905109489051,
+    "fa_dfire_negatives": 0.05194805194805195,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.28,
+    "recall": 0.9425182481751825,
+    "fa_dfire_negatives": 0.05009276437847866,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.29,
+    "recall": 0.9370437956204379,
+    "fa_dfire_negatives": 0.04267161410018553,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.3,
+    "recall": 0.9343065693430657,
+    "fa_dfire_negatives": 0.03896103896103896,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.31,
+    "recall": 0.9324817518248175,
+    "fa_dfire_negatives": 0.03896103896103896,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.32,
+    "recall": 0.9279197080291971,
+    "fa_dfire_negatives": 0.03525046382189239,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.33,
+    "recall": 0.9215328467153284,
+    "fa_dfire_negatives": 0.03339517625231911,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.34,
+    "recall": 0.916970802919708,
+    "fa_dfire_negatives": 0.03339517625231911,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.35,
+    "recall": 0.9142335766423357,
+    "fa_dfire_negatives": 0.03153988868274583,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.36,
+    "recall": 0.9124087591240876,
+    "fa_dfire_negatives": 0.027829313543599257,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.37,
+    "recall": 0.9114963503649635,
+    "fa_dfire_negatives": 0.025974025974025976,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.38,
+    "recall": 0.9078467153284672,
+    "fa_dfire_negatives": 0.02411873840445269,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.39,
+    "recall": 0.906021897810219,
+    "fa_dfire_negatives": 0.02411873840445269,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.4,
+    "recall": 0.9005474452554745,
+    "fa_dfire_negatives": 0.02040816326530612,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.41,
+    "recall": 0.8932481751824818,
+    "fa_dfire_negatives": 0.014842300556586271,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.42,
+    "recall": 0.8868613138686131,
+    "fa_dfire_negatives": 0.014842300556586271,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.43,
+    "recall": 0.8786496350364964,
+    "fa_dfire_negatives": 0.014842300556586271,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.44,
+    "recall": 0.8731751824817519,
+    "fa_dfire_negatives": 0.014842300556586271,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.45,
+    "recall": 0.8667883211678832,
+    "fa_dfire_negatives": 0.014842300556586271,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.46,
+    "recall": 0.8622262773722628,
+    "fa_dfire_negatives": 0.014842300556586271,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.47,
+    "recall": 0.8549270072992701,
+    "fa_dfire_negatives": 0.014842300556586271,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.48,
+    "recall": 0.8458029197080292,
+    "fa_dfire_negatives": 0.014842300556586271,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.49,
+    "recall": 0.8394160583941606,
+    "fa_dfire_negatives": 0.014842300556586271,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.5,
+    "recall": 0.8312043795620438,
+    "fa_dfire_negatives": 0.014842300556586271,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.51,
+    "recall": 0.8220802919708029,
+    "fa_dfire_negatives": 0.014842300556586271,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.52,
+    "recall": 0.8083941605839416,
+    "fa_dfire_negatives": 0.012987012987012988,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.53,
+    "recall": 0.8047445255474452,
+    "fa_dfire_negatives": 0.012987012987012988,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.54,
+    "recall": 0.7937956204379562,
+    "fa_dfire_negatives": 0.012987012987012988,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.55,
+    "recall": 0.7864963503649635,
+    "fa_dfire_negatives": 0.012987012987012988,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.56,
+    "recall": 0.7773722627737226,
+    "fa_dfire_negatives": 0.00927643784786642,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.57,
+    "recall": 0.7655109489051095,
+    "fa_dfire_negatives": 0.0074211502782931356,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.58,
+    "recall": 0.7472627737226277,
+    "fa_dfire_negatives": 0.0074211502782931356,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.59,
+    "recall": 0.7363138686131386,
+    "fa_dfire_negatives": 0.0074211502782931356,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.6,
+    "recall": 0.7235401459854015,
+    "fa_dfire_negatives": 0.0074211502782931356,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.61,
+    "recall": 0.7162408759124088,
+    "fa_dfire_negatives": 0.0074211502782931356,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.62,
+    "recall": 0.7043795620437956,
+    "fa_dfire_negatives": 0.0074211502782931356,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.63,
+    "recall": 0.6906934306569343,
+    "fa_dfire_negatives": 0.0074211502782931356,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.64,
+    "recall": 0.6742700729927007,
+    "fa_dfire_negatives": 0.0074211502782931356,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.65,
+    "recall": 0.6523722627737226,
+    "fa_dfire_negatives": 0.0074211502782931356,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.66,
+    "recall": 0.6395985401459854,
+    "fa_dfire_negatives": 0.0074211502782931356,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.67,
+    "recall": 0.6231751824817519,
+    "fa_dfire_negatives": 0.0055658627087198514,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.68,
+    "recall": 0.6012773722627737,
+    "fa_dfire_negatives": 0.0055658627087198514,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.69,
+    "recall": 0.5875912408759124,
+    "fa_dfire_negatives": 0.0055658627087198514,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.7,
+    "recall": 0.5693430656934306,
+    "fa_dfire_negatives": 0.0055658627087198514,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.71,
+    "recall": 0.5456204379562044,
+    "fa_dfire_negatives": 0.0055658627087198514,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.72,
+    "recall": 0.5255474452554745,
+    "fa_dfire_negatives": 0.0055658627087198514,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.73,
+    "recall": 0.5018248175182481,
+    "fa_dfire_negatives": 0.0055658627087198514,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.74,
+    "recall": 0.4771897810218978,
+    "fa_dfire_negatives": 0.0055658627087198514,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.75,
+    "recall": 0.45072992700729925,
+    "fa_dfire_negatives": 0.0055658627087198514,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.76,
+    "recall": 0.42427007299270075,
+    "fa_dfire_negatives": 0.0055658627087198514,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.77,
+    "recall": 0.40145985401459855,
+    "fa_dfire_negatives": 0.0055658627087198514,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.78,
+    "recall": 0.3841240875912409,
+    "fa_dfire_negatives": 0.0055658627087198514,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.79,
+    "recall": 0.3585766423357664,
+    "fa_dfire_negatives": 0.0055658627087198514,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.8,
+    "recall": 0.333029197080292,
+    "fa_dfire_negatives": 0.0037105751391465678,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.81,
+    "recall": 0.3010948905109489,
+    "fa_dfire_negatives": 0.0037105751391465678,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.82,
+    "recall": 0.2737226277372263,
+    "fa_dfire_negatives": 0.0037105751391465678,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.83,
+    "recall": 0.23357664233576642,
+    "fa_dfire_negatives": 0.0037105751391465678,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.84,
+    "recall": 0.20802919708029197,
+    "fa_dfire_negatives": 0.0037105751391465678,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.85,
+    "recall": 0.17244525547445255,
+    "fa_dfire_negatives": 0.0,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.86,
+    "recall": 0.13594890510948904,
+    "fa_dfire_negatives": 0.0,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.87,
+    "recall": 0.10218978102189781,
+    "fa_dfire_negatives": 0.0,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.88,
+    "recall": 0.07116788321167883,
+    "fa_dfire_negatives": 0.0,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.89,
+    "recall": 0.041970802919708027,
+    "fa_dfire_negatives": 0.0,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.9,
+    "recall": 0.030109489051094892,
+    "fa_dfire_negatives": 0.0,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.91,
+    "recall": 0.008211678832116789,
+    "fa_dfire_negatives": 0.0,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.92,
+    "recall": 0.0018248175182481751,
+    "fa_dfire_negatives": 0.0,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.93,
+    "recall": 0.0009124087591240876,
+    "fa_dfire_negatives": 0.0,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.94,
+    "recall": 0.0009124087591240876,
+    "fa_dfire_negatives": 0.0,
+    "fa_bengaluru": null
+   },
+   {
+    "t": 0.95,
+    "recall": 0.0,
+    "fa_dfire_negatives": 0.0,
+    "fa_bengaluru": null
+   }
+  ]
+ },
+ "test": {
+  "images": 4306,
+  "with_fire_or_smoke": 2301,
+  "recall_any": 0.7944372012168622,
+  "recall_fire": 0.8923766816143498,
+  "recall_smoke": 0.7164824603555983,
+  "false_alarms_on_negatives": 0.1002493765586035,
+  "box_ap50": {
+   "fire": 0.6555,
+   "smoke": 0.6658
+  },
+  "box_map50": 0.6606,
+  "bar": {
+   "recall_any_at_least": 0.85,
+   "passes_in_colab": false,
+   "still_to_check_on_the_laptop": "false alarms on the 250 Bengaluru test frames <= 1 %"
+  }
+ },
+ "onnx_max_score_diff": 1.37e-07,
+ "onnx_sha256": "3ff1580bc9d0dd675740be12d87945f218cfb2e5366793878cb76b729a4b3ad1",
+ "pt_sha256": "3326ba2be5839b28df19a17de65d6c86a0ad27f0b2f9f633a9557fa7965784d2"
+}

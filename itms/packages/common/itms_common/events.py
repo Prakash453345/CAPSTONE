@@ -8,6 +8,7 @@ decode_envelope and never touch a schema file themselves. That's what keeps
 
 from __future__ import annotations
 
+import datetime as dt
 import io
 import re
 import time
@@ -97,3 +98,19 @@ def decode_envelope(raw: bytes) -> dict[str, Any]:
     )
     envelope["payload"] = payload
     return envelope
+
+
+def occurred_at_s(envelope: dict[str, Any]) -> float | None:
+    """When the event happened, as Unix seconds -- or None if the envelope
+    does not say. `occurred_at` is written as integer milliseconds but is an
+    Avro `timestamp-millis`, so `decode_envelope` hands it back as a
+    timezone-aware `datetime`; anything comparing it with a clock must go
+    through here rather than divide it by 1000."""
+    v = envelope.get("occurred_at")
+    if v is None:
+        return None
+    if isinstance(v, dt.datetime):
+        if v.tzinfo is None:
+            v = v.replace(tzinfo=dt.UTC)
+        return v.timestamp()
+    return float(v) / 1000.0

@@ -1,0 +1,53 @@
+{
+ "file": "weights/YOLOv11-S/UVH-26-MV-YOLOv11-S.pt",
+ "repository": "https://huggingface.co/iisc-aim/UVH-26",
+ "licence": "Apache-2.0 (weights); the YOLO11 architecture is Ultralytics', AGPL-3.0",
+ "bytes": 57142241,
+ "sha256": "12dbeb8f6fa207d19446fa652fc4313359fbec267027c8c01641004dcf1d0150",
+ "ultralytics_version": "8.3.221",
+ "saved": "2025-10-31T18:08:18.537596",
+ "classes": [
+  "Hatchback",
+  "Sedan",
+  "SUV",
+  "MUV",
+  "Bus",
+  "Truck",
+  "Three-wheeler",
+  "Two-wheeler",
+  "LCV",
+  "Mini-bus",
+  "tempo-traveller",
+  "bicycle",
+  "Van",
+  "Others"
+ ],
+ "train_args": {
+  "epochs": 150,
+  "batch": 16,
+  "imgsz": 640,
+  "optimizer": "AdamW",
+  "lr0": 0.01,
+  "mosaic": 0.0,
+  "mixup": 0.0,
+  "fliplr": 0.5,
+  "model": "yolov11s_blurred_1st_week/v3/weights/best.pt",
+  "name": "v4"
+ },
+ "epochs_run_in_this_checkpoint": 5,
+ "their_val_mAP50_by_epoch_14_classes": [
+  0.50595,
+  0.52827,
+  0.53412,
+  0.5287,
+  0.54697
+ ],
+ "their_val_mAP50_95_by_epoch_14_classes": [
+  0.40753,
+  0.41566,
+  0.42712,
+  0.42589,
+  0.44551
+ ],
+ "reading": "a short continuation (5 of 150 configured epochs) of an earlier run ('model' is that run's best.pt), trained at 640 px with mosaic and mixup off; its own validation mAP50 over the 14 fine-grained classes is 0.547"
+}

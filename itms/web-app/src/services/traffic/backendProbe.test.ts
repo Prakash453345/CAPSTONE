@@ -13,14 +13,25 @@ afterEach(() => {
 });
 
 describe("isBackendReachable", () => {
-  it("is true when /health answers ok", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true }));
+  const reply = (ok: boolean, contentType: string) => ({
+    ok,
+    headers: new Headers({ "content-type": contentType }),
+  });
+
+  it("is true when /health answers ok with JSON", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(reply(true, "application/json")));
     expect(await isBackendReachable()).toBe(true);
     expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/health");
   });
 
+  it("is false for the static host's HTML fallback, even with 200 OK", async () => {
+    // Vite preview and most static hosts answer unknown paths with index.html.
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(reply(true, "text/html; charset=utf-8")));
+    expect(await isBackendReachable()).toBe(false);
+  });
+
   it("is false on a non-ok response", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false }));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(reply(false, "application/json")));
     expect(await isBackendReachable()).toBe(false);
   });
 

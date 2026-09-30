@@ -1,0 +1,953 @@
+{
+ "meta": {
+  "fps": 5.0,
+  "seeds": [
+   1
+  ],
+  "presets": [
+   "finetuned_day"
+  ],
+  "levels": [
+   "medium",
+   "heavy"
+  ],
+  "wall_min": 5.8
+ },
+ "runs": [
+  {
+   "preset": "finetuned_day",
+   "level": "medium",
+   "seed": 1,
+   "fps": 5.0,
+   "run": {
+    "controller": "ccacamp",
+    "demand_level": "medium",
+    "seed": 1,
+    "steps": 1800,
+    "interlock_violations": 0,
+    "person_delay_s": 51830.124999999956,
+    "person_throughput_per_hour": 3900.909090909081,
+    "stops_per_vehicle": 1.6981132075471699,
+    "wait_time_s": {
+     "mean_s": 20.140161725067387,
+     "p95_s": 56.0,
+     "max_s": 118.0
+    },
+    "wall_s": 218.1,
+    "decision_stats": {
+     "ticks": 8343,
+     "switch_cycle_supervisor": 2,
+     "switch_gap_out": 240,
+     "cycles_completed": 2113,
+     "extend": 7632,
+     "extend_allocation_protected": 0,
+     "switch_pressure": 367,
+     "switch_max_green": 102,
+     "switch_starvation": 0,
+     "blended": 0,
+     "fallback_fixed_time": 0,
+     "corridor_anticipating": 0,
+     "corridor_repaying": 0
+    }
+   },
+   "summary": {
+    "detection": {
+     "recall_by_class": {
+      "bus": [
+       0.8919784725781651,
+       15608
+      ],
+      "car": [
+       0.8864874715261959,
+       109750
+      ],
+      "motorcycle": [
+       0.8439086507045558,
+       119366
+      ],
+      "auto_rickshaw": [
+       0.8630748170556523,
+       59171
+      ]
+     },
+     "precision": 0.7611106288161589
+    },
+    "tracking": {
+     "gt": 303895,
+     "tp": 242716,
+     "fp": 50166,
+     "fn": 61179,
+     "idsw": 2036,
+     "mota": 0.626907319962487,
+     "idf1": 0.7244381066964712,
+     "recall": 0.7986837559025322,
+     "precision": 0.8287160016662001
+    },
+    "ground": {
+     "position_err_m_median": 0.587664254166279,
+     "position_err_m_p90": 3.0657283290953625,
+     "speed_err_mps_mae": 0.5868990587982128,
+     "speed_err_mps_bias": -0.07442282537228752,
+     "lane_accuracy": 0.9603725285459261,
+     "stopped_precision": 0.7768213178049244,
+     "stopped_recall": 0.9562879850397382
+    },
+    "links": {
+     "queue_pcu": {
+      "n": 109573,
+      "truth_mean": 0.16253639126425276,
+      "est_mean": 0.19771932866669398,
+      "mae": 0.06329022660692402,
+      "bias": 0.03518293740244122,
+      "corr": 0.7770297843357716
+     },
+     "approaching_pcu": {
+      "n": 109573,
+      "truth_mean": 0.2680450475937643,
+      "est_mean": 0.2706789081251039,
+      "mae": 0.06628640267219617,
+      "bias": 0.002633860531339627,
+      "corr": 0.8609070050675002
+     },
+     "receiving_occupancy": {
+      "n": 109573,
+      "truth_mean": 0.014059511335004505,
+      "est_mean": 0.014596961341582521,
+      "mae": 0.009787310528857113,
+      "bias": 0.000537450006578016,
+      "corr": 0.7076217982074003
+     },
+     "receiving_queue_pcu": {
+      "n": 109573,
+      "truth_mean": 0.06988309163754389,
+      "est_mean": 0.081135863762063,
+      "mae": 0.029228003248975586,
+      "bias": 0.011252772124519111,
+      "corr": 0.8011643070240901
+     }
+    },
+    "confidence": {
+     "mean": 0.896490547717976,
+     "p10": 0.8404603924575028,
+     "below_0.8": 0.003778303049108813,
+     "below_0.5": 0.0
+    },
+    "truncated_lane_fraction": 0.0009056002318336594
+   },
+   "candidates": [
+    {
+     "rule": "midblock_stop",
+     "lane": "1058429866_0",
+     "t": 516.0,
+     "evidence": {
+      "track": [
+       "cam_1880441505_350502993#6",
+       87
+      ],
+      "stopped_s": 33.4,
+      "measure": 33.4,
+      "queued_behind": 0,
+      "class": "truck",
+      "truth_id": "veh20"
+     }
+    },
+    {
+     "rule": "midblock_stop",
+     "lane": "350502993#4_1",
+     "t": 1596.0,
+     "evidence": {
+      "track": [
+       "cam_cluster_1880441532_4393295467_6357870905_6357870906_1230310394",
+       1351
+      ],
+      "stopped_s": 43.2,
+      "measure": 43.2,
+      "queued_behind": 0,
+      "class": "car",
+      "truth_id": null
+     }
+    },
+    {
+     "rule": "stuck_on_green",
+     "lane": "350502993#2_2",
+     "t": 1714.0,
+     "evidence": {
+      "track": [
+       "cam_cluster_1880441532_4393295467_6357870905_6357870906_350502993#2",
+       1669
+      ],
+      "stopped_s": 39.0,
+      "measure": 20.0,
+      "green_s": 20.0,
+      "sibling_flowing": true,
+      "truth_id": "veh649"
+     }
+    }
+   ],
+   "sim_hours": 0.4166666666666667,
+   "vision_s": 204.1,
+   "wall_s": 218.2
+  },
+  {
+   "preset": "finetuned_day",
+   "level": "heavy",
+   "seed": 1,
+   "fps": 5.0,
+   "run": {
+    "controller": "ccacamp",
+    "demand_level": "heavy",
+    "seed": 1,
+    "steps": 1800,
+    "interlock_violations": 0,
+    "person_delay_s": 328382.27400000027,
+    "person_throughput_per_hour": 7840.367278798019,
+    "stops_per_vehicle": 2.528985507246377,
+    "wait_time_s": {
+     "mean_s": 72.65942028985508,
+     "p95_s": 236.0,
+     "max_s": 419.0
+    },
+    "wall_s": 346.0,
+    "decision_stats": {
+     "ticks": 8900,
+     "switch_cycle_supervisor": 1,
+     "switch_gap_out": 108,
+     "cycles_completed": 1132,
+     "extend": 6648,
+     "extend_allocation_protected": 1634,
+     "switch_pressure": 434,
+     "switch_max_green": 73,
+     "switch_starvation": 2,
+     "blended": 0,
+     "fallback_fixed_time": 0,
+     "corridor_anticipating": 0,
+     "corridor_repaying": 0
+    }
+   },
+   "summary": {
+    "detection": {
+     "recall_by_class": {
+      "auto_rickshaw": [
+       0.8614878846344406,
+       171559
+      ],
+      "motorcycle": [
+       0.822887933799474,
+       342958
+      ],
+      "car": [
+       0.8820599779440538,
+       337324
+      ],
+      "bus": [
+       0.905999469615063,
+       49021
+      ]
+     },
+     "precision": 0.9005342790149669
+    },
+    "tracking": {
+     "gt": 900862,
+     "tp": 730680,
+     "fp": 53279,
+     "fn": 170182,
+     "idsw": 4665,
+     "mota": 0.7467692054942933,
+     "idf1": 0.7891924424018931,
+     "recall": 0.811089822858551,
+     "precision": 0.9320385377296517
+    },
+    "ground": {
+     "position_err_m_median": 0.512737349104246,
+     "position_err_m_p90": 1.963506678936188,
+     "speed_err_mps_mae": 0.46453347891738994,
+     "speed_err_mps_bias": 0.06431987554359636,
+     "lane_accuracy": 0.9761915644890357,
+     "stopped_precision": 0.9051213136482457,
+     "stopped_recall": 0.9686876116423243
+    },
+    "links": {
+     "queue_pcu": {
+      "n": 109573,
+      "truth_mean": 1.370208901828109,
+      "est_mean": 1.288085571197919,
+      "mae": 0.30422222539747246,
+      "bias": -0.08212333063018984,
+      "corr": 0.9173896715110159
+     },
+     "approaching_pcu": {
+      "n": 109573,
+      "truth_mean": 0.5156781323866672,
+      "est_mean": 0.535121790952195,
+      "mae": 0.12787365500624542,
+      "bias": 0.019443658565527877,
+      "corr": 0.8796697987143284
+     },
+     "receiving_occupancy": {
+      "n": 109573,
+      "truth_mean": 0.03166305425164724,
+      "est_mean": 0.03631931563278016,
+      "mae": 0.018858823562821935,
+      "bias": 0.004656261381132919,
+      "corr": 0.7768280232114158
+     },
+     "receiving_queue_pcu": {
+      "n": 109573,
+      "truth_mean": 0.41466602173893413,
+      "est_mean": 0.402141860396752,
+      "mae": 0.12073181324743294,
+      "bias": -0.01252416134218215,
+      "corr": 0.8776992720756867
+     }
+    },
+    "confidence": {
+     "mean": 0.8985291884188563,
+     "p10": 0.8444729465390185,
+     "below_0.8": 0.0020716782419026585,
+     "below_0.5": 0.0
+    },
+    "truncated_lane_fraction": 0.006879936714170992
+   },
+   "candidates": [
+    {
+     "rule": "stuck_on_green",
+     "lane": "470178558_2",
+     "t": 478.0,
+     "evidence": {
+      "track": [
+       "cam_cluster_1880441740_4393296791_470178558",
+       182
+      ],
+      "stopped_s": 87.0,
+      "measure": 34.0,
+      "green_s": 34.0,
+      "sibling_flowing": true,
+      "truth_id": "veh154"
+     }
+    },
+    {
+     "rule": "flow_void",
+     "lane": "678625369#2_0",
+     "t": 715.0,
+     "evidence": {
+      "bin_s_m": [
+       40.0,
+       50.0
+      ],
+      "void_s": 93.0,
+      "measure": 93.0,
+      "share": 1.84,
+      "from_stop_line_m": 190.1,
+      "neighbour_passes": 7,
+      "swerves": 4
+     }
+    },
+    {
+     "rule": "stuck_on_green",
+     "lane": "470178558_2",
+     "t": 720.0,
+     "evidence": {
+      "track": [
+       "cam_cluster_1880441740_4393296791_470178558",
+       449
+      ],
+      "stopped_s": 18.8,
+      "measure": 18.8,
+      "green_s": 24.0,
+      "sibling_flowing": true,
+      "truth_id": "veh399"
+     }
+    },
+    {
+     "rule": "stuck_on_green",
+     "lane": "350502993#2_2",
+     "t": 788.0,
+     "evidence": {
+      "track": [
+       "cam_cluster_1880441532_4393295467_6357870905_6357870906_350502993#2",
+       1282
+      ],
+      "stopped_s": 22.0,
+      "measure": 22.0,
+      "green_s": 28.0,
+      "sibling_flowing": true,
+      "truth_id": "veh560"
+     }
+    },
+    {
+     "rule": "stuck_on_green",
+     "lane": "219187869_0",
+     "t": 841.0,
+     "evidence": {
+      "track": [
+       "cam_cluster_1880441740_4393296791_219187869",
+       478
+      ],
+      "stopped_s": 53.0,
+      "measure": 26.0,
+      "green_s": 26.0,
+      "sibling_flowing": true,
+      "truth_id": "veh602"
+     }
+    },
+    {
+     "rule": "stuck_on_green",
+     "lane": "350502993#2_2",
+     "t": 938.0,
+     "evidence": {
+      "track": [
+       "cam_cluster_1880441532_4393295467_6357870905_6357870906_350502993#2",
+       1619
+      ],
+      "stopped_s": 30.8,
+      "measure": 18.0,
+      "green_s": 18.0,
+      "sibling_flowing": true,
+      "truth_id": "veh710"
+     }
+    },
+    {
+     "rule": "stuck_on_green",
+     "lane": "219187869_0",
+     "t": 942.0,
+     "evidence": {
+      "track": [
+       "cam_cluster_1880441740_4393296791_219187869",
+       553
+      ],
+      "stopped_s": 48.8,
+      "measure": 48.8,
+      "green_s": 68.0,
+      "sibling_flowing": null,
+      "truth_id": "veh690"
+     }
+    },
+    {
+     "rule": "flow_void",
+     "lane": "350502993#0_1",
+     "t": 967.0,
+     "evidence": {
+      "bin_s_m": [
+       30.0,
+       40.0
+      ],
+      "void_s": 120.0,
+      "measure": 120.0,
+      "share": 0.31,
+      "from_stop_line_m": 558.6,
+      "neighbour_passes": 5,
+      "swerves": 3
+     }
+    },
+    {
+     "rule": "stuck_on_green",
+     "lane": "350502993#2_2",
+     "t": 1012.0,
+     "evidence": {
+      "track": [
+       "cam_cluster_1880441532_4393295467_6357870905_6357870906_350502993#2",
+       1661
+      ],
+      "stopped_s": 28.6,
+      "measure": 28.6,
+      "green_s": 38.0,
+      "sibling_flowing": true,
+      "truth_id": "veh718"
+     }
+    },
+    {
+     "rule": "collision_cue",
+     "lane": "219187869_0",
+     "t": 1040.0,
+     "evidence": {
+      "tracks": [
+       [
+        "cam_cluster_1880441740_4393296791_219187869",
+        555
+       ],
+       [
+        "cam_cluster_1880441740_4393296791_219187869",
+        579
+       ]
+      ],
+      "stopped_s": 15.0,
+      "measure": 15.0,
+      "prior_speed_mps": 6.2
+     }
+    },
+    {
+     "rule": "stuck_on_green",
+     "lane": "219187869_0",
+     "t": 1049.0,
+     "evidence": {
+      "track": [
+       "cam_cluster_1880441740_4393296791_219187869",
+       570
+      ],
+      "stopped_s": 25.4,
+      "measure": 25.4,
+      "green_s": 31.0,
+      "sibling_flowing": true,
+      "truth_id": "veh724"
+     }
+    },
+    {
+     "rule": "stuck_on_green",
+     "lane": "350502993#2_2",
+     "t": 1051.0,
+     "evidence": {
+      "track": [
+       "cam_cluster_1880441532_4393295467_6357870905_6357870906_350502993#2",
+       1772
+      ],
+      "stopped_s": 18.4,
+      "measure": 18.4,
+      "green_s": 77.0,
+      "sibling_flowing": true,
+      "truth_id": "veh725"
+     }
+    },
+    {
+     "rule": "stuck_on_green",
+     "lane": "470178558_2",
+     "t": 1061.0,
+     "evidence": {
+      "track": [
+       "cam_cluster_1880441740_4393296791_470178558",
+       852
+      ],
+      "stopped_s": 32.6,
+      "measure": 32.6,
+      "green_s": 43.0,
+      "sibling_flowing": true,
+      "truth_id": "veh676"
+     }
+    },
+    {
+     "rule": "stuck_on_green",
+     "lane": "350502993#4_2",
+     "t": 1108.0,
+     "evidence": {
+      "track": [
+       "cam_cluster_11608007559_1880441514_4393295460_6354264758_350502993#4",
+       1220
+      ],
+      "stopped_s": 27.0,
+      "measure": 27.0,
+      "green_s": 45.0,
+      "sibling_flowing": true,
+      "truth_id": "veh616"
+     }
+    },
+    {
+     "rule": "flow_void",
+     "lane": "848411146_0",
+     "t": 1126.0,
+     "evidence": {
+      "bin_s_m": [
+       20.0,
+       30.0
+      ],
+      "void_s": 93.0,
+      "measure": 93.0,
+      "share": 0.33,
+      "from_stop_line_m": 302.9,
+      "neighbour_passes": 8,
+      "swerves": 3
+     }
+    },
+    {
+     "rule": "collision_cue",
+     "lane": "350502993#2_2",
+     "t": 1161.0,
+     "evidence": {
+      "tracks": [
+       [
+        "cam_cluster_1880441532_4393295467_6357870905_6357870906_350502993#2",
+        2008
+       ],
+       [
+        "cam_cluster_1880441541_4393295474_678625369#2",
+        1815
+       ]
+      ],
+      "stopped_s": 13.4,
+      "measure": 13.4,
+      "prior_speed_mps": 5.4
+     }
+    },
+    {
+     "rule": "flow_void",
+     "lane": "350502993#0_1",
+     "t": 1251.0,
+     "evidence": {
+      "bin_s_m": [
+       20.0,
+       30.0
+      ],
+      "void_s": 93.0,
+      "measure": 93.0,
+      "share": 0.48,
+      "from_stop_line_m": 568.6,
+      "neighbour_passes": 8,
+      "swerves": 4
+     }
+    },
+    {
+     "rule": "flow_void",
+     "lane": "350502993#0_0",
+     "t": 1256.0,
+     "evidence": {
+      "bin_s_m": [
+       20.0,
+       30.0
+      ],
+      "void_s": 93.0,
+      "measure": 93.0,
+      "share": 1.2,
+      "from_stop_line_m": 568.6,
+      "neighbour_passes": 7,
+      "swerves": 3
+     }
+    },
+    {
+     "rule": "midblock_stop",
+     "lane": "350502993#2_2",
+     "t": 1259.0,
+     "evidence": {
+      "track": [
+       "cam_cluster_1880441541_4393295474_678625369#2",
+       1994
+      ],
+      "stopped_s": 19.6,
+      "measure": 19.6,
+      "queued_behind": 3,
+      "class": "bus",
+      "truth_id": "veh708"
+     }
+    },
+    {
+     "rule": "midblock_stop",
+     "lane": "350502993#2_2",
+     "t": 1267.0,
+     "evidence": {
+      "track": [
+       "cam_cluster_1880441541_4393295474_678625369#2",
+       2054
+      ],
+      "stopped_s": 18.2,
+      "measure": 18.2,
+      "queued_behind": 5,
+      "class": "car",
+      "truth_id": "veh764"
+     }
+    },
+    {
+     "rule": "stuck_on_green",
+     "lane": "219187869_0",
+     "t": 1303.0,
+     "evidence": {
+      "track": [
+       "cam_cluster_1880441740_4393296791_219187869",
+       587
+      ],
+      "stopped_s": 275.4,
+      "measure": 18.0,
+      "green_s": 18.0,
+      "sibling_flowing": true,
+      "truth_id": "veh776"
+     }
+    },
+    {
+     "rule": "stuck_on_green",
+     "lane": "470178558_2",
+     "t": 1319.0,
+     "evidence": {
+      "track": [
+       "cam_cluster_1880441740_4393296791_470178558",
+       1261
+      ],
+      "stopped_s": 23.0,
+      "measure": 23.0,
+      "green_s": 34.0,
+      "sibling_flowing": true,
+      "truth_id": "veh759"
+     }
+    },
+    {
+     "rule": "flow_void",
+     "lane": "848411146_0",
+     "t": 1404.0,
+     "evidence": {
+      "bin_s_m": [
+       20.0,
+       30.0
+      ],
+      "void_s": 93.0,
+      "measure": 93.0,
+      "share": 0.35,
+      "from_stop_line_m": 302.9,
+      "neighbour_passes": 8,
+      "swerves": 5
+     }
+    },
+    {
+     "rule": "stuck_on_green",
+     "lane": "693155817_0",
+     "t": 1427.0,
+     "evidence": {
+      "track": [
+       "cam_cluster_1880441532_4393295467_6357870905_6357870906_693155817",
+       2241
+      ],
+      "stopped_s": 48.0,
+      "measure": 48.0,
+      "green_s": 66.0,
+      "sibling_flowing": null,
+      "truth_id": "veh771"
+     }
+    },
+    {
+     "rule": "collision_cue",
+     "lane": "350502993#2_2",
+     "t": 1428.0,
+     "evidence": {
+      "tracks": [
+       [
+        "cam_cluster_1880441532_4393295467_6357870905_6357870906_350502993#2",
+        2975
+       ],
+       [
+        "cam_cluster_1880441541_4393295474_678625369#2",
+        2349
+       ]
+      ],
+      "stopped_s": 16.2,
+      "measure": 16.2,
+      "prior_speed_mps": 13.8
+     }
+    },
+    {
+     "rule": "stuck_on_green",
+     "lane": "350502993#2_2",
+     "t": 1467.0,
+     "evidence": {
+      "track": [
+       "cam_cluster_1880441532_4393295467_6357870905_6357870906_350502993#2",
+       2738
+      ],
+      "stopped_s": 18.2,
+      "measure": 18.2,
+      "green_s": 24.0,
+      "sibling_flowing": true,
+      "truth_id": "veh845"
+     }
+    },
+    {
+     "rule": "stuck_on_green",
+     "lane": "350502993#2_2",
+     "t": 1498.0,
+     "evidence": {
+      "track": [
+       "cam_cluster_1880441532_4393295467_6357870905_6357870906_350502993#2",
+       2813
+      ],
+      "stopped_s": 18.6,
+      "measure": 18.6,
+      "green_s": 55.0,
+      "sibling_flowing": true,
+      "truth_id": "veh968"
+     }
+    },
+    {
+     "rule": "stuck_on_green",
+     "lane": "1058429866_2",
+     "t": 1511.0,
+     "evidence": {
+      "track": [
+       "cam_cluster_11608007559_1880441514_4393295460_6354264758_1058429866",
+       1941
+      ],
+      "stopped_s": 18.4,
+      "measure": 18.4,
+      "green_s": 60.0,
+      "sibling_flowing": true,
+      "truth_id": "veh948"
+     }
+    },
+    {
+     "rule": "stuck_on_green",
+     "lane": "350502993#4_2",
+     "t": 1511.0,
+     "evidence": {
+      "track": [
+       "cam_cluster_11608007559_1880441514_4393295460_6354264758_350502993#4",
+       1793
+      ],
+      "stopped_s": 18.0,
+      "measure": 18.0,
+      "green_s": 60.0,
+      "sibling_flowing": true,
+      "truth_id": "veh1027"
+     }
+    },
+    {
+     "rule": "midblock_stop",
+     "lane": "678625369#2_0",
+     "t": 1553.0,
+     "evidence": {
+      "track": [
+       "cam_cluster_1880441532_4393295467_6357870905_6357870906_350502993#2",
+       3301
+      ],
+      "stopped_s": 33.0,
+      "measure": 33.0,
+      "queued_behind": 0,
+      "class": "car",
+      "truth_id": null
+     }
+    },
+    {
+     "rule": "stuck_on_green",
+     "lane": "470178558_2",
+     "t": 1556.0,
+     "evidence": {
+      "track": [
+       "cam_cluster_1880441740_4393296791_470178558",
+       1512
+      ],
+      "stopped_s": 18.8,
+      "measure": 18.8,
+      "green_s": 21.0,
+      "sibling_flowing": true,
+      "truth_id": "veh1065"
+     }
+    },
+    {
+     "rule": "stuck_on_green",
+     "lane": "219187869_0",
+     "t": 1566.0,
+     "evidence": {
+      "track": [
+       "cam_cluster_1880441740_4393296791_219187869",
+       876
+      ],
+      "stopped_s": 26.0,
+      "measure": 26.0,
+      "green_s": 31.0,
+      "sibling_flowing": true,
+      "truth_id": "veh1153"
+     }
+    },
+    {
+     "rule": "stuck_on_green",
+     "lane": "350502993#2_2",
+     "t": 1598.0,
+     "evidence": {
+      "track": [
+       "cam_cluster_1880441532_4393295467_6357870905_6357870906_350502993#2",
+       3174
+      ],
+      "stopped_s": 18.8,
+      "measure": 18.8,
+      "green_s": 44.0,
+      "sibling_flowing": true,
+      "truth_id": "veh912"
+     }
+    },
+    {
+     "rule": "flow_void",
+     "lane": "350502993#0_0",
+     "t": 1703.0,
+     "evidence": {
+      "bin_s_m": [
+       30.0,
+       40.0
+      ],
+      "void_s": 93.0,
+      "measure": 93.0,
+      "share": 0.76,
+      "from_stop_line_m": 558.6,
+      "neighbour_passes": 6,
+      "swerves": 8
+     }
+    },
+    {
+     "rule": "collision_cue",
+     "lane": "470178558_2",
+     "t": 1712.0,
+     "evidence": {
+      "tracks": [
+       [
+        "cam_cluster_1880441740_4393296791_470178558",
+        1685
+       ],
+       [
+        "cam_cluster_1880441740_4393296791_470178558",
+        1794
+       ]
+      ],
+      "stopped_s": 13.6,
+      "measure": 13.6,
+      "prior_speed_mps": 6.7
+     }
+    },
+    {
+     "rule": "stuck_on_green",
+     "lane": "693155817_0",
+     "t": 1714.0,
+     "evidence": {
+      "track": [
+       "cam_cluster_1880441532_4393295467_6357870905_6357870906_693155817",
+       2839
+      ],
+      "stopped_s": 48.0,
+      "measure": 48.0,
+      "green_s": 63.0,
+      "sibling_flowing": null,
+      "truth_id": "veh1010"
+     }
+    },
+    {
+     "rule": "collision_cue",
+     "lane": "470178558_1",
+     "t": 1721.0,
+     "evidence": {
+      "tracks": [
+       [
+        "cam_cluster_1880441740_4393296791_470178558",
+        1685
+       ],
+       [
+        "cam_cluster_1880441740_4393296791_470178558",
+        1794
+       ]
+      ],
+      "stopped_s": 22.6,
+      "measure": 22.6,
+      "prior_speed_mps": 6.7
+     }
+    },
+    {
+     "rule": "stuck_on_green",
+     "lane": "350502993#2_2",
+     "t": 1761.0,
+     "evidence": {
+      "track": [
+       "cam_cluster_1880441532_4393295467_6357870905_6357870906_350502993#2",
+       3612
+      ],
+      "stopped_s": 18.4,
+      "measure": 18.4,
+      "green_s": 28.0,
+      "sibling_flowing": true,
+      "truth_id": "veh1306"
+     }
+    }
+   ],
+   "sim_hours": 0.4166666666666667,
+   "vision_s": 313.5,
+   "wall_s": 346.2
+  }
+ ]
+}

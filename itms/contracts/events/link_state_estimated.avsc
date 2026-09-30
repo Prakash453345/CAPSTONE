@@ -1,0 +1,118 @@
+{
+  "type": "record",
+  "name": "LinkStateEstimated",
+  "namespace": "itms.contracts",
+  "doc": "M8. The vision service's per-link traffic state for one junction at one tick -- the four quantities sim-service's QueueStateSampler gives the controller from SUMO ground truth (queue_pcu, approaching_pcu, receiving_occupancy, receiving_queue_pcu), measured by cameras, in the same units and keyed the same way (`L{linkIndex}` at a tls_id), plus what ground truth never needed: a confidence per link and the named factors it is built from. This is the movement-level estimate approach_state.avsc's own doc anticipates; approach_state stays as the M1 per-edge stream the web app already reads. Published by services/vision-service on `vision.link-state`, one event per junction per tick, partition key = intersection_id.",
+  "fields": [
+    {
+      "name": "intersection_id",
+      "type": "string"
+    },
+    {
+      "name": "sim_time_s",
+      "type": [
+        "null",
+        "double"
+      ],
+      "default": null,
+      "doc": "Simulation time when the producer is the digital twin; null for a real-time producer."
+    },
+    {
+      "name": "links",
+      "type": {
+        "type": "array",
+        "items": {
+          "type": "record",
+          "name": "LinkEstimate",
+          "fields": [
+            {
+              "name": "link_id",
+              "type": "string",
+              "doc": "`L{linkIndex}`, matching link_lanes / Tier0Config.phases green_movements."
+            },
+            {
+              "name": "queue_pcu",
+              "type": "double",
+              "doc": "PCU-weighted stopped vehicles on the link's approach lane, including any queue extrapolated past the edge of view."
+            },
+            {
+              "name": "approaching_pcu",
+              "type": "double",
+              "doc": "PCU-weighted moving vehicles on the approach lane that reach the stop line within the arrival horizon (8 s)."
+            },
+            {
+              "name": "receiving_occupancy",
+              "type": "double",
+              "doc": "Fraction of the receiving lane covered by vehicles, over the part the cameras see, [0,1]."
+            },
+            {
+              "name": "receiving_queue_pcu",
+              "type": "double"
+            },
+            {
+              "name": "confidence",
+              "type": "double",
+              "doc": "[0,1]. Product of the factors below. Feeds JunctionContext.confidence, i.e. A-CA-MP's degradation ladder (>=0.8 full, >=0.5 blended, else fixed-time)."
+            },
+            {
+              "name": "c_coverage",
+              "type": "double",
+              "doc": "How much of the approach lane, from the stop line back, the cameras cover at usable resolution."
+            },
+            {
+              "name": "c_health",
+              "type": "double",
+              "doc": "Worst health score among the cameras covering the lane (CameraStatus)."
+            },
+            {
+              "name": "c_visibility",
+              "type": "double",
+              "doc": "1 - 0.3 x smoothed share of the lane's PCU that is coasting (hidden, carried by its motion model)."
+            },
+            {
+              "name": "c_truncation",
+              "type": "double",
+              "doc": "Decays while the queue runs past the edge of view."
+            },
+            {
+              "name": "queue_truncated",
+              "type": "boolean",
+              "doc": "The queue's back is beyond camera coverage; queue_pcu includes an extrapolated hidden part (build guide §3.2.3)."
+            },
+            {
+              "name": "hidden_queue_m",
+              "type": "double",
+              "default": 0.0
+            },
+            {
+              "name": "vision_score",
+              "type": "double",
+              "default": 0.0,
+              "doc": "Max phase-aware incident-rule score on this link, [0,1] -- the feature control/anomaly/fusion.py reserves as `vision_score`."
+            },
+            {
+              "name": "vehicles_seen",
+              "type": "int",
+              "default": -1,
+              "doc": "Vehicles the cameras are tracking anywhere on this link's approach (all its lanes). What the controller's stop-bar cross-check compares with its loops: a loop that keeps seeing vehicles while this stays 0 is a camera that has gone blind. -1: not reported (a producer older than the field); the cross-check then skips the link."
+            },
+            {
+              "name": "cameras",
+              "type": {
+                "type": "array",
+                "items": "string"
+              },
+              "default": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "model",
+      "type": "string",
+      "default": "vision-m8",
+      "doc": "Estimator + detector identity, e.g. 'vision-m8/yolo11n' or 'vision-m8/simcam:finetuned_day'."
+    }
+  ]
+}

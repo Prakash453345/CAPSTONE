@@ -41,6 +41,7 @@ export function TrafficDataBridge() {
 
     // Never carry demo observations or an unfinished command into a live session.
     reset();
+    useIncidentStore.getState().clearReviews();
     setIncidents([]);
     setAnomalies([]);
     setIntersections([]);

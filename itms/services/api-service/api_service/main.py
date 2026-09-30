@@ -79,6 +79,8 @@ TOPICS = [
     "emergency.vehicle-updated",  # live EV position while in transit (SIM_MODE=live)
     "emergency.corridor-updated",  # green corridor lifecycle (SIM_MODE=live)
     "emergency.dispatched",  # incident -> authority alert (SIM_MODE=live)
+    "vision.link-state",  # M8 camera-measured link state (vision-service)
+    "vision.camera-status",  # M8 camera health changes (vision-service)
 ]
 _INCIDENT_EVENT_TYPES = {"IncidentCandidate", "IncidentDetected", "IncidentUpdated"}
 CONSUMER_GROUP = "api-service"

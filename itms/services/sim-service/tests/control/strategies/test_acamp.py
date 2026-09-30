@@ -23,6 +23,7 @@ Three parts, in the order the claims need to be established:
 from __future__ import annotations
 
 import math
+from dataclasses import replace
 
 from hypothesis import given, settings
 from hypothesis import strategies as st
@@ -519,6 +520,36 @@ def test_cold_start_memory_does_not_alter_live_state():
     blended = controller._blend_context(ctx)
     assert blended.queue_pcu["m0"] == 7.0
     assert blended.approaching_pcu["m0"] == 3.0
+
+
+def test_without_memory_the_middle_rung_controls_on_the_live_estimate():
+    """No history to blend toward: a blend with nothing is the live reading,
+    so the controller decides exactly as it would at full confidence --
+    it must not drop to the min-green cycler, which would end this 10 s
+    green at once even though the heavy queue is on the green movement.
+    M8's closed loop measured what that cost (baselines/2026-09-25_m8_review)."""
+    cfg = _ring_config(2)
+    ctx = JunctionContext(
+        intersection_id="J",
+        current_phase_id="P0",
+        current_phase_elapsed_s=10.0,
+        queue_pcu={"m0": 12.0, "m1": 0.5},
+        approaching_pcu={"m0": 2.0, "m1": 0.0},
+        confidence={"m0": 0.65, "m1": 0.65},
+    )
+    full = acamp.AdaptiveCamp()(cfg, replace(ctx, confidence={}))
+    mid = acamp.AdaptiveCamp()
+    plan = mid(cfg, ctx)
+    assert plan == full
+    assert mid.stats["blended_no_history"] == 1 and mid.stats["fallback_fixed_time"] == 0
+    # the ablation switch keeps M4's fixed-time fallback, for the M5 experiment
+    old = acamp.AdaptiveCamp(acamp.AcampConfig(use_memory_blend=False))
+    old(cfg, ctx)
+    assert old.stats["fallback_fixed_time"] == 1
+    # and a hard failure (below 0.5) still falls back, memory or not
+    low = acamp.AdaptiveCamp()
+    low(cfg, replace(ctx, confidence={"m0": 0.3, "m1": 0.9}))
+    assert low.stats["fallback_fixed_time"] == 1
 
 
 def test_blending_cannot_reach_the_safety_kernel():

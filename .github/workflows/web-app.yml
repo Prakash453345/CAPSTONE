@@ -1,0 +1,86 @@
+name: Web App CI
+
+on:
+  push:
+    paths:
+      - "itms/web-app/**"
+      - ".github/workflows/web-app.yml"
+  pull_request:
+    paths:
+      - "itms/web-app/**"
+      - ".github/workflows/web-app.yml"
+
+defaults:
+  run:
+    working-directory: itms/web-app
+
+jobs:
+  quality:
+    name: Type-check · Lint · Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: itms/web-app/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check
+        run: npx tsc -b --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm test -- --run
+
+      - name: Build
+        run: npm run build
+
+      # Per-page first download (entry + route + their static imports), from
+      # Vite's manifest. Summing every chunk counted lazy chunks that never
+      # load together, so it could never pass. See the script for budgets.
+      - name: Bundle budget (gzipped JS per page)
+        run: node scripts/check-bundle-budget.mjs
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: itms/web-app/dist
+          retention-days: 3
+
+  e2e:
+    name: Playwright E2E + axe
+    runs-on: ubuntu-latest
+    needs: quality
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: itms/web-app/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install chromium --with-deps
+
+      - name: Run E2E tests
+        run: npm run test:e2e
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: itms/web-app/playwright-report
+          retention-days: 7

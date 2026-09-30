@@ -1,0 +1,165 @@
+{
+ "meta": {
+  "data": "data/uvh26",
+  "images": 250,
+  "categories": {
+   "Hatchback": "car",
+   "Sedan": "car",
+   "SUV": "car",
+   "MUV": "car",
+   "Bus": "bus",
+   "Truck": "truck",
+   "Three-wheeler": "auto_rickshaw",
+   "Two-wheeler": "motorcycle",
+   "LCV": "truck",
+   "Mini-bus": "bus",
+   "Tempo-traveller": "bus",
+   "Bicycle": "bicycle",
+   "Van": "car",
+   "Others": null
+  },
+  "op_thresh": 0.5,
+  "score_floor": 0.05,
+  "cpu": "aarch64",
+  "cpus": 4
+ },
+ "models": {
+  "stock@1280": {
+   "images": 250,
+   "op_thresh": 0.5,
+   "iou_thresh": 0.5,
+   "map50": 0.4550306401931386,
+   "vehicles": 3063,
+   "vehicle_recall": 0.4139732288605942,
+   "vehicle_precision": 0.8458972648432288,
+   "false_pos_per_image": 0.924,
+   "false_pos_by_class": {
+    "car": 103,
+    "motorcycle": 94,
+    "truck": 16,
+    "bus": 15,
+    "bicycle": 3
+   },
+   "ignored_detections": 0,
+   "recall_by_height": {
+    "0-20px": [
+     null,
+     0
+    ],
+    "20-40px": [
+     0.12698412698412698,
+     63
+    ],
+    "40-80px": [
+     0.23232323232323232,
+     693
+    ],
+    "80-infpx": [
+     0.4763762462071955,
+     2307
+    ]
+   },
+   "pcu_per_image": {
+    "truth_mean": 10.163600000000002,
+    "bias": -3.2404000000000006,
+    "mae": 4.0676000000000005
+   },
+   "per_class": {
+    "auto_rickshaw": {
+     "truth": 504,
+     "ap50": 0.0,
+     "recall": 0.0,
+     "found_as_some_vehicle": 0.22023809523809523,
+     "precision": NaN,
+     "reported_as": {
+      "missed": 393,
+      "car": 64,
+      "truck": 29,
+      "bus": 17,
+      "motorcycle": 1
+     }
+    },
+    "bicycle": {
+     "truth": 32,
+     "ap50": 0.45906111324458104,
+     "recall": 0.375,
+     "found_as_some_vehicle": 0.375,
+     "precision": 0.7058823529411765,
+     "reported_as": {
+      "missed": 20,
+      "bicycle": 12
+     }
+    },
+    "bus": {
+     "truth": 87,
+     "ap50": 0.4197961417696136,
+     "recall": 0.4482758620689655,
+     "found_as_some_vehicle": 0.6551724137931034,
+     "precision": 0.46987951807228917,
+     "reported_as": {
+      "bus": 39,
+      "missed": 30,
+      "truck": 18
+     }
+    },
+    "car": {
+     "truth": 694,
+     "ap50": 0.8736487513135973,
+     "recall": 0.8515850144092219,
+     "found_as_some_vehicle": 0.8760806916426513,
+     "precision": 0.76953125,
+     "reported_as": {
+      "car": 591,
+      "missed": 86,
+      "truck": 16,
+      "bus": 1
+     }
+    },
+    "motorcycle": {
+     "truth": 1467,
+     "ap50": 0.4640093393908643,
+     "recall": 0.23244717109747784,
+     "found_as_some_vehicle": 0.23517382413087934,
+     "precision": 0.7785388127853882,
+     "reported_as": {
+      "missed": 1122,
+      "motorcycle": 341,
+      "car": 2,
+      "bicycle": 2
+     }
+    },
+    "truck": {
+     "truth": 279,
+     "ap50": 0.5136684954401757,
+     "recall": 0.40860215053763443,
+     "found_as_some_vehicle": 0.4838709677419355,
+     "precision": 0.5906735751295337,
+     "reported_as": {
+      "missed": 144,
+      "truck": 114,
+      "bus": 11,
+      "car": 8,
+      "motorcycle": 2
+     }
+    }
+   },
+   "cpu_ms_per_image": {
+    "median": 309.35170799966727,
+    "mean": 313.5810163643924,
+    "n": 247
+   },
+   "weights": "data/uvh26/yolo11s.onnx",
+   "backend": "onnxruntime 1.23.2",
+   "imgsz": 1280,
+   "class_map": {
+    "person": "person",
+    "bicycle": "bicycle",
+    "car": "car",
+    "motorcycle": "motorcycle",
+    "bus": "bus",
+    "truck": "truck"
+   }
+  }
+ },
+ "clips": {}
+}

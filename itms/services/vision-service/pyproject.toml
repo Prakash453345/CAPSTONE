@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vision-service"
+version = "0.1.0"
+description = "[ARCH] services 7 (Vision Service) and 18 (Camera Ingestion Adapter). M8: junction CCTV -> ground-plane tracks -> per-link queue state in the controller's own units, phase-aware incident rules for the M6 fusion layer, camera health, privacy redaction, and SimCam, a digital-twin camera for measuring all of it against SUMO ground truth."
+requires-python = ">=3.11"
+dependencies = [
+    "itms-common",
+    "itms-domain",
+    "itms-geo",
+    "numpy>=1.26",
+]
+
+[project.optional-dependencies]
+# Reading real video / RTSP, rasterising SimCam frames, blurring evidence.
+video = ["opencv-python-headless>=4.8"]
+# Real detector backends. `yolo` is the easy path on a Mac (MPS) or a CUDA
+# box; `onnx` runs an exported model with no torch at all.
+yolo = ["ultralytics>=8.3", "opencv-python-headless>=4.8"]
+onnx = ["onnxruntime>=1.17", "opencv-python-headless>=4.8"]
+# Evidence upload to MinIO (already in docker-compose.yml).
+evidence = ["minio>=7.2"]
+
+[tool.setuptools.packages.find]
+include = ["vision_service*"]

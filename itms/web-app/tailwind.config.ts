@@ -3,7 +3,7 @@ import animate from "tailwindcss-animate";
 
 /**
  * TRAFFIX design tokens.
- * Dark-first control-room palette. Every colour is an HSL triple exposed as a
+ * Google Maps-style Material palette, light and dark. Every colour is an HSL triple exposed as a
  * CSS variable in src/index.css, so components reference semantic roles
  * (surface, border, primary, status-*) and never raw hex.
  */
@@ -18,7 +18,9 @@ export default {
     extend: {
       fontFamily: {
         sans: [
-          "Plus Jakarta Sans",
+          "Google Sans Flex",
+          "Google Sans",
+          "Roboto",
           "ui-sans-serif",
           "system-ui",
           "-apple-system",
@@ -27,7 +29,7 @@ export default {
           "sans-serif",
         ],
         mono: [
-          "IBM Plex Mono",
+          "Google Sans Code",
           "ui-monospace",
           "SFMono-Regular",
           "Menlo",
@@ -95,9 +97,11 @@ export default {
         sm: "calc(var(--radius) - 6px)",
       },
       boxShadow: {
-        panel: "0 1px 0 0 hsl(var(--border) / 0.6), 0 12px 32px -12px rgb(0 0 0 / 0.55)",
-        "panel-lg":
-          "0 1px 0 0 hsl(var(--border) / 0.6), 0 24px 56px -20px rgb(0 0 0 / 0.65)",
+        panel: "var(--elevation-1)",
+        "panel-lg": "var(--elevation-3)",
+        "elevation-1": "var(--elevation-1)",
+        "elevation-2": "var(--elevation-2)",
+        "elevation-3": "var(--elevation-3)",
         glow: "0 0 0 1px hsl(var(--primary) / 0.35), 0 0 24px -4px hsl(var(--primary) / 0.35)",
       },
       keyframes: {
@@ -117,6 +121,10 @@ export default {
           from: { opacity: "0" },
           to: { opacity: "1" },
         },
+        "sheet-in": {
+          from: { opacity: "0", transform: "translateY(8px) scale(0.98)" },
+          to: { opacity: "1", transform: "none" },
+        },
         shimmer: {
           "100%": { transform: "translateX(100%)" },
         },
@@ -126,6 +134,8 @@ export default {
         "accordion-up": "accordion-up 0.2s ease-out",
         "ping-ring": "ping-ring 1.8s cubic-bezier(0, 0, 0.2, 1) infinite",
         "fade-in": "fade-in 0.2s ease-out",
+        // Material 3 "emphasized decelerate": how Google Maps' panels land.
+        "sheet-in": "sheet-in 0.4s cubic-bezier(0.05, 0.7, 0.1, 1)",
       },
     },
   },

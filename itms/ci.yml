@@ -31,6 +31,8 @@ jobs:
           pip install -e packages/common
           pip install -e services/sim-service
           pip install -e services/api-service
+          pip install -e packages/geo
+          pip install -e services/vision-service
 
       - name: Lint
         run: ruff check .

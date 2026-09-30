@@ -1,11 +1,12 @@
 import type { SignalState, VehicleType } from "@/types";
 
+/** Calm, distinguishable hues; the ambulance is the only saturated red. */
 export const VEHICLE_COLOR: Record<VehicleType, string> = {
-  car: "#5fd0ff",
-  bus: "#b78bff",
-  truck: "#ffd27f",
-  motorcycle: "#7ee0c0",
-  ambulance: "#ff5470",
+  car: "#6f8fff",
+  bus: "#a78bfa",
+  truck: "#e8a33d",
+  motorcycle: "#34c3a0",
+  ambulance: "#ff3b4f",
 };
 
 export const SIGNAL_COLOR: Record<SignalState, string> = {
@@ -29,11 +30,12 @@ export const ANOMALY_SEVERITY_COLOR = {
   blocked: "#e5484d",
 } as const;
 
+/** Google Maps' live-traffic ramp: free flow → slow → heavy → standstill. */
 export const CONGESTION_STOPS: Array<[number, string]> = [
-  [0, "#3f6b52"],
-  [0.4, "#e0a12a"],
-  [0.7, "#e0662a"],
-  [1, "#c0392b"],
+  [0, "#63d668"],
+  [0.4, "#ff974d"],
+  [0.7, "#f23c32"],
+  [1, "#811f1f"],
 ];
 
 /** The recommended route for every emergency mission — one constant "this is
@@ -42,7 +44,7 @@ export const CONGESTION_STOPS: Array<[number, string]> = [
  *  instantly regardless of which mission it belongs to; hashing its colour
  *  the same way as the vehicle marker made every mission's route a
  *  different, unpredictable hue and none of them reliably legible. */
-export const EV_ROUTE_COLOR = "#39ff14";
+export const EV_ROUTE_COLOR = "#16c864";
 
 /** Green-corridor preemption — shared with `SignalLayer`'s ring around a
  *  currently-held junction, so the map has exactly one consistent "this is

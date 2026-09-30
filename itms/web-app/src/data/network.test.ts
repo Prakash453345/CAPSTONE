@@ -12,7 +12,9 @@ describe("SUMO network adapter", () => {
     expect(roadEdges).toHaveLength(33);
     expect(signalJunctions).toHaveLength(7);
     expect(edgeById.has("-177626285")).toBe(true);
-    expect(shortJunctionName("1880441505")).toBe("Junction 1505");
+    // named after the streets that meet there, from the OSM name lookup
+    expect(shortJunctionName("1880441505")).toBe("MG Road at Eat Street");
+    expect(edgeById.get("-177626285")?.name).toBe("Eat Street");
     for (const e of roadEdges) {
       expect(e.path.length).toBeGreaterThan(1);
       expect(e.lengthM).toBeGreaterThan(0);

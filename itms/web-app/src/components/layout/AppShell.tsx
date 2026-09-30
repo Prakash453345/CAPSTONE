@@ -1,15 +1,23 @@
-import { useEffect, useRef, useState } from "react";
-import { SourceBanner } from "@/components/layout/SourceBanner";
-import { Outlet } from "react-router-dom";
-import { AnimatePresence, motion } from "framer-motion";
+import { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
+import { useLocation, useOutlet } from "react-router-dom";
+import { AnimatePresence, MotionConfig, motion } from "framer-motion";
 import { X } from "lucide-react";
 import { SideNav } from "@/components/layout/SideNav";
 import { TopBar } from "@/components/layout/TopBar";
-import { SplitWorkspace } from "@/components/layout/SplitWorkspace";
+import { CommandPalette } from "@/components/layout/CommandPalette";
+import { usePaletteShortcut } from "@/components/layout/usePaletteShortcut";
+import { StatusMenu } from "@/components/layout/StatusMenu";
+import { EASE_OUT } from "@/components/console/motion";
 import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/notifications/Toaster";
 import { TrafficDataBridge } from "@/services/traffic/TrafficDataBridge";
 import { useSystemStore } from "@/store/systemStore";
+
+// Split view mounts two map pages, so it pulls in MapLibre; loading it on
+// demand keeps the map library out of the landing page's first download.
+const SplitWorkspace = lazy(() =>
+  import("@/components/layout/SplitWorkspace").then((m) => ({ default: m.SplitWorkspace })),
+);
 
 const COLLAPSE_KEY = "traffix.nav.collapsed";
 
@@ -29,7 +37,14 @@ function readCollapsed(): boolean {
 export function AppShell() {
   const [collapsed, setCollapsed] = useState(readCollapsed);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const openPalette = useCallback(() => setPaletteOpen(true), []);
+  usePaletteShortcut(openPalette);
+  const { pathname } = useLocation();
   const viewMode = useSystemStore((s) => s.viewMode);
+  // The full-screen map route: rail and top bar step aside; data, alerts and
+  // the demo notice stay. Split view never applies there.
+  const immersive = pathname === "/console/map";
   const drawerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -66,11 +81,12 @@ export function AppShell() {
   }, []);
 
   return (
+    <MotionConfig reducedMotion="user">
     <div className="flex h-full w-full overflow-hidden bg-background text-foreground">
       <a href="#workspace" className="skip-link">Skip to workspace</a>
       <TrafficDataBridge />
       <Toaster />
-      <div className="hidden lg:block">
+      <div className={immersive ? "hidden" : "hidden lg:block"}>
         <SideNav
           collapsed={collapsed}
           onToggleCollapsed={() => setCollapsed((c) => !c)}
@@ -99,11 +115,13 @@ export function AppShell() {
               transition={{ type: "tween", duration: 0.2, ease: "easeOut" }}
             >
               <div className="relative h-full">
-                <SideNav
-                  collapsed={false}
-                  onToggleCollapsed={() => setDrawerOpen(false)}
-                  onNavigate={() => setDrawerOpen(false)}
-                />
+                <div className="h-full bg-background shadow-elevation-3">
+                  <SideNav
+                    collapsed={false}
+                    onToggleCollapsed={() => setDrawerOpen(false)}
+                    onNavigate={() => setDrawerOpen(false)}
+                  />
+                </div>
                 <Button
                   variant="subtle"
                   size="icon-sm"
@@ -120,12 +138,44 @@ export function AppShell() {
       </AnimatePresence>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <TopBar onOpenNav={() => setDrawerOpen(true)} />
-        <SourceBanner />
-        <main id="workspace" tabIndex={-1} className="min-h-0 flex-1 overflow-auto">
-          {viewMode === "split" ? <SplitWorkspace /> : <Outlet />}
+        {!immersive && <TopBar onOpenNav={() => setDrawerOpen(true)} onOpenSearch={openPalette} />}
+        <main id="workspace" tabIndex={-1} className="relative min-h-0 flex-1 overflow-hidden outline-none">
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={viewMode === "split" && !immersive ? "split" : pathname}
+              className="absolute inset-0 overflow-auto"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, transition: { duration: 0.12 } }}
+              transition={{ duration: 0.3, ease: EASE_OUT }}
+            >
+              {viewMode === "split" && !immersive ? (
+                <Suspense fallback={null}>
+                  <SplitWorkspace />
+                </Suspense>
+              ) : (
+                <FrozenOutlet />
+              )}
+            </motion.div>
+          </AnimatePresence>
         </main>
+        <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+        {immersive && (
+          // the full-screen map hides the top bar, but never the data status
+          <div className="absolute left-1/2 top-3 z-30 -translate-x-1/2 rounded-xl bg-surface-raised shadow-elevation-2">
+            <StatusMenu />
+          </div>
+        )}
       </div>
     </div>
+    </MotionConfig>
   );
+}
+
+/** The routed page as it was when this transition key mounted, so a page
+ *  fading out keeps showing itself rather than the page replacing it. */
+function FrozenOutlet() {
+  const outlet = useOutlet();
+  const [frozen] = useState(outlet);
+  return frozen;
 }

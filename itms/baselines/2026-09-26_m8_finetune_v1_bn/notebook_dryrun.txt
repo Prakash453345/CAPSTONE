@@ -1,0 +1,19 @@
+11 labelled training images, 12 image files, 10 usable (0 labelled but missing, 1 unlabelled, 1 named like a test frame)
+skipped: {'does not open': 1, 'looks like a test camera': 1, 'identical to a test frame': 1, 'size differs from the label file': 1, 'file missing': 1}
+unknown label stops the run: unknown label 'Tractor': stop and add it to UVH_TO_SIX
+class head started from IISc rows: {'car': 'Hatchback', 'auto_rickshaw': 'Three-wheeler', 'motorcycle': 'Two-wheeler', 'bus': 'Bus', 'truck': 'LCV', 'bicycle': 'Bicycle'}
+== simulated disconnect after epoch 1
+control: 584 broken channels -> 0 | above half precision: 283 | max variance 17908926.0 | {'frames': 1, 'outputs': 18, 'max_box_diff_px': 0.00128, 'max_score_diff': 4.07e-06}
+resumed with the full-precision copy of epoch 1
+model: {'source': 'best epoch, kept in full precision during training', 'best_epoch': 2, 'holdout_map50': 0.4417, 'onnx_check': {'frames': 1, 'outputs': 10, 'max_box_diff_px': 0.00052, 'max_score_diff': 1.55e-06}, 'sessions': [{'minutes_this_session': 0, 'batch_used': 2, 'epochs_run': 2, 'resumed': [{'from_epoch': 1, 'full_precision_restored': True}]}]}
+model BatchNorm after the resume: {'bn_layers': 81, 'channels': 14992, 'nonfinite_channels': 0, 'channels_over_fp16_max': 282, 'channels_at_fp16_max': 0, 'max_running_var': 17983258.0}
+iisc_bnfix_320.onnx 5 detections: ['car', 'motorcycle']
+itms_six_fp32_320.onnx 4 detections: ['car']
+ft6fp32_320 already finished
+Download it from Drive: folder itms_uvh26_finetune
+ft6fp32_320 already finished
+fallback: best.pt with its BatchNorm statistics re-estimated (no full-precision copy was found) {'frames': 1, 'outputs': 10, 'max_box_diff_px': 0.0014, 'max_score_diff': 1.01e-06}
+repair repeated: 81 BatchNorm layers, largest relative change 2.9e-06
+nan guard: A training batch gave a non-finite loss (epoch 4). Stop here and send Claude this output: running again would only repeat it.
+fetched: ['UVH-26-Train/UVH-26-MV-Train.json', 'UVH-26-Train/data/000/a_exact_copy.png', 'UVH-26-Train/data/000/b_same_camera.png', 'UVH-26-Train/data/000/c_edges.png', 'UVH-26-Train/data/000/d_ok.png', 'UVH-26-Train/data/000/e_ok.png', 'UVH-26-Train/data/000/f_broken.png', 'UVH-26-Train/data/000/g_wrong_size.png', 'UVH-26-Train/data/000/h_empty.png', 'UVH-26-Train/data/000/j_ok.png', 'UVH-26-Train/data/000/k_missing.png', 'weights/YOLOv11-S/UVH-26-MV-YOLOv11-S.pt']
+DRY RUN OK

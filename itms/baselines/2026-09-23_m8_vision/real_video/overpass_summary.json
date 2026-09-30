@@ -1,0 +1,78 @@
+{
+ "video": "overpass.mp4",
+ "frames": 905,
+ "fps": 24.012948418594778,
+ "size": [
+  640,
+  352
+ ],
+ "weights": "yolo11n.pt",
+ "imgsz": 640,
+ "detector": {
+  "backend": "ultralytics",
+  "ms_per_frame_cpu": 68.9,
+  "detections_per_frame": 8.83,
+  "confident_per_frame": 3.07,
+  "by_class_conf50": {
+   "car": 2766,
+   "truck": 14
+  }
+ },
+ "image_tracking": {
+  "tracks": 16,
+  "tracks_by_class": {
+   "car": 15,
+   "truck": 1
+  },
+  "track_seconds_median": 6.142519337016575,
+  "tracks_under_1s": 0,
+  "tracks_over_10s": 3,
+  "stationary_tracks": 1
+ },
+ "pixel_health": {
+  "clean_non_ok_frames": 0,
+  "clean_frames": 855,
+  "faults_on_second_half": {
+   "blur": {
+    "detected": true,
+    "latency_s": 0.0,
+    "status": "FAILED"
+   },
+   "lens_covered": {
+    "detected": true,
+    "latency_s": 0.0,
+    "status": "FAILED"
+   },
+   "spray_or_fog": {
+    "detected": true,
+    "latency_s": 0.0,
+    "status": "FAILED"
+   },
+   "frozen": {
+    "detected": true,
+    "latency_s": 1.04,
+    "status": "FAILED"
+   },
+   "night_underexposed": {
+    "detected": true,
+    "latency_s": 0.0,
+    "status": "FAILED"
+   }
+  }
+ },
+ "redaction": {
+  "frame": 677,
+  "redacted_regions": 1
+ },
+ "onnx": {
+  "ms_per_frame_cpu": 93.9,
+  "dynamic_rect": true,
+  "conf_threshold": 0.25,
+  "matched": 4717,
+  "only_ultralytics": 0,
+  "only_onnx": 0,
+  "agreement": 1.0,
+  "mean_abs_dconf": 3.942789757481717e-07,
+  "mean_iou": 0.9999991169100154
+ }
+}

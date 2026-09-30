@@ -1,0 +1,186 @@
+{
+ "models": {
+  "640": {
+   "sessions": [
+    {
+     "minutes_this_session": 61,
+     "batch_used": 16,
+     "epochs_run": 25,
+     "resumed": []
+    }
+   ],
+   "source": "best epoch, kept in full precision during training",
+   "best_epoch": 17,
+   "bn": {
+    "bn_layers": 81,
+    "channels": 14992,
+    "nonfinite_channels": 0,
+    "channels_over_fp16_max": 350,
+    "channels_at_fp16_max": 0,
+    "max_running_var": 22727772.0
+   },
+   "onnx_check": {
+    "frames": 4,
+    "outputs": 10,
+    "max_box_diff_px": 0.0025,
+    "max_score_diff": 5.68e-06
+   },
+   "holdout_map50": 0.8596,
+   "holdout_map50_95": 0.7323,
+   "holdout_ap50_by_type": {
+    "car": 0.9233,
+    "auto_rickshaw": 0.9368,
+    "motorcycle": 0.9247,
+    "bus": 0.8799,
+    "truck": 0.8563,
+    "bicycle": 0.6363
+   },
+   "pt_sha256": "52d76c9c7dbc3b8431f50278682d9bcc4f058e556809b5d52593f59bb2c66996",
+   "onnx_sha256": "f5541971b8293ab8ad827e5efc03c5e94b5519bdce6bdc17fc798ee28cb2bcac"
+  },
+  "960": {
+   "sessions": [
+    {
+     "minutes_this_session": 139,
+     "batch_used": 8,
+     "epochs_run": 25,
+     "resumed": []
+    }
+   ],
+   "source": "best epoch, kept in full precision during training",
+   "best_epoch": 19,
+   "bn": {
+    "bn_layers": 81,
+    "channels": 14992,
+    "nonfinite_channels": 0,
+    "channels_over_fp16_max": 369,
+    "channels_at_fp16_max": 0,
+    "max_running_var": 23822906.0
+   },
+   "onnx_check": {
+    "frames": 4,
+    "outputs": 10,
+    "max_box_diff_px": 0.00812,
+    "max_score_diff": 1.56e-05
+   },
+   "holdout_map50": 0.8737,
+   "holdout_map50_95": 0.7427,
+   "holdout_ap50_by_type": {
+    "car": 0.9303,
+    "auto_rickshaw": 0.9378,
+    "motorcycle": 0.9308,
+    "bus": 0.8799,
+    "truck": 0.8574,
+    "bicycle": 0.7061
+   },
+   "pt_sha256": "6a0a6d15dbda0ff233b99c5cb0bf1c77215f04ea09a8e1a807405cdda466c9bf",
+   "onnx_sha256": "cfbacedd69c893965a4dd90e3d1d9e52259308a2c1bebff7348c3388428546ba"
+  }
+ },
+ "controls": {
+  "640": {
+   "bn_before": {
+    "bn_layers": 81,
+    "channels": 14992,
+    "nonfinite_channels": 584,
+    "channels_over_fp16_max": 0,
+    "channels_at_fp16_max": 0,
+    "max_running_var": 64544.0
+   },
+   "bn_recalibration": {
+    "images": 1024,
+    "imgsz": 640,
+    "augment": {
+     "mosaic": 0.0,
+     "mixup": 0.0,
+     "cutmix": 0.0,
+     "copy_paste": 0.0,
+     "degrees": 0.0,
+     "translate": 0.1,
+     "scale": 0.5,
+     "shear": 0.0,
+     "perspective": 0.0,
+     "flipud": 0.0,
+     "fliplr": 0.5,
+     "hsv_h": 0.015,
+     "hsv_s": 0.7,
+     "hsv_v": 0.4,
+     "bgr": 0.0
+    },
+    "bn_layers": 81,
+    "channels": 14992,
+    "nonfinite_channels": 0,
+    "channels_over_fp16_max": 371,
+    "channels_at_fp16_max": 0,
+    "max_running_var": 24619294.0
+   },
+   "onnx_check": {
+    "frames": 4,
+    "outputs": 18,
+    "max_box_diff_px": 0.00336,
+    "max_score_diff": 5.78e-06
+   },
+   "onnx_sha256": "f57e0d9fdc637083d3729960b722bee346299449239c5f715e4df1c92a07105a",
+   "pt_sha256": "a4131eaacfa1a79844e80f21f37aeb3b7a3004aa30119007ffd8821d83d83b36"
+  },
+  "960": {
+   "bn_before": {
+    "bn_layers": 81,
+    "channels": 14992,
+    "nonfinite_channels": 584,
+    "channels_over_fp16_max": 0,
+    "channels_at_fp16_max": 0,
+    "max_running_var": 64544.0
+   },
+   "bn_recalibration": {
+    "images": 1024,
+    "imgsz": 960,
+    "augment": {
+     "mosaic": 0.0,
+     "mixup": 0.0,
+     "cutmix": 0.0,
+     "copy_paste": 0.0,
+     "degrees": 0.0,
+     "translate": 0.1,
+     "scale": 0.5,
+     "shear": 0.0,
+     "perspective": 0.0,
+     "flipud": 0.0,
+     "fliplr": 0.5,
+     "hsv_h": 0.015,
+     "hsv_s": 0.7,
+     "hsv_v": 0.4,
+     "bgr": 0.0
+    },
+    "bn_layers": 81,
+    "channels": 14992,
+    "nonfinite_channels": 0,
+    "channels_over_fp16_max": 350,
+    "channels_at_fp16_max": 0,
+    "max_running_var": 24991268.0
+   },
+   "onnx_check": {
+    "frames": 4,
+    "outputs": 18,
+    "max_box_diff_px": 0.00641,
+    "max_score_diff": 3.71e-05
+   },
+   "onnx_sha256": "f83190d65ccef75882e71a6adab1be07055dca0445cc9128a3b4b8c9c042f8bb",
+   "pt_sha256": "8214ac0146f0f0941e884cd37f576527cac400fdf9b72f234f1dc9a3595f263b"
+  }
+ },
+ "ultralytics": "8.4.163",
+ "torch": "2.11.0+cu128",
+ "gpu": "Tesla T4",
+ "iisc_sha256": "12dbeb8f6fa207d19446fa652fc4313359fbec267027c8c01641004dcf1d0150",
+ "seed": 26,
+ "settings": {
+  "EPOCHS": 25,
+  "PATIENCE": 8,
+  "BATCH": {
+   "640": 16,
+   "960": 8
+  },
+  "BN_BATCHES": 64
+ }
+}

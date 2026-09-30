@@ -17,6 +17,8 @@ export default defineConfig({
     },
   },
   build: {
+    // Read by scripts/check-bundle-budget.mjs to measure each page's first download.
+    manifest: true,
     rollupOptions: {
       output: {
         manualChunks: {

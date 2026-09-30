@@ -5,53 +5,76 @@ import {
   Ambulance,
   BarChart3,
   Settings2,
+  Map as MapIcon,
   type LucideIcon,
 } from "lucide-react";
 import type { WorkspaceId } from "@/types";
 
+export type NavGroup = "monitor" | "operate" | "review";
+
 export interface NavItem {
-  id: WorkspaceId;
+  id: WorkspaceId | "map";
   label: string;
   /** Short label for the collapsed rail / tooltips. */
   short: string;
   path: string;
   icon: LucideIcon;
-  /** Optional one-line description for the placeholder screens. */
+  group: NavGroup | "footer";
+  /** One line describing the workspace, used by the command palette. */
   blurb: string;
 }
+
+export const NAV_GROUPS: { id: NavGroup; label: string }[] = [
+  { id: "monitor", label: "Monitor" },
+  { id: "operate", label: "Operate" },
+  { id: "review", label: "Review" },
+];
 
 export const NAV_ITEMS: NavItem[] = [
   {
     id: "overview",
-    label: "Command Center",
+    label: "Overview",
     short: "Overview",
     path: "/console",
     icon: LayoutDashboard,
-    blurb: "Immediate system awareness — health, live traffic and the incident feed.",
+    group: "monitor",
+    blurb: "How the network is doing right now, and what needs you.",
   },
   {
-    id: "anomalies",
-    label: "Anomaly Detection",
-    short: "Anomalies",
-    path: "/console/anomalies",
-    icon: ScanEye,
-    blurb: "Investigate candidate anomalies, review evidence, confirm or dismiss.",
+    id: "map",
+    label: "Live map",
+    short: "Map",
+    path: "/console/map",
+    icon: MapIcon,
+    group: "monitor",
+    blurb: "The whole corridor on one full-screen map.",
   },
   {
     id: "traffic",
-    label: "Traffic Management",
+    label: "Traffic",
     short: "Traffic",
     path: "/console/traffic",
     icon: Waypoints,
-    blurb: "Live map, intersections, signal state and congestion.",
+    group: "operate",
+    blurb: "Every road and signal, busiest first.",
+  },
+  {
+    id: "anomalies",
+    label: "Incidents",
+    short: "Incidents",
+    path: "/console/anomalies",
+    icon: ScanEye,
+    group: "operate",
+    blurb: "Review detected incidents and manage disruptions on the road.",
   },
   {
     id: "emergency",
-    label: "Emergency Response",
+    label: "Emergency",
     short: "Emergency",
     path: "/console/emergency",
     icon: Ambulance,
-    blurb: "Emergency units, routes and green-corridor progress.",
+    group: "operate",
+    blurb: "Dispatch units and follow their green corridors.",
   },
   {
     id: "analytics",
@@ -59,7 +82,8 @@ export const NAV_ITEMS: NavItem[] = [
     short: "Analytics",
     path: "/console/analytics",
     icon: BarChart3,
-    blurb: "Trends, KPIs and fixed-timer baseline comparison.",
+    group: "review",
+    blurb: "Trends across this session: congestion, speed and load.",
   },
   {
     id: "settings",
@@ -67,8 +91,17 @@ export const NAV_ITEMS: NavItem[] = [
     short: "Settings",
     path: "/console/settings",
     icon: Settings2,
-    blurb: "Data source, thresholds, map layers and operator preferences.",
+    group: "footer",
+    blurb: "Data source, appearance and map layers.",
   },
 ];
 
 export const NAV_BY_PATH = new Map(NAV_ITEMS.map((item) => [item.path, item]));
+
+/** The nav item whose section contains `pathname`. */
+export function navItemFor(pathname: string): NavItem {
+  return (
+    NAV_ITEMS.filter((i) => i.path !== "/console").find((i) => pathname.startsWith(i.path)) ??
+    NAV_ITEMS[0]!
+  );
+}

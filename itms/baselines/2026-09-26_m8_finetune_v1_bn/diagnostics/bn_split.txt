@@ -1,0 +1,79 @@
+UVH-26-MV-YOLOv11-S.pt: 584 BatchNorm channels have non-finite statistics and 0 were clipped to 65,504 by a half-precision save; its detections are degraded. Re-estimate the statistics in full precision (notebooks/m8_uvh26_finetune.ipynb does).
+iisc_as_delivered  recall 0.706  precision 0.902  false/img 0.944  mAP50 0.693  PCU MAE 2.484  bias -1.441  {'channels': 14992, 'nonfinite': 584, 'at_fp16_max': 0}  22 s
+UVH-26-MV-YOLOv11-S.pt: 584 BatchNorm channels have non-finite statistics and 0 were clipped to 65,504 by a half-precision save; its detections are degraded. Re-estimate the statistics in full precision (notebooks/m8_uvh26_finetune.ipynb does).
+iisc_rect          recall 0.727  precision 0.928  false/img 0.688  mAP50 0.705  PCU MAE 2.696  bias -2.184  {'channels': 14992, 'nonfinite': 0, 'at_fp16_max': 0}  38 s
+UVH-26-MV-YOLOv11-S.pt: 584 BatchNorm channels have non-finite statistics and 0 were clipped to 65,504 by a half-precision save; its detections are degraded. Re-estimate the statistics in full precision (notebooks/m8_uvh26_finetune.ipynb does).
+iisc_square        recall 0.713  precision 0.946  false/img 0.504  mAP50 0.756  PCU MAE 2.634  bias -2.074  {'channels': 14992, 'nonfinite': 0, 'at_fp16_max': 0}  50 s
+UVH-26-MV-YOLOv11-S.pt: 584 BatchNorm channels have non-finite statistics and 0 were clipped to 65,504 by a half-precision save; its detections are degraded. Re-estimate the statistics in full precision (notebooks/m8_uvh26_finetune.ipynb does).
+iisc_pipeline      recall 0.743  precision 0.928  false/img 0.704  mAP50 0.755  PCU MAE 2.335  bias -1.722  {'channels': 14992, 'nonfinite': 0, 'at_fp16_max': 0}  53 s
+itms_six_640.pt: 0 BatchNorm channels have non-finite statistics and 405 were clipped to 65,504 by a half-precision save; its detections are degraded. Re-estimate the statistics in full precision (notebooks/m8_uvh26_finetune.ipynb does).
+ft6_as_delivered   recall 0.819  precision 0.868  false/img 1.528  mAP50 0.745  PCU MAE 1.939  bias -0.381  {'channels': 14992, 'nonfinite': 0, 'at_fp16_max': 405}  19 s
+itms_six_640.pt: 0 BatchNorm channels have non-finite statistics and 405 were clipped to 65,504 by a half-precision save; its detections are degraded. Re-estimate the statistics in full precision (notebooks/m8_uvh26_finetune.ipynb does).
+ft6_rect           recall 0.801  precision 0.895  false/img 1.160  mAP50 0.782  PCU MAE 2.025  bias -1.068  {'channels': 14992, 'nonfinite': 0, 'at_fp16_max': 0}  35 s
+itms_six_640.pt: 0 BatchNorm channels have non-finite statistics and 405 were clipped to 65,504 by a half-precision save; its detections are degraded. Re-estimate the statistics in full precision (notebooks/m8_uvh26_finetune.ipynb does).
+ft6_square         recall 0.833  precision 0.883  false/img 1.360  mAP50 0.796  PCU MAE 1.903  bias -0.249  {'channels': 14992, 'nonfinite': 0, 'at_fp16_max': 0}  52 s
+itms_six_640.pt: 0 BatchNorm channels have non-finite statistics and 405 were clipped to 65,504 by a half-precision save; its detections are degraded. Re-estimate the statistics in full precision (notebooks/m8_uvh26_finetune.ipynb does).
+ft6_pipeline       recall 0.819  precision 0.892  false/img 1.224  mAP50 0.790  PCU MAE 1.841  bias -0.668  {'channels': 14992, 'nonfinite': 0, 'at_fp16_max': 0}  48 s
+iisc_as_delivered -> iisc_rect
+    vehicle_recall         0.706 -> 0.727  +0.020 [+0.004, +0.036] *
+    correct_type_recall    0.693 -> 0.702  +0.008 [-0.008, +0.025]
+    vehicle_precision      0.902 -> 0.928  +0.027 [+0.009, +0.045] *
+    false_pos_per_image    0.944 -> 0.688  -0.256 [-0.456, -0.072] *
+    pcu_mae                2.484 -> 2.696  +0.212 [-0.110, +0.545]
+    pcu_bias               -1.441 -> -2.184  -0.743 [-1.189, -0.304] *
+iisc_as_delivered -> iisc_square
+    vehicle_recall         0.706 -> 0.713  +0.007 [-0.004, +0.017]
+    correct_type_recall    0.693 -> 0.699  +0.005 [-0.006, +0.016]
+    vehicle_precision      0.902 -> 0.946  +0.044 [+0.028, +0.060] *
+    false_pos_per_image    0.944 -> 0.504  -0.440 [-0.624, -0.272] *
+    pcu_mae                2.484 -> 2.634  +0.150 [-0.158, +0.455]
+    pcu_bias               -1.441 -> -2.074  -0.633 [-0.998, -0.288] *
+iisc_as_delivered -> iisc_pipeline
+    vehicle_recall         0.706 -> 0.743  +0.037 [+0.028, +0.046] *
+    correct_type_recall    0.693 -> 0.727  +0.033 [+0.024, +0.042] *
+    vehicle_precision      0.902 -> 0.928  +0.027 [+0.013, +0.041] *
+    false_pos_per_image    0.944 -> 0.704  -0.240 [-0.392, -0.096] *
+    pcu_mae                2.484 -> 2.335  -0.149 [-0.411, +0.109]
+    pcu_bias               -1.441 -> -1.722  -0.282 [-0.610, +0.027]
+ft6_as_delivered -> ft6_rect
+    vehicle_recall         0.819 -> 0.801  -0.018 [-0.032, -0.003] *
+    correct_type_recall    0.799 -> 0.780  -0.019 [-0.033, -0.004] *
+    vehicle_precision      0.868 -> 0.895  +0.026 [+0.010, +0.043] *
+    false_pos_per_image    1.528 -> 1.160  -0.368 [-0.600, -0.144] *
+    pcu_mae                1.939 -> 2.025  +0.086 [-0.258, +0.442]
+    pcu_bias               -0.381 -> -1.068  -0.687 [-1.042, -0.350] *
+ft6_as_delivered -> ft6_square
+    vehicle_recall         0.819 -> 0.833  +0.014 [+0.003, +0.025] *
+    correct_type_recall    0.799 -> 0.815  +0.016 [+0.005, +0.028] *
+    vehicle_precision      0.868 -> 0.883  +0.014 [+0.003, +0.026] *
+    false_pos_per_image    1.528 -> 1.360  -0.168 [-0.328, -0.016] *
+    pcu_mae                1.939 -> 1.903  -0.036 [-0.332, +0.265]
+    pcu_bias               -0.381 -> -0.249  +0.132 [-0.174, +0.446]
+ft6_as_delivered -> ft6_pipeline
+    vehicle_recall         0.819 -> 0.819  +0.000 [-0.008, +0.009]
+    correct_type_recall    0.799 -> 0.801  +0.002 [-0.006, +0.011]
+    vehicle_precision      0.868 -> 0.892  +0.023 [+0.013, +0.034] *
+    false_pos_per_image    1.528 -> 1.224  -0.304 [-0.456, -0.168] *
+    pcu_mae                1.939 -> 1.841  -0.098 [-0.307, +0.112]
+    pcu_bias               -0.381 -> -0.668  -0.287 [-0.513, -0.070] *
+iisc_as_delivered -> ft6_as_delivered
+    vehicle_recall         0.706 -> 0.819  +0.113 [+0.096, +0.130] *
+    correct_type_recall    0.693 -> 0.799  +0.105 [+0.089, +0.122] *
+    vehicle_precision      0.902 -> 0.868  -0.034 [-0.052, -0.015] *
+    false_pos_per_image    0.944 -> 1.528  +0.584 [+0.336, +0.832] *
+    pcu_mae                2.484 -> 1.939  -0.545 [-0.927, -0.168] *
+    pcu_bias               -1.441 -> -0.381  +1.060 [+0.586, +1.554] *
+iisc_as_delivered -> ft6_pipeline
+    vehicle_recall         0.706 -> 0.819  +0.113 [+0.095, +0.130] *
+    correct_type_recall    0.693 -> 0.801  +0.107 [+0.091, +0.124] *
+    vehicle_precision      0.902 -> 0.892  -0.010 [-0.026, +0.007]
+    false_pos_per_image    0.944 -> 1.224  +0.280 [+0.080, +0.472] *
+    pcu_mae                2.484 -> 1.841  -0.643 [-0.980, -0.318] *
+    pcu_bias               -1.441 -> -0.668  +0.773 [+0.314, +1.230] *
+iisc_pipeline -> ft6_pipeline
+    vehicle_recall         0.743 -> 0.819  +0.076 [+0.060, +0.092] *
+    correct_type_recall    0.727 -> 0.801  +0.074 [+0.059, +0.090] *
+    vehicle_precision      0.928 -> 0.892  -0.037 [-0.050, -0.024] *
+    false_pos_per_image    0.704 -> 1.224  +0.520 [+0.360, +0.688] *
+    pcu_mae                2.335 -> 1.841  -0.494 [-0.806, -0.198] *
+    pcu_bias               -1.722 -> -0.668  +1.054 [+0.722, +1.395] *

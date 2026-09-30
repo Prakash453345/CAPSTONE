@@ -808,6 +808,10 @@ LAB: Lab
 def free_port(preferred: int) -> int:
     for port in [preferred, *range(preferred + 1, preferred + 20)]:
         with socket.socket() as s:
+            # Same option ThreadingHTTPServer binds with: without it a port left
+            # in TIME_WAIT by the last restart looks taken and the site drifts
+            # off 8420. A port something is actually listening on still fails.
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             try:
                 s.bind(("127.0.0.1", port))
                 return port

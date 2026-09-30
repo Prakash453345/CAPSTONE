@@ -1,0 +1,21 @@
+{
+  "type": "record",
+  "name": "CameraStatus",
+  "namespace": "itms.contracts",
+  "doc": "M8. Health of one camera, published by services/vision-service on `vision.camera-status` when its status changes and periodically while it is not OK. The health score multiplies into every confidence that camera contributes to (LinkStateEstimated.c_health). Pixel metrics are null for a source that delivers detections rather than frames (the digital twin).",
+  "fields": [
+    { "name": "camera_id", "type": "string" },
+    { "name": "intersection_id", "type": ["null", "string"], "default": null },
+    { "name": "status", "type": { "type": "enum", "name": "CameraHealthStatus", "symbols": ["OK", "DEGRADED", "FAILED"] } },
+    { "name": "health_score", "type": "double" },
+    { "name": "reasons", "type": { "type": "array", "items": "string" }, "default": [] },
+    { "name": "sharpness", "type": ["null", "double"], "default": null },
+    { "name": "brightness", "type": ["null", "double"], "default": null },
+    { "name": "frozen_frames", "type": ["null", "int"], "default": null },
+    { "name": "drift_heading_err_deg", "type": ["null", "double"], "default": null, "doc": "Median heading error of moving vehicles against their lanes -- the calibration-drift signal." },
+    { "name": "drift_offlane_rate", "type": ["null", "double"], "default": null },
+    { "name": "lat", "type": ["null", "double"], "default": null },
+    { "name": "lon", "type": ["null", "double"], "default": null },
+    { "name": "heading_deg", "type": ["null", "double"], "default": null }
+  ]
+}
