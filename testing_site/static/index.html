@@ -37,28 +37,28 @@
   <nav class="sidenav" id="sidenav" aria-label="Sections">
     <div class="navgroup">
       <h6>Run</h6>
-      <button data-go="control"><i>▶</i>Control room<span class="nhint">scenario + stack</span></button>
-      <button data-go="demos"><i>✦</i>Guided demos<span class="nhint">scripted walk-throughs</span></button>
-      <button data-go="gates"><i>⚑</i>Gates &amp; benchmarks<span class="nhint">the repo's own scripts</span></button>
+      <button data-go="control" title="Scenario + stack"><i>▶</i>Control room</button>
+      <button data-go="demos" title="Scripted walk-throughs"><i>✦</i>Guided demos</button>
+      <button data-go="gates" title="The repo's own scripts"><i>⚑</i>Gates &amp; benchmarks</button>
     </div>
     <div class="navgroup">
       <h6>Monitor</h6>
-      <button data-go="map"><i>◎</i>Live corridor<span class="nhint">map + overlays</span></button>
-      <button data-go="signals"><i>⊞</i>Signals &amp; safety<span class="nhint">arbitration + interlocks</span></button>
-      <button data-go="traffic"><i>≣</i>Traffic state<span class="nhint">per-edge queues</span></button>
-      <button data-go="log"><i>⌗</i>Event stream<span class="nhint">raw bus traffic</span></button>
+      <button data-go="map" title="Map + overlays"><i>◎</i>Live corridor</button>
+      <button data-go="signals" title="Arbitration + interlocks"><i>⊞</i>Signals &amp; safety</button>
+      <button data-go="traffic" title="Per-edge queues"><i>≣</i>Traffic state</button>
+      <button data-go="log" title="Raw bus traffic"><i>⌗</i>Event stream</button>
     </div>
     <div class="navgroup">
       <h6>Features</h6>
-      <button data-go="anomalies"><i>⚠</i>Anomaly injection<span class="nhint">operator path</span></button>
-      <button data-go="emergency"><i>✚</i>Emergency response<span class="nhint">route + green corridor</span></button>
-      <button data-go="incidents"><i>◈</i>Incident gate<span class="nhint">M6 human-in-the-loop</span></button>
+      <button data-go="anomalies" title="Operator path"><i>⚠</i>Anomaly injection</button>
+      <button data-go="emergency" title="Route + green corridor"><i>✚</i>Emergency response</button>
+      <button data-go="incidents" title="M6 human-in-the-loop"><i>◈</i>Incident gate</button>
     </div>
     <div class="navgroup">
       <h6>Assess</h6>
-      <button data-go="kpis"><i>▤</i>KPIs &amp; runs<span class="nhint">compare + export</span></button>
-      <button data-go="milestones"><i>✓</i>Milestone check<span class="nhint">how far it has come</span></button>
-      <button data-go="settings"><i>⚙</i>Settings<span class="nhint">paths + keys</span></button>
+      <button data-go="kpis" title="Compare + export"><i>▤</i>KPIs &amp; runs</button>
+      <button data-go="milestones" title="How far it has come"><i>✓</i>Milestone check</button>
+      <button data-go="settings" title="Paths + keys"><i>⚙</i>Settings</button>
     </div>
     <div class="navfoot mono" id="navfoot"></div>
   </nav>
@@ -485,7 +485,7 @@
   </div>
 </div>
 
-<div class="toasts" id="toasts"></div>
+<div class="toasts" id="toasts" role="status" aria-live="polite" aria-atomic="false"></div>
 
 <script src="/vendor/leaflet/leaflet.js"></script>
 <script type="module" src="/static/app.js"></script>
