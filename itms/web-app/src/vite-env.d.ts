@@ -5,8 +5,10 @@ interface ImportMetaEnv {
   readonly VITE_API_BASE?: string;
   /** Full WebSocket URL to the api-service stream. Defaults to `/ws/v1/stream` on the current host. */
   readonly VITE_WS_URL?: string;
-  /** Google Maps Platform key with the Map Tiles API enabled. Unset = CARTO basemap. */
+  /** Google Maps Platform key with the Map Tiles API enabled. */
   readonly VITE_GOOGLE_MAPS_API_KEY?: string;
+  /** Legacy basemap tile key retained from local edits. Never commit key values. */
+  readonly VITE_MAP_API_KEY?: string;
 }
 
 interface ImportMeta {

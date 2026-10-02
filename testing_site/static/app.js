@@ -17,6 +17,15 @@ const VIEWS = ['control', 'map', 'signals', 'traffic', 'log', 'anomalies',
 /* ── routing ──────────────────────────────────────────────────── */
 function goto(view) {
   if (!VIEWS.includes(view)) view = 'control';
+  // Leaving for a screen other than the map abandons any in-progress "Pick on
+  // map" -- otherwise a stale S.pick lingers, and a later, unrelated click on
+  // any road anywhere on the map silently fills that old target field and
+  // jumps the operator back to a form they'd already left.
+  if (S.pick && view !== 'map') {
+    S.pick = null;
+    document.querySelectorAll('[data-pick]').forEach((b) => b.classList.remove('picking'));
+    markDirty('pick');
+  }
   S.view = view;
   document.querySelectorAll('.view').forEach((el) => {
     el.classList.toggle('active', el.dataset.view === view);
@@ -124,7 +133,13 @@ function wire() {
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
       if (!help.hidden) help.hidden = true;
-      else if (S.pick) { S.pick = null; markDirty('pick'); }
+      else if (S.pick) {
+        const { from } = S.pick;
+        S.pick = null;
+        markDirty('pick');
+        document.querySelectorAll('[data-pick]').forEach((b) => b.classList.remove('picking'));
+        if (from && from !== 'map') goto(from);
+      }
     }
   });
 
@@ -164,7 +179,10 @@ function wire() {
         anomaly: ['an-edge', 'anomaly road'], evsource: ['ev-src', 'unit start road'],
         evdest: ['ev-dst', 'unit destination road'] }[d.pick];
       if (!map) return;
-      S.pick = { target: map[0], label: map[1] };
+      // Remember where this pick was started from, so that clicking a road
+      // on the map returns the operator straight back to the form they were
+      // filling in instead of stranding them on the map.
+      S.pick = { target: map[0], label: map[1], from: S.view };
       markDirty('pick');
       document.querySelectorAll('[data-pick]').forEach((b) => b.classList.toggle('picking', b.dataset.pick === d.pick));
       goto('map');
@@ -251,8 +269,17 @@ function wire() {
     if (th) { V.setTrafficSort(th.dataset.sort); V.renderTraffic(); }
   });
 
-  document.getElementById('btn-create-anomaly').onclick = () => A.createAnomaly();
-  document.getElementById('btn-dispatch').onclick = () => A.dispatch();
+  // A successful inject/dispatch is something to *watch* -- jump straight to
+  // the map so the operator sees it land instead of having to remember to
+  // switch over themselves. A rejected command (createAnomaly/dispatch
+  // resolve null) leaves the operator on the form, where the hint/toast
+  // explaining the rejection is.
+  document.getElementById('btn-create-anomaly').onclick = async () => {
+    if (await A.createAnomaly()) goto('map');
+  };
+  document.getElementById('btn-dispatch').onclick = async () => {
+    if (await A.dispatch()) goto('map');
+  };
   document.getElementById('btn-refresh-incidents').onclick = A.refreshIncidents;
   document.getElementById('btn-compare').onclick = A.compareSelected;
   document.getElementById('btn-demo-abort').onclick = A.abortDemo;
@@ -330,11 +357,18 @@ function wire() {
     V.renderPickBanner();
     toast('Road set', `${e.detail.label}: ${e.detail.edgeId}`, 'ok', 3000);
     A.scheduleValidate();
+    if (e.detail.from && e.detail.from !== 'map') goto(e.detail.from);
   });
   window.addEventListener('itms-incident', () => A.refreshIncidents());
 
   document.addEventListener('click', (e) => {
-    if (e.target.id === 'pick-cancel') { S.pick = null; markDirty('pick'); }
+    if (e.target.id === 'pick-cancel') {
+      const { from } = S.pick || {};
+      S.pick = null;
+      markDirty('pick');
+      document.querySelectorAll('[data-pick]').forEach((b) => b.classList.remove('picking'));
+      if (from && from !== 'map') goto(from);
+    }
   });
 }
 
