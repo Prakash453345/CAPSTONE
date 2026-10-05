@@ -3,6 +3,7 @@ import {
   DEFAULT_MAP_LAYERS,
   DEFAULT_CENTER,
   DEFAULT_ZOOM,
+  parseCenter,
   useMapStore,
 } from "@/store/mapStore";
 
@@ -40,5 +41,17 @@ describe("mapStore", () => {
     expect(first.center).toEqual({ longitude: 80.7, latitude: 16.6 });
     focusOn({ longitude: 80.7, latitude: 16.6 }); // same point still re-fires
     expect(useMapStore.getState().focus.nonce).toBe(2);
+  });
+});
+
+describe("parseCenter (VITE_MAP_CENTER)", () => {
+  const fallback = { latitude: 16.5062, longitude: 80.6335 };
+  it("reads another city's centre", () => {
+    expect(parseCenter("52.4421, 13.5148", fallback)).toEqual({ latitude: 52.4421, longitude: 13.5148 });
+  });
+  it("falls back to the corridor when unset or malformed", () => {
+    expect(parseCenter(undefined, fallback)).toBe(fallback);
+    expect(parseCenter("berlin", fallback)).toBe(fallback);
+    expect(parseCenter("120,13", fallback)).toBe(fallback);
   });
 });

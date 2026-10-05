@@ -11,6 +11,14 @@ which lanes it sees and how well (`itms_geo.coverage`), and a lane locator
 restricted to those lanes; for every lane, the union of all cameras'
 coverage. Building it is the only expensive geometric step, and it happens
 once at start-up.
+
+**Two roles.** An `"approach"` camera (the default) looks out along one arm
+and feeds the queue estimate. A `"box"` camera overlooks the junction itself
+(`placement.plan_box_camera`): from where an approach camera stands, the
+junction interior is under its frame, so a vehicle waiting inside the box
+is out of its view. A box camera's tracks are used only to tell whether a
+lane is blocked at its head (`state/estimator.py`); it is left out of every
+lane's coverage, so adding one changes no queue estimate and no confidence.
 """
 
 from __future__ import annotations
@@ -43,12 +51,14 @@ class CameraSpec:
     fps: float = 5.0
     source: str = "simcam"
     notes: str = ""
+    role: str = "approach"  # or "box": see the module docstring
 
     def to_dict(self) -> dict:
         return {
             "camera_id": self.camera_id,
             "tls_id": self.tls_id,
             "approach_edge": self.approach_edge,
+            "role": self.role,
             "fps": self.fps,
             "source": self.source,
             "notes": self.notes,
@@ -65,6 +75,7 @@ class CameraSpec:
             fps=float(d.get("fps", 5.0)),
             source=d.get("source", "simcam"),
             notes=d.get("notes", ""),
+            role=d.get("role", "approach"),
         )
 
 
@@ -99,6 +110,9 @@ class CameraRig:
     locators: dict[str, LaneLocator] = field(default_factory=dict)
     coverage_by_lane: dict[str, LaneCoverage] = field(default_factory=dict)
     cameras_by_lane: dict[str, list[str]] = field(default_factory=dict)
+    # what each overview ("box") camera sees of the lanes around its junction:
+    # kept apart from `coverage_by_camera`, which feeds the queue estimate
+    box_coverage: dict[str, dict[str, LaneCoverage]] = field(default_factory=dict)
 
     @classmethod
     def build(
@@ -115,13 +129,18 @@ class CameraRig:
             cov = camera_coverage(
                 spec.camera, cand, max_resolution_m_per_px=max_resolution_m_per_px
             )
-            rig.coverage_by_camera[cid] = cov
+            if spec.role == "box":
+                rig.box_coverage[cid] = cov
+            else:
+                rig.coverage_by_camera[cid] = cov
             # The locator gets every candidate lane that is *visible at all*,
             # not only the covered ones: a vehicle at 150 m on a lane seen
             # at 0.9 m/px should still be placed on the right lane (and then
             # discounted), rather than on the nearest well-resolved lane.
             visible = camera_coverage(spec.camera, cand, max_resolution_m_per_px=float("inf"))
             rig.locators[cid] = LaneLocator([network.lanes[lid] for lid in visible])
+            if spec.role == "box":
+                continue  # not part of any lane's coverage (module docstring)
             for lid, c in cov.items():
                 per_lane.setdefault(lid, []).append(c)
                 rig.cameras_by_lane.setdefault(lid, []).append(cid)

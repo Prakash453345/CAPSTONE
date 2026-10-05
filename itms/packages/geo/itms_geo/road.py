@@ -31,8 +31,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
+from itms_domain.signal_program import green_phase_states
 
 _DEFAULT_LANE_WIDTH_M = 3.2  # SUMO's default when a lane has no width attribute
+BOX_PATH_LEAD_M = 10.0  # a box path starts this far before the stop line
 
 
 def _parse_shape(s: str) -> np.ndarray:
@@ -145,6 +147,22 @@ class Lane:
 
 
 @dataclass(frozen=True)
+class BoxPath:
+    """The path one signal link takes through its junction: a `Lane` whose
+    centreline is the last `BOX_PATH_LEAD_M` of the approach lane (all of
+    it, if shorter) followed by the link's junction-internal lanes, in
+    metres along the drawn line (`path.length` is its geometric length).
+    `stop_s` is the stop line's `s` on it."""
+
+    path: Lane
+    stop_s: float
+
+    @property
+    def length(self) -> float:
+        return self.path.length
+
+
+@dataclass(frozen=True)
 class Connection:
     from_lane: str
     to_lane: str
@@ -163,9 +181,12 @@ class RoadNetwork:
     net_offset: tuple[float, float] = (0.0, 0.0)
     proj_parameter: str = ""
     # tls -> the state strings of its green phases, in program order: index k
-    # is phase "P{k}" in extract_tier0_config.py's numbering (yellow-only
-    # clearance phases skipped), which is what SignalChanged.phase_id carries.
+    # is phase "P{k}" in extract_tier0_config.py's numbering
+    # (`itms_domain.signal_program`), which is what SignalChanged.phase_id carries.
     green_phases: dict[str, list[str]] = field(default_factory=dict)
+    # tls -> {"L{i}": the path link i takes through the junction box}.
+    # Empty for a network built without internal lanes.
+    box_paths: dict[str, dict[str, BoxPath]] = field(default_factory=dict)
 
     # ---- loading ----------------------------------------------------
 
@@ -175,8 +196,12 @@ class RoadNetwork:
         lanes: dict[str, Lane] = {}
         edges: dict[str, tuple[str, ...]] = {}
         edge_nodes: dict[str, tuple[str, str]] = {}
+        internal_shape: dict[str, np.ndarray] = {}
         for e in root.findall("edge"):
             if e.get("function") == "internal":
+                for ln in e.findall("lane"):
+                    if ln.get("shape"):
+                        internal_shape[ln.get("id", "")] = _parse_shape(ln.get("shape", ""))
                 continue
             eid = e.get("id", "")
             ids = []
@@ -200,14 +225,22 @@ class RoadNetwork:
             if j.get("type") != "internal"
         }
         connections = []
+        via_first: dict[tuple[str, str], tuple[str, str]] = {}  # (tls, link) -> (lane, via)
+        via_next: dict[str, str] = {}                           # internal lane -> next one
         for c in root.findall("connection"):
             fe, te = c.get("from"), c.get("to")
             fl, tl = c.get("fromLane"), c.get("toLane")
             if fe is None or te is None or fl is None or tl is None:
                 continue
             if fe.startswith(":") or te.startswith(":"):
-                continue  # internal-lane chains
+                # internal-lane chains: a link with a waiting position inside
+                # the box continues on a second internal lane
+                if fe.startswith(":") and c.get("via"):
+                    via_next[f"{fe}_{fl}"] = c.get("via", "")
+                continue
             li = c.get("linkIndex")
+            if c.get("tl") and li is not None and c.get("via"):
+                via_first[(c.get("tl", ""), f"L{li}")] = (f"{fe}_{fl}", c.get("via", ""))
             connections.append(
                 Connection(
                     from_lane=f"{fe}_{fl}",
@@ -219,10 +252,11 @@ class RoadNetwork:
             )
         green_phases: dict[str, list[str]] = {}
         for logic in root.findall("tlLogic"):
+            # the phases exactly as extract_tier0_config numbers them (change
+            # intervals, parts of a stage and repeats skipped); the last
+            # program for a light is the one SUMO runs, as there
             states = [ph.get("state", "") for ph in logic.findall("phase")]
-            green_phases[logic.get("id", "")] = [
-                st for st in states if any(c in "Gg" for c in st)
-            ]
+            green_phases[logic.get("id", "")] = [st for _, st in green_phase_states(states)]
         loc = root.find("location")
         offset = (0.0, 0.0)
         proj = ""
@@ -230,7 +264,8 @@ class RoadNetwork:
             ox, oy = (float(v) for v in loc.get("netOffset", "0,0").split(","))
             offset = (ox, oy)
             proj = loc.get("projParameter", "")
-        return cls(lanes, edges, edge_nodes, junctions, connections, offset, proj, green_phases)
+        return cls(lanes, edges, edge_nodes, junctions, connections, offset, proj, green_phases,
+                   _box_paths(lanes, internal_shape, via_first, via_next))
 
     # ---- links --------------------------------------------------------
 
@@ -266,24 +301,68 @@ class RoadNetwork:
 
     # ---- coordinates --------------------------------------------------
 
+    @property
+    def georeferenced(self) -> bool:
+        """False for a network with no projection (`projParameter="!"`, e.g.
+        one made by netgenerate). SUMO then reports "geo" coordinates as the
+        plain network coordinates less the offset, and so does this class."""
+        return self.proj_parameter not in ("", "!", None)
+
     def xy_to_lonlat(self, xy: np.ndarray) -> np.ndarray:
         """Net XY -> (lon, lat) using the net's own projection. Needs pyproj."""
+        pts = np.asarray(xy, dtype=np.float64).reshape(-1, 2)
+        if not self.georeferenced:
+            return pts - np.asarray(self.net_offset, dtype=np.float64)
         from pyproj import Proj  # noqa: PLC0415 -- optional dependency
 
         p = Proj(self.proj_parameter)
-        pts = np.asarray(xy, dtype=np.float64).reshape(-1, 2)
         lon, lat = p(pts[:, 0] - self.net_offset[0], pts[:, 1] - self.net_offset[1], inverse=True)
         return np.stack([np.asarray(lon), np.asarray(lat)], axis=1)
 
     def lonlat_to_xy(self, lonlat: np.ndarray) -> np.ndarray:
+        pts = np.asarray(lonlat, dtype=np.float64).reshape(-1, 2)
+        if not self.georeferenced:
+            return pts + np.asarray(self.net_offset, dtype=np.float64)
         from pyproj import Proj  # noqa: PLC0415
 
         p = Proj(self.proj_parameter)
-        pts = np.asarray(lonlat, dtype=np.float64).reshape(-1, 2)
         x, y = p(pts[:, 0], pts[:, 1])
         return np.stack(
             [np.asarray(x) + self.net_offset[0], np.asarray(y) + self.net_offset[1]], axis=1
         )
+
+
+def _box_paths(
+    lanes: Mapping[str, Lane],
+    internal_shape: Mapping[str, np.ndarray],
+    via_first: Mapping[tuple[str, str], tuple[str, str]],
+    via_next: Mapping[str, str],
+) -> dict[str, dict[str, BoxPath]]:
+    out: dict[str, dict[str, BoxPath]] = {}
+    for (tls, link), (from_lane, via) in via_first.items():
+        lane = lanes.get(from_lane)
+        if lane is None:
+            continue
+        lead = min(BOX_PATH_LEAD_M, lane.length)
+        pts = [lane.point_at(lane.length - lead)[0], lane.point_at(lane.length)[0]]
+        seen: set[str] = set()
+        while via and via not in seen and via in internal_shape:
+            seen.add(via)
+            pts.extend(internal_shape[via])
+            via = via_next.get(via, "")
+        shape = np.asarray(pts, dtype=np.float64)
+        keep = np.concatenate([[True], np.sqrt((np.diff(shape, axis=0) ** 2).sum(axis=1)) > 1e-6])
+        shape = shape[keep]
+        if len(shape) < 3:
+            continue
+        length = float(np.sqrt((np.diff(shape, axis=0) ** 2).sum(axis=1)).sum())
+        path = Lane(lane_id=f"{tls}:{link}", edge_id=lane.edge_id, index=lane.index,
+                    length=length, width=lane.width, speed=lane.speed, shape=shape)
+        # where the approach lane ends on the drawn line (SUMO's `length` of
+        # a lane can differ from its drawn length by up to a metre)
+        stop_s = float(path.project(lane.point_at(lane.length))[0][0])
+        out.setdefault(tls, {})[link] = BoxPath(path, stop_s)
+    return out
 
 
 @dataclass(frozen=True)

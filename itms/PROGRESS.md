@@ -5672,3 +5672,210 @@ New scripts:
 - `m8_gap_report.py`.
 
 `m8_closed_loop_gate.py` gains `--seed-list` and the `:nogap` arm modifier.
+
+## 2026-09-29/30 — The controller on any road network: nine networks, three real ones
+
+Baseline: `baselines/2026-09-30_m8_any_network/`.
+
+**Question:** does the system work on road networks it was never built or
+tuned on, or only on the Vijayawada corridor?
+
+**Any network is now a scenario.**
+- `scenarios/build_scenario.py` takes any SUMO network, generated (grid,
+  radial, irregular) or given (an OpenStreetMap export, gzipped too), and
+  writes the network, three demand levels, cameras and a `scenario.json`.
+- `ITMS_SCENARIO=<dir>` points every service and gate at it
+  (`itms_domain.scenario`). Unset, it is the corridor, exactly as before.
+- Demand levels are set by load: the busiest light's flow ratio `Y` (what
+  `webster.compute_timing` calls `degree_of_saturation`; lost time not
+  counted, so 1.0 is past capacity), 0.25 / 0.5 / 1.0, where the corridor's
+  own levels measure.
+- The web map takes `VITE_MAP_CENTER`; the builder writes it as `map_center`.
+- **Any city from OpenStreetMap in one command:** `scenarios/city_from_osm.py
+  --bbox W,S,E,N --name <city> --lefthand` downloads the box (normal
+  internet; not from the sandbox), converts it with the corridor's netconvert
+  options and 50 km/h cap, places lights and builds the scenario (the
+  download step has not been run from here). OSM marks one signal in the
+  whole Vijayawada extract, so a junction also gets a light where three or
+  more entering roads are tertiary or above.
+
+**No controller setting was changed.** What broke on other networks was how a
+network was read. Each fix leaves the corridor's configuration identical, and
+all 15 perfect-data corridor runs that could be compared with the earlier
+gate are bit-identical.
+- **A road cut into several edges** (turn bays, lane changes, OSM tags) was
+  measured on its last edge only: 4 m on a turn-bay grid, where the
+  controller did 2.2x Webster's delay at heavy demand (0/10 seeds better).
+  `itms_domain.lane_chains` measures the road back to the previous real
+  junction, in the simulator sampler, the camera estimator and both live
+  services. Heavy: +120.3 % → −40.5 % against Webster.
+- **Signal programs** list more than phases (`itms_domain.signal_program`):
+  change intervals that keep one movement green (these sent a radial
+  network's lights to the readback failsafe about 970 times a run: +176 % at
+  heavy, 24–112 interlock violations per level), German red+amber, pedestrian clearances inside a stage
+  (these doubled a Berlin light to ten phases), and repeats. The camera
+  service now numbers phases with the same function.
+- **Link numbering:** a light over several junctions, or one numbering its
+  links its own way (Ingolstadt, edited in netedit), takes its conflicts from
+  its own program. Before this, one Ingolstadt light was refused by the
+  interlocks on every step of the one run made.
+- Networks without a map projection, and without hospital and police files,
+  run.
+
+**Perfect data against Webster, 10 held-out seeds, light / medium / heavy**
+(mean person-delay, paired):
+
+| network | lights | light | medium | heavy |
+|---|---:|---|---|---|
+| grid3_lh (3x3 grid, 2 lanes) | 9 | −41.7 % | −26.1 % | −10.6 % |
+| arterial_lh (6 lights in a row, 4 phases) | 6 | −52.3 % | −41.7 % | −53.1 % |
+| spider_lh (radial) | 15 | −50.3 % | −44.6 % | −56.8 % |
+| random_lh (irregular streets) | 28 | −41.4 % | −40.3 % | −28.7 % |
+| grid4_rh_turns (right-hand, turn bays) | 16 | −31.8 % | −21.2 % | −40.5 % |
+| **berlin_adlershof** (SUMO's OSM Berlin) | 15 | −38.1 % | −35.1 % | −33.1 % |
+| **ingolstadt** (SUMO's Ingolstadt) | 2 | −28.0 % | −35.1 % | −55.2 % n.s. |
+| **vijayawada_district** (raw OSM street grid, `city_from_osm.py`) | 37 | −33.4 % | −39.0 % | −15.1 % n.s. (8/10) |
+| narrow_lh (3x3 grid, one lane) | 9 | −41.9 % | +13.5 % n.s. | every run capped, both |
+
+- All significant unless marked n.s. Every significant result is better on
+  10/10 seeds except Berlin heavy (9/10).
+- **Zero interlock violations in all 290 perfect-data runs** (these nine
+  networks and the corridor).
+- **The three real networks passed every perfect-data target written before
+  their held-out runs** (`TARGETS.md` in the baseline). Ingolstadt heavy is
+  n.s. because Webster jammed on three seeds (392–427k against 97–107k); the
+  controller stayed at 79–100k on all ten. Without those three it is
+  −11.6 % (significant), so its −55 % is mostly Webster's jams. Heavy on
+  Berlin is badly jammed for both (Webster reached the run-length cap on 3
+  seeds, the controller on none).
+- The first radial and random runs had their demand set while the old
+  phase rule still counted change intervals, so their heavy level was
+  saturation 0.77 and 0.63. Both were rebuilt and rerun (the table); the
+  first runs point the same way.
+
+**Where it still fails: single-lane roads with turning traffic** (`narrow_lh`).
+At heavy demand every run of both controllers reaches the run-length cap. At
+medium the controller reaches it on 4 of 10 seeds, Webster on 1. Webster's
+nominal saturation flow overstates what a single lane with turns carries, so
+"medium" there is already past capacity (Webster's delay rises 32-fold from
+light to medium, against 2-fold on the two-lane grid). Not tuned.
+
+**Not handled:** a signal index that controls several lanes (3 of
+Ingolstadt's 22; no other network here): the controller measures one of the
+lanes.
+
+**Cameras on other networks** (EVAL 1–5, against perfect data / Webster):
+grid3_lh medium +4.6 % n.s. / −25.1 %, heavy −5.9 % / −15.2 %; arterial_lh
+medium +7.8 % n.s. / −36.4 %, heavy +3.8 % n.s. / −52.6 %. Zero interlock
+violations; confidence fed 0.88–0.93, never below 0.5. About what the
+cameras cost on the corridor at medium (+4.7 %).
+
+**Cameras on Berlin** (62 cameras, EVAL 1–5, light and medium): passed the
+three targets set before the runs. Against Webster −33.0 % and −33.7 %
+(5/5 seeds each); against perfect data +8.1 % (significant) and +0.8 %
+(n.s.); zero interlock violations.
+- **First attempt stopped** after two light runs at +25.9 % and +38.7 %
+  against perfect data. The stop-bar cross-check was calling working cameras
+  blind on about 22 % of the controller's junction-ticks.
+- **Two causes in very short approach lanes**, fixed on TRAIN seeds 101–102
+  before the rerun:
+  - the gates' emulated stop-bar loop read an empty lane shorter than its
+    20 m zone as occupied;
+  - a car over the loop of an approach lane shorter than 30 m is tracked on
+    the lane before it, so "vehicles seen" now also counts the feeding lanes
+    up to 30 m from the stop line.
+- Neither fix changes a network whose approach lanes are all 30 m or longer
+  (the corridor, grid3_lh, arterial_lh).
+- **Still costing:** the ladder drops to fixed time on 3.4–6.3 % of Berlin's
+  junction-ticks (none on the grid, at most 0.9 % on the arterial). One
+  source found: a light whose approach no vehicle in the demand uses. After
+  600 s without a vehicle its camera counts as never having worked, its
+  health is capped at 0.3, and the junction goes to fixed time.
+  In the first 900 s of a TRAIN run every fallback came from it; over whole
+  runs other low-confidence links add more (most at light), not traced. On
+  an empty road the cap is a false alarm. The loops could confirm the road
+  is empty; that cross-check is not built.
+
+**Live services on another network:** the end-to-end check (SUMO,
+controller and camera service over Redis) on the 3x3 grid, with the machine
+otherwise idle: 0.0 % of junction-ticks with a link in hard failure over
+300 s, no interlock violation. The earlier 70–73 % was measured while two gate
+workers shared the machine (the simulation managed 150 steps in about nine
+minutes).
+
+**Next:**
+1. Single-lane roads with turning traffic: the level definition (measured
+   capacity) and the controller past capacity.
+2. A queue past a give-way junction just before a light is not measured
+   (45 of the district's 174 approach lanes are under 30 m for that reason).
+3. A real city of the user's choosing: `city_from_osm.py --bbox` on a normal
+   machine, and the city's own signal list where there is one.
+4. A camera on a road with no traffic is distrusted after 600 s (Berlin
+   above): check it against the stop-bar loops before calling it broken, and
+   test that on runs other than Berlin's held-out ones.
+
+Tests: `packages/domain/tests/test_lane_chains.py` (3),
+`test_signal_program.py` (5), `services/sim-service/tests/control/test_any_network.py`
+(7), chain cases in `test_queue_state.py` (3), and in
+`test_ground_and_state.py` one chain case and two short-lane cases (the
+emulated loop, the feeding lanes). Full suite: 818 passed, 6 skipped. ruff
+clean. Web app: the map-store tests pass (5).
+
+New scripts: `scenarios/build_scenario.py`, `scenarios/city_from_osm.py`,
+`scripts/any_network_report.py`.
+
+## 2026-10-03/05 — A blocking-aware controller for single-lane approaches: helps where junctions lock, four of nine targets failed
+
+Not committed. Baseline: `baselines/2026-10-03_m8_blocking_aware/` (README,
+TARGETS with a dated amendment, `summarise.py`).
+
+**Why.** On a one-lane approach a vehicle waiting to turn across oncoming
+traffic blocks the lane; CC-A-CAMP answers the growing queue with more green
+that nobody can use. On the single-lane 3x3 grid that locks the network at a
+flow ratio of 0.45.
+
+**What.** `strategies/hol.py` builds, for a single-lane approach, a variant
+of each ring phase with the conflicting *protected* streams of the other
+approaches switched off (an early cut-off). `strategies/hol_camp.py`
+(`HolAwareCamp`) uses it when a blocked head has lasted one change interval
+and the others can still be served within their maximum wait, for at most
+twice the base phase's maximum green; in with the continuing greens kept
+(`TraCICabinet.can_carry`), out by an ordinary yellow and all-red. Blocked
+lanes: `JunctionContext.blocked_by`, from the simulator
+(`QueueStateSampler._blocked_by`) or from one overview camera per junction
+(`CameraSpec.role == "box"`, `LinkStateEstimator._find_blocked`). The kernel
+refuses a malformed variant (`Tier0Config.alternate_problems`, interlock
+`PLAN_CONTINUITY`). Where no variant can be built the controller is
+CC-A-CAMP to the last digit.
+
+**Held-out result** (EVAL seeds 1-10, against CC-A-CAMP): 0.25 +0.4 %
+[-7.6, +8.4]; 0.30 -5.1 % [-10.2, +0.0]; 0.35 +1.4 % [-10.8, +13.5];
+0.40 -13.1 % [-19.3, -6.8]; 0.45 -46.5 % [-61.4, -31.6] with 53 teleports
+against 360; 0.50 -17.8 % [-36.1, +0.5]. Corridor, Berlin, district: identical
+or within noise. Six networks without single-lane approaches: identical. No
+interlock violation in 186 runs. Cameras in the loop at 0.45: -43.3 %
+[-80.7, -5.8].
+
+**Failed targets.** No gain at 0.35 (target 2); 6 of 10 runs at 0.45 without
+a teleport, 9 wanted (3); not significantly better than Webster at 0.45 (5);
+cameras at 0.45, 3 of 5 runs without a teleport, 4 wanted (8). Target 9
+(cameras within 15 % of perfect data) was missed as worded at 0.45, on the
+good side: the camera mean was 18.5 % lower, which is seed noise.
+
+**What went wrong on the way.** The first version passed the simulator and
+its held-out run and was unsafe: four independent code reviews found a yellow
+trap, a protected green facing a kept permissive movement, a late release on
+exit, and wait overruns at rings of three or more phases. None of these shows
+in SUMO. Six revisions; the safety fixes cost the gain at 0.35 (run 1:
+-13.1 %). The held-out seeds were therefore used twice, and the README says so.
+
+**Limits.** Needs a separate turn face per approach that can stay permissive
+while the through face is red; the gain is an upper bound (simulated drivers
+take every gap); one network family carries the result; a few seconds past the
+maximum wait on the jammed district (10 junction-ticks, worst 4.6 s, against
+2 for CC-A-CAMP), not yet traced; `hol:p0` (no persistence wait) did better
+than the default on held-out seeds and is a lead, not a result.
+
+Tests: `tests/control/strategies/test_hol.py` (43), runner, interlock,
+queue-state and vision blocked-lane cases. Full suite: 876 passed, 6 skipped.
+ruff clean.

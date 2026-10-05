@@ -28,13 +28,14 @@ if str(_SCEN) not in sys.path:
     sys.path.insert(0, str(_SCEN))
 
 from extract_tier0_config import load_configs  # noqa: E402
+from itms_domain.scenario import current as _current_scenario  # noqa: E402
 from link_lanes import link_to_lane_map, link_to_receiving_lane_map  # noqa: E402
 from measure_flows import compute_link_flows  # noqa: E402
 
-NET_PATH = _SCEN / "vijayawada_corridor.net.xml"
-DEMAND_DIR = _ROOT / "scenarios" / "demand" / "vijayawada"
-
-_DEMAND_SUFFIX = {"light": "_light", "medium": "", "heavy": "_heavy"}
+# which network: ITMS_SCENARIO (any network built by scenarios/build_scenario.py),
+# else the Vijayawada corridor -- itms_domain.scenario
+_SCENARIO = _current_scenario()
+NET_PATH = _SCENARIO.net
 
 
 @dataclass(frozen=True)
@@ -51,13 +52,7 @@ class CorridorSetup:
 
 
 def demand_paths(demand: str) -> tuple[Path, Path]:
-    if demand not in _DEMAND_SUFFIX:
-        raise ValueError(f"demand must be one of {sorted(_DEMAND_SUFFIX)}, got {demand!r}")
-    suffix = _DEMAND_SUFFIX[demand]
-    return (
-        DEMAND_DIR / f"vijayawada_corridor{suffix}.sumocfg",
-        DEMAND_DIR / f"vijayawada_corridor{suffix}.rou.xml",
-    )
+    return _SCENARIO.level(demand)
 
 
 def load_corridor(demand: str = "medium") -> CorridorSetup:

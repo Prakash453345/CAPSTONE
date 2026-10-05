@@ -24,6 +24,8 @@ or all-red between two conflicting phases.
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from itms_domain import JunctionContext, Phase, PlanStep, SignalPlan, Tier0Config
 from sim_service.control.runner import (
     _advance_transition,
@@ -219,3 +221,62 @@ def test_fault_recovery_keeps_the_outgoing_phase_as_current_until_the_green_land
     assert js.ctx.current_phase_id == "P0"
     _advance_transition(js, 1.0)  # still in yellow
     assert js.ctx.current_phase_id == "P0"
+
+
+# ---- a ring phase and its alternate (one approach served alone) ---------------
+
+
+def _family_junction(current: str, elapsed: float) -> _JunctionState:
+    """P0 serves L0 and L2; its alternate P0@0 serves L0 alone
+    (`Tier0Config.alternates`, `strategies/hol.py`)."""
+    js = _junction(current, elapsed)
+    cfg = js.cfg
+    phases = {**cfg.phases, "P0": Phase("P0", frozenset({"L0", "L2"})),
+              "P0@0": Phase("P0@0", frozenset({"L0"}))}
+    js.cfg = replace(
+        cfg, phases=phases, alternates={"P0@0": "P0"},
+        conflict_matrix={"L0": frozenset({"L1"}), "L1": frozenset({"L0", "L2"}),
+                         "L2": frozenset({"L1"})},
+        min_green_s={**cfg.min_green_s, "P0@0": 10.0},
+        max_green_s={**cfg.max_green_s, "P0@0": 30.0})
+    assert js.cfg.validate() == []
+    return js
+
+
+def test_the_change_into_an_alternate_keeps_the_greens_that_continue():
+    js = _family_junction("P0", 12.0)
+    js.cabinet.carriable_changes = frozenset({("P0", "P0@0")})
+    plan = SignalPlan("J", (PlanStep("P0", 1.0, yellow_s=YELLOW, all_red_s=ALL_RED),
+                            PlanStep("P0@0", 10.0)))
+    _apply_decision(js, "J", plan, step_length=1.0)
+    ticks = _run_transition_to_completion(js)
+    # the same change interval as any other, shown with the cabinet's
+    # carried states instead of the whole junction's yellow and all-red
+    assert ticks == int(YELLOW + ALL_RED)
+    assert js.cabinet.raw_states == ["yellow:P0>P0@0", "red:P0>P0@0", "green:P0@0"]
+    assert js.ctx.current_phase_id == "P0@0" and js.ctx.current_phase_elapsed_s == 0.0
+
+
+def test_only_a_change_the_cabinet_confirms_stops_protected_links_alone_is_carried():
+    """Stopping a yielding turn while the stream it yields to runs on is the
+    yellow trap; starting a stream against traffic already flowing is a late
+    release. The cabinet reads both off the signal states (`can_carry`);
+    without its word the change is the ordinary one."""
+    js = _family_junction("P0", 12.0)
+    plan = SignalPlan("J", (PlanStep("P0", 1.0, yellow_s=YELLOW, all_red_s=ALL_RED),
+                            PlanStep("P0@0", 10.0)))
+    _apply_decision(js, "J", plan, step_length=1.0)
+    assert _run_transition_to_completion(js) == int(YELLOW + ALL_RED)
+    assert js.cabinet.raw_states == ["yellow:P0", "all_red", "green:P0@0"]
+
+
+def test_the_way_out_of_an_alternate_is_an_ordinary_change():
+    for target in ("P0", "P1"):
+        js = _family_junction("P0@0", 12.0)
+        # even a cabinet that would carry it: the runner only asks on the way in
+        js.cabinet.carriable_changes = frozenset({("P0@0", target), ("P0", "P0@0")})
+        plan = SignalPlan("J", (PlanStep("P0@0", 1.0, yellow_s=YELLOW, all_red_s=ALL_RED),
+                                PlanStep(target, 10.0)))
+        _apply_decision(js, "J", plan, step_length=1.0)
+        _run_transition_to_completion(js)
+        assert js.cabinet.raw_states == ["yellow:P0@0", "all_red", f"green:{target}"]

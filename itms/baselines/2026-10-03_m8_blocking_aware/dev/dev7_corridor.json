@@ -1,0 +1,659 @@
+{
+ "meta": {
+  "fps": 5.0,
+  "seeds": [
+   101,
+   102,
+   103
+  ],
+  "levels": [
+   "heavy",
+   "medium"
+  ],
+  "arms": [
+   "truth",
+   "hol"
+  ],
+  "wall_min": 2.3
+ },
+ "summary": {
+  "heavy": {
+   "arms": {
+    "truth": {
+     "n": 3,
+     "person_delay_s": 505569.2816666665,
+     "stops_per_vehicle": 3.0482638888888887,
+     "p95_wait_s": 344.3333333333333,
+     "person_throughput_per_hour": 5746.5919209778485,
+     "interlock_violations": 0,
+     "fallback_fixed_time": 0,
+     "ticks": 42287,
+     "teleports": 0,
+     "runs_with_teleports": 0,
+     "runs_unfinished_at_cap": 0
+    },
+    "hol": {
+     "n": 3,
+     "person_delay_s": 554914.5213333337,
+     "stops_per_vehicle": 3.042361111111111,
+     "p95_wait_s": 371.0,
+     "person_throughput_per_hour": 5890.087932431575,
+     "interlock_violations": 0,
+     "fallback_fixed_time": 0,
+     "ticks": 41395,
+     "teleports": 0,
+     "runs_with_teleports": 0,
+     "runs_unfinished_at_cap": 0,
+     "variant_changes_per_run": 3.3333333333333335,
+     "blocked_junction_ticks_per_run": 41.0
+    }
+   },
+   "paired": {
+    "truth_vs_hol:person_delay_s": {
+     "n": 3,
+     "mean": -49345.23966666722,
+     "pct": -8.892403743211082,
+     "ci95": [
+      -175499.6550808279,
+      76809.17574749346
+     ],
+     "significant": false,
+     "n_better": 3
+    },
+    "truth_vs_hol:stops_per_vehicle": {
+     "n": 3,
+     "mean": 0.005902777777777886,
+     "pct": 0.1940196302214142,
+     "ci95": [
+      -0.7141823347533991,
+      0.7259878903089549
+     ],
+     "significant": false,
+     "n_better": 1
+    },
+    "hol_vs_truth:person_delay_s": {
+     "n": 3,
+     "mean": 49345.23966666722,
+     "pct": 9.760331858770185,
+     "ci95": [
+      -76809.17574749346,
+      175499.6550808279
+     ],
+     "significant": false,
+     "n_better": 0
+    },
+    "hol_vs_truth:stops_per_vehicle": {
+     "n": 3,
+     "mean": -0.005902777777777886,
+     "pct": -0.19364392299806713,
+     "ci95": [
+      -0.7259878903089549,
+      0.7141823347533991
+     ],
+     "significant": false,
+     "n_better": 2
+    }
+   }
+  },
+  "medium": {
+   "arms": {
+    "truth": {
+     "n": 3,
+     "person_delay_s": 72847.72833333332,
+     "stops_per_vehicle": 1.6814345991561181,
+     "p95_wait_s": 63.0,
+     "person_throughput_per_hour": 3480.548387666542,
+     "interlock_violations": 0,
+     "fallback_fixed_time": 0,
+     "ticks": 33233,
+     "teleports": 0,
+     "runs_with_teleports": 0,
+     "runs_unfinished_at_cap": 0
+    },
+    "hol": {
+     "n": 3,
+     "person_delay_s": 72847.72833333332,
+     "stops_per_vehicle": 1.6814345991561181,
+     "p95_wait_s": 63.0,
+     "person_throughput_per_hour": 3480.548387666542,
+     "interlock_violations": 0,
+     "fallback_fixed_time": 0,
+     "ticks": 33233,
+     "teleports": 0,
+     "runs_with_teleports": 0,
+     "runs_unfinished_at_cap": 0,
+     "variant_changes_per_run": 0.0,
+     "blocked_junction_ticks_per_run": 0.0
+    }
+   },
+   "paired": {
+    "truth_vs_hol:person_delay_s": {
+     "n": 3,
+     "mean": 0.0,
+     "pct": 0.0,
+     "ci95": [
+      0.0,
+      0.0
+     ],
+     "significant": false,
+     "n_better": 0
+    },
+    "truth_vs_hol:stops_per_vehicle": {
+     "n": 3,
+     "mean": 0.0,
+     "pct": 0.0,
+     "ci95": [
+      0.0,
+      0.0
+     ],
+     "significant": false,
+     "n_better": 0
+    },
+    "hol_vs_truth:person_delay_s": {
+     "n": 3,
+     "mean": 0.0,
+     "pct": 0.0,
+     "ci95": [
+      0.0,
+      0.0
+     ],
+     "significant": false,
+     "n_better": 0
+    },
+    "hol_vs_truth:stops_per_vehicle": {
+     "n": 3,
+     "mean": 0.0,
+     "pct": 0.0,
+     "ci95": [
+      0.0,
+      0.0
+     ],
+     "significant": false,
+     "n_better": 0
+    }
+   }
+  }
+ },
+ "records": [
+  {
+   "scenario": "vijayawada",
+   "lane_chains": true,
+   "controller": "ccacamp",
+   "demand_level": "heavy",
+   "seed": 101,
+   "steps": 2794,
+   "interlock_violations": 0,
+   "teleports": 0,
+   "unfinished_at_cap": 0,
+   "person_delay_s": 638597.4139999996,
+   "person_throughput_per_hour": 5584.678522571852,
+   "stops_per_vehicle": 3.5458333333333334,
+   "wait_time_s": {
+    "mean_s": 115.171875,
+    "p95_s": 448.0,
+    "max_s": 699.0
+   },
+   "wall_s": 26.9,
+   "decision_stats": {
+    "ticks": 14416,
+    "switch_cycle_supervisor": 2,
+    "switch_gap_out": 183,
+    "cycles_completed": 4160,
+    "extend": 11095,
+    "extend_allocation_protected": 2464,
+    "switch_pressure": 499,
+    "switch_max_green": 167,
+    "switch_starvation": 6,
+    "blended": 0,
+    "blended_no_history": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "truth"
+  },
+  {
+   "scenario": "vijayawada",
+   "lane_chains": true,
+   "controller": "ccacamp",
+   "demand_level": "heavy",
+   "seed": 102,
+   "steps": 2776,
+   "interlock_violations": 0,
+   "teleports": 0,
+   "unfinished_at_cap": 0,
+   "person_delay_s": 458082.0309999998,
+   "person_throughput_per_hour": 5630.896551724174,
+   "stops_per_vehicle": 3.0635416666666666,
+   "wait_time_s": {
+    "mean_s": 92.54583333333333,
+    "p95_s": 340.0,
+    "max_s": 581.0
+   },
+   "wall_s": 26.3,
+   "decision_stats": {
+    "ticks": 14275,
+    "switch_cycle_supervisor": 3,
+    "switch_gap_out": 175,
+    "cycles_completed": 4126,
+    "extend": 11126,
+    "extend_allocation_protected": 2289,
+    "switch_pressure": 526,
+    "switch_max_green": 153,
+    "switch_starvation": 3,
+    "blended": 0,
+    "blended_no_history": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "truth"
+  },
+  {
+   "scenario": "vijayawada",
+   "lane_chains": true,
+   "controller": "ccacamp",
+   "demand_level": "heavy",
+   "seed": 103,
+   "steps": 2634,
+   "interlock_violations": 0,
+   "teleports": 0,
+   "unfinished_at_cap": 0,
+   "person_delay_s": 420028.4000000001,
+   "person_throughput_per_hour": 6024.200688637522,
+   "stops_per_vehicle": 2.535416666666667,
+   "wait_time_s": {
+    "mean_s": 76.709375,
+    "p95_s": 245.0,
+    "max_s": 449.0
+   },
+   "wall_s": 25.5,
+   "decision_stats": {
+    "ticks": 13596,
+    "switch_cycle_supervisor": 4,
+    "switch_gap_out": 159,
+    "cycles_completed": 3550,
+    "extend": 10301,
+    "extend_allocation_protected": 2488,
+    "switch_pressure": 491,
+    "switch_max_green": 152,
+    "switch_starvation": 1,
+    "blended": 0,
+    "blended_no_history": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "truth"
+  },
+  {
+   "scenario": "vijayawada",
+   "lane_chains": true,
+   "controller": "hol",
+   "demand_level": "heavy",
+   "seed": 101,
+   "steps": 2712,
+   "interlock_violations": 0,
+   "teleports": 0,
+   "unfinished_at_cap": 0,
+   "person_delay_s": 654368.7590000003,
+   "person_throughput_per_hour": 5801.610611084829,
+   "stops_per_vehicle": 3.3041666666666667,
+   "wait_time_s": {
+    "mean_s": 119.06041666666667,
+    "p95_s": 455.0,
+    "max_s": 795.0
+   },
+   "wall_s": 29.7,
+   "decision_stats": {
+    "ticks": 13950,
+    "switch_cycle_supervisor": 2,
+    "switch_gap_out": 175,
+    "cycles_completed": 3678,
+    "extend": 10685,
+    "extend_allocation_protected": 2430,
+    "switch_pressure": 502,
+    "switch_max_green": 150,
+    "switch_starvation": 6,
+    "blended": 0,
+    "blended_no_history": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0,
+    "hol_blocked_ticks": 33,
+    "hol_variant_ticks": 29,
+    "hol_variant_switch": 3,
+    "hol_variant_exit": 1,
+    "hol_family_owed": 0,
+    "hol_family_starving": 0
+   },
+   "arm": "hol"
+  },
+  {
+   "scenario": "vijayawada",
+   "lane_chains": true,
+   "controller": "hol",
+   "demand_level": "heavy",
+   "seed": 102,
+   "steps": 2716,
+   "interlock_violations": 0,
+   "teleports": 0,
+   "unfinished_at_cap": 0,
+   "person_delay_s": 565845.8430000007,
+   "person_throughput_per_hour": 5790.638297872382,
+   "stops_per_vehicle": 2.9697916666666666,
+   "wait_time_s": {
+    "mean_s": 109.84166666666667,
+    "p95_s": 339.0,
+    "max_s": 651.0
+   },
+   "wall_s": 28.8,
+   "decision_stats": {
+    "ticks": 14028,
+    "switch_cycle_supervisor": 6,
+    "switch_gap_out": 171,
+    "cycles_completed": 3748,
+    "extend": 10625,
+    "extend_allocation_protected": 2578,
+    "switch_pressure": 487,
+    "switch_max_green": 157,
+    "switch_starvation": 4,
+    "blended": 0,
+    "blended_no_history": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0,
+    "hol_blocked_ticks": 66,
+    "hol_variant_ticks": 45,
+    "hol_variant_switch": 5,
+    "hol_variant_exit": 1,
+    "hol_family_owed": 0,
+    "hol_family_starving": 0
+   },
+   "arm": "hol"
+  },
+  {
+   "scenario": "vijayawada",
+   "lane_chains": true,
+   "controller": "hol",
+   "demand_level": "heavy",
+   "seed": 103,
+   "steps": 2616,
+   "interlock_violations": 0,
+   "teleports": 0,
+   "unfinished_at_cap": 0,
+   "person_delay_s": 444528.9620000002,
+   "person_throughput_per_hour": 6078.014888337512,
+   "stops_per_vehicle": 2.853125,
+   "wait_time_s": {
+    "mean_s": 85.471875,
+    "p95_s": 319.0,
+    "max_s": 493.0
+   },
+   "wall_s": 26.7,
+   "decision_stats": {
+    "ticks": 13417,
+    "switch_cycle_supervisor": 3,
+    "switch_gap_out": 171,
+    "cycles_completed": 3385,
+    "extend": 10134,
+    "extend_allocation_protected": 2469,
+    "switch_pressure": 498,
+    "switch_max_green": 140,
+    "switch_starvation": 2,
+    "blended": 0,
+    "blended_no_history": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0,
+    "hol_blocked_ticks": 24,
+    "hol_variant_ticks": 16,
+    "hol_variant_switch": 2,
+    "hol_variant_exit": 1,
+    "hol_family_owed": 0,
+    "hol_family_starving": 0
+   },
+   "arm": "hol"
+  },
+  {
+   "scenario": "vijayawada",
+   "lane_chains": true,
+   "controller": "ccacamp",
+   "demand_level": "medium",
+   "seed": 101,
+   "steps": 2282,
+   "interlock_violations": 0,
+   "teleports": 0,
+   "unfinished_at_cap": 0,
+   "person_delay_s": 70575.97899999998,
+   "person_throughput_per_hour": 3520.1189767995133,
+   "stops_per_vehicle": 1.6223628691983123,
+   "wait_time_s": {
+    "mean_s": 19.706751054852322,
+    "p95_s": 54.0,
+    "max_s": 107.0
+   },
+   "wall_s": 15.0,
+   "decision_stats": {
+    "ticks": 10925,
+    "switch_cycle_supervisor": 0,
+    "switch_gap_out": 266,
+    "cycles_completed": 3372,
+    "extend": 10082,
+    "extend_allocation_protected": 0,
+    "switch_pressure": 377,
+    "switch_max_green": 200,
+    "switch_starvation": 0,
+    "blended": 0,
+    "blended_no_history": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "truth"
+  },
+  {
+   "scenario": "vijayawada",
+   "lane_chains": true,
+   "controller": "ccacamp",
+   "demand_level": "medium",
+   "seed": 102,
+   "steps": 2294,
+   "interlock_violations": 0,
+   "teleports": 0,
+   "unfinished_at_cap": 0,
+   "person_delay_s": 67034.28699999998,
+   "person_throughput_per_hour": 3495.168340224443,
+   "stops_per_vehicle": 1.6962025316455696,
+   "wait_time_s": {
+    "mean_s": 19.69409282700422,
+    "p95_s": 54.0,
+    "max_s": 175.0
+   },
+   "wall_s": 15.3,
+   "decision_stats": {
+    "ticks": 11045,
+    "switch_cycle_supervisor": 0,
+    "switch_gap_out": 274,
+    "cycles_completed": 3565,
+    "extend": 10209,
+    "extend_allocation_protected": 0,
+    "switch_pressure": 352,
+    "switch_max_green": 210,
+    "switch_starvation": 0,
+    "blended": 0,
+    "blended_no_history": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "truth"
+  },
+  {
+   "scenario": "vijayawada",
+   "lane_chains": true,
+   "controller": "ccacamp",
+   "demand_level": "medium",
+   "seed": 103,
+   "steps": 2328,
+   "interlock_violations": 0,
+   "teleports": 0,
+   "unfinished_at_cap": 0,
+   "person_delay_s": 80932.91899999997,
+   "person_throughput_per_hour": 3426.35784597567,
+   "stops_per_vehicle": 1.7257383966244726,
+   "wait_time_s": {
+    "mean_s": 23.508438818565402,
+    "p95_s": 81.0,
+    "max_s": 137.0
+   },
+   "wall_s": 15.6,
+   "decision_stats": {
+    "ticks": 11263,
+    "switch_cycle_supervisor": 5,
+    "switch_gap_out": 264,
+    "cycles_completed": 3745,
+    "extend": 10317,
+    "extend_allocation_protected": 107,
+    "switch_pressure": 342,
+    "switch_max_green": 227,
+    "switch_starvation": 1,
+    "blended": 0,
+    "blended_no_history": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "truth"
+  },
+  {
+   "scenario": "vijayawada",
+   "lane_chains": true,
+   "controller": "hol",
+   "demand_level": "medium",
+   "seed": 101,
+   "steps": 2282,
+   "interlock_violations": 0,
+   "teleports": 0,
+   "unfinished_at_cap": 0,
+   "person_delay_s": 70575.97899999998,
+   "person_throughput_per_hour": 3520.1189767995133,
+   "stops_per_vehicle": 1.6223628691983123,
+   "wait_time_s": {
+    "mean_s": 19.706751054852322,
+    "p95_s": 54.0,
+    "max_s": 107.0
+   },
+   "wall_s": 15.7,
+   "decision_stats": {
+    "ticks": 10925,
+    "switch_cycle_supervisor": 0,
+    "switch_gap_out": 266,
+    "cycles_completed": 3372,
+    "extend": 10082,
+    "extend_allocation_protected": 0,
+    "switch_pressure": 377,
+    "switch_max_green": 200,
+    "switch_starvation": 0,
+    "blended": 0,
+    "blended_no_history": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0,
+    "hol_blocked_ticks": 0,
+    "hol_variant_ticks": 0,
+    "hol_variant_switch": 0,
+    "hol_variant_exit": 0,
+    "hol_family_owed": 0,
+    "hol_family_starving": 0
+   },
+   "arm": "hol"
+  },
+  {
+   "scenario": "vijayawada",
+   "lane_chains": true,
+   "controller": "hol",
+   "demand_level": "medium",
+   "seed": 102,
+   "steps": 2294,
+   "interlock_violations": 0,
+   "teleports": 0,
+   "unfinished_at_cap": 0,
+   "person_delay_s": 67034.28699999998,
+   "person_throughput_per_hour": 3495.168340224443,
+   "stops_per_vehicle": 1.6962025316455696,
+   "wait_time_s": {
+    "mean_s": 19.69409282700422,
+    "p95_s": 54.0,
+    "max_s": 175.0
+   },
+   "wall_s": 15.1,
+   "decision_stats": {
+    "ticks": 11045,
+    "switch_cycle_supervisor": 0,
+    "switch_gap_out": 274,
+    "cycles_completed": 3565,
+    "extend": 10209,
+    "extend_allocation_protected": 0,
+    "switch_pressure": 352,
+    "switch_max_green": 210,
+    "switch_starvation": 0,
+    "blended": 0,
+    "blended_no_history": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0,
+    "hol_blocked_ticks": 0,
+    "hol_variant_ticks": 0,
+    "hol_variant_switch": 0,
+    "hol_variant_exit": 0,
+    "hol_family_owed": 0,
+    "hol_family_starving": 0
+   },
+   "arm": "hol"
+  },
+  {
+   "scenario": "vijayawada",
+   "lane_chains": true,
+   "controller": "hol",
+   "demand_level": "medium",
+   "seed": 103,
+   "steps": 2328,
+   "interlock_violations": 0,
+   "teleports": 0,
+   "unfinished_at_cap": 0,
+   "person_delay_s": 80932.91899999997,
+   "person_throughput_per_hour": 3426.35784597567,
+   "stops_per_vehicle": 1.7257383966244726,
+   "wait_time_s": {
+    "mean_s": 23.508438818565402,
+    "p95_s": 81.0,
+    "max_s": 137.0
+   },
+   "wall_s": 19.5,
+   "decision_stats": {
+    "ticks": 11263,
+    "switch_cycle_supervisor": 5,
+    "switch_gap_out": 264,
+    "cycles_completed": 3745,
+    "extend": 10317,
+    "extend_allocation_protected": 107,
+    "switch_pressure": 342,
+    "switch_max_green": 227,
+    "switch_starvation": 1,
+    "blended": 0,
+    "blended_no_history": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0,
+    "hol_blocked_ticks": 0,
+    "hol_variant_ticks": 0,
+    "hol_variant_switch": 0,
+    "hol_variant_exit": 0,
+    "hol_family_owed": 0,
+    "hol_family_starving": 0
+   },
+   "arm": "hol"
+  }
+ ]
+}

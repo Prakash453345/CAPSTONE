@@ -189,3 +189,128 @@ def test_load_vtype_pcu_ignores_vtype_with_no_id(tmp_path):
     ET.SubElement(good, "param", {"key": "pcu", "value": "1.0"})
     route_path.write_text(ET.tostring(root, encoding="unicode"), encoding="UTF-8")
     assert load_vtype_pcu(route_path) == {"veh_car": 1.0}
+
+
+def _fake_positions(monkeypatch, lengths: dict[str, float], positions: dict[str, float]):
+    monkeypatch.setattr(queue_state_module.traci.lane, "getLength",
+                        lambda lane_id: lengths[lane_id])
+    monkeypatch.setattr(queue_state_module.traci.vehicle, "getLanePosition",
+                        lambda veh_id: positions[veh_id])
+
+
+def test_a_queue_that_runs_back_past_a_split_in_the_road_is_counted_whole(monkeypatch):
+    """A 4 m approach lane (the stretch after a turn bay starts) with the
+    rest of the queue on the lane before it: counted on the stop-line lane
+    alone it is one vehicle. The lane before feeds two bay lanes, so half
+    of its queue is this lane's."""
+    _fake_traci(
+        monkeypatch,
+        lane_vehicles={"bay_1": ["v0"], "road_1": ["v1", "v2", "v3", "v4"]},
+        speeds={"v0": 0.0, "v1": 0.0, "v2": 0.0, "v3": 0.0, "v4": 0.0},
+        types=dict.fromkeys(["v0", "v1", "v2", "v3", "v4"], "car"),
+        occupancies={},
+    )
+    alone = QueueStateSampler({"L0": "bay_1"}, {}, _PCU_BY_VTYPE)
+    chained = QueueStateSampler({"L0": "bay_1"}, {}, _PCU_BY_VTYPE,
+                                upstream={"bay_1": [("road_1", 0.5, 4.0)]})
+    assert alone.sample()[0] == {"L0": 1.0}
+    assert chained.sample()[0] == {"L0": 1.0 + 0.5 * 4}
+
+
+def test_an_arrival_on_the_lane_before_counts_by_its_distance_to_the_stop_line(monkeypatch):
+    _fake_traci(
+        monkeypatch,
+        lane_vehicles={"bay_1": [], "road_1": ["near", "far"]},
+        speeds={"near": 10.0, "far": 10.0},
+        types={"near": "car", "far": "car"},
+        occupancies={"out_0": 0.0},
+    )
+    # road_1 is 200 m long; `near` is 30 m before its end (34 m from the stop
+    # line: 3.4 s away), `far` 150 m before it (15.4 s, past the 8 s horizon)
+    _fake_positions(monkeypatch, {"bay_1": 4.0, "road_1": 200.0},
+                    {"near": 170.0, "far": 50.0})
+    s = QueueStateSampler({"L0": "bay_1"}, {"L0": "out_0"}, _PCU_BY_VTYPE,
+                          upstream={"bay_1": [("road_1", 1.0, 4.0)]})
+    assert s.sample_extended().approaching_pcu == {"L0": 1.0}
+
+
+def test_receiving_occupancy_over_a_split_road_is_what_one_lane_would_read(monkeypatch):
+    _fake_traci(
+        monkeypatch,
+        lane_vehicles={},
+        speeds={},
+        types={},
+        occupancies={"out_0": 1.0, "out_0b": 0.25},
+    )
+    _fake_positions(monkeypatch, {"out_0": 10.0, "out_0b": 290.0}, {})
+    s = QueueStateSampler({"L0": "in_0"}, {"L0": "out_0"}, _PCU_BY_VTYPE,
+                          downstream={"out_0": [("out_0b", 1.0, 10.0)]})
+    # 10 m full + 290 m a quarter full = 82.5 m of 300
+    assert s.sample()[1]["L0"] == 82.5 / 300
+
+
+def test_a_lane_whose_front_vehicle_stands_behind_a_turner_in_the_box_is_blocked(monkeypatch):
+    """Head-of-line blocking (`JunctionContext.blocked_by`): the front
+    vehicle is stopped, and a vehicle that left its lane is stopped inside
+    the junction just ahead of it. Every movement sharing the lane is
+    reported blocked by the waiting vehicle's movement."""
+    _fake_traci(
+        monkeypatch,
+        lane_vehicles={"in_0": ["front", "behind"], "other_0": ["free"], "far_0": ["held"],
+                       ":J_2_0": ["turner"], ":J_7_0": ["mover"], ":J_9_0": ["deep"]},
+        speeds={"front": 0.0, "behind": 0.0, "free": 0.0, "held": 0.0, "turner": 0.0,
+                "mover": 6.0, "deep": 0.0},
+        types=dict.fromkeys(["front", "behind", "free", "held"], "car"),
+        occupancies={"out_0": 0.0},
+    )
+    _fake_positions(
+        monkeypatch,
+        {"in_0": 100.0, "other_0": 100.0, "far_0": 100.0, ":J_2_0": 4.0, ":J_3_0": 14.0,
+         ":J_7_0": 14.0, ":J_8_0": 4.0, ":J_9_0": 10.0},
+        {"front": 98.0, "behind": 91.0, "free": 99.0, "held": 99.0,
+         # a 2.2 m motorcycle at the turn's waiting position, 4 m in: its tail
+         # has cleared the stop line, and it is not on the through path
+         "turner": 4.0, "mover": 3.0, "deep": 9.0})
+    monkeypatch.setattr(queue_state_module.traci.vehicle, "getLength",
+                        lambda v: {"turner": 2.2}.get(v, 5.0))
+    via = {"in_0": [":J_2_0", ":J_3_0"], "other_0": [":J_7_0"], "far_0": [":J_8_0"],
+           ":J_8_0": [":J_9_0"]}
+    monkeypatch.setattr(
+        queue_state_module.traci.lane, "getLinks",
+        lambda lane: [("out_0", True, True, False, v, "G", "s", 10.0) for v in via.get(lane, [])])
+    s = QueueStateSampler(
+        {"L0": "in_0", "L1": "in_0", "L2": "in_0", "L6": "other_0", "L8": "far_0"},
+        {"L0": "out_0"}, _PCU_BY_VTYPE,
+        internal_links={":J_2_0": "L2", ":J_3_0": "L1", ":J_7_0": "L7", ":J_8_0": "L8",
+                        ":J_9_0": "L8"},
+    )
+    # in_0: the turner's tail is 1.8 m past the stop line and the front
+    # vehicle 2 m short of it -- 3.8 m apart is not "directly behind" ...
+    assert s.sample_extended().blocked_by == {}
+    # ... a car's length further back in the box, it is (tail 0.5 m past the line)
+    monkeypatch.setattr(queue_state_module.traci.vehicle, "getLength",
+                        lambda v: {"turner": 3.5}.get(v, 5.0))
+    # other_0: the vehicle in the box is moving. far_0: the stopped vehicle is
+    # on the second internal lane of its link, 13 m in with its tail at 8 m.
+    assert s.sample_extended().blocked_by == {"L0": "L2", "L1": "L2", "L2": "L2"}
+    # without the internal-lane map the sampler reports nothing (the default)
+    plain = QueueStateSampler({"L0": "in_0"}, {"L0": "out_0"}, _PCU_BY_VTYPE)
+    assert plain.sample_extended().blocked_by == {}
+
+
+def test_the_longest_standing_wait_is_readable_before_a_sample_resets_it(monkeypatch):
+    """`ActuationDetector.longest_wait_s`: the wait a link had when it was
+    finally served, which `sample` wipes in the same call that serves it."""
+    from sim_service.signal_controller import detectors
+
+    occupied = {"in_0": 1, "side_0": 1}
+    monkeypatch.setattr(detectors.traci.lane, "getLastStepVehicleNumber",
+                        lambda lane: occupied[lane])
+    d = detectors.ActuationDetector({"L0": "in_0", "L3": "side_0"})
+    assert d.longest_wait_s(0.0) == 0.0
+    d.sample(10.0, frozenset({"L0"}))                 # both called at t=10; L0 is green
+    d.sample(40.0, frozenset({"L0"}))
+    assert d.longest_wait_s(55.0) == 45.0             # L3 has waited since t=10
+    _, waits = d.sample(55.0, frozenset({"L3"}))      # ... and is served now: its clock is wiped
+    assert waits["L3"] == 0.0
+    assert d.longest_wait_s(56.0) == 16.0             # L0 now: last green at t=40

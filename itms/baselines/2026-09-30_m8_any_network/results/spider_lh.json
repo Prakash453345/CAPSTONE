@@ -1,0 +1,1861 @@
+{
+ "meta": {
+  "fps": 5.0,
+  "seeds": [
+   1,
+   2,
+   3,
+   4,
+   5,
+   6,
+   7,
+   8,
+   9,
+   10
+  ],
+  "levels": [
+   "heavy",
+   "light",
+   "medium"
+  ],
+  "arms": [
+   "webster",
+   "truth"
+  ],
+  "wall_min": 10.3
+ },
+ "summary": {
+  "heavy": {
+   "arms": {
+    "webster": {
+     "n": 10,
+     "person_delay_s": 1541291.2296999998,
+     "stops_per_vehicle": 4.308068669527897,
+     "p95_wait_s": 338.2,
+     "person_throughput_per_hour": 16058.948269640352,
+     "interlock_violations": 0,
+     "fallback_fixed_time": 0,
+     "ticks": 0
+    },
+    "truth": {
+     "n": 10,
+     "person_delay_s": 665212.9316999998,
+     "stops_per_vehicle": 2.7156652360515023,
+     "p95_wait_s": 145.0,
+     "person_throughput_per_hour": 18731.51993453938,
+     "interlock_violations": 0,
+     "fallback_fixed_time": 0,
+     "ticks": 229501
+    }
+   },
+   "paired": {
+    "webster_vs_truth:person_delay_s": {
+     "n": 10,
+     "mean": 876078.2979999998,
+     "pct": 131.69892770441461,
+     "ci95": [
+      832961.9341295004,
+      919194.6618704993
+     ],
+     "significant": true,
+     "n_better": 0
+    },
+    "webster_vs_truth:stops_per_vehicle": {
+     "n": 10,
+     "mean": 1.5924034334763948,
+     "pct": 58.637692611615954,
+     "ci95": [
+      1.4952140745015627,
+      1.6895927924512268
+     ],
+     "significant": true,
+     "n_better": 0
+    },
+    "truth_vs_webster:person_delay_s": {
+     "n": 10,
+     "mean": -876078.2979999998,
+     "pct": -56.840542599500914,
+     "ci95": [
+      -919194.6618704993,
+      -832961.9341295004
+     ],
+     "significant": true,
+     "n_better": 10
+    },
+    "truth_vs_webster:stops_per_vehicle": {
+     "n": 10,
+     "mean": -1.5924034334763948,
+     "pct": -36.963278806112896,
+     "ci95": [
+      -1.6895927924512268,
+      -1.4952140745015627
+     ],
+     "significant": true,
+     "n_better": 10
+    }
+   }
+  },
+  "light": {
+   "arms": {
+    "webster": {
+     "n": 10,
+     "person_delay_s": 149426.28010000003,
+     "stops_per_vehicle": 2.460200668896321,
+     "p95_wait_s": 76.8,
+     "person_throughput_per_hour": 5839.605056999155,
+     "interlock_violations": 0,
+     "fallback_fixed_time": 0,
+     "ticks": 0
+    },
+    "truth": {
+     "n": 10,
+     "person_delay_s": 74236.4279,
+     "stops_per_vehicle": 1.6334448160535118,
+     "p95_wait_s": 38.7,
+     "person_throughput_per_hour": 5978.870175837403,
+     "interlock_violations": 0,
+     "fallback_fixed_time": 0,
+     "ticks": 203184
+    }
+   },
+   "paired": {
+    "webster_vs_truth:person_delay_s": {
+     "n": 10,
+     "mean": 75189.85220000004,
+     "pct": 101.28430788895763,
+     "ci95": [
+      71968.97196504909,
+      78410.73243495099
+     ],
+     "significant": true,
+     "n_better": 0
+    },
+    "webster_vs_truth:stops_per_vehicle": {
+     "n": 10,
+     "mean": 0.8267558528428095,
+     "pct": 50.61425061425062,
+     "ci95": [
+      0.782398325344687,
+      0.871113380340932
+     ],
+     "significant": true,
+     "n_better": 0
+    },
+    "truth_vs_webster:person_delay_s": {
+     "n": 10,
+     "mean": -75189.85220000004,
+     "pct": -50.319028319302994,
+     "ci95": [
+      -78410.73243495099,
+      -71968.97196504909
+     ],
+     "significant": true,
+     "n_better": 10
+    },
+    "truth_vs_webster:stops_per_vehicle": {
+     "n": 10,
+     "mean": -0.8267558528428095,
+     "pct": -33.605220228385,
+     "ci95": [
+      -0.871113380340932,
+      -0.782398325344687
+     ],
+     "significant": true,
+     "n_better": 10
+    }
+   }
+  },
+  "medium": {
+   "arms": {
+    "webster": {
+     "n": 10,
+     "person_delay_s": 280913.39400000015,
+     "stops_per_vehicle": 2.6051882845188286,
+     "p95_wait_s": 86.3,
+     "person_throughput_per_hour": 10104.159909445578,
+     "interlock_violations": 0,
+     "fallback_fixed_time": 0,
+     "ticks": 0
+    },
+    "truth": {
+     "n": 10,
+     "person_delay_s": 155730.38919999998,
+     "stops_per_vehicle": 1.9231799163179915,
+     "p95_wait_s": 46.1,
+     "person_throughput_per_hour": 10431.045322326278,
+     "interlock_violations": 0,
+     "fallback_fixed_time": 0,
+     "ticks": 201652
+    }
+   },
+   "paired": {
+    "webster_vs_truth:person_delay_s": {
+     "n": 10,
+     "mean": 125183.00480000014,
+     "pct": 80.38444226786801,
+     "ci95": [
+      120839.37561651185,
+      129526.63398348843
+     ],
+     "significant": true,
+     "n_better": 0
+    },
+    "webster_vs_truth:stops_per_vehicle": {
+     "n": 10,
+     "mean": 0.6820083682008369,
+     "pct": 35.462535897659045,
+     "ci95": [
+      0.6477999663319232,
+      0.7162167700697506
+     ],
+     "significant": true,
+     "n_better": 0
+    },
+    "truth_vs_webster:person_delay_s": {
+     "n": 10,
+     "mean": -125183.00480000014,
+     "pct": -44.56284658324269,
+     "ci95": [
+      -129526.63398348843,
+      -120839.37561651185
+     ],
+     "significant": true,
+     "n_better": 10
+    },
+    "truth_vs_webster:stops_per_vehicle": {
+     "n": 10,
+     "mean": -0.6820083682008369,
+     "pct": -26.178851342669926,
+     "ci95": [
+      -0.7162167700697506,
+      -0.6477999663319232
+     ],
+     "significant": true,
+     "n_better": 10
+    }
+   }
+  }
+ },
+ "records": [
+  {
+   "scenario": "spider_lh",
+   "lane_chains": false,
+   "controller": "webster",
+   "demand_level": "heavy",
+   "seed": 1,
+   "steps": 2329,
+   "interlock_violations": 0,
+   "person_delay_s": 1559756.7369999976,
+   "person_throughput_per_hour": 15962.50000000021,
+   "stops_per_vehicle": 4.34206008583691,
+   "wait_time_s": {
+    "mean_s": 143.98111587982834,
+    "p95_s": 334.0,
+    "max_s": 744.0
+   },
+   "wall_s": 13.6,
+   "arm": "webster"
+  },
+  {
+   "scenario": "spider_lh",
+   "lane_chains": false,
+   "controller": "webster",
+   "demand_level": "heavy",
+   "seed": 2,
+   "steps": 2437,
+   "interlock_violations": 0,
+   "person_delay_s": 1626453.270000002,
+   "person_throughput_per_hour": 15023.529411764908,
+   "stops_per_vehicle": 4.403004291845494,
+   "wait_time_s": {
+    "mean_s": 150.87424892703862,
+    "p95_s": 366.0,
+    "max_s": 728.0
+   },
+   "wall_s": 14.7,
+   "arm": "webster"
+  },
+  {
+   "scenario": "spider_lh",
+   "lane_chains": false,
+   "controller": "webster",
+   "demand_level": "heavy",
+   "seed": 3,
+   "steps": 2270,
+   "interlock_violations": 0,
+   "person_delay_s": 1560478.716999999,
+   "person_throughput_per_hour": 16526.782504493927,
+   "stops_per_vehicle": 4.31931330472103,
+   "wait_time_s": {
+    "mean_s": 141.24034334763948,
+    "p95_s": 339.0,
+    "max_s": 714.0
+   },
+   "wall_s": 14.3,
+   "arm": "webster"
+  },
+  {
+   "scenario": "spider_lh",
+   "lane_chains": false,
+   "controller": "webster",
+   "demand_level": "heavy",
+   "seed": 4,
+   "steps": 2287,
+   "interlock_violations": 0,
+   "person_delay_s": 1604780.0439999986,
+   "person_throughput_per_hour": 16360.14234875467,
+   "stops_per_vehicle": 4.507725321888412,
+   "wait_time_s": {
+    "mean_s": 148.46909871244634,
+    "p95_s": 371.0,
+    "max_s": 725.0
+   },
+   "wall_s": 13.3,
+   "arm": "webster"
+  },
+  {
+   "scenario": "spider_lh",
+   "lane_chains": false,
+   "controller": "webster",
+   "demand_level": "heavy",
+   "seed": 5,
+   "steps": 2270,
+   "interlock_violations": 0,
+   "person_delay_s": 1554277.8469999996,
+   "person_throughput_per_hour": 16526.78250449393,
+   "stops_per_vehicle": 4.358369098712446,
+   "wait_time_s": {
+    "mean_s": 141.51244635193132,
+    "p95_s": 336.0,
+    "max_s": 585.0
+   },
+   "wall_s": 13.7,
+   "arm": "webster"
+  },
+  {
+   "scenario": "spider_lh",
+   "lane_chains": false,
+   "controller": "webster",
+   "demand_level": "heavy",
+   "seed": 6,
+   "steps": 2331,
+   "interlock_violations": 0,
+   "person_delay_s": 1439856.2119999994,
+   "person_throughput_per_hour": 15944.046242774786,
+   "stops_per_vehicle": 4.163090128755365,
+   "wait_time_s": {
+    "mean_s": 136.24334763948497,
+    "p95_s": 318.0,
+    "max_s": 641.0
+   },
+   "wall_s": 13.5,
+   "arm": "webster"
+  },
+  {
+   "scenario": "spider_lh",
+   "lane_chains": false,
+   "controller": "webster",
+   "demand_level": "heavy",
+   "seed": 7,
+   "steps": 2373,
+   "interlock_violations": 0,
+   "person_delay_s": 1526359.732,
+   "person_throughput_per_hour": 15566.139954853483,
+   "stops_per_vehicle": 4.2330472103004295,
+   "wait_time_s": {
+    "mean_s": 138.80429184549357,
+    "p95_s": 332.0,
+    "max_s": 587.0
+   },
+   "wall_s": 13.9,
+   "arm": "webster"
+  },
+  {
+   "scenario": "spider_lh",
+   "lane_chains": false,
+   "controller": "webster",
+   "demand_level": "heavy",
+   "seed": 8,
+   "steps": 2271,
+   "interlock_violations": 0,
+   "person_delay_s": 1534337.4620000029,
+   "person_throughput_per_hour": 16516.886227545136,
+   "stops_per_vehicle": 4.362231759656653,
+   "wait_time_s": {
+    "mean_s": 143.57510729613733,
+    "p95_s": 331.0,
+    "max_s": 781.0
+   },
+   "wall_s": 13.5,
+   "arm": "webster"
+  },
+  {
+   "scenario": "spider_lh",
+   "lane_chains": false,
+   "controller": "webster",
+   "demand_level": "heavy",
+   "seed": 9,
+   "steps": 2295,
+   "interlock_violations": 0,
+   "person_delay_s": 1552300.0090000017,
+   "person_throughput_per_hour": 16282.880755608252,
+   "stops_per_vehicle": 4.221459227467811,
+   "wait_time_s": {
+    "mean_s": 142.55150214592274,
+    "p95_s": 343.0,
+    "max_s": 744.0
+   },
+   "wall_s": 14.3,
+   "arm": "webster"
+  },
+  {
+   "scenario": "spider_lh",
+   "lane_chains": false,
+   "controller": "webster",
+   "demand_level": "heavy",
+   "seed": 10,
+   "steps": 2338,
+   "interlock_violations": 0,
+   "person_delay_s": 1454312.266999997,
+   "person_throughput_per_hour": 15879.792746114203,
+   "stops_per_vehicle": 4.170386266094421,
+   "wait_time_s": {
+    "mean_s": 134.44463519313305,
+    "p95_s": 312.0,
+    "max_s": 573.0
+   },
+   "wall_s": 14.1,
+   "arm": "webster"
+  },
+  {
+   "scenario": "spider_lh",
+   "lane_chains": false,
+   "controller": "ccacamp",
+   "demand_level": "heavy",
+   "seed": 1,
+   "steps": 2088,
+   "interlock_violations": 0,
+   "person_delay_s": 685706.2300000001,
+   "person_throughput_per_hour": 18549.562878278663,
+   "stops_per_vehicle": 2.7648068669527897,
+   "wait_time_s": {
+    "mean_s": 55.19141630901287,
+    "p95_s": 146.0,
+    "max_s": 295.0
+   },
+   "wall_s": 39.6,
+   "decision_stats": {
+    "ticks": 23172,
+    "switch_cycle_supervisor": 2,
+    "switch_gap_out": 115,
+    "cycles_completed": 3081,
+    "extend": 14815,
+    "extend_allocation_protected": 6999,
+    "switch_pressure": 1037,
+    "switch_max_green": 204,
+    "switch_starvation": 0,
+    "blended": 0,
+    "blended_no_history": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "truth"
+  },
+  {
+   "scenario": "spider_lh",
+   "lane_chains": false,
+   "controller": "ccacamp",
+   "demand_level": "heavy",
+   "seed": 2,
+   "steps": 2043,
+   "interlock_violations": 0,
+   "person_delay_s": 630061.417999999,
+   "person_throughput_per_hour": 19128.432732316494,
+   "stops_per_vehicle": 2.6755364806866955,
+   "wait_time_s": {
+    "mean_s": 50.17639484978541,
+    "p95_s": 137.0,
+    "max_s": 248.0
+   },
+   "wall_s": 39.7,
+   "decision_stats": {
+    "ticks": 22626,
+    "switch_cycle_supervisor": 3,
+    "switch_gap_out": 115,
+    "cycles_completed": 2493,
+    "extend": 14285,
+    "extend_allocation_protected": 7004,
+    "switch_pressure": 1053,
+    "switch_max_green": 166,
+    "switch_starvation": 0,
+    "blended": 0,
+    "blended_no_history": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "truth"
+  },
+  {
+   "scenario": "spider_lh",
+   "lane_chains": false,
+   "controller": "ccacamp",
+   "demand_level": "heavy",
+   "seed": 3,
+   "steps": 2063,
+   "interlock_violations": 0,
+   "person_delay_s": 735562.8919999999,
+   "person_throughput_per_hour": 18866.757865937318,
+   "stops_per_vehicle": 2.828755364806867,
+   "wait_time_s": {
+    "mean_s": 61.885836909871244,
+    "p95_s": 171.0,
+    "max_s": 367.0
+   },
+   "wall_s": 39.4,
+   "decision_stats": {
+    "ticks": 22630,
+    "switch_cycle_supervisor": 7,
+    "switch_gap_out": 114,
+    "cycles_completed": 2590,
+    "extend": 14711,
+    "extend_allocation_protected": 6533,
+    "switch_pressure": 1075,
+    "switch_max_green": 190,
+    "switch_starvation": 0,
+    "blended": 0,
+    "blended_no_history": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "truth"
+  },
+  {
+   "scenario": "spider_lh",
+   "lane_chains": false,
+   "controller": "ccacamp",
+   "demand_level": "heavy",
+   "seed": 4,
+   "steps": 2090,
+   "interlock_violations": 0,
+   "person_delay_s": 710342.4280000005,
+   "person_throughput_per_hour": 18524.647414372324,
+   "stops_per_vehicle": 2.711158798283262,
+   "wait_time_s": {
+    "mean_s": 58.27038626609442,
+    "p95_s": 158.0,
+    "max_s": 306.0
+   },
+   "wall_s": 40.0,
+   "decision_stats": {
+    "ticks": 23214,
+    "switch_cycle_supervisor": 3,
+    "switch_gap_out": 114,
+    "cycles_completed": 2681,
+    "extend": 14745,
+    "extend_allocation_protected": 7112,
+    "switch_pressure": 1044,
+    "switch_max_green": 196,
+    "switch_starvation": 0,
+    "blended": 0,
+    "blended_no_history": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "truth"
+  },
+  {
+   "scenario": "spider_lh",
+   "lane_chains": false,
+   "controller": "ccacamp",
+   "demand_level": "heavy",
+   "seed": 5,
+   "steps": 2077,
+   "interlock_violations": 0,
+   "person_delay_s": 639149.0469999999,
+   "person_throughput_per_hour": 18687.804878049043,
+   "stops_per_vehicle": 2.618884120171674,
+   "wait_time_s": {
+    "mean_s": 52.720600858369096,
+    "p95_s": 138.0,
+    "max_s": 281.0
+   },
+   "wall_s": 45.9,
+   "decision_stats": {
+    "ticks": 22822,
+    "switch_cycle_supervisor": 3,
+    "switch_gap_out": 111,
+    "cycles_completed": 2852,
+    "extend": 14951,
+    "extend_allocation_protected": 6480,
+    "switch_pressure": 1094,
+    "switch_max_green": 183,
+    "switch_starvation": 0,
+    "blended": 0,
+    "blended_no_history": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "truth"
+  },
+  {
+   "scenario": "spider_lh",
+   "lane_chains": false,
+   "controller": "ccacamp",
+   "demand_level": "heavy",
+   "seed": 6,
+   "steps": 2071,
+   "interlock_violations": 0,
+   "person_delay_s": 616668.7970000007,
+   "person_throughput_per_hour": 18764.081632653317,
+   "stops_per_vehicle": 2.5854077253218883,
+   "wait_time_s": {
+    "mean_s": 49.3030042918455,
+    "p95_s": 128.0,
+    "max_s": 256.0
+   },
+   "wall_s": 46.4,
+   "decision_stats": {
+    "ticks": 22891,
+    "switch_cycle_supervisor": 5,
+    "switch_gap_out": 96,
+    "cycles_completed": 2676,
+    "extend": 14744,
+    "extend_allocation_protected": 6784,
+    "switch_pressure": 1089,
+    "switch_max_green": 173,
+    "switch_starvation": 0,
+    "blended": 0,
+    "blended_no_history": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "truth"
+  },
+  {
+   "scenario": "spider_lh",
+   "lane_chains": false,
+   "controller": "ccacamp",
+   "demand_level": "heavy",
+   "seed": 7,
+   "steps": 2048,
+   "interlock_violations": 0,
+   "person_delay_s": 657800.3019999987,
+   "person_throughput_per_hour": 19062.335867311944,
+   "stops_per_vehicle": 2.774678111587983,
+   "wait_time_s": {
+    "mean_s": 53.242489270386265,
+    "p95_s": 139.0,
+    "max_s": 283.0
+   },
+   "wall_s": 48.9,
+   "decision_stats": {
+    "ticks": 22541,
+    "switch_cycle_supervisor": 4,
+    "switch_gap_out": 97,
+    "cycles_completed": 2500,
+    "extend": 14862,
+    "extend_allocation_protected": 6313,
+    "switch_pressure": 1075,
+    "switch_max_green": 190,
+    "switch_starvation": 0,
+    "blended": 0,
+    "blended_no_history": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "truth"
+  },
+  {
+   "scenario": "spider_lh",
+   "lane_chains": false,
+   "controller": "ccacamp",
+   "demand_level": "heavy",
+   "seed": 8,
+   "steps": 2111,
+   "interlock_violations": 0,
+   "person_delay_s": 618893.1890000008,
+   "person_throughput_per_hour": 18267.01986754992,
+   "stops_per_vehicle": 2.6815450643776826,
+   "wait_time_s": {
+    "mean_s": 50.52231759656652,
+    "p95_s": 133.0,
+    "max_s": 250.0
+   },
+   "wall_s": 49.4,
+   "decision_stats": {
+    "ticks": 23385,
+    "switch_cycle_supervisor": 5,
+    "switch_gap_out": 104,
+    "cycles_completed": 3070,
+    "extend": 15279,
+    "extend_allocation_protected": 6725,
+    "switch_pressure": 1088,
+    "switch_max_green": 184,
+    "switch_starvation": 0,
+    "blended": 0,
+    "blended_no_history": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "truth"
+  },
+  {
+   "scenario": "spider_lh",
+   "lane_chains": false,
+   "controller": "ccacamp",
+   "demand_level": "heavy",
+   "seed": 9,
+   "steps": 2071,
+   "interlock_violations": 0,
+   "person_delay_s": 683346.9539999997,
+   "person_throughput_per_hour": 18764.081632653324,
+   "stops_per_vehicle": 2.796137339055794,
+   "wait_time_s": {
+    "mean_s": 57.7038626609442,
+    "p95_s": 149.0,
+    "max_s": 356.0
+   },
+   "wall_s": 45.0,
+   "decision_stats": {
+    "ticks": 23104,
+    "switch_cycle_supervisor": 5,
+    "switch_gap_out": 96,
+    "cycles_completed": 2720,
+    "extend": 14554,
+    "extend_allocation_protected": 7223,
+    "switch_pressure": 1029,
+    "switch_max_green": 197,
+    "switch_starvation": 0,
+    "blended": 0,
+    "blended_no_history": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "truth"
+  },
+  {
+   "scenario": "spider_lh",
+   "lane_chains": false,
+   "controller": "ccacamp",
+   "demand_level": "heavy",
+   "seed": 10,
+   "steps": 2076,
+   "interlock_violations": 0,
+   "person_delay_s": 674598.0599999996,
+   "person_throughput_per_hour": 18700.474576271452,
+   "stops_per_vehicle": 2.719742489270386,
+   "wait_time_s": {
+    "mean_s": 56.682403433476395,
+    "p95_s": 151.0,
+    "max_s": 341.0
+   },
+   "wall_s": 45.9,
+   "decision_stats": {
+    "ticks": 23116,
+    "switch_cycle_supervisor": 5,
+    "switch_gap_out": 92,
+    "cycles_completed": 2747,
+    "extend": 14308,
+    "extend_allocation_protected": 7469,
+    "switch_pressure": 1049,
+    "switch_max_green": 193,
+    "switch_starvation": 0,
+    "blended": 0,
+    "blended_no_history": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "truth"
+  },
+  {
+   "scenario": "spider_lh",
+   "lane_chains": false,
+   "controller": "webster",
+   "demand_level": "light",
+   "seed": 1,
+   "steps": 2061,
+   "interlock_violations": 0,
+   "person_delay_s": 148864.071,
+   "person_throughput_per_hour": 5866.27397260274,
+   "stops_per_vehicle": 2.4531772575250836,
+   "wait_time_s": {
+    "mean_s": 35.585284280936456,
+    "p95_s": 76.0,
+    "max_s": 127.0
+   },
+   "wall_s": 8.3,
+   "arm": "webster"
+  },
+  {
+   "scenario": "spider_lh",
+   "lane_chains": false,
+   "controller": "webster",
+   "demand_level": "light",
+   "seed": 2,
+   "steps": 2094,
+   "interlock_violations": 0,
+   "person_delay_s": 149553.43499999994,
+   "person_throughput_per_hour": 5736.610850636303,
+   "stops_per_vehicle": 2.4531772575250836,
+   "wait_time_s": {
+    "mean_s": 35.19230769230769,
+    "p95_s": 75.0,
+    "max_s": 119.0
+   },
+   "wall_s": 8.6,
+   "arm": "webster"
+  },
+  {
+   "scenario": "spider_lh",
+   "lane_chains": false,
+   "controller": "webster",
+   "demand_level": "light",
+   "seed": 3,
+   "steps": 2089,
+   "interlock_violations": 0,
+   "person_delay_s": 147736.88700000016,
+   "person_throughput_per_hour": 5755.887096774193,
+   "stops_per_vehicle": 2.4933110367892977,
+   "wait_time_s": {
+    "mean_s": 35.15719063545151,
+    "p95_s": 76.0,
+    "max_s": 124.0
+   },
+   "wall_s": 8.5,
+   "arm": "webster"
+  },
+  {
+   "scenario": "spider_lh",
+   "lane_chains": false,
+   "controller": "webster",
+   "demand_level": "light",
+   "seed": 4,
+   "steps": 2080,
+   "interlock_violations": 0,
+   "person_delay_s": 149742.6750000001,
+   "person_throughput_per_hour": 5790.912778904666,
+   "stops_per_vehicle": 2.5,
+   "wait_time_s": {
+    "mean_s": 35.71739130434783,
+    "p95_s": 76.0,
+    "max_s": 118.0
+   },
+   "wall_s": 8.6,
+   "arm": "webster"
+  },
+  {
+   "scenario": "spider_lh",
+   "lane_chains": false,
+   "controller": "webster",
+   "demand_level": "light",
+   "seed": 5,
+   "steps": 2070,
+   "interlock_violations": 0,
+   "person_delay_s": 149839.3869999999,
+   "person_throughput_per_hour": 5830.333560245063,
+   "stops_per_vehicle": 2.4816053511705687,
+   "wait_time_s": {
+    "mean_s": 35.84280936454849,
+    "p95_s": 77.0,
+    "max_s": 131.0
+   },
+   "wall_s": 8.4,
+   "arm": "webster"
+  },
+  {
+   "scenario": "spider_lh",
+   "lane_chains": false,
+   "controller": "webster",
+   "demand_level": "light",
+   "seed": 6,
+   "steps": 2059,
+   "interlock_violations": 0,
+   "person_delay_s": 150357.5460000001,
+   "person_throughput_per_hour": 5874.3209876543215,
+   "stops_per_vehicle": 2.4816053511705687,
+   "wait_time_s": {
+    "mean_s": 36.91137123745819,
+    "p95_s": 82.0,
+    "max_s": 120.0
+   },
+   "wall_s": 8.6,
+   "arm": "webster"
+  },
+  {
+   "scenario": "spider_lh",
+   "lane_chains": false,
+   "controller": "webster",
+   "demand_level": "light",
+   "seed": 7,
+   "steps": 2057,
+   "interlock_violations": 0,
+   "person_delay_s": 153066.68899999987,
+   "person_throughput_per_hour": 5882.39010989011,
+   "stops_per_vehicle": 2.5,
+   "wait_time_s": {
+    "mean_s": 35.54347826086956,
+    "p95_s": 78.0,
+    "max_s": 112.0
+   },
+   "wall_s": 8.1,
+   "arm": "webster"
+  },
+  {
+   "scenario": "spider_lh",
+   "lane_chains": false,
+   "controller": "webster",
+   "demand_level": "light",
+   "seed": 8,
+   "steps": 2056,
+   "interlock_violations": 0,
+   "person_delay_s": 151062.44800000015,
+   "person_throughput_per_hour": 5886.43298969072,
+   "stops_per_vehicle": 2.3929765886287626,
+   "wait_time_s": {
+    "mean_s": 34.85451505016722,
+    "p95_s": 74.0,
+    "max_s": 123.0
+   },
+   "wall_s": 7.9,
+   "arm": "webster"
+  },
+  {
+   "scenario": "spider_lh",
+   "lane_chains": false,
+   "controller": "webster",
+   "demand_level": "light",
+   "seed": 9,
+   "steps": 2058,
+   "interlock_violations": 0,
+   "person_delay_s": 148725.82200000016,
+   "person_throughput_per_hour": 5878.352779684283,
+   "stops_per_vehicle": 2.4264214046822743,
+   "wait_time_s": {
+    "mean_s": 34.54849498327759,
+    "p95_s": 77.0,
+    "max_s": 114.0
+   },
+   "wall_s": 8.7,
+   "arm": "webster"
+  },
+  {
+   "scenario": "spider_lh",
+   "lane_chains": false,
+   "controller": "webster",
+   "demand_level": "light",
+   "seed": 10,
+   "steps": 2054,
+   "interlock_violations": 0,
+   "person_delay_s": 145313.841,
+   "person_throughput_per_hour": 5894.535443909153,
+   "stops_per_vehicle": 2.419732441471572,
+   "wait_time_s": {
+    "mean_s": 35.061872909699,
+    "p95_s": 77.0,
+    "max_s": 127.0
+   },
+   "wall_s": 8.4,
+   "arm": "webster"
+  },
+  {
+   "scenario": "spider_lh",
+   "lane_chains": false,
+   "controller": "ccacamp",
+   "demand_level": "light",
+   "seed": 1,
+   "steps": 2069,
+   "interlock_violations": 0,
+   "person_delay_s": 79036.8629999999,
+   "person_throughput_per_hour": 5834.305177111717,
+   "stops_per_vehicle": 1.657190635451505,
+   "wait_time_s": {
+    "mean_s": 14.299331103678929,
+    "p95_s": 40.0,
+    "max_s": 69.0
+   },
+   "wall_s": 21.1,
+   "decision_stats": {
+    "ticks": 20589,
+    "switch_cycle_supervisor": 5,
+    "switch_gap_out": 621,
+    "cycles_completed": 5805,
+    "extend": 18847,
+    "extend_allocation_protected": 0,
+    "switch_pressure": 544,
+    "switch_max_green": 572,
+    "switch_starvation": 0,
+    "blended": 0,
+    "blended_no_history": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "truth"
+  },
+  {
+   "scenario": "spider_lh",
+   "lane_chains": false,
+   "controller": "ccacamp",
+   "demand_level": "light",
+   "seed": 2,
+   "steps": 2028,
+   "interlock_violations": 0,
+   "person_delay_s": 70421.00200000007,
+   "person_throughput_per_hour": 6001.934127540295,
+   "stops_per_vehicle": 1.5635451505016722,
+   "wait_time_s": {
+    "mean_s": 13.108695652173912,
+    "p95_s": 38.0,
+    "max_s": 64.0
+   },
+   "wall_s": 20.9,
+   "decision_stats": {
+    "ticks": 20281,
+    "switch_cycle_supervisor": 6,
+    "switch_gap_out": 618,
+    "cycles_completed": 5740,
+    "extend": 18589,
+    "extend_allocation_protected": 0,
+    "switch_pressure": 491,
+    "switch_max_green": 577,
+    "switch_starvation": 0,
+    "blended": 0,
+    "blended_no_history": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "truth"
+  },
+  {
+   "scenario": "spider_lh",
+   "lane_chains": false,
+   "controller": "ccacamp",
+   "demand_level": "light",
+   "seed": 3,
+   "steps": 2065,
+   "interlock_violations": 0,
+   "person_delay_s": 67812.77300000003,
+   "person_throughput_per_hour": 5850.245901639346,
+   "stops_per_vehicle": 1.620401337792642,
+   "wait_time_s": {
+    "mean_s": 14.414715719063546,
+    "p95_s": 38.0,
+    "max_s": 65.0
+   },
+   "wall_s": 21.8,
+   "decision_stats": {
+    "ticks": 20664,
+    "switch_cycle_supervisor": 4,
+    "switch_gap_out": 588,
+    "cycles_completed": 5814,
+    "extend": 18944,
+    "extend_allocation_protected": 0,
+    "switch_pressure": 541,
+    "switch_max_green": 587,
+    "switch_starvation": 0,
+    "blended": 0,
+    "blended_no_history": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "truth"
+  },
+  {
+   "scenario": "spider_lh",
+   "lane_chains": false,
+   "controller": "ccacamp",
+   "demand_level": "light",
+   "seed": 4,
+   "steps": 2070,
+   "interlock_violations": 0,
+   "person_delay_s": 74924.91800000003,
+   "person_throughput_per_hour": 5830.333560245065,
+   "stops_per_vehicle": 1.6337792642140467,
+   "wait_time_s": {
+    "mean_s": 14.18561872909699,
+    "p95_s": 38.0,
+    "max_s": 67.0
+   },
+   "wall_s": 19.7,
+   "decision_stats": {
+    "ticks": 20752,
+    "switch_cycle_supervisor": 3,
+    "switch_gap_out": 591,
+    "cycles_completed": 5903,
+    "extend": 19032,
+    "extend_allocation_protected": 0,
+    "switch_pressure": 518,
+    "switch_max_green": 608,
+    "switch_starvation": 0,
+    "blended": 0,
+    "blended_no_history": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "truth"
+  },
+  {
+   "scenario": "spider_lh",
+   "lane_chains": false,
+   "controller": "ccacamp",
+   "demand_level": "light",
+   "seed": 5,
+   "steps": 1994,
+   "interlock_violations": 0,
+   "person_delay_s": 79143.301,
+   "person_throughput_per_hour": 6148.427853553483,
+   "stops_per_vehicle": 1.6337792642140467,
+   "wait_time_s": {
+    "mean_s": 14.352842809364548,
+    "p95_s": 42.0,
+    "max_s": 65.0
+   },
+   "wall_s": 20.1,
+   "decision_stats": {
+    "ticks": 19892,
+    "switch_cycle_supervisor": 7,
+    "switch_gap_out": 606,
+    "cycles_completed": 5314,
+    "extend": 18220,
+    "extend_allocation_protected": 0,
+    "switch_pressure": 493,
+    "switch_max_green": 566,
+    "switch_starvation": 0,
+    "blended": 0,
+    "blended_no_history": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "truth"
+  },
+  {
+   "scenario": "spider_lh",
+   "lane_chains": false,
+   "controller": "ccacamp",
+   "demand_level": "light",
+   "seed": 6,
+   "steps": 2047,
+   "interlock_violations": 0,
+   "person_delay_s": 69876.499,
+   "person_throughput_per_hour": 5923.070539419088,
+   "stops_per_vehicle": 1.6354515050167224,
+   "wait_time_s": {
+    "mean_s": 14.531772575250836,
+    "p95_s": 40.0,
+    "max_s": 68.0
+   },
+   "wall_s": 19.9,
+   "decision_stats": {
+    "ticks": 20415,
+    "switch_cycle_supervisor": 6,
+    "switch_gap_out": 591,
+    "cycles_completed": 5643,
+    "extend": 18698,
+    "extend_allocation_protected": 0,
+    "switch_pressure": 546,
+    "switch_max_green": 574,
+    "switch_starvation": 0,
+    "blended": 0,
+    "blended_no_history": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "truth"
+  },
+  {
+   "scenario": "spider_lh",
+   "lane_chains": false,
+   "controller": "ccacamp",
+   "demand_level": "light",
+   "seed": 7,
+   "steps": 2013,
+   "interlock_violations": 0,
+   "person_delay_s": 71894.06199999996,
+   "person_throughput_per_hour": 6065.694050991502,
+   "stops_per_vehicle": 1.6036789297658862,
+   "wait_time_s": {
+    "mean_s": 14.351170568561873,
+    "p95_s": 40.0,
+    "max_s": 76.0
+   },
+   "wall_s": 20.1,
+   "decision_stats": {
+    "ticks": 20180,
+    "switch_cycle_supervisor": 9,
+    "switch_gap_out": 597,
+    "cycles_completed": 5727,
+    "extend": 18509,
+    "extend_allocation_protected": 0,
+    "switch_pressure": 503,
+    "switch_max_green": 562,
+    "switch_starvation": 0,
+    "blended": 0,
+    "blended_no_history": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "truth"
+  },
+  {
+   "scenario": "spider_lh",
+   "lane_chains": false,
+   "controller": "ccacamp",
+   "demand_level": "light",
+   "seed": 8,
+   "steps": 2010,
+   "interlock_violations": 0,
+   "person_delay_s": 78822.31900000005,
+   "person_throughput_per_hour": 6078.608942512421,
+   "stops_per_vehicle": 1.6872909698996656,
+   "wait_time_s": {
+    "mean_s": 14.921404682274247,
+    "p95_s": 39.0,
+    "max_s": 65.0
+   },
+   "wall_s": 20.0,
+   "decision_stats": {
+    "ticks": 20019,
+    "switch_cycle_supervisor": 6,
+    "switch_gap_out": 623,
+    "cycles_completed": 5600,
+    "extend": 18329,
+    "extend_allocation_protected": 0,
+    "switch_pressure": 509,
+    "switch_max_green": 552,
+    "switch_starvation": 0,
+    "blended": 0,
+    "blended_no_history": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "truth"
+  },
+  {
+   "scenario": "spider_lh",
+   "lane_chains": false,
+   "controller": "ccacamp",
+   "demand_level": "light",
+   "seed": 9,
+   "steps": 2038,
+   "interlock_violations": 0,
+   "person_delay_s": 76964.86799999999,
+   "person_throughput_per_hour": 5960.1670146137785,
+   "stops_per_vehicle": 1.6555183946488294,
+   "wait_time_s": {
+    "mean_s": 13.72742474916388,
+    "p95_s": 37.0,
+    "max_s": 68.0
+   },
+   "wall_s": 20.1,
+   "decision_stats": {
+    "ticks": 20360,
+    "switch_cycle_supervisor": 6,
+    "switch_gap_out": 636,
+    "cycles_completed": 5656,
+    "extend": 18656,
+    "extend_allocation_protected": 0,
+    "switch_pressure": 478,
+    "switch_max_green": 584,
+    "switch_starvation": 0,
+    "blended": 0,
+    "blended_no_history": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "truth"
+  },
+  {
+   "scenario": "spider_lh",
+   "lane_chains": false,
+   "controller": "ccacamp",
+   "demand_level": "light",
+   "seed": 10,
+   "steps": 2006,
+   "interlock_violations": 0,
+   "person_delay_s": 73467.67399999996,
+   "person_throughput_per_hour": 6095.91459074733,
+   "stops_per_vehicle": 1.6438127090301002,
+   "wait_time_s": {
+    "mean_s": 13.558528428093645,
+    "p95_s": 35.0,
+    "max_s": 73.0
+   },
+   "wall_s": 20.1,
+   "decision_stats": {
+    "ticks": 20032,
+    "switch_cycle_supervisor": 4,
+    "switch_gap_out": 621,
+    "cycles_completed": 5520,
+    "extend": 18353,
+    "extend_allocation_protected": 0,
+    "switch_pressure": 497,
+    "switch_max_green": 557,
+    "switch_starvation": 0,
+    "blended": 0,
+    "blended_no_history": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "truth"
+  },
+  {
+   "scenario": "spider_lh",
+   "lane_chains": false,
+   "controller": "webster",
+   "demand_level": "medium",
+   "seed": 1,
+   "steps": 2099,
+   "interlock_violations": 0,
+   "person_delay_s": 279906.143,
+   "person_throughput_per_hour": 10074.953271028126,
+   "stops_per_vehicle": 2.59163179916318,
+   "wait_time_s": {
+    "mean_s": 38.72384937238494,
+    "p95_s": 86.0,
+    "max_s": 151.0
+   },
+   "wall_s": 8.4,
+   "arm": "webster"
+  },
+  {
+   "scenario": "spider_lh",
+   "lane_chains": false,
+   "controller": "webster",
+   "demand_level": "medium",
+   "seed": 2,
+   "steps": 2116,
+   "interlock_violations": 0,
+   "person_delay_s": 280848.04300000024,
+   "person_throughput_per_hour": 9961.900990099097,
+   "stops_per_vehicle": 2.5874476987447697,
+   "wait_time_s": {
+    "mean_s": 39.08535564853557,
+    "p95_s": 89.0,
+    "max_s": 150.0
+   },
+   "wall_s": 8.7,
+   "arm": "webster"
+  },
+  {
+   "scenario": "spider_lh",
+   "lane_chains": false,
+   "controller": "webster",
+   "demand_level": "medium",
+   "seed": 3,
+   "steps": 2106,
+   "interlock_violations": 0,
+   "person_delay_s": 281811.5649999999,
+   "person_throughput_per_hour": 10028.0930232559,
+   "stops_per_vehicle": 2.6476987447698743,
+   "wait_time_s": {
+    "mean_s": 39.50962343096234,
+    "p95_s": 88.0,
+    "max_s": 156.0
+   },
+   "wall_s": 8.5,
+   "arm": "webster"
+  },
+  {
+   "scenario": "spider_lh",
+   "lane_chains": false,
+   "controller": "webster",
+   "demand_level": "medium",
+   "seed": 4,
+   "steps": 2103,
+   "interlock_violations": 0,
+   "person_delay_s": 279799.50200000015,
+   "person_throughput_per_hour": 10048.122503328983,
+   "stops_per_vehicle": 2.6602510460251048,
+   "wait_time_s": {
+    "mean_s": 39.70292887029289,
+    "p95_s": 85.0,
+    "max_s": 164.0
+   },
+   "wall_s": 9.5,
+   "arm": "webster"
+  },
+  {
+   "scenario": "spider_lh",
+   "lane_chains": false,
+   "controller": "webster",
+   "demand_level": "medium",
+   "seed": 5,
+   "steps": 2107,
+   "interlock_violations": 0,
+   "person_delay_s": 272404.9120000004,
+   "person_throughput_per_hour": 10021.434262948294,
+   "stops_per_vehicle": 2.5430962343096235,
+   "wait_time_s": {
+    "mean_s": 38.273640167364015,
+    "p95_s": 85.0,
+    "max_s": 140.0
+   },
+   "wall_s": 9.0,
+   "arm": "webster"
+  },
+  {
+   "scenario": "spider_lh",
+   "lane_chains": false,
+   "controller": "webster",
+   "demand_level": "medium",
+   "seed": 6,
+   "steps": 2052,
+   "interlock_violations": 0,
+   "person_delay_s": 283428.41800000024,
+   "person_throughput_per_hour": 10401.295658166871,
+   "stops_per_vehicle": 2.600836820083682,
+   "wait_time_s": {
+    "mean_s": 38.70794979079498,
+    "p95_s": 85.0,
+    "max_s": 137.0
+   },
+   "wall_s": 9.5,
+   "arm": "webster"
+  },
+  {
+   "scenario": "spider_lh",
+   "lane_chains": false,
+   "controller": "webster",
+   "demand_level": "medium",
+   "seed": 7,
+   "steps": 2100,
+   "interlock_violations": 0,
+   "person_delay_s": 287170.295,
+   "person_throughput_per_hour": 10068.232154769936,
+   "stops_per_vehicle": 2.6217573221757324,
+   "wait_time_s": {
+    "mean_s": 39.30292887029289,
+    "p95_s": 88.0,
+    "max_s": 149.0
+   },
+   "wall_s": 9.0,
+   "arm": "webster"
+  },
+  {
+   "scenario": "spider_lh",
+   "lane_chains": false,
+   "controller": "webster",
+   "demand_level": "medium",
+   "seed": 8,
+   "steps": 2110,
+   "interlock_violations": 0,
+   "person_delay_s": 282741.046,
+   "person_throughput_per_hour": 10001.510934393726,
+   "stops_per_vehicle": 2.596652719665272,
+   "wait_time_s": {
+    "mean_s": 38.6418410041841,
+    "p95_s": 83.0,
+    "max_s": 155.0
+   },
+   "wall_s": 9.6,
+   "arm": "webster"
+  },
+  {
+   "scenario": "spider_lh",
+   "lane_chains": false,
+   "controller": "webster",
+   "demand_level": "medium",
+   "seed": 9,
+   "steps": 2052,
+   "interlock_violations": 0,
+   "person_delay_s": 278654.02300000016,
+   "person_throughput_per_hour": 10401.295658166871,
+   "stops_per_vehicle": 2.572384937238494,
+   "wait_time_s": {
+    "mean_s": 38.823430962343096,
+    "p95_s": 87.0,
+    "max_s": 128.0
+   },
+   "wall_s": 9.0,
+   "arm": "webster"
+  },
+  {
+   "scenario": "spider_lh",
+   "lane_chains": false,
+   "controller": "webster",
+   "demand_level": "medium",
+   "seed": 10,
+   "steps": 2105,
+   "interlock_violations": 0,
+   "person_delay_s": 282369.9930000001,
+   "person_throughput_per_hour": 10034.76063829796,
+   "stops_per_vehicle": 2.6301255230125524,
+   "wait_time_s": {
+    "mean_s": 39.66108786610879,
+    "p95_s": 87.0,
+    "max_s": 143.0
+   },
+   "wall_s": 9.7,
+   "arm": "webster"
+  },
+  {
+   "scenario": "spider_lh",
+   "lane_chains": false,
+   "controller": "ccacamp",
+   "demand_level": "medium",
+   "seed": 1,
+   "steps": 2062,
+   "interlock_violations": 0,
+   "person_delay_s": 151215.30300000013,
+   "person_throughput_per_hour": 10330.102669404605,
+   "stops_per_vehicle": 1.8669456066945607,
+   "wait_time_s": {
+    "mean_s": 17.276987447698744,
+    "p95_s": 45.0,
+    "max_s": 84.0
+   },
+   "wall_s": 25.0,
+   "decision_stats": {
+    "ticks": 20325,
+    "switch_cycle_supervisor": 35,
+    "switch_gap_out": 385,
+    "cycles_completed": 3769,
+    "extend": 18557,
+    "extend_allocation_protected": 0,
+    "switch_pressure": 957,
+    "switch_max_green": 391,
+    "switch_starvation": 0,
+    "blended": 0,
+    "blended_no_history": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "truth"
+  },
+  {
+   "scenario": "spider_lh",
+   "lane_chains": false,
+   "controller": "ccacamp",
+   "demand_level": "medium",
+   "seed": 2,
+   "steps": 2052,
+   "interlock_violations": 0,
+   "person_delay_s": 153917.15299999996,
+   "person_throughput_per_hour": 10401.29565816687,
+   "stops_per_vehicle": 1.9238493723849373,
+   "wait_time_s": {
+    "mean_s": 17.989958158995815,
+    "p95_s": 47.0,
+    "max_s": 118.0
+   },
+   "wall_s": 25.0,
+   "decision_stats": {
+    "ticks": 20175,
+    "switch_cycle_supervisor": 31,
+    "switch_gap_out": 365,
+    "cycles_completed": 3674,
+    "extend": 18403,
+    "extend_allocation_protected": 0,
+    "switch_pressure": 976,
+    "switch_max_green": 400,
+    "switch_starvation": 0,
+    "blended": 0,
+    "blended_no_history": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "truth"
+  },
+  {
+   "scenario": "spider_lh",
+   "lane_chains": false,
+   "controller": "ccacamp",
+   "demand_level": "medium",
+   "seed": 3,
+   "steps": 2060,
+   "interlock_violations": 0,
+   "person_delay_s": 161861.0179999998,
+   "person_throughput_per_hour": 10344.263193968562,
+   "stops_per_vehicle": 1.9389121338912134,
+   "wait_time_s": {
+    "mean_s": 18.21589958158996,
+    "p95_s": 46.0,
+    "max_s": 99.0
+   },
+   "wall_s": 25.1,
+   "decision_stats": {
+    "ticks": 20334,
+    "switch_cycle_supervisor": 27,
+    "switch_gap_out": 362,
+    "cycles_completed": 3752,
+    "extend": 18569,
+    "extend_allocation_protected": 0,
+    "switch_pressure": 970,
+    "switch_max_green": 406,
+    "switch_starvation": 0,
+    "blended": 0,
+    "blended_no_history": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "truth"
+  },
+  {
+   "scenario": "spider_lh",
+   "lane_chains": false,
+   "controller": "ccacamp",
+   "demand_level": "medium",
+   "seed": 4,
+   "steps": 2041,
+   "interlock_violations": 0,
+   "person_delay_s": 157219.38499999995,
+   "person_throughput_per_hour": 10480.750000000084,
+   "stops_per_vehicle": 1.9246861924686192,
+   "wait_time_s": {
+    "mean_s": 17.727196652719666,
+    "p95_s": 45.0,
+    "max_s": 99.0
+   },
+   "wall_s": 24.2,
+   "decision_stats": {
+    "ticks": 20070,
+    "switch_cycle_supervisor": 28,
+    "switch_gap_out": 366,
+    "cycles_completed": 3608,
+    "extend": 18310,
+    "extend_allocation_protected": 0,
+    "switch_pressure": 961,
+    "switch_max_green": 405,
+    "switch_starvation": 0,
+    "blended": 0,
+    "blended_no_history": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "truth"
+  },
+  {
+   "scenario": "spider_lh",
+   "lane_chains": false,
+   "controller": "ccacamp",
+   "demand_level": "medium",
+   "seed": 5,
+   "steps": 2065,
+   "interlock_violations": 0,
+   "person_delay_s": 160905.8660000001,
+   "person_throughput_per_hour": 10308.934426229596,
+   "stops_per_vehicle": 1.9213389121338913,
+   "wait_time_s": {
+    "mean_s": 17.907112970711296,
+    "p95_s": 47.0,
+    "max_s": 87.0
+   },
+   "wall_s": 25.1,
+   "decision_stats": {
+    "ticks": 20361,
+    "switch_cycle_supervisor": 29,
+    "switch_gap_out": 348,
+    "cycles_completed": 3739,
+    "extend": 18591,
+    "extend_allocation_protected": 0,
+    "switch_pressure": 991,
+    "switch_max_green": 402,
+    "switch_starvation": 0,
+    "blended": 0,
+    "blended_no_history": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "truth"
+  },
+  {
+   "scenario": "spider_lh",
+   "lane_chains": false,
+   "controller": "ccacamp",
+   "demand_level": "medium",
+   "seed": 6,
+   "steps": 2057,
+   "interlock_violations": 0,
+   "person_delay_s": 157403.0350000001,
+   "person_throughput_per_hour": 10365.576923077013,
+   "stops_per_vehicle": 1.9439330543933055,
+   "wait_time_s": {
+    "mean_s": 18.090376569037655,
+    "p95_s": 47.0,
+    "max_s": 81.0
+   },
+   "wall_s": 25.3,
+   "decision_stats": {
+    "ticks": 20291,
+    "switch_cycle_supervisor": 33,
+    "switch_gap_out": 347,
+    "cycles_completed": 3690,
+    "extend": 18528,
+    "extend_allocation_protected": 0,
+    "switch_pressure": 966,
+    "switch_max_green": 417,
+    "switch_starvation": 0,
+    "blended": 0,
+    "blended_no_history": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "truth"
+  },
+  {
+   "scenario": "spider_lh",
+   "lane_chains": false,
+   "controller": "ccacamp",
+   "demand_level": "medium",
+   "seed": 7,
+   "steps": 2039,
+   "interlock_violations": 0,
+   "person_delay_s": 155276.52300000016,
+   "person_throughput_per_hour": 10495.326842837363,
+   "stops_per_vehicle": 1.892887029288703,
+   "wait_time_s": {
+    "mean_s": 17.466945606694562,
+    "p95_s": 45.0,
+    "max_s": 94.0
+   },
+   "wall_s": 23.6,
+   "decision_stats": {
+    "ticks": 20034,
+    "switch_cycle_supervisor": 30,
+    "switch_gap_out": 367,
+    "cycles_completed": 3693,
+    "extend": 18271,
+    "extend_allocation_protected": 0,
+    "switch_pressure": 979,
+    "switch_max_green": 387,
+    "switch_starvation": 0,
+    "blended": 0,
+    "blended_no_history": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "truth"
+  },
+  {
+   "scenario": "spider_lh",
+   "lane_chains": false,
+   "controller": "ccacamp",
+   "demand_level": "medium",
+   "seed": 8,
+   "steps": 2047,
+   "interlock_violations": 0,
+   "person_delay_s": 153170.58299999984,
+   "person_throughput_per_hour": 10437.261410788475,
+   "stops_per_vehicle": 1.9263598326359832,
+   "wait_time_s": {
+    "mean_s": 18.12887029288703,
+    "p95_s": 46.0,
+    "max_s": 97.0
+   },
+   "wall_s": 24.4,
+   "decision_stats": {
+    "ticks": 20161,
+    "switch_cycle_supervisor": 29,
+    "switch_gap_out": 381,
+    "cycles_completed": 3737,
+    "extend": 18402,
+    "extend_allocation_protected": 0,
+    "switch_pressure": 947,
+    "switch_max_green": 402,
+    "switch_starvation": 0,
+    "blended": 0,
+    "blended_no_history": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "truth"
+  },
+  {
+   "scenario": "spider_lh",
+   "lane_chains": false,
+   "controller": "ccacamp",
+   "demand_level": "medium",
+   "seed": 9,
+   "steps": 2042,
+   "interlock_violations": 0,
+   "person_delay_s": 154531.62199999986,
+   "person_throughput_per_hour": 10473.476752255472,
+   "stops_per_vehicle": 1.9757322175732217,
+   "wait_time_s": {
+    "mean_s": 17.94560669456067,
+    "p95_s": 46.0,
+    "max_s": 90.0
+   },
+   "wall_s": 24.9,
+   "decision_stats": {
+    "ticks": 20116,
+    "switch_cycle_supervisor": 25,
+    "switch_gap_out": 360,
+    "cycles_completed": 3594,
+    "extend": 18362,
+    "extend_allocation_protected": 0,
+    "switch_pressure": 993,
+    "switch_max_green": 376,
+    "switch_starvation": 0,
+    "blended": 0,
+    "blended_no_history": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "truth"
+  },
+  {
+   "scenario": "spider_lh",
+   "lane_chains": false,
+   "controller": "ccacamp",
+   "demand_level": "medium",
+   "seed": 10,
+   "steps": 2015,
+   "interlock_violations": 0,
+   "person_delay_s": 151803.40399999995,
+   "person_throughput_per_hour": 10673.465346534746,
+   "stops_per_vehicle": 1.917154811715481,
+   "wait_time_s": {
+    "mean_s": 18.04518828451883,
+    "p95_s": 47.0,
+    "max_s": 88.0
+   },
+   "wall_s": 27.4,
+   "decision_stats": {
+    "ticks": 19785,
+    "switch_cycle_supervisor": 33,
+    "switch_gap_out": 355,
+    "cycles_completed": 3584,
+    "extend": 18041,
+    "extend_allocation_protected": 0,
+    "switch_pressure": 983,
+    "switch_max_green": 373,
+    "switch_starvation": 0,
+    "blended": 0,
+    "blended_no_history": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "truth"
+  }
+ ]
+}

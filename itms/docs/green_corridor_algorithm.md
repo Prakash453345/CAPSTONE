@@ -476,7 +476,7 @@ applicable to this build · **`GAP` not addressed**
 
 | | status | mechanism |
 |---|---|---|
-| A1 yellow trap, entry | STRUCT | clean all-red break; every phase pair checked |
+| A1 yellow trap, entry | STRUCT | clean all-red break; every phase pair checked. One later exception outside the corridor controller: the blocking-aware controller enters a phase's own alternate with continuing greens kept; an alternate stops only protected movements, never a permissive one, and needs a separate turn face per approach |
 | A2 yellow trap, exit | STRUCT | same |
 | A3 lagging prot/perm left | N/A | no lagging left phasing in this network |
 | A4 trailing overlaps | N/A | no overlaps; phases are disjoint movement sets |

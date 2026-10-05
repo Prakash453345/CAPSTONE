@@ -1181,6 +1181,20 @@ class AdaptiveCamp:
     def set_sim_time(self, sim_time_s: float) -> None:
         self._sim_time_s = sim_time_s
 
+    def _pressure(
+        self,
+        cfg_t0: Tier0Config,
+        ctx: JunctionContext,
+        phase_id: str,
+        urgency: Mapping[str, float],
+        owed_s: Mapping[str, float],
+        horizon_s: float,
+    ) -> float:
+        """One phase's pressure. A method only so a subclass can price a
+        phase differently (`hol_camp.HolAwareCamp`); here it is exactly the
+        module-level `pressure`."""
+        return pressure(cfg_t0, ctx, self.cfg, phase_id, urgency, owed_s, horizon_s)
+
     def _phase_horizon_s(self, cfg_t0: Tier0Config) -> float:
         """How long one phase can expect to hold if it wins -- the horizon
         `switch_cost_bias` amortizes the clearance interval over.
@@ -1399,7 +1413,7 @@ class AdaptiveCamp:
         urgency, owed = self._corridor_state(cfg_t0)
         horizon = self._phase_horizon_s(cfg_t0)
         pressures = {
-            p: pressure(cfg_t0, ctx, cfg, p, urgency, owed, horizon) for p in live
+            p: self._pressure(cfg_t0, ctx, p, urgency, owed, horizon) for p in live
         }
         min_g = cfg_t0.min_green_s.get(current, 0.0)
         max_g = cfg_t0.max_green_s.get(current, min_g)

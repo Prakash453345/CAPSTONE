@@ -1,0 +1,346 @@
+{
+ "meta": {
+  "fps": 5.0,
+  "seeds": [
+   101,
+   102
+  ],
+  "levels": [
+   "light"
+  ],
+  "arms": [
+   "webster",
+   "truth",
+   "vision:itms6_640:failsafe"
+  ],
+  "wall_min": 27.0
+ },
+ "summary": {
+  "light": {
+   "arms": {
+    "webster": {
+     "n": 2,
+     "person_delay_s": 25491.982500000006,
+     "stops_per_vehicle": 1.5623100303951367,
+     "p95_wait_s": 108.0,
+     "person_throughput_per_hour": 1238.9609366451473,
+     "interlock_violations": 0,
+     "fallback_fixed_time": 0,
+     "ticks": 0
+    },
+    "truth": {
+     "n": 2,
+     "person_delay_s": 15751.53000000001,
+     "stops_per_vehicle": 1.1854103343465046,
+     "p95_wait_s": 44.0,
+     "person_throughput_per_hour": 1270.8180515759313,
+     "interlock_violations": 0,
+     "fallback_fixed_time": 0,
+     "ticks": 43042
+    },
+    "vision:itms6_640:failsafe": {
+     "n": 2,
+     "person_delay_s": 16652.59500000001,
+     "stops_per_vehicle": 1.2294832826747721,
+     "p95_wait_s": 50.5,
+     "person_throughput_per_hour": 1266.3026116855249,
+     "interlock_violations": 0,
+     "fallback_fixed_time": 2015,
+     "ticks": 42308,
+     "confidence_fed_mean": 0.938807459105746,
+     "confidence_below_0.8": 0.011292587886447285
+    }
+   },
+   "paired": {
+    "webster_vs_truth:person_delay_s": {
+     "n": 2,
+     "mean": 9740.4525,
+     "pct": 61.8381357239582,
+     "ci95": [
+      9339.392212500004,
+      10141.512787499994
+     ],
+     "significant": true,
+     "n_better": 0
+    },
+    "webster_vs_truth:stops_per_vehicle": {
+     "n": 2,
+     "mean": 0.37689969604863216,
+     "pct": 31.79487179487179,
+     "ci95": [
+      0.3396048632218843,
+      0.41419452887538
+     ],
+     "significant": true,
+     "n_better": 0
+    },
+    "truth_vs_webster:person_delay_s": {
+     "n": 2,
+     "mean": -9740.4525,
+     "pct": -38.20986657275478,
+     "ci95": [
+      -10141.512787499994,
+      -9339.392212500004
+     ],
+     "significant": true,
+     "n_better": 2
+    },
+    "truth_vs_webster:stops_per_vehicle": {
+     "n": 2,
+     "mean": -0.37689969604863216,
+     "pct": -24.12451361867704,
+     "ci95": [
+      -0.41419452887538,
+      -0.3396048632218843
+     ],
+     "significant": true,
+     "n_better": 2
+    },
+    "vision:itms6_640:failsafe_vs_webster:person_delay_s": {
+     "n": 2,
+     "mean": -8839.3875,
+     "pct": -34.67516698632599,
+     "ci95": [
+      -9145.385962500013,
+      -8533.389037499988
+     ],
+     "significant": true,
+     "n_better": 2
+    },
+    "vision:itms6_640:failsafe_vs_webster:stops_per_vehicle": {
+     "n": 2,
+     "mean": -0.3328267477203647,
+     "pct": -21.30350194552529,
+     "ci95": [
+      -0.3732294832826747,
+      -0.2924240121580547
+     ],
+     "significant": true,
+     "n_better": 2
+    },
+    "vision:itms6_640:failsafe_vs_truth:person_delay_s": {
+     "n": 2,
+     "mean": 901.0649999999987,
+     "pct": 5.720491914118807,
+     "ci95": [
+      194.00624999999138,
+      1608.123750000006
+     ],
+     "significant": true,
+     "n_better": 0
+    },
+    "vision:itms6_640:failsafe_vs_truth:stops_per_vehicle": {
+     "n": 2,
+     "mean": 0.04407294832826747,
+     "pct": 3.7179487179487167,
+     "ci95": [
+      -0.03362462006079037,
+      0.1217705167173253
+     ],
+     "significant": false,
+     "n_better": 0
+    }
+   }
+  }
+ },
+ "records": [
+  {
+   "scenario": "berlin_adlershof",
+   "lane_chains": false,
+   "controller": "webster",
+   "demand_level": "light",
+   "seed": 101,
+   "steps": 2026,
+   "interlock_violations": 0,
+   "person_delay_s": 25280.220000000016,
+   "person_throughput_per_hour": 1246.7368421052631,
+   "stops_per_vehicle": 1.553191489361702,
+   "wait_time_s": {
+    "mean_s": 28.51063829787234,
+    "p95_s": 108.0,
+    "max_s": 165.0
+   },
+   "wall_s": 20.0,
+   "arm": "webster"
+  },
+  {
+   "scenario": "berlin_adlershof",
+   "lane_chains": false,
+   "controller": "webster",
+   "demand_level": "light",
+   "seed": 102,
+   "steps": 2044,
+   "interlock_violations": 0,
+   "person_delay_s": 25703.745,
+   "person_throughput_per_hour": 1231.1850311850312,
+   "stops_per_vehicle": 1.5714285714285714,
+   "wait_time_s": {
+    "mean_s": 29.075987841945288,
+    "p95_s": 108.0,
+    "max_s": 162.0
+   },
+   "wall_s": 20.2,
+   "arm": "webster"
+  },
+  {
+   "scenario": "berlin_adlershof",
+   "lane_chains": true,
+   "controller": "ccacamp",
+   "demand_level": "light",
+   "seed": 101,
+   "steps": 1997,
+   "interlock_violations": 0,
+   "person_delay_s": 15735.885000000015,
+   "person_throughput_per_hour": 1272.6361031518625,
+   "stops_per_vehicle": 1.1945288753799392,
+   "wait_time_s": {
+    "mean_s": 10.945288753799392,
+    "p95_s": 45.0,
+    "max_s": 92.0
+   },
+   "wall_s": 47.9,
+   "decision_stats": {
+    "ticks": 21493,
+    "switch_cycle_supervisor": 2,
+    "switch_gap_out": 425,
+    "cycles_completed": 11171,
+    "extend": 20080,
+    "extend_allocation_protected": 0,
+    "switch_pressure": 130,
+    "switch_max_green": 856,
+    "switch_starvation": 0,
+    "blended": 0,
+    "blended_no_history": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "truth"
+  },
+  {
+   "scenario": "berlin_adlershof",
+   "lane_chains": true,
+   "controller": "ccacamp",
+   "demand_level": "light",
+   "seed": 102,
+   "steps": 2001,
+   "interlock_violations": 0,
+   "person_delay_s": 15767.175000000003,
+   "person_throughput_per_hour": 1269.0,
+   "stops_per_vehicle": 1.1762917933130699,
+   "wait_time_s": {
+    "mean_s": 10.94224924012158,
+    "p95_s": 43.0,
+    "max_s": 80.0
+   },
+   "wall_s": 62.6,
+   "decision_stats": {
+    "ticks": 21549,
+    "switch_cycle_supervisor": 2,
+    "switch_gap_out": 418,
+    "cycles_completed": 11246,
+    "extend": 20135,
+    "extend_allocation_protected": 0,
+    "switch_pressure": 127,
+    "switch_max_green": 867,
+    "switch_starvation": 0,
+    "blended": 0,
+    "blended_no_history": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "truth"
+  },
+  {
+   "scenario": "berlin_adlershof",
+   "lane_chains": true,
+   "controller": "ccacamp",
+   "demand_level": "light",
+   "seed": 101,
+   "steps": 1999,
+   "interlock_violations": 0,
+   "person_delay_s": 16291.20000000001,
+   "person_throughput_per_hour": 1270.815450643777,
+   "stops_per_vehicle": 1.2006079027355623,
+   "wait_time_s": {
+    "mean_s": 11.972644376899696,
+    "p95_s": 49.0,
+    "max_s": 93.0
+   },
+   "wall_s": 1621.3,
+   "decision_stats": {
+    "ticks": 21135,
+    "switch_cycle_supervisor": 5,
+    "switch_gap_out": 395,
+    "cycles_completed": 10313,
+    "extend": 19015,
+    "extend_allocation_protected": 0,
+    "switch_pressure": 160,
+    "switch_max_green": 809,
+    "switch_starvation": 0,
+    "blended": 0,
+    "blended_no_history": 0,
+    "fallback_fixed_time": 751,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "vision": {
+    "confidence_fed": {
+     "mean": 0.941599266345287,
+     "below_0.8": 0.0038453292580356113,
+     "below_0.5": 0.0038453292580356113,
+     "link_ticks": 363818
+    },
+    "ticks": 1999,
+    "blind_check_junction_ticks": 0
+   },
+   "arm": "vision:itms6_640:failsafe"
+  },
+  {
+   "scenario": "berlin_adlershof",
+   "lane_chains": true,
+   "controller": "ccacamp",
+   "demand_level": "light",
+   "seed": 102,
+   "steps": 2009,
+   "interlock_violations": 0,
+   "person_delay_s": 17013.990000000005,
+   "person_throughput_per_hour": 1261.7897727272727,
+   "stops_per_vehicle": 1.2583586626139818,
+   "wait_time_s": {
+    "mean_s": 13.030395136778116,
+    "p95_s": 52.0,
+    "max_s": 94.0
+   },
+   "wall_s": 1563.0,
+   "decision_stats": {
+    "ticks": 21173,
+    "switch_cycle_supervisor": 6,
+    "switch_gap_out": 388,
+    "cycles_completed": 10231,
+    "extend": 18595,
+    "extend_allocation_protected": 0,
+    "switch_pressure": 141,
+    "switch_max_green": 779,
+    "switch_starvation": 0,
+    "blended": 0,
+    "blended_no_history": 0,
+    "fallback_fixed_time": 1264,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "vision": {
+    "confidence_fed": {
+     "mean": 0.9360156518662052,
+     "below_0.8": 0.01873984651485896,
+     "below_0.5": 0.01609788916906886,
+     "link_ticks": 365638
+    },
+    "ticks": 2009,
+    "blind_check_junction_ticks": 0
+   },
+   "arm": "vision:itms6_640:failsafe"
+  }
+ ]
+}

@@ -141,6 +141,8 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 from itms_domain import Phase, Tier0Config
+from itms_domain.signal_program import green_phase_states, is_green_phase
+from itms_domain.signal_program import sub_stage_indices as _sub_stage_indices  # noqa: F401
 
 _HERE = Path(__file__).resolve().parent
 _DEFAULT_NET = _HERE / "vijayawada_corridor.net.xml"
@@ -184,9 +186,54 @@ def _conflicts_from_foes(foes: str) -> list[int]:
 
 
 def _is_green_phase(state: str) -> bool:
-    """A real (non-yellow-only) phase has at least one green link. SUMO
-    states use 'G'/'g' for green, 'y'/'Y' for yellow, 'r'/'R' for red/off."""
-    return any(c in "Gg" for c in state)
+    """A real green phase has at least one green link and no yellow one. SUMO
+    states use 'G'/'g' for green, 'y'/'Y' for yellow, 'r'/'R' for red/off.
+
+    A state with both is a change interval in which some movements carry on
+    (netconvert writes `yygrrrryygrrrr` before a protected-turn phase, and
+    `yyyrrrGyy` where one movement runs through two phases). The first
+    version counted those as green phases. Their green sets are subsets of
+    the phases around them, often identical to another one, so the cabinet
+    could not tell them apart on readback: on a generated radial network
+    (`scenarios/generated/spider_lh`) every junction with one went to the
+    readback-divergence failsafe hundreds of times a run, and delay at heavy
+    demand was 2.8x Webster's. The controller builds its own change interval
+    (`TraCICabinet.yellow_state_for`), so these are skipped. The corridor's
+    programs have none, so its configs are unchanged.
+
+    'u' (red+amber before green, used in German signal plans such as SUMO's
+    Ingolstadt example) is a change interval too. The rule lives in
+    `itms_domain.signal_program`, shared with the camera service."""
+    return is_green_phase(state)   # itms_domain.signal_program: one rule for all
+
+
+def _program_agrees(junction: ET.Element, tl_logic: ET.Element) -> bool:
+    """Whether the junction's `<request>` rows describe this program's links.
+
+    The conflict matrix is read from the junction, keyed by request index,
+    and that is only right while request `i` is the light's link `i`.
+    netconvert numbers them the same way; a network edited in netedit can
+    give the light its own link numbering (SUMO's Ingolstadt example: a
+    junction with 35 requests under an 18-link program). Read through the
+    wrong numbering, the program's own greens looked like conflicts, and
+    every tick of every run went to the interlock failsafe. The test: the
+    same number of links, and no green phase of the program showing two
+    protected links the junction calls foes (no real program does)."""
+    states = [ph.get("state", "") for ph in tl_logic.findall("phase")]
+    if not states:
+        return True
+    requests = junction.findall("request")
+    if len(requests) != len(states[0]):
+        return False
+    foes = {int(r.get("index", "-1")): set(_conflicts_from_foes(r.get("foes", "")))
+            for r in requests}
+    for st in states:
+        if not _is_green_phase(st):
+            continue
+        on = [i for i, c in enumerate(st) if c == "G"] or [i for i, c in enumerate(st) if c == "g"]
+        if any(j in foes.get(i, ()) for i in on for j in on if i < j):
+            return False
+    return True
 
 
 def kinematic_yellow_s(approach_speed_mps: float) -> float:
@@ -212,6 +259,33 @@ def _approach_speed_mps(junction: ET.Element, lane_speeds: dict[str, float]) -> 
         if lane in lane_speeds
     ]
     return max(speeds) if speeds else 13.9
+
+
+def _joined_view(tls_id: str, tl_logic: ET.Element, root: ET.Element) -> ET.Element:
+    """A stand-in `<junction>` for a traffic light that controls several
+    junctions (netconvert's `--tls.join`, common in OpenStreetMap imports,
+    names it `joinedS_...`). Its link indices span every junction it
+    controls, so no single junction's `<request>` rows describe it. The
+    conflicts are taken from its own program instead: two links conflict when
+    no green phase shows both green. That treats the program's groupings as
+    the safe ones -- which is what they are, the network's own signal plan --
+    and incoming lanes come from its connections, for the yellow."""
+    greens = [
+        {i for i, c in enumerate(p.get("state", "")) if c in "Gg"}
+        for p in tl_logic.findall("phase")
+        if _is_green_phase(p.get("state", ""))
+    ]
+    n = max((len(p.get("state", "")) for p in tl_logic.findall("phase")), default=0)
+    view = ET.Element("junction", {"id": tls_id})
+    for i in range(n):
+        together = set().union(*(g for g in greens if i in g)) if any(i in g for g in greens) \
+            else set()
+        foes = "".join("1" if (j != i and j not in together) else "0" for j in range(n))
+        ET.SubElement(view, "request", {"index": str(i), "foes": foes[::-1]})
+    inc = {c.get("from") + "_" + c.get("fromLane") for c in root.findall("connection")
+           if c.get("tl") == tls_id and c.get("from") and c.get("fromLane") is not None}
+    view.set("incLanes", " ".join(sorted(inc)))
+    return view
 
 
 def _extract_one(
@@ -242,20 +316,18 @@ def _extract_one(
     # section for the measurement that forced the change.
     yellow_s = kinematic_yellow_s(_approach_speed_mps(junction, lane_speeds or {}))
 
+    # The program's green stages, in program order: change intervals
+    # (including the yellow-only clearances SUMO's default program inserts,
+    # whose 5-6 s netconvert guess once seeded `yellow_s` and cost more delay
+    # than any controller change recovered -- the kinematic rule above is the
+    # source now), the heads and tails of a stage (a pedestrian clearance)
+    # and repeats are skipped. See `itms_domain.signal_program`.
     green_phase_count = 0
-    all_phase_elements = tl_logic.findall("phase")
-    for phase_el in all_phase_elements:
-        state = phase_el.get("state", "")
-        if not _is_green_phase(state):
-            # A yellow-only clearance phase SUMO's default program inserted.
-            # Its duration used to seed `yellow_s`; it no longer does (the
-            # kinematic rule above is the source), because netconvert's
-            # guess is 5-6 s here and that cost more delay than any
-            # controller change recovered. Skipped, not read.
-            continue
-        phase_id = f"P{green_phase_count}"
+    states = [ph.get("state", "") for ph in tl_logic.findall("phase")]
+    for _, state in green_phase_states(states):
         green_links = frozenset(f"L{i}" for i, c in enumerate(state) if c in "Gg")
         protected_links = frozenset(f"L{i}" for i, c in enumerate(state) if c == "G")
+        phase_id = f"P{green_phase_count}"
         phases[phase_id] = Phase(phase_id, green_links, protected_movements=protected_links)
         ring_order.append(phase_id)
         min_green_s[phase_id] = _MIN_GREEN_S
@@ -327,8 +399,10 @@ def load_configs(net_path: str | Path) -> dict[str, Tier0Config]:
         if tls_id is None:
             raise ValueError("a <tlLogic> element has no id")
         junction = junctions_by_id.get(tls_id)
-        if junction is None:
-            raise ValueError(f"tlLogic {tls_id!r} has no matching <junction> element")
+        if junction is None or not _program_agrees(junction, tl_logic):
+            # one light over several junctions (netconvert --tls.join), or a
+            # light numbering its links its own way: conflicts from the program
+            junction = _joined_view(tls_id, tl_logic, root)
         configs[tls_id] = _extract_one(
             tls_id, tl_logic, junction, calibration.get(tls_id), lane_speeds
         )
