@@ -106,6 +106,19 @@ class RuleConfig:
     collision_overlap: float = 0.5
     collision_prior_speed: float = 5.0
     collision_apart_m: float = 4.0
+    # > 0: a pair counts when its bumper gap (centre distance minus the mean
+    # of the two lengths) is <= this many metres -- vehicles stopped in contact,
+    # which a real rear-end leaves -- instead of the footprint-overlap fraction
+    # above. 0 keeps the overlap test.
+    collision_contact_m: float = 0.0
+    # contact-mode gates (defaults off): skip a pair on a red/yellow lane, require
+    # the two to have stopped within `max_dt_stop` s of each other, at most
+    # `max_neighbours` other stopped vehicles within 20 m on the lane, and
+    # `min_v3` m/s in the 3 s before stopping (an abrupt stop, not a queue crawl)
+    collision_skip_red: bool = False
+    collision_max_dt_stop: float = 1e9
+    collision_max_neighbours: int = 10**9
+    collision_min_v3: float = 0.0
     void_s: float = 90.0
     void_bin_m: float = 10.0
     void_min_from_stop_line_m: float = 60.0
@@ -152,6 +165,15 @@ OPERATING_POINTS: dict[str, RuleConfig] = {
                          midblock_stop_s=45.0, midblock_stop_dwell_s=60.0,
                          midblock_impact_s=20.0, raise_persist_s=4.0,
                          enabled=("stuck_on_green", "midblock_stop")),
+    # Opt-in, NOT a default: the rear-end-aftermath gates chosen on train seeds
+    # (baselines/2026-10-05_m8_accident). Held-out: 0.4-1.5 false alarms/h but
+    # only 1/15 in-view injected aftermaths -- recall target missed.
+    "accident": RuleConfig(midblock_stop_s=45.0, midblock_stop_dwell_s=60.0,
+                           midblock_impact_s=20.0, raise_persist_s=4.0,
+                           collision_stop_s=20.0, collision_contact_m=1.0,
+                           collision_skip_red=True, collision_max_dt_stop=2.0,
+                           collision_max_neighbours=1, collision_min_v3=5.0,
+                           enabled=("midblock_stop", "collision_cue")),
 }
 DEFAULT_OPERATING_POINT = "quiet"
 
@@ -442,7 +464,9 @@ class IncidentEngine:
         xy = np.stack([g.xy for g in tr])
         lengths = np.array([g.length_m for g in tr])
         d = np.hypot(xy[:, None, 0] - xy[None, :, 0], xy[:, None, 1] - xy[None, :, 1])
-        reach = cfg.collision_overlap * (lengths[:, None] + lengths[None, :]) / 2.0
+        half_sum = (lengths[:, None] + lengths[None, :]) / 2.0
+        reach = (half_sum + cfg.collision_contact_m if cfg.collision_contact_m > 0
+                 else cfg.collision_overlap * half_sum)
         close = np.triu(d <= reach, k=1)
         for i, j in zip(*np.nonzero(close), strict=True):
             a, b = tr[int(i)], tr[int(j)]
@@ -458,11 +482,26 @@ class IncidentEngine:
             if prior < cfg.collision_prior_speed:
                 continue
             keys = sorted([[a.camera_id, a.track_id], [b.camera_id, b.track_id]])
-            out.append(RuleHit("collision_cue", a.lane_id or "", 1.0, a.s,
-                               self.links_for_lane(a.lane_id or ""),
+            links = self.links_for_lane(a.lane_id or "")
+            sa, sb = a.stopped_since or t, b.stopped_since or t
+            nb = sum(1 for g in all_tracks
+                     if g is not a and g is not b and g.lane_id == a.lane_id and g.stopped
+                     and not g.coasting and abs(g.s - a.s) <= 20.0)
+            v3 = max(self._recent_speed(a, sa, 3.0), self._recent_speed(b, sb, 3.0))
+            states = [self._state_of(tls, lk)[0].lower() for tls, lk in links]
+            red = bool(states) and all(x in ("r", "y") for x in states)
+            if cfg.collision_skip_red and red:
+                continue
+            if (abs(sa - sb) > cfg.collision_max_dt_stop or nb > cfg.collision_max_neighbours
+                    or v3 < cfg.collision_min_v3):
+                continue
+            out.append(RuleHit("collision_cue", a.lane_id or "", 1.0, a.s, links,
                                {"tracks": keys, "stopped_s": round(dur, 1),
                                 "measure": round(dur, 1),
-                                "prior_speed_mps": round(prior, 1)}))
+                                "prior_speed_mps": round(prior, 1),
+                                "gap_m": round(float(d[i, j] - half_sum[i, j]), 2),
+                                "red": red, "dt_stop": round(abs(sa - sb), 1),
+                                "nb": nb, "v3": round(v3, 1)}))
         return out
 
     def _observe_lanes(self, t: float, all_tracks: list[GroundTrack]) -> None:

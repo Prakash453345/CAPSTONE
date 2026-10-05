@@ -876,3 +876,6 @@ preset it was measured under.
 | free-text labels matched as far as "SUV" | every BMD-45 / UVH-26 label mapped, with a test | "MUV" matched nothing, so a model trained on either would never have counted one |
 | detector presets assumed | three fitted to measured detectors, with a size curve per vehicle type | the assumed size curve credited a 640 px detector with far vehicles it misses; the controller's cost of a stock detector was a third of the measured one |
 
+
+## Accident candidate (rear-end aftermath), opt-in
+`VISION_RULES=accident` enables `collision_cue` in contact mode (two vehicles stopped bumper-to-bumper within 2 s of each other, abrupt stop, isolated pair, not on a red lane, >= 20 s). A candidate for an operator to confirm (ADR-006). Held-out in SUMO: 0.4-1.5 false alarms/h, 1/15 injected aftermaths found; the 30 % recall target was missed, so it is not the default. No real crash data was available. See `baselines/2026-10-05_m8_accident/README.md`.

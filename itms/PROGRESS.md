@@ -5886,3 +5886,7 @@ than the default on held-out seeds and is a lead, not a result.
 Tests: `tests/control/strategies/test_hol.py` (43), runner, interlock,
 queue-state and vision blocked-lane cases. Full suite: 876 passed, 6 skipped.
 ruff clean.
+
+
+## M8 accident candidate (2026-10-05)
+Rear-end-aftermath injector + `accident` operating point (opt-in, `VISION_RULES=accident`). Held-out: 0.4-1.5 false alarms/h on twins, but only 1/15 in-view injected aftermaths found (target >= 30 % missed). Not a default. Details: `baselines/2026-10-05_m8_accident/README.md`.

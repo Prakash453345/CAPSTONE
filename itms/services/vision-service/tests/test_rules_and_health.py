@@ -390,3 +390,44 @@ def test_a_silent_camera_is_reported_but_only_a_never_working_one_is_a_hard_fail
     status, score, _ = blind.assess(620.0)
     assert status is CameraStatus.DEGRADED and score == 0.3
     assert nxt > 0
+
+
+_CONTACT = dict(collision_stop_s=10.0, collision_contact_m=1.0, collision_max_dt_stop=2.0,
+                collision_max_neighbours=1, collision_min_v3=5.0, collision_skip_red=True,
+                enabled=("collision_cue",))
+
+
+def _pair_frames(network, s_a, s_b, stop_a=6.0, stop_b=6.0):
+    lane = network.lanes["in_0"]
+    hist_a = [(float(k), *lane.point_at(s_a - 12.0 * (6 - k))[0]) for k in range(6)]
+    hist_b = [(float(k), *lane.point_at(s_b - 6.0 * (6 - k))[0]) for k in range(6)]
+    frames = []
+    for t in range(6, 30):
+        a = _gt(network, "in_0", s_a, track_id=1, stopped_since=stop_a, history=list(hist_a))
+        b = _gt(network, "in_0", s_b, track_id=2, stopped_since=stop_b, history=list(hist_b))
+        hist_a.append((float(t), *lane.point_at(s_a)[0]))
+        hist_b.append((float(t), *lane.point_at(s_b)[0]))
+        frames.append((float(t), [a, b]))
+    return frames
+
+
+def test_contact_mode_fires_on_an_abrupt_pair_in_contact(network, rig, links) -> None:
+    eng, est = _engine(rig, links, StaticSignalState(), **_CONTACT)
+    _run(eng, est, _pair_frames(network, 130.0, 126.0))   # 4.0 m apart, 4.2 m long: touching
+    assert any(c.rule == "collision_cue" for c in eng.active.values())
+
+
+def test_contact_mode_ignores_a_queue_gap_and_a_staggered_stop(network, rig, links) -> None:
+    eng, est = _engine(rig, links, StaticSignalState(), **_CONTACT)
+    _run(eng, est, _pair_frames(network, 130.0, 123.0))   # 7 m apart: standing-queue gap
+    assert not any(c.rule == "collision_cue" for c in eng.active.values())
+    eng, est = _engine(rig, links, StaticSignalState(), **_CONTACT)
+    _run(eng, est, _pair_frames(network, 130.0, 126.0, stop_a=6.0, stop_b=14.0))
+    assert not any(c.rule == "collision_cue" for c in eng.active.values())
+
+
+def test_accident_point_is_opt_in() -> None:
+    from vision_service.incidents import DEFAULT_OPERATING_POINT, OPERATING_POINTS
+
+    assert "collision_cue" in OPERATING_POINTS["accident"].enabled
+    assert DEFAULT_OPERATING_POINT == "quiet"
