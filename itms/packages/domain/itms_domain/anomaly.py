@@ -39,6 +39,7 @@ class AnomalyType(StrEnum):
     ROAD_OBSTRUCTION = "road_obstruction"
     HEAVY_CONGESTION = "heavy_congestion"
     STALLED_VEHICLE = "stalled_vehicle"  # the M6 injector's stall
+    FIRE = "fire"  # M8 fire/smoke candidate (operator confirms, ADR-006)
     UNKNOWN = "unknown"
 
 

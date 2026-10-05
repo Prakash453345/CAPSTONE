@@ -32,6 +32,7 @@ const ANOMALY_WORDS: Record<AnomalyKind, string> = {
   road_obstruction: "Obstruction",
   heavy_congestion: "Heavy congestion",
   stalled_vehicle: "Stalled vehicle",
+  fire: "Fire",
   unknown: "Disruption",
 };
 export const anomalyWord = (k: AnomalyKind) => ANOMALY_WORDS[k] ?? "Disruption";

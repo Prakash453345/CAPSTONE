@@ -1,0 +1,835 @@
+{
+ "model": "/mnt/user-data/uploads/capstone/itms_uvh26_ft6v3_results/itms_six_aug_640.onnx",
+ "backend": "onnxruntime 1.25.0",
+ "imgsz": 640,
+ "op": 0.5,
+ "conditions": {
+  "clean": {
+   "map50": 0.841229406812715,
+   "vehicle_recall": 0.8,
+   "vehicle_precision": 0.9353985644125425,
+   "false_pos_per_image": 0.684,
+   "pcu_per_image": {
+    "truth_mean": 10.324399999999999,
+    "bias": -1.217200000000001,
+    "mae": 1.782000000000001
+   },
+   "per_class": {
+    "auto_rickshaw": {
+     "truth": 522,
+     "ap50": 0.89471351916546,
+     "recall": 0.8084291187739464,
+     "found_as_some_vehicle": 0.8314176245210728,
+     "precision": 0.9419642857142857,
+     "reported_as": {
+      "auto_rickshaw": 422,
+      "missed": 88,
+      "truck": 8,
+      "car": 4
+     }
+    },
+    "bicycle": {
+     "truth": 31,
+     "ap50": 0.6232623347224365,
+     "recall": 0.5806451612903226,
+     "found_as_some_vehicle": 0.7419354838709677,
+     "precision": 0.8181818181818182,
+     "reported_as": {
+      "bicycle": 18,
+      "missed": 8,
+      "motorcycle": 5
+     }
+    },
+    "bus": {
+     "truth": 106,
+     "ap50": 0.8178779237087319,
+     "recall": 0.7452830188679245,
+     "found_as_some_vehicle": 0.8490566037735849,
+     "precision": 0.8586956521739131,
+     "reported_as": {
+      "bus": 79,
+      "missed": 16,
+      "car": 6,
+      "truck": 5
+     }
+    },
+    "car": {
+     "truth": 645,
+     "ap50": 0.9462944095828878,
+     "recall": 0.8697674418604651,
+     "found_as_some_vehicle": 0.8821705426356589,
+     "precision": 0.9136807817589576,
+     "reported_as": {
+      "car": 561,
+      "missed": 76,
+      "auto_rickshaw": 3,
+      "truck": 3,
+      "bus": 1,
+      "motorcycle": 1
+     }
+    },
+    "motorcycle": {
+     "truth": 1509,
+     "ap50": 0.9131123671744075,
+     "recall": 0.756129887342611,
+     "found_as_some_vehicle": 0.7581179589131876,
+     "precision": 0.9337152209492635,
+     "reported_as": {
+      "motorcycle": 1141,
+      "missed": 365,
+      "bicycle": 3
+     }
+    },
+    "truck": {
+     "truth": 282,
+     "ap50": 0.8521158865223661,
+     "recall": 0.7375886524822695,
+     "found_as_some_vehicle": 0.7659574468085106,
+     "precision": 0.8353413654618473,
+     "reported_as": {
+      "truck": 208,
+      "missed": 66,
+      "bus": 4,
+      "auto_rickshaw": 2,
+      "car": 2
+     }
+    }
+   }
+  },
+  "dusk": {
+   "map50": 0.84178945058065,
+   "vehicle_recall": 0.795799676898223,
+   "vehicle_precision": 0.9397176650133536,
+   "false_pos_per_image": 0.632,
+   "pcu_per_image": {
+    "truth_mean": 10.324399999999999,
+    "bias": -1.386800000000001,
+    "mae": 1.8868000000000007
+   },
+   "per_class": {
+    "auto_rickshaw": {
+     "truth": 522,
+     "ap50": 0.8906372832964712,
+     "recall": 0.8160919540229885,
+     "found_as_some_vehicle": 0.842911877394636,
+     "precision": 0.9403973509933775,
+     "reported_as": {
+      "auto_rickshaw": 426,
+      "missed": 82,
+      "truck": 8,
+      "car": 6
+     }
+    },
+    "bicycle": {
+     "truth": 31,
+     "ap50": 0.6333917764865389,
+     "recall": 0.6129032258064516,
+     "found_as_some_vehicle": 0.7419354838709677,
+     "precision": 0.8260869565217391,
+     "reported_as": {
+      "bicycle": 19,
+      "missed": 8,
+      "motorcycle": 4
+     }
+    },
+    "bus": {
+     "truth": 106,
+     "ap50": 0.8303103047126694,
+     "recall": 0.7358490566037735,
+     "found_as_some_vehicle": 0.8490566037735849,
+     "precision": 0.8478260869565217,
+     "reported_as": {
+      "bus": 78,
+      "missed": 16,
+      "truck": 6,
+      "car": 6
+     }
+    },
+    "car": {
+     "truth": 645,
+     "ap50": 0.9476779107200156,
+     "recall": 0.8635658914728682,
+     "found_as_some_vehicle": 0.875968992248062,
+     "precision": 0.9206611570247933,
+     "reported_as": {
+      "car": 557,
+      "missed": 80,
+      "auto_rickshaw": 3,
+      "truck": 3,
+      "bus": 1,
+      "motorcycle": 1
+     }
+    },
+    "motorcycle": {
+     "truth": 1509,
+     "ap50": 0.9106730519978665,
+     "recall": 0.752153744201458,
+     "found_as_some_vehicle": 0.7541418157720344,
+     "precision": 0.9380165289256198,
+     "reported_as": {
+      "motorcycle": 1135,
+      "missed": 371,
+      "bicycle": 3
+     }
+    },
+    "truck": {
+     "truth": 282,
+     "ap50": 0.8380463762703387,
+     "recall": 0.6985815602836879,
+     "found_as_some_vehicle": 0.7340425531914894,
+     "precision": 0.8277310924369747,
+     "reported_as": {
+      "truck": 197,
+      "missed": 75,
+      "bus": 5,
+      "auto_rickshaw": 3,
+      "car": 2
+     }
+    }
+   }
+  },
+  "night": {
+   "map50": 0.8139958012102285,
+   "vehicle_recall": 0.7835218093699515,
+   "vehicle_precision": 0.935570987654321,
+   "false_pos_per_image": 0.668,
+   "pcu_per_image": {
+    "truth_mean": 10.324399999999999,
+    "bias": -1.5732000000000013,
+    "mae": 2.1324000000000005
+   },
+   "per_class": {
+    "auto_rickshaw": {
+     "truth": 522,
+     "ap50": 0.8826057479181573,
+     "recall": 0.7911877394636015,
+     "found_as_some_vehicle": 0.8160919540229885,
+     "precision": 0.9301801801801802,
+     "reported_as": {
+      "auto_rickshaw": 413,
+      "missed": 96,
+      "truck": 8,
+      "car": 5
+     }
+    },
+    "bicycle": {
+     "truth": 31,
+     "ap50": 0.5363006352611172,
+     "recall": 0.45161290322580644,
+     "found_as_some_vehicle": 0.6774193548387096,
+     "precision": 0.8235294117647058,
+     "reported_as": {
+      "bicycle": 14,
+      "missed": 10,
+      "motorcycle": 7
+     }
+    },
+    "bus": {
+     "truth": 106,
+     "ap50": 0.8230251568498355,
+     "recall": 0.7169811320754716,
+     "found_as_some_vehicle": 0.7924528301886793,
+     "precision": 0.8837209302325582,
+     "reported_as": {
+      "bus": 76,
+      "missed": 22,
+      "car": 5,
+      "truck": 3
+     }
+    },
+    "car": {
+     "truth": 645,
+     "ap50": 0.9310805563881798,
+     "recall": 0.8635658914728682,
+     "found_as_some_vehicle": 0.8806201550387597,
+     "precision": 0.9221854304635762,
+     "reported_as": {
+      "car": 557,
+      "missed": 77,
+      "truck": 5,
+      "auto_rickshaw": 4,
+      "motorcycle": 2
+     }
+    },
+    "motorcycle": {
+     "truth": 1509,
+     "ap50": 0.9032728595746784,
+     "recall": 0.7435387673956262,
+     "found_as_some_vehicle": 0.7442014579191517,
+     "precision": 0.9272727272727272,
+     "reported_as": {
+      "motorcycle": 1122,
+      "missed": 386,
+      "bicycle": 1
+     }
+    },
+    "truck": {
+     "truth": 282,
+     "ap50": 0.8076898512694033,
+     "recall": 0.6773049645390071,
+     "found_as_some_vehicle": 0.7198581560283688,
+     "precision": 0.8268398268398268,
+     "reported_as": {
+      "truck": 191,
+      "missed": 79,
+      "bus": 5,
+      "auto_rickshaw": 5,
+      "car": 2
+     }
+    }
+   }
+  },
+  "noise": {
+   "map50": 0.8247465601939367,
+   "vehicle_recall": 0.7712439418416801,
+   "vehicle_precision": 0.9379174852652259,
+   "false_pos_per_image": 0.632,
+   "pcu_per_image": {
+    "truth_mean": 10.324399999999999,
+    "bias": -1.777600000000001,
+    "mae": 2.121600000000001
+   },
+   "per_class": {
+    "auto_rickshaw": {
+     "truth": 522,
+     "ap50": 0.880248404195296,
+     "recall": 0.789272030651341,
+     "found_as_some_vehicle": 0.8084291187739464,
+     "precision": 0.9493087557603687,
+     "reported_as": {
+      "auto_rickshaw": 412,
+      "missed": 100,
+      "truck": 5,
+      "car": 5
+     }
+    },
+    "bicycle": {
+     "truth": 31,
+     "ap50": 0.6275352855112211,
+     "recall": 0.5483870967741935,
+     "found_as_some_vehicle": 0.6774193548387096,
+     "precision": 0.85,
+     "reported_as": {
+      "bicycle": 17,
+      "missed": 10,
+      "motorcycle": 4
+     }
+    },
+    "bus": {
+     "truth": 106,
+     "ap50": 0.8005315657671209,
+     "recall": 0.7075471698113207,
+     "found_as_some_vehicle": 0.7830188679245284,
+     "precision": 0.8522727272727273,
+     "reported_as": {
+      "bus": 75,
+      "missed": 23,
+      "car": 5,
+      "truck": 2,
+      "auto_rickshaw": 1
+     }
+    },
+    "car": {
+     "truth": 645,
+     "ap50": 0.9351680119716183,
+     "recall": 0.8589147286821706,
+     "found_as_some_vehicle": 0.8713178294573644,
+     "precision": 0.9141914191419142,
+     "reported_as": {
+      "car": 554,
+      "missed": 83,
+      "bus": 2,
+      "auto_rickshaw": 2,
+      "motorcycle": 2,
+      "truck": 2
+     }
+    },
+    "motorcycle": {
+     "truth": 1509,
+     "ap50": 0.8943108928565747,
+     "recall": 0.7269715043074884,
+     "found_as_some_vehicle": 0.7282968853545394,
+     "precision": 0.9288738357324301,
+     "reported_as": {
+      "motorcycle": 1097,
+      "missed": 410,
+      "bicycle": 2
+     }
+    },
+    "truck": {
+     "truth": 282,
+     "ap50": 0.8106852008617891,
+     "recall": 0.6666666666666666,
+     "found_as_some_vehicle": 0.7092198581560284,
+     "precision": 0.8703703703703703,
+     "reported_as": {
+      "truck": 188,
+      "missed": 82,
+      "bus": 5,
+      "car": 4,
+      "auto_rickshaw": 3
+     }
+    }
+   }
+  },
+  "blur": {
+   "map50": 0.8429947079007069,
+   "vehicle_recall": 0.8045234248788369,
+   "vehicle_precision": 0.9364422715306506,
+   "false_pos_per_image": 0.676,
+   "pcu_per_image": {
+    "truth_mean": 10.324399999999999,
+    "bias": -1.208800000000001,
+    "mae": 1.7464000000000008
+   },
+   "per_class": {
+    "auto_rickshaw": {
+     "truth": 522,
+     "ap50": 0.9038680577574618,
+     "recall": 0.8275862068965517,
+     "found_as_some_vehicle": 0.8582375478927203,
+     "precision": 0.9250535331905781,
+     "reported_as": {
+      "auto_rickshaw": 432,
+      "missed": 74,
+      "truck": 10,
+      "car": 6
+     }
+    },
+    "bicycle": {
+     "truth": 31,
+     "ap50": 0.6322515274082042,
+     "recall": 0.5161290322580645,
+     "found_as_some_vehicle": 0.6774193548387096,
+     "precision": 0.8,
+     "reported_as": {
+      "bicycle": 16,
+      "missed": 10,
+      "motorcycle": 5
+     }
+    },
+    "bus": {
+     "truth": 106,
+     "ap50": 0.8187864504138431,
+     "recall": 0.7547169811320755,
+     "found_as_some_vehicle": 0.8207547169811321,
+     "precision": 0.8421052631578947,
+     "reported_as": {
+      "bus": 80,
+      "missed": 19,
+      "car": 5,
+      "truck": 2
+     }
+    },
+    "car": {
+     "truth": 645,
+     "ap50": 0.9450131196035947,
+     "recall": 0.8790697674418605,
+     "found_as_some_vehicle": 0.8914728682170543,
+     "precision": 0.9219512195121952,
+     "reported_as": {
+      "car": 567,
+      "missed": 70,
+      "auto_rickshaw": 3,
+      "truck": 3,
+      "bus": 1,
+      "motorcycle": 1
+     }
+    },
+    "motorcycle": {
+     "truth": 1509,
+     "ap50": 0.9116550721239138,
+     "recall": 0.752153744201458,
+     "found_as_some_vehicle": 0.7528164347249834,
+     "precision": 0.9310910582444627,
+     "reported_as": {
+      "motorcycle": 1135,
+      "missed": 373,
+      "bicycle": 1
+     }
+    },
+    "truck": {
+     "truth": 282,
+     "ap50": 0.8463940200972238,
+     "recall": 0.7340425531914894,
+     "found_as_some_vehicle": 0.7907801418439716,
+     "precision": 0.8518518518518519,
+     "reported_as": {
+      "truck": 207,
+      "missed": 59,
+      "bus": 7,
+      "auto_rickshaw": 7,
+      "car": 2
+     }
+    }
+   }
+  },
+  "jpeg": {
+   "map50": 0.822714549622745,
+   "vehicle_recall": 0.7609046849757674,
+   "vehicle_precision": 0.946163117717959,
+   "false_pos_per_image": 0.536,
+   "pcu_per_image": {
+    "truth_mean": 10.324399999999999,
+    "bias": -1.830400000000001,
+    "mae": 2.164800000000001
+   },
+   "per_class": {
+    "auto_rickshaw": {
+     "truth": 522,
+     "ap50": 0.8652360529022385,
+     "recall": 0.7854406130268199,
+     "found_as_some_vehicle": 0.8065134099616859,
+     "precision": 0.9447004608294931,
+     "reported_as": {
+      "auto_rickshaw": 410,
+      "missed": 101,
+      "truck": 8,
+      "car": 3
+     }
+    },
+    "bicycle": {
+     "truth": 31,
+     "ap50": 0.6185661308419463,
+     "recall": 0.5483870967741935,
+     "found_as_some_vehicle": 0.6774193548387096,
+     "precision": 0.8095238095238095,
+     "reported_as": {
+      "bicycle": 17,
+      "missed": 10,
+      "motorcycle": 4
+     }
+    },
+    "bus": {
+     "truth": 106,
+     "ap50": 0.7950748150055312,
+     "recall": 0.6981132075471698,
+     "found_as_some_vehicle": 0.7830188679245284,
+     "precision": 0.8705882352941177,
+     "reported_as": {
+      "bus": 74,
+      "missed": 23,
+      "car": 6,
+      "truck": 3
+     }
+    },
+    "car": {
+     "truth": 645,
+     "ap50": 0.9377739679423048,
+     "recall": 0.8480620155038759,
+     "found_as_some_vehicle": 0.8635658914728682,
+     "precision": 0.9239864864864865,
+     "reported_as": {
+      "car": 547,
+      "missed": 88,
+      "auto_rickshaw": 4,
+      "truck": 3,
+      "motorcycle": 2,
+      "bus": 1
+     }
+    },
+    "motorcycle": {
+     "truth": 1509,
+     "ap50": 0.8988940020703448,
+     "recall": 0.709741550695825,
+     "found_as_some_vehicle": 0.7117296222664016,
+     "precision": 0.9452780229479258,
+     "reported_as": {
+      "motorcycle": 1071,
+      "missed": 435,
+      "bicycle": 3
+     }
+    },
+    "truck": {
+     "truth": 282,
+     "ap50": 0.8207423289741042,
+     "recall": 0.6702127659574468,
+     "found_as_some_vehicle": 0.7056737588652482,
+     "precision": 0.84375,
+     "reported_as": {
+      "truck": 189,
+      "missed": 83,
+      "bus": 5,
+      "auto_rickshaw": 3,
+      "car": 2
+     }
+    }
+   }
+  },
+  "haze": {
+   "map50": 0.8385491261631199,
+   "vehicle_recall": 0.7825525040387722,
+   "vehicle_precision": 0.9446177847113885,
+   "false_pos_per_image": 0.568,
+   "pcu_per_image": {
+    "truth_mean": 10.324399999999999,
+    "bias": -1.458400000000001,
+    "mae": 1.8792000000000006
+   },
+   "per_class": {
+    "auto_rickshaw": {
+     "truth": 522,
+     "ap50": 0.8903242587033742,
+     "recall": 0.8065134099616859,
+     "found_as_some_vehicle": 0.8314176245210728,
+     "precision": 0.9355555555555556,
+     "reported_as": {
+      "auto_rickshaw": 421,
+      "missed": 88,
+      "truck": 7,
+      "car": 6
+     }
+    },
+    "bicycle": {
+     "truth": 31,
+     "ap50": 0.6257972465126084,
+     "recall": 0.5483870967741935,
+     "found_as_some_vehicle": 0.6774193548387096,
+     "precision": 0.8095238095238095,
+     "reported_as": {
+      "bicycle": 17,
+      "missed": 10,
+      "motorcycle": 4
+     }
+    },
+    "bus": {
+     "truth": 106,
+     "ap50": 0.8269910173813592,
+     "recall": 0.7547169811320755,
+     "found_as_some_vehicle": 0.8490566037735849,
+     "precision": 0.8421052631578947,
+     "reported_as": {
+      "bus": 80,
+      "missed": 16,
+      "truck": 5,
+      "car": 5
+     }
+    },
+    "car": {
+     "truth": 645,
+     "ap50": 0.9416104855506285,
+     "recall": 0.862015503875969,
+     "found_as_some_vehicle": 0.8744186046511628,
+     "precision": 0.9251247920133111,
+     "reported_as": {
+      "car": 556,
+      "missed": 81,
+      "auto_rickshaw": 3,
+      "bus": 2,
+      "truck": 2,
+      "motorcycle": 1
+     }
+    },
+    "motorcycle": {
+     "truth": 1509,
+     "ap50": 0.9108769136261565,
+     "recall": 0.7282968853545394,
+     "found_as_some_vehicle": 0.730284956925116,
+     "precision": 0.9465977605512489,
+     "reported_as": {
+      "motorcycle": 1099,
+      "missed": 407,
+      "bicycle": 3
+     }
+    },
+    "truck": {
+     "truth": 282,
+     "ap50": 0.8356948352045928,
+     "recall": 0.7092198581560284,
+     "found_as_some_vehicle": 0.74822695035461,
+     "precision": 0.847457627118644,
+     "reported_as": {
+      "truck": 200,
+      "missed": 71,
+      "bus": 6,
+      "auto_rickshaw": 3,
+      "car": 2
+     }
+    }
+   }
+  },
+  "glare": {
+   "map50": 0.8116492364869141,
+   "vehicle_recall": 0.7757673667205169,
+   "vehicle_precision": 0.9346049046321526,
+   "false_pos_per_image": 0.672,
+   "pcu_per_image": {
+    "truth_mean": 10.324399999999999,
+    "bias": -1.742400000000001,
+    "mae": 2.188000000000001
+   },
+   "per_class": {
+    "auto_rickshaw": {
+     "truth": 522,
+     "ap50": 0.8864158261592325,
+     "recall": 0.7911877394636015,
+     "found_as_some_vehicle": 0.8084291187739464,
+     "precision": 0.9365079365079365,
+     "reported_as": {
+      "auto_rickshaw": 413,
+      "missed": 100,
+      "car": 5,
+      "truck": 4
+     }
+    },
+    "bicycle": {
+     "truth": 31,
+     "ap50": 0.5398348572982188,
+     "recall": 0.45161290322580644,
+     "found_as_some_vehicle": 0.6774193548387096,
+     "precision": 0.8235294117647058,
+     "reported_as": {
+      "bicycle": 14,
+      "missed": 10,
+      "motorcycle": 7
+     }
+    },
+    "bus": {
+     "truth": 106,
+     "ap50": 0.8150449172025737,
+     "recall": 0.7075471698113207,
+     "found_as_some_vehicle": 0.7830188679245284,
+     "precision": 0.8823529411764706,
+     "reported_as": {
+      "bus": 75,
+      "missed": 23,
+      "car": 5,
+      "truck": 3
+     }
+    },
+    "car": {
+     "truth": 645,
+     "ap50": 0.9294643707926336,
+     "recall": 0.8604651162790697,
+     "found_as_some_vehicle": 0.8790697674418605,
+     "precision": 0.9234608985024958,
+     "reported_as": {
+      "car": 555,
+      "missed": 78,
+      "truck": 6,
+      "auto_rickshaw": 4,
+      "motorcycle": 2
+     }
+    },
+    "motorcycle": {
+     "truth": 1509,
+     "ap50": 0.891662701925946,
+     "recall": 0.73558648111332,
+     "found_as_some_vehicle": 0.7362491716368456,
+     "precision": 0.921161825726141,
+     "reported_as": {
+      "motorcycle": 1110,
+      "missed": 398,
+      "bicycle": 1
+     }
+    },
+    "truck": {
+     "truth": 282,
+     "ap50": 0.8074727455428803,
+     "recall": 0.6595744680851063,
+     "found_as_some_vehicle": 0.6985815602836879,
+     "precision": 0.8454545454545455,
+     "reported_as": {
+      "truck": 186,
+      "missed": 85,
+      "bus": 5,
+      "auto_rickshaw": 4,
+      "car": 2
+     }
+    }
+   }
+  },
+  "rain": {
+   "map50": 0.8415386872450824,
+   "vehicle_recall": 0.8064620355411954,
+   "vehicle_precision": 0.9379932356257046,
+   "false_pos_per_image": 0.66,
+   "pcu_per_image": {
+    "truth_mean": 10.324399999999999,
+    "bias": -1.194800000000001,
+    "mae": 1.7420000000000009
+   },
+   "per_class": {
+    "auto_rickshaw": {
+     "truth": 522,
+     "ap50": 0.907033867223648,
+     "recall": 0.8295019157088123,
+     "found_as_some_vehicle": 0.8582375478927203,
+     "precision": 0.941304347826087,
+     "reported_as": {
+      "auto_rickshaw": 433,
+      "missed": 74,
+      "truck": 9,
+      "car": 6
+     }
+    },
+    "bicycle": {
+     "truth": 31,
+     "ap50": 0.629479373338566,
+     "recall": 0.5483870967741935,
+     "found_as_some_vehicle": 0.7096774193548387,
+     "precision": 0.85,
+     "reported_as": {
+      "bicycle": 17,
+      "missed": 9,
+      "motorcycle": 5
+     }
+    },
+    "bus": {
+     "truth": 106,
+     "ap50": 0.8106645271204546,
+     "recall": 0.7358490566037735,
+     "found_as_some_vehicle": 0.8301886792452831,
+     "precision": 0.8387096774193549,
+     "reported_as": {
+      "bus": 78,
+      "missed": 18,
+      "car": 6,
+      "truck": 4
+     }
+    },
+    "car": {
+     "truth": 645,
+     "ap50": 0.9519402715599485,
+     "recall": 0.8821705426356589,
+     "found_as_some_vehicle": 0.8992248062015504,
+     "precision": 0.9089456869009584,
+     "reported_as": {
+      "car": 569,
+      "missed": 65,
+      "bus": 4,
+      "auto_rickshaw": 3,
+      "truck": 3,
+      "motorcycle": 1
+     }
+    },
+    "motorcycle": {
+     "truth": 1509,
+     "ap50": 0.9071905664378601,
+     "recall": 0.7541418157720344,
+     "found_as_some_vehicle": 0.7554671968190855,
+     "precision": 0.9343185550082101,
+     "reported_as": {
+      "motorcycle": 1138,
+      "missed": 369,
+      "bicycle": 2
+     }
+    },
+    "truck": {
+     "truth": 282,
+     "ap50": 0.8429235177900174,
+     "recall": 0.7340425531914894,
+     "found_as_some_vehicle": 0.7730496453900709,
+     "precision": 0.8483606557377049,
+     "reported_as": {
+      "truck": 207,
+      "missed": 64,
+      "bus": 5,
+      "auto_rickshaw": 4,
+      "car": 2
+     }
+    }
+   }
+  }
+ }
+}

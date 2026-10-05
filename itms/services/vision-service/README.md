@@ -61,11 +61,11 @@ make vision-dev     # in another shell: SimCam mode on the live position stream
 
 `VISION_MODE=video` reads every registry camera whose `source` is a file or
 `rtsp://` URL through a real detector (`pip install -e
-'services/vision-service[onnx]'`). The default detector is the adopted
-fine-tune of IISc's UVH-26 model, `data/models/itms_six_fp32_640.onnx`
-(`make vision-model` copies it from the fine-tune results;
-`baselines/2026-09-27_m8_finetune_v2/`); `VISION_DETECTOR` picks another
-(`yolo11n.pt` is the stock COCO model). SimCam mode's default error preset,
+'services/vision-service[onnx]'`). The default detector is fine-tune v3 of
+IISc's UVH-26 model, `data/models/itms_six_aug_640.onnx` (v2 plus degradation
+augmentation; `make vision-model` copies it from the fine-tune results;
+`baselines/2026-10-04_m8_finetune_v3/`; v2 is `itms_six_fp32_640.onnx`); `VISION_DETECTOR` picks another
+(`yolo11n.pt` is the stock COCO model). Fire and smoke detection switches on by itself when `data/models/itms_fire_640.pt` (the v4 detector) and `data/models/itms_fire_cls_112.onnx` (the Step 2 crop classifier) are both there, needs `pip install -e 'services/vision-service[fire]'`, and is turned off with `VISION_FIRE=0`; its candidates are for an operator to confirm. SimCam mode's default error preset,
 `itms6_640`, is the one fitted to that detector. A source
 may name environment variables (`rtsp://${CAM_USER}:${CAM_PASS}@10.0.0.12/s1`)
 so the registry holds no password; logs show URLs with the user-info

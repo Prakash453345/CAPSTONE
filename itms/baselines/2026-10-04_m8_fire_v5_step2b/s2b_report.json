@@ -1,0 +1,1059 @@
+{
+ "crops": {
+  "train": {
+   "images": 13444,
+   "positives_fire": 60038,
+   "positives_smoke": 32974,
+   "negatives": 17771,
+   "negative_sources_available": {
+    "detector_candidates_in_label_free_images": 735,
+    "flame_blobs_bengaluru": 7412,
+    "random_boxes": 9624
+   },
+   "negative_sources_used": {
+    "detector": 735,
+    "blobs": 7412,
+    "random": 9624
+   },
+   "ignored_candidates_in_labelled_images": 24483
+  },
+  "val": {
+   "images": 2887,
+   "positives_fire": 6494,
+   "positives_smoke": 3913,
+   "negatives": 6195,
+   "negative_sources_available": {
+    "detector_candidates_in_label_free_images": 272,
+    "flame_blobs_bengaluru": 2929,
+    "random_boxes": 2994
+   },
+   "negative_sources_used": {
+    "detector": 272,
+    "blobs": 2929,
+    "random": 2994
+   },
+   "ignored_candidates_in_labelled_images": 4141
+  },
+  "settings": {
+   "CROP": 112,
+   "MARGIN": 0.25,
+   "DET_CONF": 0.05
+  }
+ },
+ "train_history": [
+  {
+   "epoch": 1,
+   "train_loss": 0.503,
+   "val_crop_accuracy": 0.9632
+  },
+  {
+   "epoch": 2,
+   "train_loss": 0.4484,
+   "val_crop_accuracy": 0.9722
+  },
+  {
+   "epoch": 3,
+   "train_loss": 0.4276,
+   "val_crop_accuracy": 0.977
+  },
+  {
+   "epoch": 4,
+   "train_loss": 0.413,
+   "val_crop_accuracy": 0.9746
+  },
+  {
+   "epoch": 5,
+   "train_loss": 0.4034,
+   "val_crop_accuracy": 0.9774
+  },
+  {
+   "epoch": 6,
+   "train_loss": 0.3932,
+   "val_crop_accuracy": 0.98
+  },
+  {
+   "epoch": 7,
+   "train_loss": 0.3863,
+   "val_crop_accuracy": 0.9801
+  },
+  {
+   "epoch": 8,
+   "train_loss": 0.3841,
+   "val_crop_accuracy": 0.9798
+  }
+ ],
+ "val_crops": {
+  "accuracy": 0.979761474521142,
+  "per_class_recall": {
+   "fire": 0.9829072990452725,
+   "smoke": 0.9769997444416049,
+   "not": 0.9782082324455206
+  },
+  "n": 16602
+ },
+ "classifier_sha256": "ad783dfacb93140c736eb1c32c85dfb2e284c161af22f91c352579427520d950",
+ "choice": {
+  "rule": "max recall on validation images with fire or smoke (near-copies of training removed) subject to Bengaluru validation alarms <= 2 of 958; ties: fewer D-Fire-negative alarms, larger sum",
+  "validation_positives_before_dedupe": 1390,
+  "validation_positives_used": 1236,
+  "bengaluru_val_frames": 958,
+  "max_alarms": 2,
+  "chosen": {
+   "p_fire": 0.8,
+   "p_smoke": 0.85,
+   "val_recall": 0.9830097087378641,
+   "val_fa_dfire_negatives": 0.05194805194805195,
+   "bengaluru_val_alarms": 2
+  },
+  "top10": [
+   {
+    "p_fire": 0.8,
+    "p_smoke": 0.85,
+    "val_recall": 0.9830097087378641,
+    "val_fa_dfire_negatives": 0.05194805194805195,
+    "bengaluru_val_alarms": 2
+   },
+   {
+    "p_fire": 0.45,
+    "p_smoke": 0.9,
+    "val_recall": 0.9765372168284789,
+    "val_fa_dfire_negatives": 0.055658627087198514,
+    "bengaluru_val_alarms": 2
+   },
+   {
+    "p_fire": 0.75,
+    "p_smoke": 0.9,
+    "val_recall": 0.9757281553398058,
+    "val_fa_dfire_negatives": 0.05009276437847866,
+    "bengaluru_val_alarms": 2
+   },
+   {
+    "p_fire": 0.7,
+    "p_smoke": 0.9,
+    "val_recall": 0.9757281553398058,
+    "val_fa_dfire_negatives": 0.05009276437847866,
+    "bengaluru_val_alarms": 2
+   },
+   {
+    "p_fire": 0.65,
+    "p_smoke": 0.9,
+    "val_recall": 0.9757281553398058,
+    "val_fa_dfire_negatives": 0.05009276437847866,
+    "bengaluru_val_alarms": 2
+   },
+   {
+    "p_fire": 0.6,
+    "p_smoke": 0.9,
+    "val_recall": 0.9757281553398058,
+    "val_fa_dfire_negatives": 0.05380333951762523,
+    "bengaluru_val_alarms": 2
+   },
+   {
+    "p_fire": 0.55,
+    "p_smoke": 0.9,
+    "val_recall": 0.9757281553398058,
+    "val_fa_dfire_negatives": 0.05380333951762523,
+    "bengaluru_val_alarms": 2
+   },
+   {
+    "p_fire": 0.5,
+    "p_smoke": 0.9,
+    "val_recall": 0.9757281553398058,
+    "val_fa_dfire_negatives": 0.055658627087198514,
+    "bengaluru_val_alarms": 2
+   },
+   {
+    "p_fire": 0.8,
+    "p_smoke": 0.9,
+    "val_recall": 0.9733009708737864,
+    "val_fa_dfire_negatives": 0.04452690166975881,
+    "bengaluru_val_alarms": 1
+   },
+   {
+    "p_fire": 0.85,
+    "p_smoke": 0.85,
+    "val_recall": 0.9555016181229773,
+    "val_fa_dfire_negatives": 0.04267161410018553,
+    "bengaluru_val_alarms": 1
+   }
+  ],
+  "recall_by_distance_to_training": {
+   "near-copy 0-40": {
+    "positives": 154,
+    "recall": 0.9545
+   },
+   "same video 41-72": {
+    "positives": 369,
+    "recall": 0.9756
+   },
+   "unseen scene >72": {
+    "positives": 867,
+    "recall": 0.9862
+   }
+  }
+ },
+ "test4_source": {
+  "looked_at": 624,
+  "skipped": {
+   "duplicate of a frame already known": 154,
+   "same camera as a known frame": 209
+  },
+  "frames": [
+   "108458.jpg",
+   "113014.jpg",
+   "113370.jpg",
+   "115283.jpg",
+   "117559.jpg",
+   "117724.jpg",
+   "121953.jpg",
+   "125445.jpg",
+   "134963.jpg",
+   "135365.jpg",
+   "142861.jpg",
+   "147883.jpg",
+   "148129.jpg",
+   "154559.jpg",
+   "155708.jpg",
+   "158225.jpg",
+   "158562.jpg",
+   "165095.jpg",
+   "166792.jpg",
+   "169613.jpg",
+   "176088.jpg",
+   "177857.jpg",
+   "179959.jpg",
+   "181143.jpg",
+   "198846.jpg",
+   "209909.jpg",
+   "210579.jpg",
+   "212905.jpg",
+   "213856.jpg",
+   "21923.jpg",
+   "223403.jpg",
+   "226634.jpg",
+   "227850.jpg",
+   "233559.jpg",
+   "235443.jpg",
+   "241621.jpg",
+   "253582.jpg",
+   "25511.jpg",
+   "257761.jpg",
+   "25908.jpg",
+   "265061.jpg",
+   "270153.jpg",
+   "27482.jpg",
+   "2808.jpg",
+   "283239.jpg",
+   "290755.jpg",
+   "291515.jpg",
+   "297507.jpg",
+   "29771.jpg",
+   "298247.jpg",
+   "304551.jpg",
+   "304686.jpg",
+   "30515.jpg",
+   "309997.jpg",
+   "310883.jpg",
+   "314187.jpg",
+   "319362.jpg",
+   "319440.jpg",
+   "319467.jpg",
+   "320229.jpg",
+   "320336.jpg",
+   "320837.jpg",
+   "327696.jpg",
+   "331799.jpg",
+   "343549.jpg",
+   "348147.jpg",
+   "349498.jpg",
+   "350122.jpg",
+   "36324.jpg",
+   "370133.jpg",
+   "373619.jpg",
+   "375755.jpg",
+   "379151.jpg",
+   "379557.jpg",
+   "380188.jpg",
+   "383558.jpg",
+   "385967.jpg",
+   "390256.jpg",
+   "392047.jpg",
+   "393795.jpg",
+   "394613.jpg",
+   "398213.jpg",
+   "403335.jpg",
+   "40387.jpg",
+   "406107.jpg",
+   "411524.jpg",
+   "411605.jpg",
+   "416887.jpg",
+   "418218.jpg",
+   "418769.jpg",
+   "421301.jpg",
+   "421591.jpg",
+   "427584.jpg",
+   "427755.jpg",
+   "439578.jpg",
+   "440637.jpg",
+   "441277.jpg",
+   "443432.jpg",
+   "445826.jpg",
+   "454923.jpg",
+   "455099.jpg",
+   "456455.jpg",
+   "462837.jpg",
+   "466168.jpg",
+   "470885.jpg",
+   "475946.jpg",
+   "478783.jpg",
+   "488017.jpg",
+   "488700.jpg",
+   "489118.jpg",
+   "495848.jpg",
+   "499852.jpg",
+   "50453.jpg",
+   "506011.jpg",
+   "510049.jpg",
+   "51214.jpg",
+   "517183.jpg",
+   "518665.jpg",
+   "519793.jpg",
+   "521413.jpg",
+   "524517.jpg",
+   "527055.jpg",
+   "535330.jpg",
+   "545188.jpg",
+   "549108.jpg",
+   "551494.jpg",
+   "553302.jpg",
+   "557859.jpg",
+   "582276.jpg",
+   "582278.jpg",
+   "590449.jpg",
+   "590610.jpg",
+   "599613.jpg",
+   "601345.jpg",
+   "601815.jpg",
+   "604300.jpg",
+   "604872.jpg",
+   "607140.jpg",
+   "613264.jpg",
+   "621159.jpg",
+   "625181.jpg",
+   "636817.jpg",
+   "64655.jpg",
+   "666746.jpg",
+   "668112.jpg",
+   "67139.jpg",
+   "67220.jpg",
+   "677406.jpg",
+   "677650.jpg",
+   "679472.jpg",
+   "683988.jpg",
+   "686291.jpg",
+   "688646.jpg",
+   "692145.jpg",
+   "697681.jpg",
+   "700693.jpg",
+   "702642.jpg",
+   "711198.jpg",
+   "713387.jpg",
+   "721108.jpg",
+   "721698.jpg",
+   "728878.jpg",
+   "730295.jpg",
+   "748154.jpg",
+   "74978.jpg",
+   "750822.jpg",
+   "758960.jpg",
+   "762130.jpg",
+   "762774.jpg",
+   "771567.jpg",
+   "778984.jpg",
+   "788554.jpg",
+   "791393.jpg",
+   "79327.jpg",
+   "79606.jpg",
+   "796665.jpg",
+   "797753.jpg",
+   "798480.jpg",
+   "803988.jpg",
+   "806758.jpg",
+   "814438.jpg",
+   "817427.jpg",
+   "819796.jpg",
+   "825819.jpg",
+   "834465.jpg",
+   "838491.jpg",
+   "838894.jpg",
+   "840556.jpg",
+   "841796.jpg",
+   "842722.jpg",
+   "844368.jpg",
+   "847251.jpg",
+   "848232.jpg",
+   "850913.jpg",
+   "853415.jpg",
+   "855017.jpg",
+   "858696.jpg",
+   "859447.jpg",
+   "863802.jpg",
+   "87331.jpg",
+   "876171.jpg",
+   "879162.jpg",
+   "880934.jpg",
+   "8819.jpg",
+   "88196.jpg",
+   "882162.jpg",
+   "883428.jpg",
+   "888419.jpg",
+   "890100.jpg",
+   "89051.jpg",
+   "894102.jpg",
+   "89615.jpg",
+   "899069.jpg",
+   "902292.jpg",
+   "9093.jpg",
+   "909713.jpg",
+   "911200.jpg",
+   "911522.jpg",
+   "912443.jpg",
+   "912737.jpg",
+   "91298.jpg",
+   "916277.jpg",
+   "92146.jpg",
+   "921737.jpg",
+   "922608.jpg",
+   "926392.jpg",
+   "926776.jpg",
+   "929906.jpg",
+   "930652.jpg",
+   "930903.jpg",
+   "93861.jpg",
+   "938653.jpg",
+   "94682.jpg",
+   "947858.jpg",
+   "949616.jpg",
+   "951447.jpg",
+   "961913.jpg",
+   "966063.jpg",
+   "97177.jpg",
+   "972932.jpg",
+   "982356.jpg",
+   "984715.jpg",
+   "984767.jpg",
+   "98692.jpg",
+   "989145.jpg",
+   "992419.jpg",
+   "993361.jpg",
+   "994894.jpg",
+   "999828.jpg",
+   "999895.jpg"
+  ]
+ },
+ "test5_source": {
+  "looked_at": 672,
+  "skipped": {
+   "duplicate of a frame already known": 166,
+   "same camera as a known frame": 253
+  },
+  "frames": [
+   "10137.jpg",
+   "102469.jpg",
+   "105627.jpg",
+   "109554.jpg",
+   "112071.jpg",
+   "113114.jpg",
+   "113204.jpg",
+   "113777.jpg",
+   "11507.jpg",
+   "120734.jpg",
+   "124733.jpg",
+   "126823.jpg",
+   "128067.jpg",
+   "130001.jpg",
+   "134466.jpg",
+   "135848.jpg",
+   "138104.jpg",
+   "140467.jpg",
+   "158794.jpg",
+   "164274.jpg",
+   "164811.jpg",
+   "167805.jpg",
+   "169501.jpg",
+   "169653.jpg",
+   "172106.jpg",
+   "173058.jpg",
+   "180624.jpg",
+   "18513.jpg",
+   "200614.jpg",
+   "201531.jpg",
+   "203969.jpg",
+   "205979.jpg",
+   "208008.jpg",
+   "213908.jpg",
+   "216427.jpg",
+   "228521.jpg",
+   "229005.jpg",
+   "238389.jpg",
+   "23983.jpg",
+   "241984.jpg",
+   "250821.jpg",
+   "259101.jpg",
+   "274477.jpg",
+   "279473.jpg",
+   "28478.jpg",
+   "285555.jpg",
+   "28867.jpg",
+   "289218.jpg",
+   "298118.jpg",
+   "30408.jpg",
+   "308760.jpg",
+   "309299.jpg",
+   "321030.jpg",
+   "322069.jpg",
+   "323068.jpg",
+   "324721.jpg",
+   "332811.jpg",
+   "33717.jpg",
+   "34072.jpg",
+   "343215.jpg",
+   "346185.jpg",
+   "3602.jpg",
+   "367825.jpg",
+   "368646.jpg",
+   "369135.jpg",
+   "371056.jpg",
+   "37645.jpg",
+   "379721.jpg",
+   "379733.jpg",
+   "389270.jpg",
+   "390487.jpg",
+   "39345.jpg",
+   "399405.jpg",
+   "401042.jpg",
+   "401321.jpg",
+   "401329.jpg",
+   "403155.jpg",
+   "404582.jpg",
+   "410528.jpg",
+   "414877.jpg",
+   "415191.jpg",
+   "41819.jpg",
+   "42660.jpg",
+   "427464.jpg",
+   "428633.jpg",
+   "429322.jpg",
+   "429911.jpg",
+   "429979.jpg",
+   "430813.jpg",
+   "43189.jpg",
+   "432403.jpg",
+   "434159.jpg",
+   "439062.jpg",
+   "44296.jpg",
+   "455876.jpg",
+   "456293.jpg",
+   "459879.jpg",
+   "463311.jpg",
+   "464492.jpg",
+   "464936.jpg",
+   "468257.jpg",
+   "478564.jpg",
+   "480493.jpg",
+   "4940.jpg",
+   "495176.jpg",
+   "498590.jpg",
+   "501054.jpg",
+   "504262.jpg",
+   "506876.jpg",
+   "510627.jpg",
+   "51339.jpg",
+   "514151.jpg",
+   "527024.jpg",
+   "530169.jpg",
+   "530181.jpg",
+   "549813.jpg",
+   "554369.jpg",
+   "554674.jpg",
+   "558152.jpg",
+   "566965.jpg",
+   "56996.jpg",
+   "571581.jpg",
+   "576454.jpg",
+   "577500.jpg",
+   "586561.jpg",
+   "591613.jpg",
+   "593528.jpg",
+   "593989.jpg",
+   "59571.jpg",
+   "599042.jpg",
+   "599421.jpg",
+   "607302.jpg",
+   "607557.jpg",
+   "612069.jpg",
+   "619047.jpg",
+   "619233.jpg",
+   "619461.jpg",
+   "620103.jpg",
+   "621730.jpg",
+   "627004.jpg",
+   "628156.jpg",
+   "628494.jpg",
+   "628641.jpg",
+   "628949.jpg",
+   "629168.jpg",
+   "635996.jpg",
+   "649846.jpg",
+   "653283.jpg",
+   "655164.jpg",
+   "655548.jpg",
+   "658214.jpg",
+   "659136.jpg",
+   "663462.jpg",
+   "664639.jpg",
+   "665615.jpg",
+   "667427.jpg",
+   "674675.jpg",
+   "677988.jpg",
+   "687123.jpg",
+   "687693.jpg",
+   "689522.jpg",
+   "691362.jpg",
+   "696429.jpg",
+   "69677.jpg",
+   "704223.jpg",
+   "707904.jpg",
+   "711257.jpg",
+   "713867.jpg",
+   "717801.jpg",
+   "72096.jpg",
+   "723353.jpg",
+   "731043.jpg",
+   "736528.jpg",
+   "736660.jpg",
+   "737024.jpg",
+   "742750.jpg",
+   "743469.jpg",
+   "745840.jpg",
+   "750305.jpg",
+   "750602.jpg",
+   "751203.jpg",
+   "75247.jpg",
+   "756022.jpg",
+   "757630.jpg",
+   "762410.jpg",
+   "764125.jpg",
+   "770450.jpg",
+   "773699.jpg",
+   "779256.jpg",
+   "779910.jpg",
+   "781468.jpg",
+   "786289.jpg",
+   "788777.jpg",
+   "796781.jpg",
+   "800233.jpg",
+   "800636.jpg",
+   "803332.jpg",
+   "806917.jpg",
+   "811600.jpg",
+   "811991.jpg",
+   "821341.jpg",
+   "824757.jpg",
+   "832719.jpg",
+   "840416.jpg",
+   "84116.jpg",
+   "847114.jpg",
+   "848357.jpg",
+   "853068.jpg",
+   "861540.jpg",
+   "861804.jpg",
+   "866376.jpg",
+   "867989.jpg",
+   "876339.jpg",
+   "87808.jpg",
+   "878599.jpg",
+   "878642.jpg",
+   "879905.jpg",
+   "882389.jpg",
+   "883592.jpg",
+   "88385.jpg",
+   "894677.jpg",
+   "895311.jpg",
+   "901493.jpg",
+   "902957.jpg",
+   "906249.jpg",
+   "911900.jpg",
+   "914147.jpg",
+   "914881.jpg",
+   "919771.jpg",
+   "920400.jpg",
+   "922080.jpg",
+   "936259.jpg",
+   "94.jpg",
+   "943208.jpg",
+   "946949.jpg",
+   "947155.jpg",
+   "947190.jpg",
+   "94914.jpg",
+   "956203.jpg",
+   "958952.jpg",
+   "966673.jpg",
+   "969985.jpg",
+   "976555.jpg",
+   "979212.jpg",
+   "981441.jpg",
+   "982844.jpg",
+   "983660.jpg",
+   "987617.jpg",
+   "99516.jpg",
+   "995277.jpg"
+  ]
+ },
+ "test": {
+  "images": 4306,
+  "with_fire_or_smoke": 2301,
+  "p_fire": 0.8,
+  "p_smoke": 0.85,
+  "recall_any": 0.8935245545415037,
+  "recall_of_images_with_fire": 0.9829596412556054,
+  "recall_of_images_with_smoke": 0.8880345987506006,
+  "false_alarms_on_negatives": 0.13815461346633418,
+  "precision": 0.8812687526789541,
+  "tp": 2056,
+  "fp": 277,
+  "fn": 245,
+  "f1": 0.8873543375053949,
+  "step1_for_comparison": {
+   "recall_any": 0.8926553672316384,
+   "false_alarms_on_negatives": 0.1910224438902743
+  }
+ },
+ "heldout": {
+  "images": 500,
+  "near_copies_of_training_removed": 75,
+  "by_label": {
+   "B": {
+    "alarm": 61,
+    "n": 61
+   },
+   "F": {
+    "alarm": 64,
+    "n": 64
+   },
+   "I": {
+    "alarm": 41,
+    "n": 41
+   },
+   "O": {
+    "alarm": 94,
+    "n": 97
+   },
+   "R": {
+    "alarm": 23,
+    "n": 23
+   },
+   "V": {
+    "alarm": 55,
+    "n": 55
+   },
+   "X": {
+    "alarm": 71,
+    "n": 84
+   },
+   "not street": {
+    "alarm": 331,
+    "n": 347
+   },
+   "street (V+R)": {
+    "alarm": 78,
+    "n": 78
+   }
+  },
+  "street_recall": 1.0,
+  "street_n": 78,
+  "street_wilson_95": [
+   0.953,
+   1.0
+  ],
+  "note": "label X (no visible fire) is reported, not a recall target"
+ },
+ "test4": {
+  "frames": 250,
+  "p_fire": 0.8,
+  "p_smoke": 0.85,
+  "alarms": 0,
+  "max_alarms_allowed": 2,
+  "alarm_frames": [],
+  "highest_p_fire": [
+   0.7669,
+   0.7103,
+   0.4455,
+   0.1205,
+   0.0198,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0
+  ],
+  "highest_p_smoke": [
+   0.7003,
+   0.0382,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0
+  ],
+  "reported_not_judged": {
+   "B3_alarms": 0,
+   "B3_alarm_frames": [],
+   "B3_plate_frame_803445_alarms": false,
+   "v4_fresh_250_alarms": 1
+  },
+  "pass": true
+ },
+ "verdict_in_colab": {
+  "A_dfire_recall": {
+   "value": 0.8935245545415037,
+   "target": 0.85,
+   "pass": true
+  },
+  "N_dfire_false_alarms": {
+   "value": 0.13815461346633418,
+   "target": 0.1,
+   "pass": false
+  },
+  "P_dfire_precision": {
+   "value": 0.8812687526789541,
+   "target": 0.9,
+   "pass": false
+  },
+  "C_street_recall": {
+   "value": 1.0,
+   "target": 0.8,
+   "pass": true,
+   "wilson_95": [
+    0.953,
+    1.0
+   ]
+  },
+  "B4_new_bengaluru": {
+   "alarms": 0,
+   "of": 250,
+   "max_allowed": 2,
+   "pass": true
+  },
+  "all_judged_pass": false,
+  "still_to_check_on_the_laptop": [
+   "D: Inferno, if it has arrived"
+  ]
+ },
+ "degraded": {
+  "B5": {
+   "clean": {
+    "new_alarms": 1,
+    "old_alarms": 2,
+    "new_alarm_frames": [
+     "213908.jpg"
+    ],
+    "new_max_score_over_threshold": 1.011
+   },
+   "dusk": {
+    "new_alarms": 1,
+    "old_alarms": 1,
+    "new_alarm_frames": [
+     "213908.jpg"
+    ],
+    "new_max_score_over_threshold": 1.037
+   },
+   "night": {
+    "new_alarms": 1,
+    "old_alarms": 1,
+    "new_alarm_frames": [
+     "213908.jpg"
+    ],
+    "new_max_score_over_threshold": 1.028
+   },
+   "noise": {
+    "new_alarms": 1,
+    "old_alarms": 1,
+    "new_alarm_frames": [
+     "213908.jpg"
+    ],
+    "new_max_score_over_threshold": 1.063
+   },
+   "blur": {
+    "new_alarms": 3,
+    "old_alarms": 5,
+    "new_alarm_frames": [
+     "172106.jpg",
+     "213908.jpg",
+     "390487.jpg"
+    ],
+    "new_max_score_over_threshold": 1.053
+   },
+   "jpeg": {
+    "new_alarms": 1,
+    "old_alarms": 2,
+    "new_alarm_frames": [
+     "213908.jpg"
+    ],
+    "new_max_score_over_threshold": 1.057
+   },
+   "haze": {
+    "new_alarms": 1,
+    "old_alarms": 1,
+    "new_alarm_frames": [
+     "213908.jpg"
+    ],
+    "new_max_score_over_threshold": 1.032
+   },
+   "glare": {
+    "new_alarms": 1,
+    "old_alarms": 3,
+    "new_alarm_frames": [
+     "861540.jpg"
+    ],
+    "new_max_score_over_threshold": 1.063
+   },
+   "rain": {
+    "new_alarms": 1,
+    "old_alarms": 3,
+    "new_alarm_frames": [
+     "213908.jpg"
+    ],
+    "new_max_score_over_threshold": 1.011
+   }
+  },
+  "street": {
+   "clean": {
+    "new_recall": 1.0,
+    "old_recall": 1.0,
+    "n": 78
+   },
+   "dusk": {
+    "new_recall": 1.0,
+    "old_recall": 1.0,
+    "n": 78
+   },
+   "night": {
+    "new_recall": 0.9871794871794872,
+    "old_recall": 0.9871794871794872,
+    "n": 78
+   },
+   "noise": {
+    "new_recall": 0.9743589743589743,
+    "old_recall": 0.9871794871794872,
+    "n": 78
+   },
+   "blur": {
+    "new_recall": 1.0,
+    "old_recall": 1.0,
+    "n": 78
+   },
+   "jpeg": {
+    "new_recall": 1.0,
+    "old_recall": 1.0,
+    "n": 78
+   },
+   "haze": {
+    "new_recall": 1.0,
+    "old_recall": 1.0,
+    "n": 78
+   },
+   "glare": {
+    "new_recall": 0.8461538461538461,
+    "old_recall": 0.782051282051282,
+    "n": 78
+   },
+   "rain": {
+    "new_recall": 1.0,
+    "old_recall": 1.0,
+    "n": 78
+   }
+  }
+ },
+ "step2_thresholds": {
+  "p_fire": 0.8,
+  "p_smoke": 0.9
+ },
+ "verdict_2b": {
+  "A_dfire_recall": {
+   "value": 0.8935245545415037,
+   "target": 0.85,
+   "pass": true
+  },
+  "N_dfire_false_alarms": {
+   "value": 0.13815461346633418,
+   "target": 0.1,
+   "pass": false
+  },
+  "P_dfire_precision": {
+   "value": 0.8812687526789541,
+   "target": 0.9,
+   "pass": false
+  },
+  "C_street_recall": {
+   "value": 1.0,
+   "target": 0.8,
+   "pass": true
+  },
+  "B5_clean_alarms": {
+   "value": 1,
+   "max": 2,
+   "pass": true
+  },
+  "G_degraded_alarms_per_condition": {
+   "values": {
+    "dusk": 1,
+    "night": 1,
+    "noise": 1,
+    "blur": 3,
+    "jpeg": 1,
+    "haze": 1,
+    "glare": 1,
+    "rain": 1
+   },
+   "max": 3,
+   "pass": true
+  },
+  "R_street_recall_change_vs_step2": {
+   "values": {
+    "dusk": 0.0,
+    "night": 0.0,
+    "noise": -0.013,
+    "blur": 0.0,
+    "jpeg": 0.0,
+    "haze": 0.0,
+    "glare": 0.064,
+    "rain": 0.0
+   },
+   "min_change": -0.05,
+   "pass": true
+  },
+  "all_judged_pass": false,
+  "reported_not_judged": {
+   "B4_alarms_new": 0,
+   "B4_alarms_step2": 1,
+   "step2_A_N_P_C": [
+    0.8570186875271621,
+    0.09526184538653366,
+    0.9116967175219602,
+    1.0
+   ],
+   "street_recall_clean_here_vs_C_above": [
+    1.0,
+    1.0
+   ]
+  }
+ }
+}

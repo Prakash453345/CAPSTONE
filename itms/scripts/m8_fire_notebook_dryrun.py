@@ -1,4 +1,4 @@
-"""Dry-run the fire and smoke notebook (`notebooks/m8_fire_smoke.ipynb`) on CPU (M8).
+"""Dry-run the fire and smoke notebook (`notebooks/m8_fire_smoke_v4.ipynb`) on CPU (M8).
 
 A small fake D-Fire is painted onto the labelled test sample's frames
 (orange flames, grey smoke), zipped into a fake Google Drive, and the
@@ -20,7 +20,12 @@ It covers:
 - the threshold chosen on validation, the test scored once, and the ONNX
   export and its check;
 - a second session with nothing left to do;
-- a changed setting refused.
+- a changed setting refused;
+- version 4: fresh Bengaluru frames (extra validation, a fresh test set, hard negatives picked by flame-coloured area),
+  training frames of the same camera as a fresh test frame dropped, the test frames kept out of the dataset;
+- version 3: the FASDD package (a copy of a D-Fire test image in it must be dropped, by checksum and by
+  fingerprint), flame pasting from D-Fire train crops, and the held-out street test with its near-copy
+  removal and target verdicts.
 
 Needs torch, ultralytics==8.4.163, onnx, onnxruntime and onnxslim: not the
 project venv.
@@ -32,6 +37,7 @@ from __future__ import annotations
 
 import argparse
 import glob
+import hashlib
 import json
 import os
 import shutil
@@ -55,6 +61,8 @@ TITLES = {
     "SHEET": "# ---- Look at the labels",
     "TRAIN": "# ---- Train",
     "EVAL": "# ---- The model in full precision",
+    "HELDOUT": "# ---- The FASDD held-out",
+    "FRESH": "# ---- The FRESH Bengaluru test frames",
     "EXPORT": "# ---- Export to ONNX",
     "PACKAGE": "# ---- Package and download",
 }
@@ -66,6 +74,15 @@ SMALL = {
     "WORKERS": 0,
     "N_NEG_TRAIN": 6,
     "MIN_IMAGES": 30,
+    "N_PASTE": 4,
+    "PASTE_MIN_BOX": 12,
+    "PASTE_HEIGHTS": (20, 60),
+    "MIN_FLAME_CROPS": 5,
+    "N_NEG_VAL": 8,
+    "N_NEG_VAL_BASE": 4,
+    "N_TEST2": 3,
+    "N_MINE_POOL": 8,
+    "N_HARD": 3,
 }
 
 
@@ -146,6 +163,7 @@ def fake_dfire(
         os.path.join(top, "test", "labels", "test_001.txt"),
         os.path.join(tr, "labels", "leak_near.txt"),
     )
+    fake_fasdd(drive, bases, os.path.join(top, "test"))
     # broken things
     with open(os.path.join(tr, "images", "broken.jpg"), "wb") as f:
         f.write(b"not an image")
@@ -190,10 +208,56 @@ def fake_dfire(
     return made
 
 
+def fake_fasdd(drive: str, bases: list, test_dir: str) -> None:
+    """A small FASDD package as `fasdd_select.py` writes it (fire = 0, smoke = 1): one file that is a byte-for-byte
+    copy of a D-Fire test image and one that is a blurred copy (both must be dropped), and a held-out set with
+    letters that includes a near-copy of a training image (dropped from the test)."""
+    rng = np.random.default_rng(11)
+    pkg = tempfile.mkdtemp(prefix="fasdd_")
+    top = os.path.join(pkg, "v3_package")
+    for d in ("images/train", "images/val", "labels/train", "labels/val", "heldout/images"):
+        os.makedirs(os.path.join(top, d))
+    images, held = [], []
+
+    def write(sp: str, stem: str, img: np.ndarray, lines: list) -> None:
+        cv2.imwrite(os.path.join(top, "images", sp, stem + ".jpg"), img)
+        with open(os.path.join(top, "labels", sp, stem + ".txt"), "w") as f:
+            f.write("\n".join(lines) + "\n")
+
+    swap = lambda ls: [("1" if x[0] == "0" else "0") + x[1:] for x in ls]  # noqa: E731  D-Fire's ids -> FASDD's
+    for i in range(20):
+        sp = "val" if i % 10 == 9 else "train"
+        base = cv2.rotate(bases[i % 5], cv2.ROTATE_180)
+        noisy = np.clip(base.astype(int) + rng.integers(-6, 7, base.shape), 0, 255).astype(np.uint8)
+        img, lines = paint(noisy, rng, True, i % 2 == 0)
+        write(sp, f"fd_{i:03d}", img, swap(lines))
+        images.append({"stem": f"fd_{i:03d}", "split": sp, "kind": "street" if i % 3 else "other",
+                       "file": f"fire_{i}.jpg", "veh": 0.5, "cluster": i})
+    shutil.copy(os.path.join(test_dir, "images", "test_002.jpg"), os.path.join(top, "images", "train", "fd_leak_same.jpg"))
+    with open(os.path.join(top, "labels", "train", "fd_leak_same.txt"), "w") as f:
+        f.write("0 0.5 0.5 0.2 0.2\n")
+    near = cv2.GaussianBlur(cv2.imread(os.path.join(test_dir, "images", "test_003.jpg")), (3, 3), 0)
+    write("train", "fd_leak_near", near, ["0 0.5 0.5 0.2 0.2"])
+    for stem in ("fd_leak_same", "fd_leak_near"):
+        images.append({"stem": stem, "split": "train", "kind": "street", "file": stem + ".jpg", "veh": 0.5, "cluster": 99})
+    for j, letter in enumerate("VRBOFIXV"):
+        base = cv2.flip(cv2.rotate(bases[j % 5], cv2.ROTATE_180), 1) if j % 2 else cv2.flip(bases[j % 5], 0)
+        noisy = np.clip(base.astype(int) + rng.integers(-6, 7, base.shape), 0, 255).astype(np.uint8)
+        img, _ = paint(noisy, rng, letter != "X", False)
+        cv2.imwrite(os.path.join(top, "heldout", "images", f"held_{j}.jpg"), img)
+        held.append({"stem": f"held_{j}", "file": f"held_{j}.jpg", "label": letter})
+    shutil.copy(os.path.join(top, "images", "train", "fd_003.jpg"), os.path.join(top, "heldout", "images", "held_near.jpg"))
+    held.append({"stem": "held_near", "file": "held_near.jpg", "label": "V"})
+    json.dump({"stats": {"fake": True}, "settings": {"fake": True}, "images": images, "heldout": held},
+              open(os.path.join(top, "fasdd_selection.json"), "w"))
+    os.makedirs(drive, exist_ok=True)
+    subprocess.run(["tar", "-cf", os.path.join(drive, "fasdd_v3_package.tar"), "-C", pkg, "v3_package"], check=True)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument(
-        "--notebook", default=os.path.join(REPO_ROOT, "notebooks", "m8_fire_smoke.ipynb")
+        "--notebook", default=os.path.join(REPO_ROOT, "notebooks", "m8_fire_smoke_v4.ipynb")
     )
     ap.add_argument(
         "--data",
@@ -247,6 +311,35 @@ def main() -> None:
 
     offline = {"hf_list": no_network, "hf_get": no_network}
 
+    # a fake UVH-26 for the fresh frames: bad files, frames far from everything, frames that are the same camera as a
+    # base (training) frame, a duplicate of a base frame, and frames with a big orange patch (hard negatives)
+    import random as _random  # noqa: PLC0415
+
+    vs = sorted(glob.glob(os.path.join(args.data, "val_sample", "*.png")))
+    base5 = [cv2.resize(cv2.imread(f), (1280, 720)) for f in vs[:5]]
+    enc_ = lambda im: cv2.imencode(".png", im)[1].tobytes()  # noqa: E731
+    fr = {}
+    for i, f in enumerate(vs):
+        im = cv2.imread(f)
+        for j, t in enumerate((lambda a: cv2.flip(a, 1), lambda a: cv2.rotate(a, cv2.ROTATE_180))):
+            x = t(im)
+            if (i + j) % 7 == 0:   # some get a big orange blob: what the hard negatives should pick
+                h_, w_ = x.shape[:2]
+                cv2.rectangle(x, (w_ // 5, h_ // 2), (w_ // 5 + w_ // 6, h_ // 2 + h_ // 5), (0, 140, 255), -1)
+            fr[f"f{i:02d}{j}.png"] = enc_(x)
+    rng_ = np.random.default_rng(5)
+    for k in range(6):   # same camera as a base frame, but shifted: near (9-72 bits), not a duplicate
+        b = np.roll(base5[k % 5], 14 + 3 * (k // 5), axis=1)
+        fr[f"near{k}.png"] = enc_(np.clip(b.astype(int) + rng_.integers(-3, 4, b.shape), 0, 255).astype(np.uint8))
+    n0 = np.clip(base5[0].astype(int) + rng_.integers(-3, 4, base5[0].shape), 0, 255).astype(np.uint8)
+    fr["dup0.png"] = enc_(n0)   # a duplicate of a base frame (within 8 bits)
+    fr["bad_sha.png"] = open(vs[1], "rb").read()   # an old test frame under another name
+    fr["bad_cam.png"] = enc_(np.clip(cv2.imread(vs[0]).astype(int) + rng_.integers(-6, 7, cv2.imread(vs[0]).shape), 0, 255).astype(np.uint8))
+    fr["bad_open.png"] = b"not an image"
+    fr["zz_named_like_test.png"] = open(vs[0], "rb").read()
+    fresh_names = {n: f"UVH-26-Train/data/x/{n}" for n in fr}
+    fresh_repo = {"hf_list": lambda folder="": dict(fresh_names), "hf_get": lambda path, tries=10: fr[os.path.basename(path)]}
+
     def session(
         overrides: dict | None = None, upto: str = "PACKAGE", hf: dict | None = None
     ) -> dict:
@@ -270,8 +363,8 @@ def main() -> None:
             if k == "SETTINGS":
                 continue
             exec(cell[k], g)
-            if k == "HELPERS":  # Hugging Face: offline unless a scenario brings a fake repository
-                g.update(hf or offline)
+            if k == "HELPERS":  # Hugging Face: the fake repository unless a scenario says otherwise
+                g.update(hf or fresh_repo)
             if k == upto:
                 break
         return g
@@ -310,8 +403,29 @@ def main() -> None:
         "box with an unknown class id dropped",
     ):
         assert man["box_stats"].get(k), (k, man["box_stats"])
-    assert man["counts"]["train"]["Bengaluru frames with no fire"] == SMALL["N_NEG_TRAIN"]
-    assert man["counts"]["val"]["Bengaluru frames with no fire"] == 4
+    dr = man["fresh"]["dropped_as_same_camera_as_a_fresh_test_frame"]
+    assert man["counts"]["train"]["Bengaluru frames with no fire"] == SMALL["N_NEG_TRAIN"] - dr.get("train", 0)
+    assert man["counts"]["val"]["Bengaluru frames with no fire"] == 4 - dr.get("val", 0) + man["fresh"]["extra_val"]
+    assert len(man["fresh"]["test2"]) == SMALL["N_TEST2"], man["fresh"]
+    assert man["counts"]["train"]["Bengaluru hard negatives (flame-coloured)"] == man["fresh"]["hard_kept"]
+    assert not any(r["split"] == "test2" for r in man["images"]), "fresh test frames are in the dataset"
+    # version 3: FASDD copies of a D-Fire test image dropped (checksum and fingerprint), the rest imported;
+    # flames pasted into Bengaluru training frames (never validation), labelled fire
+    assert man["skipped"].get("FASDD: identical to a D-Fire test image") == 1, man["skipped"]
+    assert man["skipped"].get("FASDD: near-copy of a D-Fire test image", 0) >= 1, man["skipped"]
+    assert man["counts"]["train"]["FASDD images"] > 0 and man["counts"]["val"]["FASDD images"] > 0, man["counts"]
+    assert man["counts"]["test"].get("FASDD images", 0) == 0, "FASDD images leaked into the test split"
+    assert man["fasdd"]["median_flame_share_id0_id1"][0] >= 0.05, man["fasdd"]
+    assert man["pasted"]["frames"] == SMALL["N_PASTE"], man["pasted"]
+    assert man["counts"]["train"]["Bengaluru frames with pasted flames"] == SMALL["N_PASTE"]
+    assert not man["counts"]["val"].get("Bengaluru frames with pasted flames"), "flames pasted into validation"
+    pasted = [r for r in man["images"] if r["stem"].startswith("blrp_")]
+    assert len(pasted) == SMALL["N_PASTE"] and all(r["split"] == "train" for r in pasted)
+    for r in pasted:
+        lab = open(os.path.join(drive, "..", "..", "work", "ds", "labels", "train", r["stem"] + ".txt")).read().split("\n")
+        lab = [x for x in lab if x]
+        assert lab and all(x.startswith("0 ") for x in lab), (r["stem"], lab)
+        assert all(0 <= float(v) <= 1 for x in lab for v in x.split()[1:]), (r["stem"], lab)
     assert "carved" not in man["split"] or man["counts"]["val"]["images"] > 0
 
     # 2. second session: resumes, finishes, picks the threshold, scores the test, exports, packages
@@ -330,6 +444,12 @@ def main() -> None:
         rep["sessions"],
     )
     assert rep["threshold"]["at_t"]["fa_bengaluru"] <= 0.01
+    ho = rep["heldout"]
+    print("held-out:", {k: v for k, v in ho.items() if k != "by_label"}, "| by label:", ho["by_label"])
+    assert ho["near_copies_of_training_removed"] >= 1 and ho["images"] == 9, ho
+    assert sum(v["n"] for k, v in ho["by_label"].items() if len(k) == 1) == 8, ho["by_label"]
+    assert "street (V+R)" in ho["by_label"] and ho["street_n"] == 3, ho   # V, R, and the second V (held_near removed)
+    assert set(rep["verdict_in_colab"]) >= {"A_dfire_recall", "C_street_recall", "still_to_check_on_the_laptop"}
     last = torch.load(
         os.path.join(g["RUN"], "weights", "last.pt"), map_location="cpu", weights_only=False
     )
@@ -344,6 +464,37 @@ def main() -> None:
         "itms_fire_320.pt",
         "runs/fire_320/results.csv",
     } <= names, names
+
+    # version 4: the fresh test frames are kept out of the dataset, by name and by camera; the hard negatives are the
+    # most flame-coloured of the pool; the fresh test is scored once and the verdict is written
+    man4 = json.load(open(os.path.join(drive, "fire_manifest.json")))
+    ds4, uf = os.path.join(g["WORK"], "ds"), os.path.join(g["WORK"], "uvh_fresh")
+    t2 = sorted(glob.glob(os.path.join(uf, "test2", "*.jpg")))
+    assert len(t2) == SMALL["N_TEST2"], t2
+    t2stems = {os.path.basename(x)[:-4] for x in t2}
+    assert not any(r["stem"].endswith(x) for r in man4["images"] for x in t2stems), "a fresh test frame is in the dataset"
+    t2fp = np.stack([g["dhash16"](cv2.imread(x)) for x in t2])
+    assert g["hamming_min"](t2fp, g["TEST_FPS"]).min() > SMALL.get("SAME_CAMERA_BITS", 72), "a fresh frame is an old test camera"
+    for x in t2:
+        assert hashlib.sha256(open(x, "rb").read()).hexdigest() not in g["TEST_SHA"]
+    blr_files = [f for f in glob.glob(os.path.join(ds4, "images", "*", "*.jpg"))
+                 if os.path.basename(f).startswith(("blr_", "blrh_"))]
+    assert blr_files
+    near_t2 = g["hamming_min"](np.stack([g["dhash16"](cv2.imread(f)) for f in blr_files]), t2fp)
+    assert near_t2.min() > 72, ("a training or validation frame is the same camera as a fresh test frame", near_t2.min())
+    kept = json.load(open(os.path.join(drive, "bengaluru_fresh.json")))["kept"]
+    pool_stems = [n[:-4] for n, r in kept if r == "pool"]
+    sc = sorted(((g["orange_score"](cv2.imread(os.path.join(uf, "pool", n + ".jpg"))), n) for n in pool_stems), reverse=True)
+    dropped_hard = man4["fresh"]["dropped_as_same_camera_as_a_fresh_test_frame"].get("hard negatives", 0)
+    top = {n for _, n in sc[: SMALL["N_HARD"] + dropped_hard]}
+    hard_stems = {r["stem"][len("blrh_"):] for r in man4["images"] if r["stem"].startswith("blrh_")}
+    assert hard_stems and hard_stems <= top, (hard_stems, sc)
+    print("fresh frames: test2", len(t2), "| dropped as same camera:", man4["fresh"]["dropped_as_same_camera_as_a_fresh_test_frame"],
+          "| hard negatives", sorted(hard_stems), "| skipped:", man4["fresh"]["skipped"])
+    t2r = rep["test2"]
+    assert t2r["frames"] == SMALL["N_TEST2"] and t2r["max_alarms_allowed"] == 0, t2r
+    assert set(rep["verdict_in_colab"]) >= {"A_dfire_recall", "B2_fresh_bengaluru", "C_street_recall", "all_judged_pass"}
+    assert "bengaluru_test2_frames.tar" in set(zipfile.ZipFile(os.path.join(drive, g["ZIP_NAME"])).namelist())
 
     # 3. the export runs as a two-class ONNX model the laptop scorer can read
     import onnxruntime as ort  # noqa: PLC0415
@@ -399,7 +550,7 @@ def main() -> None:
     print("flat download:", man["split"], "| D-Fire images:", counts, "| skipped:", man["skipped"])
     assert man["split"].startswith("no split in the download"), man["split"]
     assert all(counts[sp] > 0 for sp in ("train", "val", "test")), counts
-    assert not any("near-copy" in k for k in man["skipped"]), (
+    assert not any("near-copy of a test image" in k for k in man["skipped"]), (
         "the grouped split left near-copies across it"
     )
     # 8. no Bengaluru frames: version 2 stops instead of carrying on without them --
@@ -412,9 +563,9 @@ def main() -> None:
     for case, overrides in (("building", {"UVH_DRIVE_DIR": nowhere}),
                             ("restoring", {"REQUIRE_BENGALURU": True})):
         if case == "restoring":  # a dataset built with the switch off, then a run with it on
-            session({"UVH_DRIVE_DIR": nowhere, "REQUIRE_BENGALURU": False}, upto="BUILD")
+            session({"UVH_DRIVE_DIR": nowhere, "REQUIRE_BENGALURU": False}, upto="BUILD", hf=offline)
         try:
-            session(overrides, upto="BUILD")
+            session(overrides, upto="BUILD", hf=offline)
             raise AssertionError(f"{case}: the run carried on without the Bengaluru frames")
         except SystemExit as e:
             assert "no Bengaluru frames" in str(e), e
@@ -426,7 +577,7 @@ def main() -> None:
     import random  # noqa: PLC0415
 
     test_pngs = sorted(glob.glob(os.path.join(args.data, "val_sample", "*.png")))
-    names = [f"u{i:02d}.png" for i in range(14)] + [os.path.basename(test_pngs[0])]
+    names = [f"u{i:02d}.png" for i in range(30)] + [os.path.basename(test_pngs[0])]
     order = sorted(names[:-1])  # the test-named file never enters the pool
     random.Random(SMALL.get("SEED", 26)).shuffle(order)
     enc = lambda im: cv2.imencode(".png", im)[1].tobytes()  # noqa: E731
@@ -459,7 +610,7 @@ def main() -> None:
     drive4 = os.path.join(tempfile.mkdtemp(prefix="fire_hf_"), "drive", "itms_fire")
     fake_dfire(args.data, drive4, unused, with_names="['smoke', 'fire']")
     drive = drive4
-    g = session({"UVH_DRIVE_DIR": nowhere, "N_NEG_VAL": 4}, upto="BUILD", hf=fake)
+    g = session({"UVH_DRIVE_DIR": nowhere}, upto="BUILD", hf=fake)
     man = json.load(open(os.path.join(drive4, "fire_manifest.json")))
     blr = man["bengaluru"]
     n_blr = {sp: man["counts"][sp].get("Bengaluru frames with no fire") for sp in ("train", "val")}
@@ -468,8 +619,9 @@ def main() -> None:
     assert blr["skipped"] == {"identical to a test frame": 1, "looks like a test camera": 1,
                               "does not open": 1, "file missing": 1}, blr["skipped"]
     assert blr["pool"] == len(repo) - 1, "the test-named file entered the pool"
-    assert man["counts"]["train"]["Bengaluru frames with no fire"] == SMALL["N_NEG_TRAIN"]
-    assert man["counts"]["val"]["Bengaluru frames with no fire"] == 4
+    dr9 = man["fresh"]["dropped_as_same_camera_as_a_fresh_test_frame"]
+    assert man["counts"]["train"]["Bengaluru frames with no fire"] == SMALL["N_NEG_TRAIN"] - dr9.get("train", 0)
+    assert man["counts"]["val"]["Bengaluru frames with no fire"] == 4 - dr9.get("val", 0) + man["fresh"]["extra_val"]
     kept = {r["source"] for r in man["images"] if r["source"].startswith("uvh26:")}
     assert not kept & {f"uvh26:{os.path.splitext(n)[0]}.jpg" for n in bad}, kept
     assert os.path.exists(os.path.join(drive4, "bengaluru_frames.tar"))
@@ -477,11 +629,67 @@ def main() -> None:
     for fn in ("fire_manifest.json", "fire_dataset.tar"):
         os.remove(os.path.join(drive4, fn))
     n_calls = len(calls)
-    session({"UVH_DRIVE_DIR": nowhere, "N_NEG_VAL": 4}, upto="BUILD")  # offline
+    session({"UVH_DRIVE_DIR": nowhere}, upto="BUILD", hf=offline)  # offline: base and fresh frames from Drive's copies
     assert len(calls) == n_calls
     man2 = json.load(open(os.path.join(drive4, "fire_manifest.json")))
     assert man2["counts"] == man["counts"], "the rebuild from Drive's copy differs"
     print("Bengaluru frames: downloaded once, reused from Drive")
+    drive = drive_saved
+
+    # 10. the fresh Bengaluru frames cannot be downloaded and are not in Drive: version 4 stops (they are its test)
+    drive5 = os.path.join(tempfile.mkdtemp(prefix="fire_nofresh_"), "drive", "itms_fire")
+    fake_dfire(args.data, drive5, uvh_drive, with_names="['smoke', 'fire']")
+    drive = drive5
+    try:
+        session(upto="BUILD", hf=offline)
+        raise AssertionError("the run carried on without the fresh test frames")
+    except SystemExit as e:
+        assert "could not get the fresh Bengaluru test frames" in str(e), e
+        print("missing fresh Bengaluru frames: stops")
+    drive = drive_saved
+
+    # 11. the fresh download: every kind of bad file is counted; a frame of the same camera as a fresh test frame is
+    # dropped from training and validation; a duplicate of a used frame is not taken
+    def dh(img):
+        gr = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        sm = cv2.resize(gr, (17, 16), interpolation=cv2.INTER_AREA)
+        return np.packbits((sm[:, 1:] > sm[:, :-1]).flatten())
+
+    bits = lambda a, b: int(np.unpackbits(a ^ b).sum())  # noqa: E731
+    rg = np.random.default_rng(9)
+    repo2 = {}
+    for k in range(5):   # pairs of frames of one camera: a frame and the same frame shifted (9-72 bits apart)
+        f0 = cv2.flip(cv2.imread(vs[k + 5]), 1)
+        f1 = np.roll(f0, 14, axis=1)
+        f1 = np.clip(f1.astype(int) + rg.integers(-3, 4, f1.shape), 0, 255).astype(np.uint8)
+        d = bits(dh(f0), dh(f1))
+        assert 8 < d <= 72, ("the fake same-camera pair is not in the 9-72 bit band", k, d)
+        repo2[f"pair{k}a.png"], repo2[f"pair{k}b.png"] = enc_(f0), enc_(f1)
+    repo2["dup0.png"] = fr["dup0.png"]   # a copy of a base frame, which is also an old test frame here: caught as that
+    pa = cv2.imdecode(np.frombuffer(repo2["pair0a.png"], np.uint8), cv2.IMREAD_COLOR)
+    dupa = np.clip(pa.astype(int) + rg.integers(-2, 3, pa.shape), 0, 255).astype(np.uint8)
+    assert bits(dh(pa), dh(dupa)) <= 8
+    repo2["dupA.png"] = enc_(dupa)   # a duplicate of a fresh frame: whichever comes second is not taken
+    repo2["bad_sha.png"], repo2["bad_cam.png"] = fr["bad_sha.png"], fr["bad_cam.png"]
+    repo2["bad_open.png"], repo2["missing.png"] = b"not an image", None
+    hf2 = {"hf_list": lambda folder="": {n: f"UVH-26-Train/data/x/{n}" for n in repo2},
+           "hf_get": lambda path, tries=10: repo2[os.path.basename(path)]}
+    drive6 = os.path.join(tempfile.mkdtemp(prefix="fire_fresh_"), "drive", "itms_fire")
+    fake_dfire(args.data, drive6, uvh_drive, with_names="['smoke', 'fire']")
+    drive = drive6
+    g = session({"WORK": os.path.join(root, "work_unit"), "N_MINE_POOL": 20}, upto="BUILD", hf=hf2)   # more wanted than there is: all are looked at
+    man6 = json.load(open(os.path.join(drive6, "fire_manifest.json")))
+    fi = man6["fresh"]
+    print("fresh download skipped:", fi["skipped"], "| dropped as same camera:", fi["dropped_as_same_camera_as_a_fresh_test_frame"])
+    assert fi["skipped"] == {"identical to an old test frame": 1, "looks like an old test camera": 2, "does not open": 1,
+                             "file missing": 1, "duplicate of a frame already used": 1}, fi["skipped"]
+    # every frame left in training, validation and the hard negatives is more than 72 bits from every fresh test frame
+    ds6, uf6 = os.path.join(g["WORK"], "ds"), os.path.join(g["WORK"], "uvh_fresh")
+    t26 = np.stack([g["dhash16"](cv2.imread(x)) for x in sorted(glob.glob(os.path.join(uf6, "test2", "*.jpg")))])
+    left = [f for f in glob.glob(os.path.join(ds6, "images", "*", "*.jpg")) if os.path.basename(f).startswith(("blr_", "blrh_"))]
+    assert g["hamming_min"](np.stack([g["dhash16"](cv2.imread(f)) for f in left]), t26).min() > 72
+    assert sum(fi["dropped_as_same_camera_as_a_fresh_test_frame"].values()) > 0, (
+        "no frame was dropped although fresh test frames share cameras with others", fi)
     drive = drive_saved
     print("DRY RUN OK")
 

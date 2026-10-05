@@ -5824,6 +5824,13 @@ clean. Web app: the map-store tests pass (5).
 New scripts: `scenarios/build_scenario.py`, `scenarios/city_from_osm.py`,
 `scripts/any_network_report.py`.
 
+## 2026-10-04: vision v3 and fire wrap
+
+- Fire: v5 detector plus crop classifier passed all five locked targets (recall 85.7 %, negatives alarming 9.5 %, precision 91.2 %). Wired into vision-service as operator-confirmed candidates (12 tests). Persistence settings are guesses; no real footage, no Inferno run. `AnomalyType.FIRE` added (console word; incident response pages fire truck and police by default). Step 2b (classifier with degradation augmentation) was run and FAILED N (13.8 % against 10 %) and P (88.1 % against 90 %); Step 2 stays (`baselines/2026-10-04_m8_fire_v5_step2b/README.md`).
+- Vision: fine-tune v3 passed all seven locked targets and is the video-mode default (`itms_six_aug_640.onnx`; v2 stays at `itms_six_fp32_640.onnx`). SimCam preset `itms6aug_640` fitted to v3 (daytime error model practically unchanged from v2); no closed loop with v3 (needs SUMO).
+- Details: `baselines/2026-10-04_m8_finetune_v3/`, `baselines/2026-10-04_m8_stress/`.
+- Models attached (2026-10-05): `data/models/` holds `itms_six_aug_640.onnx` (vehicles, default), `itms_six_aug_640.pt`, `itms_six_fp32_640.onnx` (v2), `itms_fire_640.pt` and `itms_fire_cls_112.onnx`. Video mode turns fire detection on by itself when both fire files are there (`VISION_FIRE=0` turns it off; needs the `fire` extra). Old Step 2b, v3 result and fresh-frame folders were deleted.
+
 ## 2026-10-03/05 — A blocking-aware controller for single-lane approaches: helps where junctions lock, four of nine targets failed
 
 Not committed. Baseline: `baselines/2026-10-03_m8_blocking_aware/` (README,

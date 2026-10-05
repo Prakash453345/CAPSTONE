@@ -15,6 +15,7 @@ import json
 import time
 from collections.abc import Mapping
 
+from vision_service.fire.monitor import FireCandidate
 from vision_service.health import CameraHealth, CameraStatus
 from vision_service.incidents.rules import AnomalyCandidate
 from vision_service.state.estimator import LinkEstimate
@@ -117,6 +118,41 @@ def anomaly_payload(
         "start_time_ms": start_time_ms if start_time_ms is not None else int(time.time() * 1000),
         "expires_at_ms": None,
         "sim_tick": sim_tick,
+        "detail": json.dumps(detail, default=str)[:2000],
+        "operator": "",
+    }
+
+
+def fire_payload(
+    cand: FireCandidate,
+    *,
+    edge_id: str,
+    start_time_ms: int | None = None,
+) -> dict:
+    """A fire/smoke candidate as an `AnomalyUpdated` with `source = VISION`.
+
+    `anomaly_type` is "fire" (`itms_domain.anomaly.AnomalyType.FIRE`; the
+    console has its word, and sim-service's incident response pages a fire
+    truck and police for it once an anomaly of that type exists there).
+    `estimated_impact` is 0: an unconfirmed
+    candidate must not change routing; the operator sets the real impact when
+    confirming (ADR-006). The box is normalised to the frame so a console can
+    draw it without knowing the frame size."""
+    detail = {"rule": "fire_smoke", "camera": cand.camera_id, "kind": cand.kind,
+              "score": round(cand.score, 3), **cand.evidence}
+    return {
+        "anomaly_id": cand.candidate_id,
+        "source": "VISION",
+        "anomaly_type": "fire",
+        "severity": "high",
+        "status": "RESOLVED" if cand.status == "RESOLVED" else "ACTIVE",
+        "edge_id": edge_id,
+        "lane_id": None,
+        "estimated_impact": 0.0,
+        "position_m": None,
+        "start_time_ms": start_time_ms if start_time_ms is not None else int(time.time() * 1000),
+        "expires_at_ms": None,
+        "sim_tick": None,
         "detail": json.dumps(detail, default=str)[:2000],
         "operator": "",
     }

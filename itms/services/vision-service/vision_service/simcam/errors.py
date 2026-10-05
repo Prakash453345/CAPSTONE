@@ -214,6 +214,20 @@ PRESETS["itms6_960"] = replace(
                _B: {_T: 0.076}, _C: {_A: 0.005, _B: 0.005, _T: 0.002},
                _T: {_A: 0.034, _B: 0.02, _C: 0.034}},
 )
+# Fine-tune v3 (`baselines/2026-10-04_m8_finetune_v3/`): v2's recipe plus degradation augmentation, the video-mode
+# default detector. Fitted the same way on the same 250 daylight frames (`simcam_fit.json`): it differs from
+# `itms6_640` by at most 0.03 in any class's recall (bus and bicycle have under 100 boxes), so this daytime error
+# model is practically unchanged. It does NOT represent v3's gains at night, in glare or with sensor noise: the
+# labelled frames are daylight. The default preset stays `itms6_640` so earlier baselines stay comparable.
+PRESETS["itms6aug_640"] = replace(
+    PRESETS["finetuned_day"],
+    name="itms6aug_640",
+    base_recall={_C: 0.944, _A: 0.88, _M: 0.81, _B: 0.772, _T: 0.796, _BI: 0.678, _P: 0.85},
+    size_h50_px=46.25,
+    size_h50_by_class={_C: 44.75, _A: 40.5, _M: 47.0, _B: 46.25, _T: 73.5, _BI: 46.25},
+    confusion={_A: {_C: 0.01, _M: 0.002, _T: 0.014}, _BI: {_M: 0.381}, _B: {_T: 0.063},
+               _C: {_A: 0.002, _B: 0.005}, _T: {_A: 0.036, _B: 0.031, _C: 0.026}},
+)
 # stock COCO YOLO11-S, 640 px: no auto-rickshaw class, so an auto it finds is always another type
 PRESETS["stock_640"] = replace(
     PRESETS["coco_pretrained"],
