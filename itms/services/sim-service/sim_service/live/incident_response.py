@@ -74,6 +74,7 @@ _RESPONSE_MAP: dict[AnomalyType, tuple[EmergencyKind, ...]] = {
     AnomalyType.LANE_BLOCKAGE: (EmergencyKind.POLICE,),
     AnomalyType.ROAD_OBSTRUCTION: (EmergencyKind.POLICE,),
     AnomalyType.HEAVY_CONGESTION: (),
+    AnomalyType.FIRE: (EmergencyKind.FIRE_TRUCK, EmergencyKind.POLICE),
     AnomalyType.UNKNOWN: (EmergencyKind.POLICE,),
 }
 

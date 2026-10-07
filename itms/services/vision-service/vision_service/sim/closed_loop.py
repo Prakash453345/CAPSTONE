@@ -49,6 +49,7 @@ presence detection. Only the controller's *optimisation* inputs are swapped.
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import replace
 from typing import Any
 
 from itms_domain.camera import (
@@ -111,7 +112,15 @@ class VisionLoop:
     def stopbar(self, tls_id: str, zone_m: float = STOPBAR_ZONE_M) -> dict[str, bool]:
         """The stop-bar loops of one junction, emulated from the snapshot the
         cameras film: a link's loop is occupied when some vehicle's front is
-        within `zone_m` of its approach lane's end."""
+        within `zone_m` of its approach lane's end.
+
+        An empty lane is never occupied. The first version compared a
+        missing lane's position of -1 with `length - zone_m`, which is below
+        -1 on a lane shorter than the zone, so on Berlin's short approach
+        lanes the loop read "occupied" with nobody there, the cross-check
+        called the camera blind 30 s into every run, and the controller fell
+        back to fixed time about 5,000 times a run. The corridor's approach
+        lanes are all longer than the zone, so its runs never met it."""
         snap, system = self._prev, self.system
         if snap is None or system is None:
             return {}
@@ -125,7 +134,8 @@ class VisionLoop:
         out = {}
         for link, lane_id in system.estimator.approach_links.get(tls_id, {}).items():
             lane = lanes.get(lane_id)
-            out[link] = lane is not None and self._front.get(lane_id, -1.0) >= lane.length - zone_m
+            front = self._front.get(lane_id)
+            out[link] = lane is not None and front is not None and front >= lane.length - zone_m
         return out
 
     def confidence_summary(self) -> dict:
@@ -175,5 +185,8 @@ class VisionSensor:
                                       qs.get("vehicles_seen", {}))
             self.blind_ticks += bool(blind)
         new = with_camera_state(ctx, fields, qs["confidence"], mode=self.mode, blind=blind)
+        # which lanes are blocked at their head is the cameras' reading too
+        # (empty without a junction-overview camera), never the simulator's
+        new = replace(new, blocked_by=dict(system.estimator.blocked.get(self.tls_id, {})))
         self.swaps += 1
         return self.inner(cfg, new)

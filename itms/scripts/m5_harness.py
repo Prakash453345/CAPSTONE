@@ -27,12 +27,15 @@ as M4's recorded ones rather than beside an incomparable set.
 
 from __future__ import annotations
 
+import json
+import os
 import sys
 from collections.abc import Callable, Mapping
-from functools import partial
+from functools import cache, partial
 from pathlib import Path
 
 from itms_domain import Tier0Config
+from itms_domain.lane_chains import from_sumo_net as chains_from_net
 from sim_service.control import metrics
 from sim_service.control.memory import DemandMemory, LoadBaseline
 from sim_service.control.online_calibration import OnlineCalibration
@@ -45,6 +48,15 @@ sys.path.insert(0, str(_ROOT / "scenarios" / "networks" / "vijayawada"))
 from extract_tier0_config import load_configs  # noqa: E402
 from link_lanes import link_to_lane_map, link_to_receiving_lane_map  # noqa: E402
 from measure_flows import compute_link_flows  # noqa: E402
+
+# Which road network. The Vijayawada corridor unless `ITMS_SCENARIO` names a
+# directory built by `scenarios/build_scenario.py` (any network, demand levels
+# set by how loaded its busiest junction is). Read at import, so every worker
+# process of a gate sees the same scenario as its parent.
+SCENARIO_DIR = Path(os.environ["ITMS_SCENARIO"]).resolve() if os.environ.get("ITMS_SCENARIO") \
+    else None
+SCENARIO = json.loads((SCENARIO_DIR / "scenario.json").read_text()) if SCENARIO_DIR else None
+SCENARIO_NAME = SCENARIO["name"] if SCENARIO else "vijayawada"
 
 NET_PATH = _ROOT / "scenarios" / "networks" / "vijayawada" / "vijayawada_corridor.net.xml"
 DEMAND_DIR = _ROOT / "scenarios" / "demand" / "vijayawada"
@@ -72,6 +84,32 @@ DEMAND_LEVELS: dict[str, dict[str, Path]] = {
         "route": DEMAND_DIR / "vijayawada_corridor_heavy.rou.xml",
     },
 }
+
+
+if SCENARIO is not None:
+    NET_PATH = SCENARIO_DIR / SCENARIO["net"]
+    DEMAND_DIR = SCENARIO_DIR
+    DEMAND_LEVELS = {
+        level: {"sumocfg": SCENARIO_DIR / v["sumocfg"], "route": SCENARIO_DIR / v["route"]}
+        for level, v in SCENARIO["levels"].items()
+    }
+
+
+# `itms_domain.lane_chains`: measure a road SUMO split into several edges
+# (a turn bay, an OpenStreetMap tag change) as the whole road. On by default;
+# `ITMS_LANE_CHAINS=0` turns it off, for the with/without comparison only.
+LANE_CHAINS_ON = os.environ.get("ITMS_LANE_CHAINS", "1") != "0"
+
+
+@cache
+def lane_chains() -> tuple[dict, dict] | None:
+    """`(upstream, downstream)` for `NET_PATH`, or None when switched off or
+    when the network has nothing to chain (the runner then does exactly
+    what it did before chains existed)."""
+    if not LANE_CHAINS_ON:
+        return None
+    up, down = chains_from_net(NET_PATH)
+    return (up, down) if (up or down) else None
 
 
 def scenario_inputs(demand_level: str):
@@ -207,6 +245,8 @@ def run_one(
     if controller in _NEEDS_QUEUE_STATE:
         kwargs["receiving_lanes"] = receiving_lanes
         kwargs["vtype_pcu"] = vtype_pcu
+        if lane_chains() is not None:
+            kwargs["lane_chains"] = lane_chains()
     if record_memory and demand_memory is not None:
         kwargs["demand_memory"] = demand_memory
     if calibration is not None and record_calibration:

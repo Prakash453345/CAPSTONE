@@ -9,6 +9,8 @@ interface ImportMetaEnv {
   readonly VITE_GOOGLE_MAPS_API_KEY?: string;
   /** Legacy basemap tile key retained from local edits. Never commit key values. */
   readonly VITE_MAP_API_KEY?: string;
+  /** Map start centre, `"lat,lon"`. Defaults to the Vijayawada corridor. */
+  readonly VITE_MAP_CENTER?: string;
 }
 
 interface ImportMeta {

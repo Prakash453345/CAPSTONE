@@ -120,6 +120,16 @@ class FakeCabinet:
     def all_red_state(self) -> str:
         return "all_red"
 
+    def carried_clearance_states(self, outgoing: str, incoming: str) -> tuple[str, str]:
+        """`TraCICabinet.carried_clearance_states`, as labels a test can read."""
+        return f"yellow:{outgoing}>{incoming}", f"red:{outgoing}>{incoming}"
+
+    carriable_changes: frozenset[tuple[str, str]] = frozenset()
+    """Changes a test declares only stop protected links (`TraCICabinet.can_carry`)."""
+
+    def can_carry(self, outgoing: str, incoming: str) -> bool:
+        return (outgoing, incoming) in self.carriable_changes
+
     def set_raw_state(self, state: str) -> None:
         # A raw yellow/all-red display is not a known green phase, exactly
         # as `TraCICabinet._phase_id_for_state` reads it back as None.

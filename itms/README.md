@@ -207,6 +207,14 @@ or read the one api-service generates and logs on startup when it isn't set
 `make dev` still prints `web/index.html` -- the older single-page live map and
 raw event log that `web-app/` replaced.
 
+**Another city or road network.** Nothing is tied to the corridor.
+`scenarios/build_scenario.py` makes a scenario from any SUMO network (an
+OpenStreetMap export, or a generated grid, radial or random network) and
+`ITMS_SCENARIO=<its directory>` points every service and gate at it; the web
+map takes `VITE_MAP_CENTER`. See `scenarios/README.md`, "Any road network",
+and `baselines/2026-09-30_m8_any_network/` for results on eight networks,
+including Berlin and Ingolstadt.
+
 For hands-on testing -- light/medium/heavy demand, custom origin-to-destination
 scenarios, A/B run comparison, milestone checklists -- use the test lab in
 `../testing_site/` (`./start.sh`, then http://127.0.0.1:8420). It runs this

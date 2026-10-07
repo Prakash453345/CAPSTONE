@@ -61,6 +61,15 @@ is checked directly rather than asserted --
 any_transition` enumerates every ordered phase pair at every one of the
 corridor's seven junctions.
 
+One exception was added later and does not touch the corridor controller:
+the blocking-aware controller (`control/strategies/hol_camp.py`) may go from
+a ring phase to that phase's own alternate with the continuing greens kept
+(`TraCICabinet.can_carry`, `runner._apply_decision`). The trap is avoided
+there by construction instead -- an alternate only stops protected movements
+and never a permissive one, and every way out of an alternate is again the
+clean break described above. It needs a separate turn face per approach (a
+flashing-yellow-arrow type head); with one shared face the trap returns.
+
 The related hazard A5 -- a permissive left kept green during the preempt
 phase, still inviting drivers across the path an emergency vehicle is
 about to enter at speed -- was *not* structurally prevented, and was

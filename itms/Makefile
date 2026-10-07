@@ -86,11 +86,11 @@ vision-dev: setup
 # The adopted detector for VISION_MODE=video: the fine-tune of IISc's UVH-26
 # model (baselines/2026-09-27_m8_finetune_v2/). Unzip the fine-tune notebook's
 # results into data/uvh26/finetune_v2/ first; data/ is not in git.
-MODEL_SRC := data/uvh26/finetune_v2/itms_six_fp32_640.onnx
+MODEL_SRC := data/uvh26/finetune_v3/itms_six_aug_640.onnx
 vision-model:
-	@test -f $(MODEL_SRC) || { echo "missing $(MODEL_SRC): unzip the fine-tune notebook's results there"; exit 1; }
-	mkdir -p data/models && cp $(MODEL_SRC) data/models/itms_six_fp32_640.onnx
-	@echo "data/models/itms_six_fp32_640.onnx is the video-mode detector"
+	@test -f $(MODEL_SRC) || { echo "missing $(MODEL_SRC): unzip the v3 fine-tune notebook's results there"; exit 1; }
+	mkdir -p data/models && cp $(MODEL_SRC) data/models/itms_six_aug_640.onnx
+	@echo "data/models/itms_six_aug_640.onnx is the video-mode detector"
 
 test-vision: setup
 	$(VENV)/bin/pytest -q packages/geo services/vision-service

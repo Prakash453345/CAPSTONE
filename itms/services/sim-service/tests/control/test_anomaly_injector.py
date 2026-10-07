@@ -315,3 +315,53 @@ def test_random_schedule_rejects_a_run_too_short_to_hold_the_incidents():
 def test_random_schedule_rejects_empty_lane_set():
     with pytest.raises(ValueError):
         random_schedule([], seed=1, n_incidents=1, run_ticks=6000)
+
+
+# ---- collision ----------------------------------------------------------
+
+
+def _patch_collision_calls(sim, monkeypatch):
+    t = injector_module.traci
+    sim.speed_mode = {}
+    monkeypatch.setattr(t.vehicle, "getLength", lambda v: 4.2)
+    monkeypatch.setattr(t.vehicle, "getSpeedMode", lambda v: sim.speed_mode.get(v, 31))
+    monkeypatch.setattr(t.vehicle, "setSpeedMode", lambda v, m: sim.speed_mode.__setitem__(v, m))
+    monkeypatch.setattr(t.simulation, "getDeltaT", lambda: 1.0)
+
+
+def test_collision_window_starts_at_contact_not_at_the_request(sim, monkeypatch):
+    _patch_collision_calls(sim, monkeypatch)
+    sim.put_vehicle("app_a_0", "lead", speed=9.0, pos=50.0)
+    sim.put_vehicle("app_a_0", "fol", speed=9.0, pos=40.0)  # 5.8 m bumper gap
+    inj = IncidentInjector(
+        [PlannedIncident("collision", "app_a_0", start_tick=5, duration_ticks=6)],
+        link_lanes=_LINK_LANES,
+    )
+    for step in range(1, 8):
+        inj.tick(step)
+    # closing: the follower ignores the leader but is clamped to land on its bumper
+    assert sim.speed_mode["fol"] == 0
+    assert any(v == "fol" and abs(s - 5.8) < 1e-6 for v, s in sim.set_speed_calls)
+    sim.positions["fol"] = 45.7  # bumpers meet
+    for step in range(8, 20):
+        inj.tick(step)
+    inj.finalize(20)
+    (w,) = inj.ground_truth()
+    assert w.kind == "collision" and w.realised
+    assert w.actual_start_tick == 8 and w.end_tick == 14 and w.ended_reason == "released"
+    assert sim.speed_mode["fol"] == 31  # restored
+
+
+def test_collision_that_never_makes_contact_is_unrealised(sim, monkeypatch):
+    _patch_collision_calls(sim, monkeypatch)
+    sim.put_vehicle("app_a_0", "lead", speed=9.0, pos=50.0)
+    sim.put_vehicle("app_a_0", "fol", speed=9.0, pos=40.0)
+    inj = IncidentInjector(
+        [PlannedIncident("collision", "app_a_0", start_tick=5, duration_ticks=6)],
+        link_lanes=_LINK_LANES,
+    )
+    for step in range(1, 40):
+        inj.tick(step)
+    inj.finalize(40)
+    (w,) = inj.ground_truth()
+    assert not w.realised and w.ended_reason == "never_started"

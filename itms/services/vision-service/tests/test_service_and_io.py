@@ -218,8 +218,9 @@ def test_a_near_tie_does_not_count_as_an_identity_switch() -> None:
 
 
 class _FakeLoop:
-    def __init__(self, qs):
+    def __init__(self, qs, blocked=None):
         self.qs = qs
+        self.blocked = blocked or {}
 
     def stopbar(self, tls):
         return {}
@@ -229,7 +230,8 @@ class _FakeLoop:
             pass
 
         s = S()
-        s.estimator = type("E", (), {"queue_sample": lambda _self, tls: self.qs})()
+        s.estimator = type("E", (), {"queue_sample": lambda _self, tls: self.qs,
+                                     "blocked": self.blocked})()
         return s
 
 
@@ -261,6 +263,32 @@ def test_closed_loop_wrapper_swaps_exactly_the_queue_fields() -> None:
         assert got.queue_pcu == {"L0": 5.0} and got.receiving_occupancy == {"L0": 0.3}
         assert dict(got.confidence) == conf
         assert got.wait_times_s == {"L0": 9.0} and got.has_demand == {"L0": True}
+        assert got.blocked_by == {}
+
+
+def test_closed_loop_wrapper_takes_blocked_lanes_from_the_cameras_only() -> None:
+    """What the simulator knows about a blocked lane never reaches a
+    camera-fed controller; what the overview camera saw does."""
+    qs = {"queue_pcu": {}, "approaching_pcu": {}, "receiving_occupancy": {},
+          "receiving_queue_pcu": {}, "confidence": {}}
+    seen = {}
+
+    class Inner:
+        stats: dict = {}
+
+        def set_sim_time(self, t):
+            pass
+
+        def __call__(self, cfg, ctx):
+            seen["ctx"] = ctx
+
+    ctx = JunctionContext(intersection_id="J", current_phase_id="P0",
+                          current_phase_elapsed_s=3.0, blocked_by={"L0": "L2"})
+    VisionSensor(Inner(), _FakeLoop(qs), "J", "honest")(None, ctx)  # type: ignore[arg-type]
+    assert seen["ctx"].blocked_by == {}
+    cams = _FakeLoop(qs, {"J": {"L4": "?"}, "K": {"L0": "?"}})
+    VisionSensor(Inner(), cams, "J", "honest")(None, ctx)  # type: ignore[arg-type]
+    assert seen["ctx"].blocked_by == {"L4": "?"}
 
 
 def test_evidence_redacts_tracked_people_the_detector_missed() -> None:

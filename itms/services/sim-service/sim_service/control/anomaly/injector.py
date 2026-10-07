@@ -56,6 +56,13 @@ _RELEASE_SPEED = -1.0
 # disables every autonomous lane change for the duration of the stall; the
 # vehicle's own mode is restored on release.
 _NO_LANE_CHANGES = 0
+# Collision injection: both vehicles must be moving this fast (so the track
+# history shows real prior speed) and within this bumper gap of each other.
+_COLLISION_MIN_SPEED_MPS = 5.0
+_COLLISION_MAX_GAP_M = 25.0
+_COLLISION_CONTACT_GAP_M = 0.3  # bumper gap at which the follower is stopped dead
+_COLLISION_APPROACH_TICKS = 20  # give up if the bumpers have not met by then
+_NO_SAFETY = 0  # SUMO speed mode 0: no safe-speed / decel / right-of-way checks
 
 
 @dataclass(frozen=True)
@@ -64,13 +71,13 @@ class PlannedIncident:
     *requested* to begin; the realised start can be later for a stall if no
     vehicle is on the lane yet (see `IncidentWindow.actual_start_tick`)."""
 
-    kind: str  # "stall" | "lane_block"
+    kind: str  # "stall" | "lane_block" | "collision"
     lane_id: str
     start_tick: int
     duration_ticks: int
 
     def __post_init__(self) -> None:
-        if self.kind not in ("stall", "lane_block"):
+        if self.kind not in ("stall", "lane_block", "collision"):
             raise ValueError(f"unknown incident kind {self.kind!r}")
         if self.duration_ticks <= 0:
             raise ValueError(f"duration_ticks must be > 0, got {self.duration_ticks}")
@@ -119,6 +126,16 @@ class _ActiveStall:
 
 
 @dataclass
+class _ActiveCollision:
+    plan: PlannedIncident
+    vehicle_ids: tuple[str, str]  # (leader, follower)
+    approach_tick: int  # the leader braked and the follower stopped yielding
+    lane_change_modes: tuple[int | None, int | None] = (None, None)
+    follower_speed_mode: int | None = None
+    started_tick: int | None = None  # contact tick; None while still closing
+
+
+@dataclass
 class _ActiveBlock:
     plan: PlannedIncident
     original_max_speed_mps: float
@@ -161,6 +178,8 @@ class IncidentInjector:
         self._cursor = 0
         self._active_stalls: dict[str, _ActiveStall] = {}  # keyed by lane_id
         self._active_blocks: dict[str, _ActiveBlock] = {}
+        self._active_collisions: dict[str, _ActiveCollision] = {}
+        self._pending_collisions: list[PlannedIncident] = []
         # Requested-but-not-yet-started stalls whose lane was empty at
         # start_tick -- retried each tick until their window would be over.
         self._pending_stalls: list[PlannedIncident] = []
@@ -190,6 +209,7 @@ class IncidentInjector:
         self._release_due(step)
         self._advance_schedule(step)
         self._retry_pending(step)
+        self._retry_collisions(step)
         self._maintain_active(step)
 
     def _advance_schedule(self, step: int) -> None:
@@ -201,6 +221,9 @@ class IncidentInjector:
             self._cursor += 1
             if plan.kind == "lane_block":
                 self._start_block(plan, step)
+            elif plan.kind == "collision":
+                if not self._try_start_collision(plan, step):
+                    self._pending_collisions.append(plan)
             else:
                 if not self._try_start_stall(plan, step):
                     self._pending_stalls.append(plan)
@@ -241,11 +264,34 @@ class IncidentInjector:
                 self._finish_stall(lane_id, step, "vehicle_gone")
                 continue
             traci.vehicle.setSpeed(active.vehicle_id, 0.0)
+        for lane_id, col in list(self._active_collisions.items()):
+            if not set(col.vehicle_ids) <= present:
+                self._finish_collision(lane_id, step, "vehicle_gone")
+                continue
+            lead, fol = col.vehicle_ids
+            if col.started_tick is None:
+                gap = (traci.vehicle.getLanePosition(lead) - traci.vehicle.getLength(lead)
+                       - traci.vehicle.getLanePosition(fol))
+                if gap > _COLLISION_CONTACT_GAP_M:
+                    # land exactly on the leader's bumper this step, not through it
+                    dt = traci.simulation.getDeltaT()
+                    traci.vehicle.setSpeed(
+                        fol, max(0.0, min(traci.vehicle.getSpeed(fol), gap / dt)))
+                    continue
+                col.started_tick = step  # contact: the follower stops dead
+            for vid in col.vehicle_ids:
+                traci.vehicle.setSpeed(vid, 0.0)
 
     def _release_due(self, step: int) -> None:
         for lane_id, stall in list(self._active_stalls.items()):
             if step >= stall.started_tick + stall.plan.duration_ticks:
                 self._finish_stall(lane_id, step, "released")
+        for lane_id, col in list(self._active_collisions.items()):
+            if col.started_tick is None:
+                if step - col.approach_tick > _COLLISION_APPROACH_TICKS:
+                    self._finish_collision(lane_id, step, "no_contact")
+            elif step >= col.started_tick + col.plan.duration_ticks:
+                self._finish_collision(lane_id, step, "released")
         for lane_id, block in list(self._active_blocks.items()):
             if step >= block.started_tick + block.plan.duration_ticks:
                 traci.lane.setMaxSpeed(lane_id, block.original_max_speed_mps)
@@ -281,6 +327,11 @@ class IncidentInjector:
                 vehicle_id=None,
             )
             del self._active_blocks[lane_id]
+        for lane_id, col in list(self._active_collisions.items()):
+            present = set(col.vehicle_ids) <= set(traci.vehicle.getIDList())
+            reason = "run_ended" if present else "vehicle_gone"
+            self._finish_collision(lane_id, step, reason if col.started_tick is not None
+                                   else "no_contact")
         for plan in self._pending_stalls:
             tls_id, link_ids = self._links_for(plan.lane_id)
             self._windows.append(
@@ -297,6 +348,22 @@ class IncidentInjector:
                 )
             )
         self._pending_stalls = []
+        for plan in self._pending_collisions:
+            tls_id, link_ids = self._links_for(plan.lane_id)
+            self._windows.append(
+                IncidentWindow(
+                    kind="collision",
+                    lane_id=plan.lane_id,
+                    intersection_id=tls_id,
+                    link_ids=link_ids,
+                    requested_start_tick=plan.start_tick,
+                    actual_start_tick=None,
+                    end_tick=None,
+                    vehicle_id=None,
+                    ended_reason="never_started",
+                )
+            )
+        self._pending_collisions = []
 
     # ---- mechanics ------------------------------------------------------
 
@@ -315,6 +382,86 @@ class IncidentInjector:
             plan=plan, vehicle_id=candidate, started_tick=step, lane_change_mode=mode
         )
         return True
+
+    def _retry_collisions(self, step: int) -> None:
+        still: list[PlannedIncident] = []
+        for plan in self._pending_collisions:
+            if step >= plan.start_tick + plan.duration_ticks:
+                tls_id, link_ids = self._links_for(plan.lane_id)
+                self._windows.append(
+                    IncidentWindow(
+                        kind="collision", lane_id=plan.lane_id, intersection_id=tls_id,
+                        link_ids=link_ids, requested_start_tick=plan.start_tick,
+                        actual_start_tick=None, end_tick=None, vehicle_id=None,
+                        ended_reason="never_started",
+                    )
+                )
+            elif not self._try_start_collision(plan, step):
+                still.append(plan)
+        self._pending_collisions = still
+
+    def _try_start_collision(self, plan: PlannedIncident, step: int) -> bool:
+        """Rear-end aftermath: two moving vehicles one behind the other on the
+        lane. The leader brakes to a stop, the follower ignores it until the
+        bumpers touch, then both are held at 0 m/s for the window (the
+        window starts at contact). Needs SUMO run with `--collision.action warn`, or SUMO removes
+        the overlapping pair. The aftermath is synthetic: nothing about how
+        a real crash looks or how long it lasts is modelled."""
+        if plan.lane_id in self._active_collisions or plan.lane_id in self._active_stalls:
+            return True
+        moving = [
+            (traci.vehicle.getLanePosition(v), v)
+            for v in traci.lane.getLastStepVehicleIDs(plan.lane_id)
+            if traci.vehicle.getSpeed(v) > _COLLISION_MIN_SPEED_MPS
+        ]
+        moving.sort(reverse=True)
+        for (pos_lead, lead), (pos_fol, fol) in zip(moving, moving[1:], strict=False):
+            if pos_lead - pos_fol > _COLLISION_MAX_GAP_M:
+                continue
+            modes = []
+            for v in (lead, fol):
+                modes.append(traci.vehicle.getLaneChangeMode(v))
+                traci.vehicle.setLaneChangeMode(v, _NO_LANE_CHANGES)
+            fol_mode = traci.vehicle.getSpeedMode(fol)
+            # leader brakes to a stop; the follower stops braking for it and
+            # keeps its speed until the bumpers meet (see `_maintain_active`)
+            traci.vehicle.setSpeed(lead, 0.0)
+            traci.vehicle.setSpeedMode(fol, _NO_SAFETY)
+            traci.vehicle.setSpeed(fol, traci.vehicle.getSpeed(fol))
+            self._active_collisions[plan.lane_id] = _ActiveCollision(
+                plan=plan, vehicle_ids=(lead, fol), approach_tick=step,
+                lane_change_modes=(modes[0], modes[1]), follower_speed_mode=fol_mode,
+            )
+            return True
+        return False
+
+    def _finish_collision(self, lane_id: str, step: int, reason: str) -> None:
+        col = self._active_collisions.pop(lane_id)
+        if reason != "vehicle_gone":
+            for v, mode in zip(col.vehicle_ids, col.lane_change_modes, strict=True):
+                try:
+                    traci.vehicle.setSpeed(v, _RELEASE_SPEED)
+                    if mode is not None:
+                        traci.vehicle.setLaneChangeMode(v, mode)
+                except traci.TraCIException:
+                    pass
+            try:
+                if col.follower_speed_mode is not None:
+                    traci.vehicle.setSpeedMode(col.vehicle_ids[1], col.follower_speed_mode)
+            except traci.TraCIException:
+                pass
+        if col.started_tick is None:
+            tls_id, link_ids = self._links_for(lane_id)
+            self._windows.append(IncidentWindow(
+                kind="collision", lane_id=lane_id, intersection_id=tls_id, link_ids=link_ids,
+                requested_start_tick=col.plan.start_tick, actual_start_tick=None,
+                end_tick=None, vehicle_id=None, ended_reason="never_started"))
+            return
+        self._close_window(
+            "collision", lane_id,
+            requested_start_tick=col.plan.start_tick, actual_start_tick=col.started_tick,
+            end_tick=step, reason=reason, vehicle_id=col.vehicle_ids[0],
+        )
 
     @staticmethod
     def _pick_stall_vehicle(lane_id: str) -> str | None:

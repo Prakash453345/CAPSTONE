@@ -1,0 +1,123 @@
+{
+ "name": "narrow_sweep",
+ "net": "narrow_sweep.net.xml",
+ "mix": "india",
+ "levels": {
+  "d30": {
+   "sumocfg": "narrow_sweep_d30.sumocfg",
+   "route": "narrow_sweep_d30.rou.xml",
+   "target_ds": 0.3,
+   "achieved_ds": 0.3024,
+   "busiest_tls": "B2",
+   "period_s": 1.6793,
+   "iterations": [
+    [
+     4.0,
+     0.1319
+    ],
+    [
+     1.7583,
+     0.2865
+    ],
+    [
+     1.6793,
+     0.3024
+    ]
+   ]
+  },
+  "d35": {
+   "sumocfg": "narrow_sweep_d35.sumocfg",
+   "route": "narrow_sweep_d35.rou.xml",
+   "target_ds": 0.35,
+   "achieved_ds": 0.3443,
+   "busiest_tls": "B2",
+   "period_s": 1.4327,
+   "iterations": [
+    [
+     4.0,
+     0.1319
+    ],
+    [
+     1.5071,
+     0.3327
+    ],
+    [
+     1.4327,
+     0.3443
+    ]
+   ]
+  },
+  "d40": {
+   "sumocfg": "narrow_sweep_d40.sumocfg",
+   "route": "narrow_sweep_d40.rou.xml",
+   "target_ds": 0.4,
+   "achieved_ds": 0.4013,
+   "busiest_tls": "B1",
+   "period_s": 1.2502,
+   "iterations": [
+    [
+     4.0,
+     0.1319
+    ],
+    [
+     1.3187,
+     0.3792
+    ],
+    [
+     1.2502,
+     0.4013
+    ]
+   ]
+  },
+  "d45": {
+   "sumocfg": "narrow_sweep_d45.sumocfg",
+   "route": "narrow_sweep_d45.rou.xml",
+   "target_ds": 0.45,
+   "achieved_ds": 0.4517,
+   "busiest_tls": "B1",
+   "period_s": 1.1027,
+   "iterations": [
+    [
+     4.0,
+     0.1319
+    ],
+    [
+     1.1722,
+     0.4233
+    ],
+    [
+     1.1027,
+     0.4517
+    ]
+   ]
+  }
+ },
+ "demand": "randomTrips --fringe-factor 5, 0-1800 s, routed by duarouter",
+ "generated": {
+  "spec": "grid:3x3,200,1",
+  "lefthand": true,
+  "turn_lanes": 0,
+  "speed_mps": 13.89,
+  "tls_layout": "opposites",
+  "netgenerate": "netgenerate -o narrow_sweep.net.xml --default-junction-type traffic_light --default.speed 13.89 --no-turnarounds true --tls.layout opposites --grid --grid.x-number 3 --grid.y-number 3 --grid.length 200 --default.lanenumber 1 --grid.attach-length 200 --lefthand"
+ },
+ "signalised_junctions": 9,
+ "map_center": null,
+ "phases_per_junction": [
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2
+ ],
+ "cameras": 36,
+ "cameras_file": "cameras.json",
+ "box_cameras": 9,
+ "box_paths": 108,
+ "box_path_metres_covered": 1.0,
+ "box_cameras_file": "cameras_box.json"
+}

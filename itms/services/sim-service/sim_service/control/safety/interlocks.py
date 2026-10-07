@@ -264,23 +264,60 @@ def phase_reachable(plan: SignalPlan, ctx: JunctionContext) -> list[Violation]:
 
 
 def transition_legal(plan: SignalPlan, cfg: Tier0Config) -> list[Violation]:
-    """Structural guard, not one of I1-I7: the plan's first phase must be a
-    real, configured member of this junction's ring. This deliberately does
-    NOT enforce ring *order* (build guide §3.7's skip-ahead ring logic is a
-    strategy/optimiser concern, not a safety one) -- only that nothing can
-    command a phase this junction doesn't actually have."""
-    if not plan.steps:
+    """Structural guard, not one of I1-I7: every phase the plan names must be
+    a real, configured member of this junction's ring. This deliberately
+    does NOT enforce ring *order* (build guide §3.7's skip-ahead ring logic
+    is a strategy/optimiser concern, not a safety one) -- only that nothing
+    can command a phase this junction doesn't actually have. A configured
+    alternate of a ring phase (`Tier0Config.alternates`) counts as one.
+    (Until 2026-10-04 only the first step was checked, and the first step is
+    the phase already running: a plan could move on to a configured phase
+    that was in neither the ring nor the alternates.)"""
+    out = []
+    for step in plan.steps:
+        pid = step.phase_id
+        if pid in cfg.ring_order:
+            continue
+        if pid not in cfg.alternates or pid not in cfg.phases:
+            out.append(
+                Violation(
+                    "RING_INTEGRITY",
+                    f"phase {pid!r} is not part of this intersection's configured ring",
+                    frozenset({pid}),
+                )
+            )
+        else:
+            # an alternate is only as safe as its ring phase if it is the
+            # ring phase with protected movements taken away and nothing
+            # else changed (`Tier0Config.alternate_problems`)
+            broken = cfg.alternate_problems(pid)
+            if broken:
+                out.append(Violation("RING_INTEGRITY", broken[0], frozenset({pid})))
+    return out
+
+
+def starts_at_current_phase(plan: SignalPlan, ctx: JunctionContext) -> list[Violation]:
+    """Structural guard, not one of I1-I7: a plan's first step is the phase
+    the junction is showing. Every other predicate reads the first step as
+    "the green that is running" -- I3 judges its minimum green against
+    `ctx.current_phase_elapsed_s`, I2 asks for a clearance only *between*
+    steps -- so a one-step plan naming a different phase passed all of
+    them, and the runner applies a one-step plan by relabelling the current
+    phase with no change interval at all. No strategy here emits such a
+    plan; the kernel is there for the one that does. Found by review,
+    2026-10-04, when a phase and its alternate (`Tier0Config.alternates`)
+    made the jump one typo away."""
+    if not plan.steps or plan.steps[0].phase_id == ctx.current_phase_id:
         return []
     first = plan.steps[0].phase_id
-    if first not in cfg.ring_order:
-        return [
-            Violation(
-                "RING_INTEGRITY",
-                f"phase {first!r} is not part of this intersection's configured ring",
-                frozenset({first}),
-            )
-        ]
-    return []
+    return [
+        Violation(
+            "PLAN_CONTINUITY",
+            f"plan starts at phase {first!r} but the junction is in "
+            f"{ctx.current_phase_id!r}",
+            frozenset({first}),
+        )
+    ]
 
 
 def check(plan: SignalPlan, ctx: JunctionContext, cfg: Tier0Config) -> list[Violation]:
@@ -291,6 +328,7 @@ def check(plan: SignalPlan, ctx: JunctionContext, cfg: Tier0Config) -> list[Viol
         return [Violation("EMPTY_PLAN", "a SignalPlan must propose at least one step")]
 
     violations: list[Violation] = []
+    violations += starts_at_current_phase(plan, ctx)
     violations += no_conflicting_greens(plan, cfg)
     violations += min_green_satisfied(plan, ctx, cfg)
     violations += clearance_intervals_present(plan, cfg)

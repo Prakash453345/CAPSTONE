@@ -89,3 +89,9 @@ def test_every_source_and_type_round_trips_as_a_string_enum():
         assert str(src) == src.value
     a = _op_anomaly(source=AnomalySource.GRAPH_MODEL, anomaly_type=AnomalyType.STALLED_VEHICLE)
     assert a.source == "graph_model" and a.anomaly_type == "stalled_vehicle"
+
+
+def test_fire_is_a_type_the_vision_candidate_can_carry():
+    assert AnomalyType.FIRE == "fire"
+    a = _op_anomaly(source=AnomalySource.VISION, anomaly_type=AnomalyType.FIRE)
+    assert a.anomaly_type == "fire"

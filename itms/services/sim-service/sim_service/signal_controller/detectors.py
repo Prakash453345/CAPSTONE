@@ -91,6 +91,16 @@ class ActuationDetector:
         return has_demand, wait_times_s
 
 
+    def longest_wait_s(self, sim_time_s: float) -> float:
+        """The longest any standing call has waited, as of `sim_time_s` and
+        before the next `sample` resets the links being served. Read-only.
+        It is how a wait that passed its bound *during* a change interval
+        gets seen at all: the kernel's I5 is only asked on the ticks a plan
+        is arbitrated, and on the first tick after a change the link that
+        waited is already green."""
+        return max((sim_time_s - t for t in self._call_started_s.values()), default=0.0)
+
+
 class StopBarLoops:
     """Presence over the last `zone_m` of each approach lane -- a stop-bar
     loop, emulated over TraCI the same way `ActuationDetector` emulates a

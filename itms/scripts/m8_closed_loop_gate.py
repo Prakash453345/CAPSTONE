@@ -24,6 +24,14 @@ Arms, all on the same held-out seeds (paired):
                          (on by default in honest and failsafe)
     ...:nogap            without counting the queue past the camera's view
                          (`vision_service/state/gap_count.py`; on by default)
+    ...:hol              the blocking-aware controller (`strategies/hol_camp.py`)
+                         on the cameras, with a junction-overview camera per
+                         junction telling it which lanes are blocked at their
+                         head (the scenario needs `--add-box-cameras`)
+    hol                  the blocking-aware controller on SUMO ground truth
+                         (`hol:price`, `hol:p0`, ... are its development arms)
+    truth:c<factor>      CC-A-CAMP with a green ceiling of <factor> x Webster's
+                         green instead of 1.25
 
 `vision_service/sim/closed_loop.py` does the swap inside the unmodified
 runner; see its docstring for exactly which inputs change (the four queue
@@ -49,6 +57,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import m5_harness as H  # noqa: E402
 import m8_harness as M  # noqa: E402
 from m5_ccacamp_gate import paired  # noqa: E402
+from m5_cycle_ceiling_probe import configs_with_ceiling  # noqa: E402
 from vision_service.sim.closed_loop import VisionLoop, VisionSensor  # noqa: E402
 
 METRICS = ("person_delay_s", "stops_per_vehicle", "person_throughput_per_hour")
@@ -87,17 +96,32 @@ def _job(args) -> dict:
         rec = M.run_scenario("webster", level, seed, inputs=H.scenario_inputs(level), tag=arm)
     elif arm == "truth":
         rec = M.run_scenario("ccacamp", level, seed, tag=arm)
+    elif arm.startswith("truth:c"):
+        # CC-A-CAMP with another green ceiling (x Webster's green; the gate's
+        # own is 1.25): does a longer green alone do what a variant does?
+        inputs = configs_with_ceiling(H.scenario_inputs(level), float(arm[len("truth:c"):]))
+        rec = M.run_scenario("ccacamp", level, seed, inputs=inputs, tag=arm.replace(":", "_"))
+    elif arm in M.HOL_ARMS:
+        rec = M.run_scenario(arm, level, seed, tag=arm.replace(":", "_"))
     else:
         _, preset, mode, *extra = arm.split(":")
-        inputs = M.ccacamp_inputs(level)
-        base = M.build_strategy("ccacamp", inputs)
+        unknown = set(extra) - {"outage", "blind", "nocheck", "nogap", "hol"}
+        if unknown:  # a mistyped modifier must not run a plain arm under its name
+            raise SystemExit(f"arm {arm!r}: unknown modifier(s) {sorted(unknown)}")
+        blocking_aware = "hol" in extra
+        if blocking_aware:
+            inputs, base_of = M.hol_inputs(level)
+            base = M.build_hol("hol", inputs, base_of)
+        else:
+            inputs = M.ccacamp_inputs(level)
+            base = M.build_strategy("ccacamp", inputs)
         approach, _ = M.link_maps()
         kw = {}
         if "nogap" in extra:
             from vision_service.state import EstimatorConfig  # noqa: PLC0415
 
             kw["estimator_config"] = EstimatorConfig(gap_counting=False)
-        factory = M.vision_factory(preset, seed, fps, **kw)
+        factory = M.vision_factory(preset, seed, fps, box=blocking_aware, **kw)
         if "outage" in extra:
             factory = _with_fault(factory, "offline")
         if "blind" in extra:
@@ -138,12 +162,30 @@ def summarise(records: list[dict], arms: list[str]) -> dict:
                     "fallback_fixed_time", 0) for r in v),
                 "ticks": sum(r.get("decision_stats", {}).get("ticks", 0) for r in v),
             }
+            if all(r.get("teleports") is not None for r in v):
+                # gridlock, measured: vehicles SUMO had to teleport out of a
+                # jam, runs with any, runs still unfinished at the step cap
+                lv["arms"][a]["teleports"] = sum(r["teleports"] for r in v)
+                lv["arms"][a]["runs_with_teleports"] = sum(r["teleports"] > 0 for r in v)
+                lv["arms"][a]["runs_unfinished_at_cap"] = sum(
+                    (r.get("unfinished_at_cap") or 0) > 0 for r in v)
+            excess = [r.get("longest_wait_excess_s") for r in v]
+            if all(x is not None for x in excess):
+                # the longest wait against the junction's maximum wait (worst
+                # run; negative: never reached), and junction-ticks past it
+                lv["arms"][a]["longest_wait_excess_s"] = max(excess)
+                lv["arms"][a]["waits_over_bound"] = sum(r["waits_over_bound"] for r in v)
+            variant = [r.get("decision_stats", {}).get("hol_variant_switch") for r in v]
+            if all(x is not None for x in variant):
+                lv["arms"][a]["variant_changes_per_run"] = st.fmean(variant)
+                lv["arms"][a]["blocked_junction_ticks_per_run"] = st.fmean(
+                    r["decision_stats"].get("hol_blocked_ticks", 0) for r in v)
             conf = [r["vision"]["confidence_fed"] for r in v if "vision" in r]
             if conf:
                 lv["arms"][a]["confidence_fed_mean"] = st.fmean(c["mean"] for c in conf)
                 lv["arms"][a]["confidence_below_0.8"] = st.fmean(c["below_0.8"] for c in conf)
         for a in arms:
-            for base in ("webster", "truth"):
+            for base in ("webster", "truth", "hol"):
                 if a == base or not by.get(a) or not by.get(base):
                     continue
                 for key in METRICS[:2]:
@@ -184,6 +226,18 @@ def main() -> None:
           f"seeds {seeds}", flush=True)
     t0 = time.time()
     total = len(jobs) + len(records)
+    # Every run is a fresh interpreter (max_tasks_per_child=1 implies spawn), and
+    # a fresh interpreter draws a fresh string-hash seed, which fixes the order
+    # Python walks a set of movement ids in. The controller sums pressures over
+    # such sets, so two runs of one seed could differ in the last bit of a sum,
+    # break a tie between phases differently and part ways: CC-A-CAMP on the
+    # district network (medium, TRAIN seed 101) gave 171,849 s of person-delay
+    # under most hash seeds and 178,150 or 178,317 under others (found
+    # 2026-10-04, when an arm that must equal it did not). Pinning the hash
+    # seed for the workers makes a run a function of its arguments again.
+    # Results stored before this date were each drawn under an arbitrary seed.
+    if not os.environ.get("PYTHONHASHSEED", "").isdigit():
+        os.environ["PYTHONHASHSEED"] = "0"
     with ProcessPoolExecutor(max_workers=args.workers, max_tasks_per_child=1) as pool:
         for rec in pool.map(_job, jobs):
             records.append(rec)
@@ -197,6 +251,7 @@ def main() -> None:
             Path(args.out).parent.mkdir(parents=True, exist_ok=True)
             Path(args.out).write_text(json.dumps(
                 {"meta": {"fps": args.fps, "seeds": seeds,
+                          "python_hash_seed": os.environ["PYTHONHASHSEED"],
                           "levels": sorted({r["demand_level"] for r in records}), "arms": arms,
                           "wall_min": round((time.time() - t0) / 60, 1)},
                  "summary": summarise(records, arms), "records": records},

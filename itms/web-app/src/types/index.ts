@@ -62,6 +62,7 @@ export type AnomalyKind =
   | "road_obstruction"
   | "heavy_congestion"
   | "stalled_vehicle"
+  | "fire"
   | "unknown";
 export type AnomalySeverity = "low" | "medium" | "high" | "blocked";
 export type AnomalyStatus = "active" | "resolved" | "cancelled";

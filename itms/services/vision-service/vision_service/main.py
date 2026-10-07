@@ -23,9 +23,18 @@ Env vars:
                      held-out seeds) or "hand_set" (37 % at ~37/h) --
                      see vision_service.incidents.rules.OPERATING_POINTS
   VISION_DETECTOR    video mode: a .pt (Ultralytics) or .onnx model (default
-                     data/models/itms_six_fp32_640.onnx, the adopted fine-tune
-                     of IISc's UVH-26 model: `make vision-model` puts it there;
-                     yolo11n.pt is the stock COCO model)
+                     data/models/itms_six_aug_640.onnx, fine-tune v3 (v2 plus
+                     degradation augmentation): `make vision-model` puts it
+                     there; itms_six_fp32_640.onnx is v2; yolo11n.pt is stock)
+  VISION_FIRE_DETECTOR / VISION_FIRE_CLASSIFIER
+                     video mode, both or neither: the v4 fire/smoke detector
+                     (.pt) and the Step 2 crop classifier (.onnx, made by
+                     scripts/m8_fire_export_cls.py). Each camera is scored
+                     about once a second; a run of alarming frames becomes an
+                     AnomalyUpdated candidate (type "fire") for an operator.
+                     Unset = the models in data/models (itms_fire_640.pt and
+                     itms_fire_cls_112.onnx) when both are there, else no fire
+                     detection. VISION_FIRE=0 turns it off.
   VISION_EVIDENCE    directory for redacted evidence clips (video mode;
                      unset = keep no evidence at all)
   MINIO_ENDPOINT / MINIO_ACCESS_KEY / MINIO_SECRET_KEY
@@ -49,7 +58,10 @@ _NET_DIR = _REPO / "scenarios" / "networks" / "vijayawada"
 # the adopted detector (baselines/2026-09-27_m8_finetune_v2/) and the simcam
 # error model fitted to it; data/ is not in git, `make vision-model` fills it
 DEFAULT_PRESET = "itms6_640"
-DEFAULT_DETECTOR = _REPO / "data" / "models" / "itms_six_fp32_640.onnx"
+DEFAULT_DETECTOR = _REPO / "data" / "models" / "itms_six_aug_640.onnx"
+# the v4 fire/smoke detector and the Step 2 crop classifier (baselines/2026-10-03_m8_fire_v5_step2/)
+DEFAULT_FIRE_DETECTOR = _REPO / "data" / "models" / "itms_fire_640.pt"
+DEFAULT_FIRE_CLASSIFIER = _REPO / "data" / "models" / "itms_fire_cls_112.onnx"
 
 
 def detector_path() -> str:
@@ -61,9 +73,28 @@ def detector_path() -> str:
     if not DEFAULT_DETECTOR.exists():
         raise SystemExit(
             f"no detector at {DEFAULT_DETECTOR}. Run `make vision-model` (it copies the adopted "
-            "fine-tune from data/uvh26/finetune_v2/, where the fine-tune notebook's results "
+            "fine-tune from data/uvh26/finetune_v3/, where the fine-tune notebook's results "
             "go), or set VISION_DETECTOR to a .onnx/.pt model (yolo11n.pt is the stock COCO one).")
     return str(DEFAULT_DETECTOR)
+
+
+def fire_paths() -> tuple[str, str] | None:
+    """(detector, classifier): the two env vars when set, else the models in
+    data/models when both are there, else None (also None for VISION_FIRE=0).
+    Setting only one of the two env vars is a mistake, not a default."""
+    if os.environ.get("VISION_FIRE") == "0":
+        return None
+    det, cls = os.environ.get("VISION_FIRE_DETECTOR"), os.environ.get("VISION_FIRE_CLASSIFIER")
+    if not det and not cls:
+        if DEFAULT_FIRE_DETECTOR.exists() and DEFAULT_FIRE_CLASSIFIER.exists():
+            return str(DEFAULT_FIRE_DETECTOR), str(DEFAULT_FIRE_CLASSIFIER)
+        return None
+    if not (det and cls):
+        raise SystemExit("set both VISION_FIRE_DETECTOR and VISION_FIRE_CLASSIFIER, or neither")
+    for path in (det, cls):
+        if not Path(path).exists():
+            raise SystemExit(f"fire model not found: {path}")
+    return det, cls
 
 
 def _publisher(redis_url: str):
@@ -109,11 +140,17 @@ def build_service(mode: str):
     preset = os.environ.get("VISION_PRESET", DEFAULT_PRESET) if mode == "simcam" else None
     fps = float(os.environ.get("VISION_FPS", "5"))
     publish = _publisher(os.environ.get("REDIS_URL", "redis://localhost:6379/0"))
+    fire = None
+    if mode == "video" and fire_paths() is not None:
+        from vision_service.fire import FireMonitorConfig  # noqa: PLC0415
+
+        fire = FireMonitorConfig()
     model = f"vision-m8/simcam:{preset}" if mode == "simcam" else \
         f"vision-m8/{Path(detector_path()).name}"
     return VisionService(rig, approach, receiving, publish, preset=preset, fps=fps, model=model,
                          evidence=evidence,
-                         rules=os.environ.get("VISION_RULES", DEFAULT_OPERATING_POINT)), specs
+                         rules=os.environ.get("VISION_RULES", DEFAULT_OPERATING_POINT),
+                         fire=fire), specs
 
 
 class LatestFrames:
@@ -160,6 +197,18 @@ def _run_video(service, specs) -> None:
         from vision_service.detect.yolo import UltralyticsDetector  # noqa: PLC0415
 
         detector = UltralyticsDetector(weights)
+    fire_scorer = None
+    fire_cfg = fire_paths()
+    if fire_cfg is not None:
+        try:
+            from vision_service.fire.detector import FireScorer  # noqa: PLC0415
+
+            fire_scorer = FireScorer(*fire_cfg)
+        except ImportError as e:
+            raise SystemExit(f"fire detection is on but its packages are missing ({e}): "
+                             "pip install -e 'services/vision-service[fire]', or set VISION_FIRE=0") from e
+        log.info("fire detection on: %s", fire_scorer.name)
+    last_fire: dict[str, float] = {}
     latest = LatestFrames()
     t0 = time.monotonic()
 
@@ -180,6 +229,9 @@ def _run_video(service, specs) -> None:
         if got is not None:
             cid, t, frame = got
             service.on_frame(cid, t, frame, detector.detect(frame))
+            if fire_scorer is not None and t - last_fire.get(cid, -1e9) >= 1.0:
+                last_fire[cid] = t       # about once a second per camera, not at the frame rate
+                service.on_fire_score(cid, t, fire_scorer.score(frame))
         now = time.monotonic() - t0
         if now >= next_tick:
             service.tick(now)

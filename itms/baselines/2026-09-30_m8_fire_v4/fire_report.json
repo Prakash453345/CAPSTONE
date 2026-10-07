@@ -1,0 +1,711 @@
+{
+ "ultralytics": "8.4.163",
+ "torch": "2.11.0+cu128",
+ "gpu": "Tesla T4",
+ "seed": 26,
+ "settings": {
+  "SIZE": 640,
+  "EPOCHS": 30,
+  "PATIENCE": 8,
+  "BATCH": 32,
+  "BASE_WEIGHTS": "yolo11s.pt",
+  "FA_TARGET": 0.003,
+  "RECALL_BAR": 0.85
+ },
+ "sessions": [
+  {
+   "minutes": 136,
+   "batch_used": 32
+  }
+ ],
+ "bn": {
+  "bn_layers": 81,
+  "channels": 14992,
+  "nonfinite_channels": 0,
+  "channels_over_fp16_max": 0,
+  "channels_at_fp16_max": 0
+ },
+ "threshold": {
+  "t": 0.36,
+  "chosen_on": "validation, fa_bengaluru <= 0.003",
+  "at_t": {
+   "t": 0.36,
+   "recall": 0.9151079136690647,
+   "fa_dfire_negatives": 0.04267161410018553,
+   "fa_bengaluru": 0.0020876826722338203
+  },
+  "curve": [
+   {
+    "t": 0.05,
+    "recall": 0.9848920863309353,
+    "fa_dfire_negatives": 0.1836734693877551,
+    "fa_bengaluru": 0.020876826722338204
+   },
+   {
+    "t": 0.06,
+    "recall": 0.9841726618705036,
+    "fa_dfire_negatives": 0.17439703153988867,
+    "fa_bengaluru": 0.017745302713987474
+   },
+   {
+    "t": 0.07,
+    "recall": 0.9827338129496402,
+    "fa_dfire_negatives": 0.15955473098330242,
+    "fa_bengaluru": 0.015657620041753653
+   },
+   {
+    "t": 0.08,
+    "recall": 0.9827338129496402,
+    "fa_dfire_negatives": 0.14471243042671614,
+    "fa_bengaluru": 0.010438413361169102
+   },
+   {
+    "t": 0.09,
+    "recall": 0.981294964028777,
+    "fa_dfire_negatives": 0.137291280148423,
+    "fa_bengaluru": 0.010438413361169102
+   },
+   {
+    "t": 0.1,
+    "recall": 0.9805755395683453,
+    "fa_dfire_negatives": 0.1280148423005566,
+    "fa_bengaluru": 0.008350730688935281
+   },
+   {
+    "t": 0.11,
+    "recall": 0.979136690647482,
+    "fa_dfire_negatives": 0.12244897959183673,
+    "fa_bengaluru": 0.006263048016701462
+   },
+   {
+    "t": 0.12,
+    "recall": 0.9776978417266187,
+    "fa_dfire_negatives": 0.11317254174397032,
+    "fa_bengaluru": 0.006263048016701462
+   },
+   {
+    "t": 0.13,
+    "recall": 0.9769784172661871,
+    "fa_dfire_negatives": 0.10946196660482375,
+    "fa_bengaluru": 0.005219206680584551
+   },
+   {
+    "t": 0.14,
+    "recall": 0.9755395683453237,
+    "fa_dfire_negatives": 0.1038961038961039,
+    "fa_bengaluru": 0.005219206680584551
+   },
+   {
+    "t": 0.15,
+    "recall": 0.9719424460431655,
+    "fa_dfire_negatives": 0.09833024118738404,
+    "fa_bengaluru": 0.005219206680584551
+   },
+   {
+    "t": 0.16,
+    "recall": 0.9697841726618706,
+    "fa_dfire_negatives": 0.09276437847866419,
+    "fa_bengaluru": 0.005219206680584551
+   },
+   {
+    "t": 0.17,
+    "recall": 0.9669064748201439,
+    "fa_dfire_negatives": 0.08905380333951762,
+    "fa_bengaluru": 0.005219206680584551
+   },
+   {
+    "t": 0.18,
+    "recall": 0.9654676258992806,
+    "fa_dfire_negatives": 0.08163265306122448,
+    "fa_bengaluru": 0.005219206680584551
+   },
+   {
+    "t": 0.19,
+    "recall": 0.960431654676259,
+    "fa_dfire_negatives": 0.07977736549165121,
+    "fa_bengaluru": 0.005219206680584551
+   },
+   {
+    "t": 0.2,
+    "recall": 0.9589928057553957,
+    "fa_dfire_negatives": 0.07792207792207792,
+    "fa_bengaluru": 0.0041753653444676405
+   },
+   {
+    "t": 0.21,
+    "recall": 0.956115107913669,
+    "fa_dfire_negatives": 0.07606679035250463,
+    "fa_bengaluru": 0.0041753653444676405
+   },
+   {
+    "t": 0.22,
+    "recall": 0.9546762589928057,
+    "fa_dfire_negatives": 0.06679035250463822,
+    "fa_bengaluru": 0.0041753653444676405
+   },
+   {
+    "t": 0.23,
+    "recall": 0.9539568345323741,
+    "fa_dfire_negatives": 0.06493506493506493,
+    "fa_bengaluru": 0.003131524008350731
+   },
+   {
+    "t": 0.24,
+    "recall": 0.9525179856115108,
+    "fa_dfire_negatives": 0.061224489795918366,
+    "fa_bengaluru": 0.003131524008350731
+   },
+   {
+    "t": 0.25,
+    "recall": 0.9489208633093525,
+    "fa_dfire_negatives": 0.061224489795918366,
+    "fa_bengaluru": 0.003131524008350731
+   },
+   {
+    "t": 0.26,
+    "recall": 0.9460431654676259,
+    "fa_dfire_negatives": 0.0575139146567718,
+    "fa_bengaluru": 0.003131524008350731
+   },
+   {
+    "t": 0.27,
+    "recall": 0.9446043165467626,
+    "fa_dfire_negatives": 0.055658627087198514,
+    "fa_bengaluru": 0.003131524008350731
+   },
+   {
+    "t": 0.28,
+    "recall": 0.9417266187050359,
+    "fa_dfire_negatives": 0.05194805194805195,
+    "fa_bengaluru": 0.003131524008350731
+   },
+   {
+    "t": 0.29,
+    "recall": 0.939568345323741,
+    "fa_dfire_negatives": 0.05009276437847866,
+    "fa_bengaluru": 0.003131524008350731
+   },
+   {
+    "t": 0.3,
+    "recall": 0.9374100719424461,
+    "fa_dfire_negatives": 0.04638218923933209,
+    "fa_bengaluru": 0.003131524008350731
+   },
+   {
+    "t": 0.31,
+    "recall": 0.9330935251798561,
+    "fa_dfire_negatives": 0.04638218923933209,
+    "fa_bengaluru": 0.003131524008350731
+   },
+   {
+    "t": 0.32,
+    "recall": 0.9316546762589928,
+    "fa_dfire_negatives": 0.04638218923933209,
+    "fa_bengaluru": 0.003131524008350731
+   },
+   {
+    "t": 0.33,
+    "recall": 0.9266187050359712,
+    "fa_dfire_negatives": 0.04452690166975881,
+    "fa_bengaluru": 0.003131524008350731
+   },
+   {
+    "t": 0.34,
+    "recall": 0.923021582733813,
+    "fa_dfire_negatives": 0.04452690166975881,
+    "fa_bengaluru": 0.003131524008350731
+   },
+   {
+    "t": 0.35,
+    "recall": 0.918705035971223,
+    "fa_dfire_negatives": 0.04267161410018553,
+    "fa_bengaluru": 0.003131524008350731
+   },
+   {
+    "t": 0.36,
+    "recall": 0.9151079136690647,
+    "fa_dfire_negatives": 0.04267161410018553,
+    "fa_bengaluru": 0.0020876826722338203
+   },
+   {
+    "t": 0.37,
+    "recall": 0.9086330935251798,
+    "fa_dfire_negatives": 0.04267161410018553,
+    "fa_bengaluru": 0.0020876826722338203
+   },
+   {
+    "t": 0.38,
+    "recall": 0.9043165467625899,
+    "fa_dfire_negatives": 0.03710575139146568,
+    "fa_bengaluru": 0.0020876826722338203
+   },
+   {
+    "t": 0.39,
+    "recall": 0.902158273381295,
+    "fa_dfire_negatives": 0.03525046382189239,
+    "fa_bengaluru": 0.0020876826722338203
+   },
+   {
+    "t": 0.4,
+    "recall": 0.8971223021582734,
+    "fa_dfire_negatives": 0.03525046382189239,
+    "fa_bengaluru": 0.0020876826722338203
+   },
+   {
+    "t": 0.41,
+    "recall": 0.8920863309352518,
+    "fa_dfire_negatives": 0.03525046382189239,
+    "fa_bengaluru": 0.0010438413361169101
+   },
+   {
+    "t": 0.42,
+    "recall": 0.8877697841726618,
+    "fa_dfire_negatives": 0.03153988868274583,
+    "fa_bengaluru": 0.0010438413361169101
+   },
+   {
+    "t": 0.43,
+    "recall": 0.8856115107913669,
+    "fa_dfire_negatives": 0.029684601113172542,
+    "fa_bengaluru": 0.0010438413361169101
+   },
+   {
+    "t": 0.44,
+    "recall": 0.8755395683453238,
+    "fa_dfire_negatives": 0.025974025974025976,
+    "fa_bengaluru": 0.0010438413361169101
+   },
+   {
+    "t": 0.45,
+    "recall": 0.8690647482014389,
+    "fa_dfire_negatives": 0.025974025974025976,
+    "fa_bengaluru": 0.0010438413361169101
+   },
+   {
+    "t": 0.46,
+    "recall": 0.858273381294964,
+    "fa_dfire_negatives": 0.02411873840445269,
+    "fa_bengaluru": 0.0010438413361169101
+   },
+   {
+    "t": 0.47,
+    "recall": 0.8546762589928057,
+    "fa_dfire_negatives": 0.022263450834879406,
+    "fa_bengaluru": 0.0010438413361169101
+   },
+   {
+    "t": 0.48,
+    "recall": 0.8474820143884892,
+    "fa_dfire_negatives": 0.01855287569573284,
+    "fa_bengaluru": 0.0010438413361169101
+   },
+   {
+    "t": 0.49,
+    "recall": 0.8402877697841726,
+    "fa_dfire_negatives": 0.014842300556586271,
+    "fa_bengaluru": 0.0010438413361169101
+   },
+   {
+    "t": 0.5,
+    "recall": 0.8323741007194244,
+    "fa_dfire_negatives": 0.012987012987012988,
+    "fa_bengaluru": 0.0010438413361169101
+   },
+   {
+    "t": 0.51,
+    "recall": 0.8258992805755395,
+    "fa_dfire_negatives": 0.012987012987012988,
+    "fa_bengaluru": 0.0
+   },
+   {
+    "t": 0.52,
+    "recall": 0.8172661870503597,
+    "fa_dfire_negatives": 0.011131725417439703,
+    "fa_bengaluru": 0.0
+   },
+   {
+    "t": 0.53,
+    "recall": 0.8028776978417266,
+    "fa_dfire_negatives": 0.011131725417439703,
+    "fa_bengaluru": 0.0
+   },
+   {
+    "t": 0.54,
+    "recall": 0.7935251798561151,
+    "fa_dfire_negatives": 0.00927643784786642,
+    "fa_bengaluru": 0.0
+   },
+   {
+    "t": 0.55,
+    "recall": 0.7848920863309352,
+    "fa_dfire_negatives": 0.00927643784786642,
+    "fa_bengaluru": 0.0
+   },
+   {
+    "t": 0.56,
+    "recall": 0.7755395683453238,
+    "fa_dfire_negatives": 0.00927643784786642,
+    "fa_bengaluru": 0.0
+   },
+   {
+    "t": 0.57,
+    "recall": 0.7712230215827338,
+    "fa_dfire_negatives": 0.00927643784786642,
+    "fa_bengaluru": 0.0
+   },
+   {
+    "t": 0.58,
+    "recall": 0.760431654676259,
+    "fa_dfire_negatives": 0.0074211502782931356,
+    "fa_bengaluru": 0.0
+   },
+   {
+    "t": 0.59,
+    "recall": 0.7496402877697842,
+    "fa_dfire_negatives": 0.0074211502782931356,
+    "fa_bengaluru": 0.0
+   },
+   {
+    "t": 0.6,
+    "recall": 0.7410071942446043,
+    "fa_dfire_negatives": 0.0074211502782931356,
+    "fa_bengaluru": 0.0
+   },
+   {
+    "t": 0.61,
+    "recall": 0.7280575539568346,
+    "fa_dfire_negatives": 0.0074211502782931356,
+    "fa_bengaluru": 0.0
+   },
+   {
+    "t": 0.62,
+    "recall": 0.718705035971223,
+    "fa_dfire_negatives": 0.0074211502782931356,
+    "fa_bengaluru": 0.0
+   },
+   {
+    "t": 0.63,
+    "recall": 0.702158273381295,
+    "fa_dfire_negatives": 0.0074211502782931356,
+    "fa_bengaluru": 0.0
+   },
+   {
+    "t": 0.64,
+    "recall": 0.6870503597122302,
+    "fa_dfire_negatives": 0.0074211502782931356,
+    "fa_bengaluru": 0.0
+   },
+   {
+    "t": 0.65,
+    "recall": 0.6733812949640288,
+    "fa_dfire_negatives": 0.0074211502782931356,
+    "fa_bengaluru": 0.0
+   },
+   {
+    "t": 0.66,
+    "recall": 0.6532374100719425,
+    "fa_dfire_negatives": 0.0074211502782931356,
+    "fa_bengaluru": 0.0
+   },
+   {
+    "t": 0.67,
+    "recall": 0.6345323741007194,
+    "fa_dfire_negatives": 0.0074211502782931356,
+    "fa_bengaluru": 0.0
+   },
+   {
+    "t": 0.68,
+    "recall": 0.625179856115108,
+    "fa_dfire_negatives": 0.0055658627087198514,
+    "fa_bengaluru": 0.0
+   },
+   {
+    "t": 0.69,
+    "recall": 0.6071942446043166,
+    "fa_dfire_negatives": 0.0055658627087198514,
+    "fa_bengaluru": 0.0
+   },
+   {
+    "t": 0.7,
+    "recall": 0.5834532374100719,
+    "fa_dfire_negatives": 0.0055658627087198514,
+    "fa_bengaluru": 0.0
+   },
+   {
+    "t": 0.71,
+    "recall": 0.5661870503597123,
+    "fa_dfire_negatives": 0.0055658627087198514,
+    "fa_bengaluru": 0.0
+   },
+   {
+    "t": 0.72,
+    "recall": 0.5467625899280576,
+    "fa_dfire_negatives": 0.0055658627087198514,
+    "fa_bengaluru": 0.0
+   },
+   {
+    "t": 0.73,
+    "recall": 0.5280575539568345,
+    "fa_dfire_negatives": 0.0055658627087198514,
+    "fa_bengaluru": 0.0
+   },
+   {
+    "t": 0.74,
+    "recall": 0.5050359712230216,
+    "fa_dfire_negatives": 0.0055658627087198514,
+    "fa_bengaluru": 0.0
+   },
+   {
+    "t": 0.75,
+    "recall": 0.47553956834532374,
+    "fa_dfire_negatives": 0.0055658627087198514,
+    "fa_bengaluru": 0.0
+   },
+   {
+    "t": 0.76,
+    "recall": 0.4553956834532374,
+    "fa_dfire_negatives": 0.0037105751391465678,
+    "fa_bengaluru": 0.0
+   },
+   {
+    "t": 0.77,
+    "recall": 0.42805755395683454,
+    "fa_dfire_negatives": 0.0037105751391465678,
+    "fa_bengaluru": 0.0
+   },
+   {
+    "t": 0.78,
+    "recall": 0.39136690647482014,
+    "fa_dfire_negatives": 0.0037105751391465678,
+    "fa_bengaluru": 0.0
+   },
+   {
+    "t": 0.79,
+    "recall": 0.35899280575539566,
+    "fa_dfire_negatives": 0.0037105751391465678,
+    "fa_bengaluru": 0.0
+   },
+   {
+    "t": 0.8,
+    "recall": 0.33884892086330937,
+    "fa_dfire_negatives": 0.0037105751391465678,
+    "fa_bengaluru": 0.0
+   },
+   {
+    "t": 0.81,
+    "recall": 0.3064748201438849,
+    "fa_dfire_negatives": 0.0018552875695732839,
+    "fa_bengaluru": 0.0
+   },
+   {
+    "t": 0.82,
+    "recall": 0.2697841726618705,
+    "fa_dfire_negatives": 0.0018552875695732839,
+    "fa_bengaluru": 0.0
+   },
+   {
+    "t": 0.83,
+    "recall": 0.23237410071942446,
+    "fa_dfire_negatives": 0.0018552875695732839,
+    "fa_bengaluru": 0.0
+   },
+   {
+    "t": 0.84,
+    "recall": 0.19136690647482013,
+    "fa_dfire_negatives": 0.0018552875695732839,
+    "fa_bengaluru": 0.0
+   },
+   {
+    "t": 0.85,
+    "recall": 0.15467625899280577,
+    "fa_dfire_negatives": 0.0018552875695732839,
+    "fa_bengaluru": 0.0
+   },
+   {
+    "t": 0.86,
+    "recall": 0.1237410071942446,
+    "fa_dfire_negatives": 0.0018552875695732839,
+    "fa_bengaluru": 0.0
+   },
+   {
+    "t": 0.87,
+    "recall": 0.09784172661870504,
+    "fa_dfire_negatives": 0.0,
+    "fa_bengaluru": 0.0
+   },
+   {
+    "t": 0.88,
+    "recall": 0.07194244604316546,
+    "fa_dfire_negatives": 0.0,
+    "fa_bengaluru": 0.0
+   },
+   {
+    "t": 0.89,
+    "recall": 0.0460431654676259,
+    "fa_dfire_negatives": 0.0,
+    "fa_bengaluru": 0.0
+   },
+   {
+    "t": 0.9,
+    "recall": 0.025179856115107913,
+    "fa_dfire_negatives": 0.0,
+    "fa_bengaluru": 0.0
+   },
+   {
+    "t": 0.91,
+    "recall": 0.01079136690647482,
+    "fa_dfire_negatives": 0.0,
+    "fa_bengaluru": 0.0
+   },
+   {
+    "t": 0.92,
+    "recall": 0.005035971223021582,
+    "fa_dfire_negatives": 0.0,
+    "fa_bengaluru": 0.0
+   },
+   {
+    "t": 0.93,
+    "recall": 0.002158273381294964,
+    "fa_dfire_negatives": 0.0,
+    "fa_bengaluru": 0.0
+   },
+   {
+    "t": 0.94,
+    "recall": 0.0007194244604316547,
+    "fa_dfire_negatives": 0.0,
+    "fa_bengaluru": 0.0
+   },
+   {
+    "t": 0.95,
+    "recall": 0.0007194244604316547,
+    "fa_dfire_negatives": 0.0,
+    "fa_bengaluru": 0.0
+   }
+  ]
+ },
+ "test": {
+  "images": 4306,
+  "with_fire_or_smoke": 2301,
+  "recall_any": 0.7796610169491526,
+  "recall_fire": 0.8699551569506726,
+  "recall_smoke": 0.671792407496396,
+  "false_alarms_on_negatives": 0.08129675810473816,
+  "box_ap50": {
+   "fire": 0.6755,
+   "smoke": 0.6841
+  },
+  "box_map50": 0.6798,
+  "bar": {
+   "recall_any_at_least": 0.85,
+   "passes_in_colab": false,
+   "still_to_check_on_the_laptop": "false alarms on the 250 Bengaluru test frames <= 1 %"
+  }
+ },
+ "heldout": {
+  "images": 500,
+  "near_copies_of_training_removed": 75,
+  "by_label": {
+   "B": {
+    "alarm": 59,
+    "n": 61
+   },
+   "F": {
+    "alarm": 64,
+    "n": 64
+   },
+   "I": {
+    "alarm": 39,
+    "n": 41
+   },
+   "O": {
+    "alarm": 88,
+    "n": 97
+   },
+   "R": {
+    "alarm": 21,
+    "n": 23
+   },
+   "V": {
+    "alarm": 55,
+    "n": 55
+   },
+   "X": {
+    "alarm": 64,
+    "n": 84
+   },
+   "not street": {
+    "alarm": 314,
+    "n": 347
+   },
+   "street (V+R)": {
+    "alarm": 76,
+    "n": 78
+   }
+  },
+  "street_recall": 0.9743589743589743,
+  "street_n": 78,
+  "street_wilson_95": [
+   0.911,
+   0.993
+  ],
+  "note": "label X (no visible fire) is reported, not a recall target"
+ },
+ "verdict_in_colab": {
+  "A_dfire_recall": {
+   "value": 0.7796610169491526,
+   "target": 0.85,
+   "pass": false
+  },
+  "C_street_recall": {
+   "value": 0.9743589743589743,
+   "target": 0.8,
+   "pass": true,
+   "wilson_95": [
+    0.911,
+    0.993
+   ]
+  },
+  "still_to_check_on_the_laptop": [
+   "D: Inferno, if it has arrived",
+   "reported, not judged: false alarms on the old 250 Bengaluru test frames (scripts/m8_fire_eval.py)"
+  ],
+  "B2_fresh_bengaluru": {
+   "alarms": 1,
+   "of": 250,
+   "max_allowed": 2,
+   "pass": true
+  },
+  "all_judged_pass": false
+ },
+ "test2": {
+  "frames": 250,
+  "threshold": 0.36,
+  "alarms": 1,
+  "share": 0.004,
+  "max_alarms_allowed": 2,
+  "alarm_frames": [
+   [
+    "876137.jpg",
+    0.6386
+   ]
+  ],
+  "highest_scores": [
+   0.6386,
+   0.3306,
+   0.3186,
+   0.115,
+   0.0724,
+   0.0544,
+   0.0483,
+   0.0353,
+   0.0316,
+   0.0308,
+   0.0257,
+   0.0256
+  ],
+  "pass": true
+ },
+ "onnx_max_score_diff": 1.48e-07,
+ "onnx_sha256": "91e4689ef01fd31d26cb7b5e18b09f38c98d52dfd90a4c852bb497e36cabf5be",
+ "pt_sha256": "bc5c70ece3e74e675d76b120243c452f8e160446698aa3bbd315c26a001ca1fe"
+}

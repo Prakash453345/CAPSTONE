@@ -1,0 +1,165 @@
+{
+ "meta": {
+  "fps": 5.0,
+  "seeds": [
+   1
+  ],
+  "python_hash_seed": "0",
+  "levels": [
+   "heavy"
+  ],
+  "arms": [
+   "truth",
+   "hol"
+  ],
+  "wall_min": 0.3
+ },
+ "summary": {
+  "heavy": {
+   "arms": {
+    "truth": {
+     "n": 1,
+     "person_delay_s": 80747.29500000006,
+     "stops_per_vehicle": 1.0501968503937007,
+     "p95_wait_s": 183.0,
+     "person_throughput_per_hour": 2543.5326842837276,
+     "interlock_violations": 0,
+     "fallback_fixed_time": 0,
+     "ticks": 4224,
+     "teleports": 4,
+     "runs_with_teleports": 1,
+     "runs_unfinished_at_cap": 0,
+     "longest_wait_excess_s": 1.3,
+     "waits_over_bound": 1
+    },
+    "hol": {
+     "n": 1,
+     "person_delay_s": 80747.29500000006,
+     "stops_per_vehicle": 1.0501968503937007,
+     "p95_wait_s": 183.0,
+     "person_throughput_per_hour": 2543.5326842837276,
+     "interlock_violations": 0,
+     "fallback_fixed_time": 0,
+     "ticks": 4224,
+     "teleports": 4,
+     "runs_with_teleports": 1,
+     "runs_unfinished_at_cap": 0,
+     "longest_wait_excess_s": 1.3,
+     "waits_over_bound": 1,
+     "variant_changes_per_run": 0.0,
+     "blocked_junction_ticks_per_run": 256.0
+    }
+   },
+   "paired": {
+    "truth_vs_hol:person_delay_s": {
+     "n": 1,
+     "mean": 0.0
+    },
+    "truth_vs_hol:stops_per_vehicle": {
+     "n": 1,
+     "mean": 0.0
+    },
+    "hol_vs_truth:person_delay_s": {
+     "n": 1,
+     "mean": 0.0
+    },
+    "hol_vs_truth:stops_per_vehicle": {
+     "n": 1,
+     "mean": 0.0
+    }
+   }
+  }
+ },
+ "records": [
+  {
+   "scenario": "ingolstadt",
+   "lane_chains": true,
+   "controller": "ccacamp",
+   "demand_level": "heavy",
+   "seed": 1,
+   "steps": 2758,
+   "interlock_violations": 0,
+   "teleports": 4,
+   "longest_wait_excess_s": 1.3,
+   "waits_over_bound": 1,
+   "unfinished_at_cap": 0,
+   "person_delay_s": 80747.29500000006,
+   "person_throughput_per_hour": 2543.5326842837276,
+   "stops_per_vehicle": 1.0501968503937007,
+   "wait_time_s": {
+    "mean_s": 39.928149606299215,
+    "p95_s": 183.0,
+    "max_s": 605.0
+   },
+   "wall_s": 13.8,
+   "decision_stats": {
+    "ticks": 4224,
+    "switch_cycle_supervisor": 0,
+    "switch_gap_out": 23,
+    "cycles_completed": 705,
+    "extend": 2909,
+    "extend_allocation_protected": 1099,
+    "switch_pressure": 136,
+    "switch_max_green": 46,
+    "switch_starvation": 11,
+    "blended": 0,
+    "blended_no_history": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "truth"
+  },
+  {
+   "scenario": "ingolstadt",
+   "lane_chains": true,
+   "controller": "hol",
+   "demand_level": "heavy",
+   "seed": 1,
+   "steps": 2758,
+   "interlock_violations": 0,
+   "teleports": 4,
+   "longest_wait_excess_s": 1.3,
+   "waits_over_bound": 1,
+   "unfinished_at_cap": 0,
+   "person_delay_s": 80747.29500000006,
+   "person_throughput_per_hour": 2543.5326842837276,
+   "stops_per_vehicle": 1.0501968503937007,
+   "wait_time_s": {
+    "mean_s": 39.928149606299215,
+    "p95_s": 183.0,
+    "max_s": 605.0
+   },
+   "wall_s": 14.6,
+   "decision_stats": {
+    "ticks": 4224,
+    "switch_cycle_supervisor": 0,
+    "switch_gap_out": 23,
+    "cycles_completed": 705,
+    "extend": 2909,
+    "extend_allocation_protected": 1099,
+    "switch_pressure": 136,
+    "switch_max_green": 46,
+    "switch_starvation": 11,
+    "blended": 0,
+    "blended_no_history": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0,
+    "hol_blocked_ticks": 256,
+    "hol_variant_ticks": 0,
+    "hol_variant_switch": 0,
+    "hol_variant_entry": 0,
+    "hol_variant_exit": 0,
+    "hol_variant_idle_exit": 0,
+    "hol_variant_moved_on": 0,
+    "hol_variant_cut_short": 0,
+    "hol_no_room": 0,
+    "hol_family_owed": 0,
+    "hol_family_starving": 0,
+    "hol_family_budget_ticks": 0
+   },
+   "arm": "hol"
+  }
+ ]
+}

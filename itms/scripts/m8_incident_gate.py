@@ -43,6 +43,9 @@ from vision_service.incidents import RuleConfig, TraciSignalState  # noqa: E402
 from vision_service.simcam import TraciWorld  # noqa: E402
 
 MAX_STEPS = 6000
+# incident kinds drawn by the schedule, and extra SUMO args; the accident gate overrides both
+KINDS = ("stall", "lane_block")
+EXTRA_SUMO_ARGS: list[str] | None = None
 N_INCIDENTS = 6
 LATENCY_GRACE_S = 45
 # Where the schedule may put incidents. M6's gate schedules over the whole
@@ -84,7 +87,8 @@ def _job(args) -> dict:
     if inject:
         schedule = random_schedule(lanes, seed=seed, n_incidents=N_INCIDENTS,
                                    run_ticks=SCHEDULE_TICKS.get(level, MAX_STEPS),
-                                   warmup_ticks=400, cooldown_ticks=300, min_gap_ticks=200)
+                                   warmup_ticks=400, cooldown_ticks=300, min_gap_ticks=200,
+                                   kinds=KINDS)
         injector = IncidentInjector(schedule, link_lanes=approach)
     make = M.vision_factory(preset, seed, fps, rule_config=LOGGING_RULES)
     world = TraciWorld()
@@ -146,13 +150,15 @@ def _job(args) -> dict:
             st["hits"].append([t, h.rule, h.lane_id, str(anchor), float(ev.get("measure", 0.0)),
                                [list(k) for k in h.links],
                                {k: ev[k] for k in ("sibling_flowing", "queued_behind", "class",
-                                                   "swerves", "share", "from_stop_line_m")
+                                                   "swerves", "share", "from_stop_line_m",
+                                                   "gap_m", "red", "dt_stop", "nb", "v3")
                                 if k in ev}])
         if injector is not None:
             # where each stalled vehicle actually is, for the coverage tag
             idx = snap.index()
-            for act in getattr(injector, "_active_stalls", {}).values():
-                vid = act.vehicle_id
+            actives = [a.vehicle_id for a in getattr(injector, "_active_stalls", {}).values()]
+            actives += [a.vehicle_ids[0] for a in getattr(injector, "_active_collisions", {}).values()]
+            for vid in actives:
                 if vid in idx and vid not in st["stall_pos"]:
                     i = idx[vid]
                     lane = rig.network.lanes.get(snap.lane_id[i])
@@ -164,13 +170,13 @@ def _job(args) -> dict:
                     st["stall_pos"][vid] = {"lane": snap.lane_id[i], "s": s,
                                             "covered": covered}
 
-    runner_kwargs = None
+    runner_kwargs = {"extra_sumo_args": EXTRA_SUMO_ARGS} if EXTRA_SUMO_ARGS else None
     frames: list = []
     if features_dir:
         # M6's per-link traffic features on the same run, for the fusion study
         # (scripts/m8_incident_fusion.py); read-only TraCI queries, nothing the run depends on
         inputs = H.scenario_inputs(level)
-        runner_kwargs = {"anomaly_graph": graph, "receiving_lanes": receiving,
+        runner_kwargs = {**(runner_kwargs or {}), "anomaly_graph": graph, "receiving_lanes": receiving,
                          "vtype_pcu": inputs[2],
                          "anomaly_feature_sink": lambda _s, t, m: frames.append(
                              (t, np.asarray(m, dtype=np.float32)))}
@@ -190,7 +196,7 @@ def _job(args) -> dict:
                             cam_features=np.array(CAM_FEATURES))
     windows = []
     for w in (injector.realised_windows() if injector is not None else []):
-        if w.kind == "stall":
+        if w.kind in ("stall", "collision"):
             pos = st["stall_pos"].get(w.vehicle_id or "", {})
             covered = bool(pos.get("covered", False))
         else:
@@ -200,7 +206,7 @@ def _job(args) -> dict:
                         "links": list(w.link_ids), "start": w.actual_start_tick,
                         "end": w.end_tick, "covered": covered,
                         "stall": st["stall_pos"].get(w.vehicle_id or "")
-                        if w.kind == "stall" else None})
+                        if w.kind in ("stall", "collision") else None})
     return {
         "preset": preset, "level": level, "seed": seed, "inject": inject, "fps": fps,
         "run": run, "windows": windows, "hits": st["hits"], "features_file": features_file,
@@ -243,6 +249,10 @@ def _threshold(rule: str, measure_flags: dict, pol: dict) -> float | None:
             return None
         return pol["void_s"]
     if rule == "collision_cue":
+        if measure_flags.get("gap_m", -1e9) > pol.get("collision_gap_m", 1e9):
+            return None
+        if pol.get("collision_skip_red") and measure_flags.get("red"):
+            return None
         return pol["collision_s"]
     if rule == "wrong_way":
         return pol["wrong_way_s"]

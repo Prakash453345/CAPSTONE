@@ -176,6 +176,8 @@ At 640 px it more than doubles what IISc's model finds among boxes 20–40 px
 tall (0.19 → 0.44). IISc's model with only its statistics repaired finds
 more too, but did not pass the bar at either size.
 
+**Fine-tune v3 (2026-10-04, adopted as the video default).** Same start, data and recipe as v2, plus image-only augmentation (dimming, sensor noise, blur, headlight glare). On 250 fresh UVH-26 frames, scored once against v2 (`baselines/2026-10-04_m8_finetune_v3/`): night found 0.711 to 0.784, glare 0.706 to 0.776, noise 0.604 to 0.771, clean 0.808 to 0.800 (small but statistically real loss), JPEG, haze and rain within 0.01, lowest precision 0.934, CPU 0.94x. Night, glare and noise rows are in-family with the training augmentation; only JPEG, haze and rain test transfer. Not measured: real night or rain footage. The SimCam presets `itms6_640` and `itms6_960` are still fitted to v2, and no closed loop was run with v3.
+
 ### 3.3 Tracking
 
 ByteTrack, implemented here rather than imported: constant-velocity Kalman on
@@ -421,7 +423,7 @@ The link's `vision_score` is the maximum rule score, and goes straight into
 candidates — which still only become incidents through an operator
 (ADR-006). There is no person rule.
 
-**Fire and smoke (version 2 passed its bars but failed the street probe; not wired in).** No rule over
+**Fire and smoke (v4 detector + Step 2 crop classifier; wired in, off unless configured).** No rule over
 vehicle tracks can see a fire, so this is the one incident type with its own
 detector.
 - **The model:** a two-class YOLO11-S (fire, smoke), trained in Colab
@@ -464,9 +466,36 @@ detector.
     and at 256 px 0.67 against 0.92. The bar, set before the run, was a
     ratio of at least 0.8. So the detector is not wired in. It needs street
     fires in its training.
+- **Versions 3 to 5** (`baselines/2026-10-03_m8_fire_v5_*`, `baselines/2026-10-03_m8_fire_v5_step2/`).
+  - Version 4 (the detector used now) passed Step 1 with one alarm rule on its own
+    scores (fire 0.44 or smoke 0.11): D-Fire recall 89.3 %, but 19 % of D-Fire's no-fire
+    images alarmed.
+  - Step 2 keeps the v4 detector and adds a second model: an EfficientNet-B0 that looks
+    at each box the detector proposes (confidence >= 0.05) and says fire, smoke or
+    neither. A frame alarms when a fire box has P(fire) >= 0.80 or a smoke box has
+    P(smoke) >= 0.90, chosen on validation only.
+  - **Step 2 passed all five targets, set before the run:** D-Fire recall 85.7 % (bar
+    85), D-Fire no-fire images alarming 9.5 % (bar 10), precision 91.2 % (bar 90), 1 of
+    250 new Bengaluru frames (bar 2; a night frame with a hazy patch beside a headlight
+    beam), 78 of 78 held-out street/vehicle fires (bar 80 %). The two D-Fire bars were
+    passed narrowly; their intervals cross the bars. Inferno, the real-fire set, has not
+    arrived, so that check is still open.
+  - **How it runs:** `VISION_FIRE_DETECTOR` (v4 `.pt`) and `VISION_FIRE_CLASSIFIER`
+    (`.onnx` from `scripts/m8_fire_export_cls.py`) in video mode; each camera is scored
+    about once a second; `vision_service.fire.FireMonitor` raises a candidate when 3 of
+    the last 5 scores alarm and resolves it after 30 s without an alarm. It is published
+    as `AnomalyUpdated(source=VISION, anomaly_type="fire")` with no routing impact; the
+    operator confirms (ADR-006). The service reproduces the notebook's score on the
+    Step 2 alarm frame exactly (0.8647).
+  - **Persistence settings are guesses.** There is no labelled street-fire video; the
+    3-of-5 and 30 s values only remove single-frame false alarms and have not been tested
+    on fire that moves, flickers or grows.
 - **Not yet measured:**
   - fire in Indian junction footage, of which there is none labelled;
-  - the persistence settings, which need video.
+  - the persistence settings, which need video;
+  - night, infrared and headlight glare beyond the one frame above;
+  - CPU time on the deployment machine (about 0.16 s per frame with one candidate on a
+    cloud CPU; more candidates cost more).
 
 ### 3.8 Camera health, including calibration drift
 
@@ -847,3 +876,6 @@ preset it was measured under.
 | free-text labels matched as far as "SUV" | every BMD-45 / UVH-26 label mapped, with a test | "MUV" matched nothing, so a model trained on either would never have counted one |
 | detector presets assumed | three fitted to measured detectors, with a size curve per vehicle type | the assumed size curve credited a 640 px detector with far vehicles it misses; the controller's cost of a stock detector was a third of the measured one |
 
+
+## Accident candidate (rear-end aftermath), opt-in
+`VISION_RULES=accident` enables `collision_cue` in contact mode (two vehicles stopped bumper-to-bumper within 2 s of each other, abrupt stop, isolated pair, not on a red lane, >= 20 s). A candidate for an operator to confirm (ADR-006). Held-out in SUMO: 0.4-1.5 false alarms/h, 1/15 injected aftermaths found; the 30 % recall target was missed, so it is not the default. No real crash data was available. See `baselines/2026-10-05_m8_accident/README.md`.

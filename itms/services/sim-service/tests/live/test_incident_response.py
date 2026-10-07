@@ -164,6 +164,11 @@ def test_heavy_congestion_pages_nobody():
     assert _RESPONSE_MAP[AnomalyType.HEAVY_CONGESTION] == ()
 
 
+def test_fire_pages_fire_truck_and_police():
+    """Default policy for the M8 fire candidate once an operator confirms it; change here if the policy changes."""
+    assert set(_RESPONSE_MAP[AnomalyType.FIRE]) == {EmergencyKind.FIRE_TRUCK, EmergencyKind.POLICE}
+
+
 # ---- dispatch on tick ---------------------------------------------------
 
 

@@ -41,8 +41,11 @@ from vision_service.events import (
     LINK_STATE_TOPIC,
     anomaly_payload,
     camera_status_payload,
+    fire_payload,
     link_state_payload,
 )
+from vision_service.fire.detector import FireScore
+from vision_service.fire.monitor import FireMonitor, FireMonitorConfig
 from vision_service.health import CameraStatus
 from vision_service.incidents import (
     DEFAULT_OPERATING_POINT,
@@ -111,6 +114,7 @@ class VisionService:
         model: str = "vision-m8",
         evidence: EvidenceStore | None = None,
         rules: str | RuleConfig = DEFAULT_OPERATING_POINT,
+        fire: FireMonitorConfig | None = None,
     ):
         self.rig = rig
         self.publish = publish
@@ -128,6 +132,9 @@ class VisionService:
         self.published: dict[str, int] = {}
         self._lonlat: dict[str, tuple[float, float] | None] = {}
         self._anomaly_start_ms: dict[str, int] = {}
+        # fire/smoke: off unless a config is given (it needs its own models)
+        self.fire: dict[str, FireMonitor] = (
+            {cid: FireMonitor(cid, fire) for cid in rig.specs} if fire is not None else {})
 
     # ---- inputs ---------------------------------------------------------------------
 
@@ -161,6 +168,12 @@ class VisionService:
         if self.evidence is not None:
             self.buffers[camera_id].push(t, frame, detections + tracked_boxes(pipe.last_tracks))
 
+    def on_fire_score(self, camera_id: str, t: float, score: FireScore) -> None:
+        """One camera's fire/smoke score for one frame (about once a second);
+        persistence and publishing happen in `FireMonitor` and `tick`."""
+        mon = self.fire.get(camera_id)
+        if mon is not None:
+            mon.observe(t, score)
     # ---- the tick ----------------------------------------------------------------------
 
     def step_simcam(self, t: float) -> None:
@@ -204,8 +217,27 @@ class VisionService:
                 self._save_evidence(cand)
             else:
                 self._anomaly_start_ms.pop(cand.anomaly_id, None)
+        self._emit_fire(t)
         return res
 
+    def _emit_fire(self, t: float) -> None:
+        now_ms = time.time() * 1000.0
+        for cid, mon in self.fire.items():
+            new, resolved = mon.drain()
+            for cand in [*new, *resolved]:
+                start_ms = self._anomaly_start_ms.setdefault(
+                    cand.candidate_id, int(now_ms - 1000.0 * max(0.0, t - cand.first_t)))
+                edge = self.rig.specs[cid].approach_edge or ""
+                self._emit(ANOMALY_TOPIC, "AnomalyUpdated",
+                           fire_payload(cand, edge_id=edge, start_time_ms=start_ms), edge or cid)
+                if cand.status == "RESOLVED":
+                    self._anomaly_start_ms.pop(cand.candidate_id, None)
+                elif self.evidence is not None:
+                    buf = self.buffers.get(cid)
+                    if buf is not None and len(buf):
+                        uri = self.evidence.save(cand.candidate_id, cid, buf.redacted_clip(),
+                                                 {"rule": "fire_smoke", "kind": cand.kind})
+                        log.info("evidence for %s from %s -> %s", cand.candidate_id, cid, uri)
     # ---- helpers -----------------------------------------------------------------------
 
     def _emit(self, topic: str, event_type: str, payload: dict, key: str | None) -> None:

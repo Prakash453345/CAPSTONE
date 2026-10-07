@@ -94,6 +94,11 @@ class SignalPlan:
     source: str = "fixed_time"
 
 
+BLOCKER_UNKNOWN = "?"
+"""`JunctionContext.blocked_by` value: a vehicle waits inside the junction
+ahead of this lane, movement not known."""
+
+
 @dataclass(frozen=True)
 class JunctionContext:
     """Everything about a junction's current situation that the interlocks
@@ -173,6 +178,17 @@ class JunctionContext:
     confidence: Mapping[str, float] = field(default_factory=dict)
     receiving_queue_pcu: Mapping[str, float] = field(default_factory=dict)
     approaching_pcu: Mapping[str, float] = field(default_factory=dict)
+    blocked_by: Mapping[str, str] = field(default_factory=dict)
+    """Head-of-line blocking: `{movement: the movement of the vehicle blocking
+    its lane}`. A movement appears here when the vehicle at the front of its
+    approach lane is stopped directly behind a vehicle that is waiting inside
+    the junction (a turner yielding to oncoming traffic); the value is that
+    waiting vehicle's movement, or `BLOCKER_UNKNOWN` when the sensor sees
+    where the vehicle stands but not which way it is going (a camera: on a
+    shared lane the turn's path and the through path are centimetres apart
+    where the turner waits). Every movement sharing the lane gets the same
+    entry. Empty (the default) when nothing is blocked or nothing measures
+    it; only `strategies/hol_camp.py` reads it."""
 
 
 @dataclass(frozen=True)
@@ -209,6 +225,16 @@ class Tier0Config:
     max_wait_s: float = 120.0
     max_preempt_s_per_hour: float = 300.0
     sat_flow_pcu_s: Mapping[str, float] = field(default_factory=dict)
+    alternates: Mapping[str, str] = field(default_factory=dict)
+    """`{phase id: the ring phase it stands in for}`: configured phases that
+    are not ring members but may be commanded in place of one. An alternate
+    is its ring phase with some *protected* movements taken away and nothing
+    else changed (`strategies/hol.py`): every movement it shows, it shows as
+    the ring phase does, and it stops no permissive movement of it --
+    `validate` checks both. So it contains no pair of greens the ring phase
+    does not, and everything the interlocks check about a phase (conflicts,
+    clearance, green bounds) is checked for it as for any other. Empty for
+    every junction that has none."""
 
     def validate(self) -> list[str]:
         """C7: "bad Tier-0 config value rejected at load, last-known-good
@@ -238,4 +264,61 @@ class Tier0Config:
             for b in conflicts:
                 if a not in self.conflict_matrix.get(b, frozenset()):
                     problems.append(f"conflict_matrix not symmetric for ({a!r}, {b!r})")
+        problems.extend(self.alternate_problems())
+        return problems
+
+    def alternate_problems(self, only: str | None = None) -> list[str]:
+        """What is wrong with this junction's alternates (`only`: with that
+        one), empty when nothing is. These are the properties that make an
+        alternate as safe as the ring phase it stands in for, so a junction
+        with any of them is not run (`control/runner.py`) and a plan that
+        steps into such an alternate is refused (`interlocks.transition_legal`):
+
+        - it is a configured phase, standing in for a ring phase, with a
+          minimum green of its own;
+        - it shows nothing the ring phase does not, and shows each movement
+          the same way (protected stays protected, permissive permissive) --
+          so no pair of greens exists in it that the ring phase lacks;
+        - it stops at least one movement, and only protected ones -- stopping
+          a yielding movement while the stream it yields to may run on is
+          the yellow trap;
+        - it keeps a protected movement (a phase with none is read as "all
+          protected" by the cabinet and the kernel);
+        - its signal state is its own (the cabinet tells phases apart by
+          their state);
+        - the junction has an all-red (leaving an alternate restarts what
+          it stopped, and that must start into an empty junction)."""
+        problems: list[str] = []
+        for alt, base in self.alternates.items():
+            if only is not None and alt != only:
+                continue
+            if alt not in self.phases:
+                problems.append(f"alternate {alt!r} is not a configured phase")
+                continue
+            if base not in self.ring_order or base not in self.phases:
+                problems.append(f"alternate {alt!r} stands in for {base!r}, not a ring phase")
+                continue
+            a, b = self.phases[alt], self.phases[base]
+            a_protected = a.protected_movements or frozenset()
+            b_protected = b.protected_movements or frozenset()
+            if self.min_green_s.get(alt, 0) <= 0:
+                problems.append(f"alternate {alt!r} has no minimum green")
+            if self.all_red_s <= 0:
+                problems.append(f"alternate {alt!r} needs an all-red interval at the junction")
+            if not a.green_movements <= b.green_movements:
+                problems.append(f"alternate {alt!r} serves movements {base!r} does not")
+                continue
+            stopped = b.green_movements - a.green_movements
+            if not stopped:
+                problems.append(f"alternate {alt!r} stops nothing of {base!r}")
+            if a_protected != b_protected & a.green_movements:
+                problems.append(f"alternate {alt!r} shows a movement differently from {base!r}")
+            if not a_protected:
+                problems.append(f"alternate {alt!r} has no protected movement")
+            if not stopped <= b_protected:
+                problems.append(f"alternate {alt!r} stops a permissive movement of {base!r}")
+            for pid, p in self.phases.items():
+                if pid != alt and p.green_movements == a.green_movements and (
+                        p.protected_movements or frozenset()) == a_protected:
+                    problems.append(f"alternate {alt!r} shows the same signal state as {pid!r}")
         return problems

@@ -153,6 +153,48 @@ class TraCICabinet:
     def all_red_state(self) -> str:
         return self._all_red
 
+    def carried_clearance_states(self, outgoing: str, incoming: str) -> tuple[str, str]:
+        """`(yellow stage, red stage)` for a change that only *stops* links:
+        every link the incoming phase shows green, the outgoing phase shows
+        the same way. Those links are carried through the change interval
+        unchanged; the links being stopped get their yellow, then their red.
+        Nothing is shown that the outgoing phase did not show. Only
+        meaningful when `can_carry` is true."""
+        out_state = self._state_by_phase[outgoing]
+        in_state = self._state_by_phase[incoming]
+        yellow, red = [], []
+        for a, b in zip(out_state, in_state, strict=True):
+            keep = a in "Gg" and b == a
+            yellow.append(a if keep else "y" if a in "Gg" else "r")
+            red.append(a if keep else "r")
+        return "".join(yellow), "".join(red)
+
+    def can_carry(self, outgoing: str, incoming: str) -> bool:
+        """Whether a change may keep its continuing greens instead of
+        putting the whole junction through yellow and all-red. Two
+        conditions, both read off the two signal states:
+
+        - **Nothing starts or changes.** Every link green in the incoming
+          phase is green, with the same character, in the outgoing one. A
+          stream that starts against traffic already flowing -- a turner
+          who has had a free run through the box and is given no sign that
+          the oncoming through is about to move ("late release") -- is the
+          one thing an all-red exists to prevent; so anything that starts,
+          starts from an all-red.
+        - **No permissive link is stopped.** A permissive movement's driver
+          waits in the junction for a gap in a stream that has a green.
+          Stop that driver with a yellow while the stream keeps its green
+          and the yellow says "they are stopping too" when they are not:
+          the yellow trap. A protected link that is stopped yields to
+          nobody, so its yellow tells it nothing false.
+
+        What is left is exactly "stop some protected streams, change nothing
+        else" -- an early cut-off."""
+        out_state = self._state_by_phase[outgoing]
+        in_state = self._state_by_phase[incoming]
+        return all((b not in "Gg" or b == a) and not (a == "g" and b not in "Gg")
+                   for a, b in zip(out_state, in_state, strict=True))
+
     def set_raw_state(self, state: str) -> None:
         """Direct escape hatch for the runner's yellow/all-red sequencing --
         deliberately outside `CabinetPort` (see module docstring)."""
