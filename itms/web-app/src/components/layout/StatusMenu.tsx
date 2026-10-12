@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { ChevronDown, Columns2, FlaskConical, Radio, Square } from "lucide-react";
 import { useSystemStore, selectIsStale } from "@/store/systemStore";
-import { roadEdges, signalJunctions } from "@/data/network";
+import { networkName, roadEdges, signalJunctions } from "@/data/network";
 import { Dot, Popover, Segmented } from "@/components/console/kit";
 import { ago, useNow } from "@/components/console/hooks";
 import { type Tone } from "@/components/console/tone";
@@ -112,7 +112,7 @@ export function StatusMenu() {
         <dl className="grid grid-cols-2 gap-x-3 gap-y-2.5 border-t border-border px-3 pb-2 pt-3 text-[12.5px]">
           <Fact term="Last update" value={updated.replace("Updated ", "")} />
           <Fact term="Local time" value={new Date(now).toLocaleTimeString("en-GB")} />
-          <Fact term="Network" value="MG Road corridor" />
+          <Fact term="Network" value={networkName} />
           <Fact term="Coverage" value={`${roadEdges.length} roads, ${signalJunctions.length} signals`} />
         </dl>
       </Popover>

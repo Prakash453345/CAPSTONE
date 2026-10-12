@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { EV_ROUTE_ALT_COLOR, EV_ROUTE_COLOR } from "@/components/map/mapColors";
 import {
   Ambulance,
   AlertTriangle,
@@ -538,6 +539,12 @@ function RouteTabs({
           )}
           title={`${i === 0 ? "Recommended" : `Alternative ${i}`} · ${fmtDuration(rt.etaS)} · score ${rt.cost.score.toFixed(1)}`}
         >
+          {/* the same line the map draws: solid blue for the route shown, light blue for the others */}
+          <span
+            aria-hidden
+            className="mx-auto mb-0.5 block h-[3px] w-6 rounded-full"
+            style={{ background: i === previewRank ? EV_ROUTE_COLOR : EV_ROUTE_ALT_COLOR }}
+          />
           <span className="block font-medium">{i === 0 ? "Recommended" : `Alt ${i}`}</span>
           <span className="block font-mono opacity-70">{fmtDuration(rt.etaS)}</span>
         </button>

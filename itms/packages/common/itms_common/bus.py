@@ -164,6 +164,17 @@ class RedisStreamsSyncBus:
         message_id = self._redis.xadd(topic, {"raw": raw})
         return message_id.decode() if isinstance(message_id, bytes) else message_id
 
+    def publish_many(self, messages: list[tuple[str, bytes]]) -> list[str]:
+        """XADD every (topic, raw) in one pipelined round trip, in order.
+        Same entries `publish` would write one by one; a tick's worth of
+        vehicle positions costs one network wait instead of hundreds."""
+        if not messages:
+            return []
+        pipe = self._redis.pipeline(transaction=False)
+        for topic, raw in messages:
+            pipe.xadd(topic, {"raw": raw})
+        return [m.decode() if isinstance(m, bytes) else m for m in pipe.execute()]
+
     def close(self) -> None:
         self._redis.close()
 

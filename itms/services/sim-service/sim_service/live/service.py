@@ -35,7 +35,7 @@ from itms_common.events import decode_envelope, encode_envelope
 
 from sim_service.control.runner import run_controlled_scenario
 from sim_service.live.anomaly_control import OperatorAnomalyController
-from sim_service.live.corridor import NET_PATH, load_corridor
+from sim_service.live.corridor import load_corridor, network_path
 from sim_service.live.emergency_control import EmergencyController
 from sim_service.live.green_corridor import CorridorController
 from sim_service.live.incident_response import IncidentResponseOrchestrator
@@ -59,6 +59,7 @@ def run_live(
     *,
     redis_url: str = "redis://localhost:6379/0",
     demand: str = "medium",
+    network: str | None = None,  # None: the configured scenario (itms_domain.scenario)
     realtime_factor: float = 1.0,
     step_length: float = 1.0,
     seed: int | None = None,
@@ -79,8 +80,8 @@ def run_live(
     consumer = RedisStreamsSyncConsumer(
         topics, group=CONSUMER_GROUP, consumer="live-1", url=redis_url
     )
-    setup = load_corridor(demand)
-    graph = RoadGraph.from_network(NET_PATH)
+    setup = load_corridor(demand, network=network)
+    graph = RoadGraph.from_network(network_path(network))
     anomalies = OperatorAnomalyController()
     corridor = CorridorController(graph)
     emergency = EmergencyController(graph, anomalies, corridor_controller=corridor)

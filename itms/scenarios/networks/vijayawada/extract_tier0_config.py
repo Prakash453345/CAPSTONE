@@ -207,31 +207,34 @@ def _is_green_phase(state: str) -> bool:
     return is_green_phase(state)   # itms_domain.signal_program: one rule for all
 
 
-def _program_agrees(junction: ET.Element, tl_logic: ET.Element) -> bool:
-    """Whether the junction's `<request>` rows describe this program's links.
+def _program_agrees(
+    junction: ET.Element, tl_logic: ET.Element, tl_to_junction: dict[int, int]
+) -> bool:
+    """Whether the junction's `<request>` rows, read through `tl_to_junction`,
+    describe this program's links.
 
     The conflict matrix is read from the junction, keyed by request index,
-    and that is only right while request `i` is the light's link `i`.
-    netconvert numbers them the same way; a network edited in netedit can
-    give the light its own link numbering (SUMO's Ingolstadt example: a
-    junction with 35 requests under an 18-link program). Read through the
-    wrong numbering, the program's own greens looked like conflicts, and
-    every tick of every run went to the interlock failsafe. The test: the
-    same number of links, and no green phase of the program showing two
-    protected links the junction calls foes (no real program does)."""
+    and the light's link `i` is request `tl_to_junction[i]`
+    (`_tl_to_junction_index`). The test: every link of the program maps to a
+    request, and no green phase of the program shows two protected links the
+    junction calls foes (no real program does). Read through a wrong
+    numbering, the program's own greens looked like conflicts (SUMO's
+    Ingolstadt example: a junction with 35 requests under an 18-link
+    program), and every tick of every run went to the interlock failsafe."""
     states = [ph.get("state", "") for ph in tl_logic.findall("phase")]
     if not states:
         return True
-    requests = junction.findall("request")
-    if len(requests) != len(states[0]):
+    if set(tl_to_junction) != set(range(len(states[0]))):
         return False
     foes = {int(r.get("index", "-1")): set(_conflicts_from_foes(r.get("foes", "")))
-            for r in requests}
+            for r in junction.findall("request")}
+    if any(j not in foes for j in tl_to_junction.values()):
+        return False
     for st in states:
         if not _is_green_phase(st):
             continue
         on = [i for i, c in enumerate(st) if c == "G"] or [i for i, c in enumerate(st) if c == "g"]
-        if any(j in foes.get(i, ()) for i in on for j in on if i < j):
+        if any(tl_to_junction[j] in foes[tl_to_junction[i]] for i in on for j in on if i < j):
             return False
     return True
 
@@ -294,18 +297,33 @@ def _extract_one(
     junction: ET.Element,
     measured_sat_flow: dict[str, float] | None = None,
     lane_speeds: dict[str, float] | None = None,
+    tl_to_junction: dict[int, int] | None = None,
 ) -> Tier0Config:
     # Conflict matrix from this junction's own <request> elements, keyed by
     # link-index labels ("L0", "L1", ...) matching the tlLogic state string
-    # character positions.
-    conflict_matrix: dict[str, frozenset[str]] = {}
+    # character positions. A <request index> counts the *junction's* links,
+    # which is not always the signal's numbering: inside some joined
+    # clusters netconvert numbers the signal's links in a different order
+    # (see `_tl_to_junction_index`). `tl_to_junction` translates; without it
+    # the two are taken to be the same (true of every corridor junction).
+    foes_by_junction_index: dict[int, list[int]] = {}
     for req in junction.findall("request"):
         idx_attr = req.get("index")
         if idx_attr is None:
             raise ValueError(f"junction {junction.get('id')!r} has a <request> with no index")
-        idx = int(idx_attr)
-        foes = req.get("foes", "")
-        conflict_matrix[f"L{idx}"] = frozenset(f"L{j}" for j in _conflicts_from_foes(foes))
+        foes_by_junction_index[int(idx_attr)] = _conflicts_from_foes(req.get("foes", ""))
+    if tl_to_junction is None:
+        tl_to_junction = {i: i for i in foes_by_junction_index}
+    junction_to_tl = {j: i for i, j in tl_to_junction.items()}
+    conflict_matrix: dict[str, frozenset[str]] = {}
+    for tl_idx, j_idx in tl_to_junction.items():
+        if j_idx not in foes_by_junction_index:
+            raise ValueError(
+                f"{tls_id!r}: signal link {tl_idx} maps to junction link {j_idx}, which has no <request>"
+            )
+        conflict_matrix[f"L{tl_idx}"] = frozenset(
+            f"L{junction_to_tl[j]}" for j in foes_by_junction_index[j_idx] if j in junction_to_tl
+        )
 
     phases: dict[str, Phase] = {}
     ring_order: list[str] = []
@@ -379,6 +397,38 @@ def _load_sat_flow_calibration(net_path: Path) -> dict[str, dict[str, float]]:
     return json.loads(calibration_path.read_text())
 
 
+def _tl_to_junction_index(
+    root: ET.Element, junction: ET.Element, tls_id: str
+) -> dict[int, int]:
+    """{signal linkIndex: junction link index} for one signalised junction.
+
+    SUMO numbers a junction's links (the `index` of its <request>s, and the
+    bit positions of `foes`) by walking `incLanes` in order and, per lane,
+    its outgoing connections in file order -- the rule `sumolib`'s
+    `Node.getLinkIndex` implements. The signal's `linkIndex` on each
+    <connection> is a separate numbering that usually, but not always,
+    matches it."""
+    by_lane: dict[str, list[ET.Element]] = {}
+    for c in root.iter("connection"):
+        frm = c.get("from", "")
+        if frm.startswith(":") or c.get("to", "").startswith(":"):
+            continue  # internal (via) connections are not junction links
+        by_lane.setdefault(f"{frm}_{c.get('fromLane')}", []).append(c)
+    mapping: dict[int, int] = {}
+    j_idx = 0
+    for lane in (junction.get("incLanes") or "").split():
+        if lane.startswith(":"):
+            continue
+        for c in by_lane.get(lane, ()):
+            if c.get("tl") == tls_id and c.get("linkIndex") is not None:
+                tl_idx = int(c.get("linkIndex"))
+                if tl_idx in mapping:
+                    raise ValueError(f"{tls_id!r}: signal link {tl_idx} appears twice")
+                mapping[tl_idx] = j_idx
+            j_idx += 1
+    return mapping
+
+
 def load_configs(net_path: str | Path) -> dict[str, Tier0Config]:
     net_path = Path(net_path)
     tree = ET.parse(net_path)
@@ -399,12 +449,29 @@ def load_configs(net_path: str | Path) -> dict[str, Tier0Config]:
         if tls_id is None:
             raise ValueError("a <tlLogic> element has no id")
         junction = junctions_by_id.get(tls_id)
-        if junction is None or not _program_agrees(junction, tl_logic):
-            # one light over several junctions (netconvert --tls.join), or a
-            # light numbering its links its own way: conflicts from the program
+        tl_to_junction: dict[int, int] | None = None
+        if junction is not None:
+            try:
+                tl_to_junction = _tl_to_junction_index(root, junction, tls_id)
+            except ValueError:
+                tl_to_junction = None  # inconsistent numbering: use the program's view
+        if (
+            junction is None
+            or tl_to_junction is None
+            or not _program_agrees(junction, tl_logic, tl_to_junction)
+        ):
+            # one light over several junctions (netconvert --tls.join), or
+            # links the junction's own rows cannot account for: conflicts from
+            # the program, whose view is already in the light's numbering
             junction = _joined_view(tls_id, tl_logic, root)
+            tl_to_junction = None
         configs[tls_id] = _extract_one(
-            tls_id, tl_logic, junction, calibration.get(tls_id), lane_speeds
+            tls_id,
+            tl_logic,
+            junction,
+            calibration.get(tls_id),
+            lane_speeds,
+            tl_to_junction=tl_to_junction,
         )
     return configs
 

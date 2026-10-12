@@ -86,3 +86,40 @@ for j in root.findall("junction"):
     if j.get("type") not in ("internal",):
         print(j.get("id"), j.get("type"))
 ```
+
+## The district network (`vijayawada_district.net.xml`)
+
+The corridor above is deliberately one arterial, so between most pairs of
+roads there is exactly one way to drive, and the emergency router can't show
+a choice. The district network keeps the whole arterial grid around it from
+the same OSM extract (trunk down to unclassified roads): **314 roads, every
+road reachable from every other, 17 signals** (the corridor's signalised
+crossings plus the other crossings where two named arterials meet with at
+least three ways in and out). The corridor files and every gate measured on
+them are untouched; the district is a separate network for the live console.
+
+Build (needs SUMO, run from this directory):
+
+    PYTHON=python bash build_district.sh /path/to/vijayawada_corridor_bbox.osm.xml
+
+`filter_district.py` keeps the drivable arterial ways. `select_district.py`
+keeps the largest strongly connected set of roads, picks the signalised
+crossings and, at the end, `--verify` fails the build unless every road
+reaches every other. `export_geojson.py NET OUT` writes the console's compact
+map geometry, `vijayawada_district.geojson`.
+
+Two things netconvert does on the district but never on the corridor, which
+the Tier-0 extractor now handles (both are checked link by link against
+sumolib in `tests/control/strategies/test_tier0_extraction.py`):
+
+- a joined cluster whose signal numbers its links in a different order from
+  the junction's own conflict table: the conflict matrix is translated into
+  the signal's numbering;
+- transition phases that keep one movement green (`yyyrrrGyy`): they are
+  transitions, not ring phases.
+
+Running it live: `SIM_MODE=live SIM_NETWORK=district` for sim-service, with
+demand from `../../demand/vijayawada/build_district.sh`, and the console
+built or served with `VITE_ITMS_NETWORK=district` (see
+`web-app/network.config.ts`). The backend and the console must use the same
+network, since road ids come from the network file.

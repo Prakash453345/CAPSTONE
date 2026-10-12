@@ -73,12 +73,9 @@ class RoutePlanner:
         if dest_edge not in avoiding.edges:
             raise NoRouteError("the destination road is blocked")
 
-        k = 1 + max(0, self.config.max_alternatives)
         graph = avoiding
-        candidates = GraphSearchEngine(graph).k_shortest(
-            source_edge, dest_edge, self._weight(graph, cond), k=k
-        )
-        forced_through: frozenset[str] = frozenset()
+        candidates = self._search(graph, source_edge, dest_edge, cond)
+        fallback = False
 
         if not candidates and blocked:
             # The primary pass found nothing avoiding the blockage at all --
@@ -89,11 +86,8 @@ class RoutePlanner:
             # prefers any real alternative and only lands here when there
             # truly is none.
             graph = self.graph
-            candidates = GraphSearchEngine(graph).k_shortest(
-                source_edge, dest_edge, self._weight(graph, cond), k=k
-            )
-            if candidates:
-                forced_through = blocked & set(candidates[0].edges)
+            candidates = self._search(graph, source_edge, dest_edge, cond)
+            fallback = True
 
         if not candidates:
             raise NoRouteError(
@@ -112,13 +106,35 @@ class RoutePlanner:
 
         results: list[RouteResult] = []
         for rank, cand in enumerate(candidates):
+            # each route reports the blocked roads *it* crosses: in the
+            # fallback pass an alternative may cross a different one than the
+            # recommended route does, and must be flagged just the same
+            crossed = blocked & set(cand.edges) if fallback else set()
             results.append(
                 self._build_result(
                     cand.edges, cond, graph, ff_edges, anomalous, rank,
-                    forced_through=forced_through & set(cand.edges),
+                    forced_through=frozenset(crossed),
                 )
             )
         return results
+
+    def _search(
+        self,
+        graph: RoadGraph,
+        source_edge: str,
+        dest_edge: str,
+        cond: Mapping[str, EdgeConditions],
+    ):
+        """The recommended route plus up to `max_alternatives` genuinely
+        different alternatives (see `GraphSearchEngine.k_shortest`)."""
+        return GraphSearchEngine(graph).k_shortest(
+            source_edge,
+            dest_edge,
+            self._weight(graph, cond),
+            k=1 + max(0, self.config.max_alternatives),
+            max_stretch=self.config.alternative_max_stretch,
+            max_overlap=self.config.alternative_max_overlap,
+        )
 
     def _weight(self, graph: RoadGraph, cond: Mapping[str, EdgeConditions]):
         def weight(from_edge: str, ge: GraphEdge) -> float:

@@ -88,4 +88,42 @@ describe("live snapshot integration", () => {
     expect(snap!.incidents[0].status).toBe("resolved");
     provider.stop();
   });
+  it("forgets a live request the backend stopped announcing, but only while the stream flows", () => {
+    const provider = createWebSocketProvider();
+    let snap: TrafficSnapshot | undefined;
+    provider.subscribe((s) => {
+      snap = s;
+    });
+    provider.start();
+    Socket.latest.onopen?.();
+    const request = (id: string) =>
+      Socket.latest.sendEvent("EmergencyRequestUpdated", {
+        request_id: id,
+        vehicle_id: `v-${id}`,
+        vehicle_kind: "AMBULANCE",
+        state: "ROUTE_READY",
+        source_edge: "-177626285",
+        destination_edge: "-679017002",
+        updated_at: Date.now(),
+      });
+    const ids = () => snap!.emergencyRequests.map((r) => r.id).sort();
+    request("old");
+    request("live");
+    vi.advanceTimersByTime(500);
+    expect(ids()).toEqual(["live", "old"]);
+
+    // the stream goes quiet (connection trouble): nothing is forgotten
+    vi.advanceTimersByTime(60_000);
+    expect(ids()).toEqual(["live", "old"]);
+
+    // the stream flows again, re-announcing only "live" every 10 s
+    for (let t = 0; t < 50_000; t += 10_000) {
+      request("live");
+      vi.advanceTimersByTime(10_000);
+    }
+    request("live");
+    vi.advanceTimersByTime(500);
+    expect(ids()).toEqual(["live"]);
+    provider.stop();
+  });
 });

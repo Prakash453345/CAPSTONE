@@ -2,6 +2,7 @@ import { ChevronDown } from "lucide-react";
 import {
   ANOMALY_SEVERITY_COLOR,
   CORRIDOR_ACCENT_COLOR,
+  EV_ROUTE_ALT_COLOR,
   EV_ROUTE_COLOR,
   SIGNAL_COLOR,
   VEHICLE_COLOR,
@@ -16,6 +17,7 @@ const ROWS: Array<{ label: string; swatch: React.ReactNode }> = [
   { label: "Truck", swatch: <Dot color={VEHICLE_COLOR.truck} /> },
   { label: "Emergency vehicle", swatch: <Dot color={VEHICLE_COLOR.ambulance} /> },
   { label: "Emergency route (optimal)", swatch: <Line color={EV_ROUTE_COLOR} /> },
+  { label: "Alternative route", swatch: <Line color={EV_ROUTE_ALT_COLOR} /> },
   { label: "Green corridor / preemption", swatch: <Ring color={CORRIDOR_ACCENT_COLOR} /> },
   { label: "Signal — under control", swatch: <Dot color={SIGNAL_COLOR.green} /> },
   { label: "Signal — idle / no data", swatch: <Dot color={SIGNAL_COLOR.red} /> },

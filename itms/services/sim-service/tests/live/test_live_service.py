@@ -68,7 +68,7 @@ def test_run_live_drains_and_dispatches_each_command(monkeypatch):
     batch2 = [_Msg("commands.operator", "2-0", hb)]
 
     consumer = _FakeConsumer([batch1, batch2])
-    monkeypatch.setattr(live_service, "load_corridor", lambda demand="medium": _CorridorStub())
+    monkeypatch.setattr(live_service, "load_corridor", lambda demand="medium", network="corridor": _CorridorStub())
     monkeypatch.setattr(live_service, "RedisStreamsSyncBus", lambda url: _FakeBus())
     monkeypatch.setattr(
         live_service, "RedisStreamsSyncConsumer",
@@ -104,7 +104,7 @@ def test_run_live_drains_and_dispatches_each_command(monkeypatch):
 def test_undecodable_command_is_acked_and_skipped_not_fatal(monkeypatch):
     handled: list[str] = []
     consumer = _FakeConsumer([[_Msg("commands.operator", "9-0", b"\x00not-avro")]])
-    monkeypatch.setattr(live_service, "load_corridor", lambda demand="medium": _CorridorStub())
+    monkeypatch.setattr(live_service, "load_corridor", lambda demand="medium", network="corridor": _CorridorStub())
     monkeypatch.setattr(live_service, "RedisStreamsSyncBus", lambda url: _FakeBus())
     monkeypatch.setattr(live_service, "RedisStreamsSyncConsumer", lambda *a, **k: consumer)
     monkeypatch.setattr(
@@ -159,7 +159,7 @@ def test_built_in_dispatch_routes_anomaly_commands_to_the_controller(monkeypatch
     )
     consumer = _FakeConsumer([[_Msg("commands.operator", "1-0", create),
                               _Msg("commands.operator", "1-1", other)]])
-    monkeypatch.setattr(live_service, "load_corridor", lambda demand="medium": _CorridorStub())
+    monkeypatch.setattr(live_service, "load_corridor", lambda demand="medium", network="corridor": _CorridorStub())
     monkeypatch.setattr(live_service, "RedisStreamsSyncBus", lambda url: _FakeBus())
     monkeypatch.setattr(live_service, "RedisStreamsSyncConsumer", lambda *a, **k: consumer)
     monkeypatch.setattr(

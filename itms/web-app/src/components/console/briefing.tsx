@@ -8,7 +8,7 @@ import {
   Siren,
   TrafficCone,
 } from "lucide-react";
-import { roadLabel } from "@/data/network";
+import { networkName, roadLabel } from "@/data/network";
 import { useSystemStore } from "@/store/systemStore";
 import { useAnalyticsStore } from "@/store/analyticsStore";
 import { useNotificationStore } from "@/store/notificationStore";
@@ -46,7 +46,7 @@ export function NetworkStatus() {
       <div className="px-5 pb-4 pt-5">
         <div className="flex items-center gap-2 text-[13px] text-muted-foreground">
           <Dot tone={mood.tone} pulse={has} />
-          MG Road corridor, now
+          {networkName}, now
         </div>
         <motion.p
           key={mood.headline}

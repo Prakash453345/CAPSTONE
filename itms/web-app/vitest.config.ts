@@ -1,5 +1,6 @@
 import { defineConfig } from "vitest/config";
 import { fileURLToPath, URL } from "node:url";
+import { networkAlias } from "./network.config";
 
 // Standalone Vitest config so vite.config.ts stays a plain Vite config (the
 // bundled/nested vite copies otherwise clash on the react plugin's types).
@@ -7,9 +8,10 @@ import { fileURLToPath, URL } from "node:url";
 // React plugin and no DOM environment are needed.
 export default defineConfig({
   resolve: {
-    alias: {
-      "@": fileURLToPath(new URL("./src", import.meta.url)),
-    },
+    alias: [
+      networkAlias(),
+      { find: "@", replacement: fileURLToPath(new URL("./src", import.meta.url)) },
+    ],
   },
   test: {
     environment: "node",

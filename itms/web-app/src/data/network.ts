@@ -1,10 +1,18 @@
-import rawNetwork from "../../../scenarios/networks/vijayawada/vijayawada_corridor.geojson?raw";
+// The network chosen at build time (VITE_ITMS_NETWORK, see network.config.ts).
+import rawNetwork from "@itms-network?raw";
 import type { FeatureCollection } from "geojson";
 import { cumulativeLengths, haversineMeters, type LngLat } from "@/utils/geo";
 import { ROAD_NAMES } from "@/data/roadNames";
 
 /** Geometry from the same checked-in network used by the SUMO exporter. */
 const network = JSON.parse(rawNetwork) as FeatureCollection;
+
+/** "corridor" (the MG Road arterial) or "district" (the grid around it). */
+export const networkKind: "corridor" | "district" =
+  import.meta.env.VITE_ITMS_NETWORK === "district" ? "district" : "corridor";
+/** What operators call the area on screen. */
+export const networkName =
+  networkKind === "district" ? "Central Vijayawada" : "MG Road corridor";
 export interface RoadEdge {
   id: string;
   name: string | null;

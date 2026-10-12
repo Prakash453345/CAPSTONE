@@ -86,6 +86,14 @@ class EmergencyRoutingConfig:
 
     # --- multi-route ---
     max_alternatives: int = 2
+    # An alternative is offered only if it is a genuinely different way to get
+    # there: its weighted cost is at most `alternative_max_stretch` x the best
+    # route's, and at most `alternative_max_overlap` of its length (source and
+    # destination roads excluded) runs along any route already offered. On a
+    # grid this stops "the same route with one block's detour" being shown as
+    # an alternative, and stops wildly longer routes padding the list.
+    alternative_max_stretch: float = 1.6
+    alternative_max_overlap: float = 0.7
 
     # --- last-resort routing ---
     # `RoutePlanner.plan`'s primary pass always excludes BLOCKED edges. If that
@@ -136,6 +144,12 @@ class EmergencyRoutingConfig:
             self.blocked_fallback_anomaly_norm
         ):
             problems.append("blocked_fallback_anomaly_norm must be finite and > 0")
+        if self.max_alternatives < 0:
+            problems.append("max_alternatives must be >= 0")
+        if not (self.alternative_max_stretch >= 1.0):
+            problems.append("alternative_max_stretch must be >= 1 (the best route has stretch 1)")
+        if not (0.0 <= self.alternative_max_overlap <= 1.0):
+            problems.append("alternative_max_overlap must be between 0 and 1")
         if self.corridor_max_simultaneous < 1:
             problems.append("corridor_max_simultaneous must be >= 1")
         if not 0.0 < self.reliability_reject_threshold:
@@ -154,6 +168,8 @@ class EmergencyRoutingConfig:
             "reliability_weight": self.reliability_weight,
             "impact_penalty_scale": self.impact_penalty_scale,
             "reliability_variance_weight": self.reliability_variance_weight,
+            "alternative_max_stretch": self.alternative_max_stretch,
+            "alternative_max_overlap": self.alternative_max_overlap,
         }
 
 

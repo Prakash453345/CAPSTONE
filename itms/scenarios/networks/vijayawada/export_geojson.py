@@ -14,11 +14,17 @@ Writes two files with the same content:
     JSON is the actual fix, not a stylistic choice.
 
 Usage: python export_geojson.py [path/to/vijayawada_corridor.net.xml]
+       python export_geojson.py NET OUT.geojson
+
+The second form writes only OUT.geojson, compact (shapes simplified to 1 m,
+coordinates to 5 decimals), for other networks such as the district grid the console
+bundles; the corridor's two files above are left alone.
 """
 
 from __future__ import annotations
 
 import json
+import math
 import sys
 from pathlib import Path
 
@@ -71,9 +77,61 @@ def build_feature_collection(net_path: str) -> dict:
     return {"type": "FeatureCollection", "features": features}
 
 
+# Compact export: the console bundles this file, so every byte is downloaded
+# by every map page. Douglas-Peucker at 1 m keeps each road's shape within a
+# metre of SUMO's (invisible at street zoom, and lengths change by well under
+# 1%), and 5 decimals of a degree is about 1 m.
+_SIMPLIFY_M = 1.0
+_DECIMALS = 5
+
+
+def _simplify(pts: list, tol_m: float) -> list:
+    if len(pts) < 3:
+        return pts
+    kx = 111_320 * math.cos(math.radians(pts[0][1]))  # metres per degree here
+    ky = 110_540
+
+    def off(p, a, b) -> float:
+        ax, ay = (p[0] - a[0]) * kx, (p[1] - a[1]) * ky
+        bx, by = (b[0] - a[0]) * kx, (b[1] - a[1]) * ky
+        seg = bx * bx + by * by
+        t = 0.0 if seg == 0 else max(0.0, min(1.0, (ax * bx + ay * by) / seg))
+        return math.hypot(ax - t * bx, ay - t * by)
+
+    i, worst = max(((i, off(pts[i], pts[0], pts[-1])) for i in range(1, len(pts) - 1)), key=lambda x: x[1])
+    if worst <= tol_m:
+        return [pts[0], pts[-1]]
+    return _simplify(pts[: i + 1], tol_m)[:-1] + _simplify(pts[i:], tol_m)
+
+
+def _compact(fc: dict) -> str:
+    def rnd(c, decimals=_DECIMALS):
+        return [round(c[0], decimals), round(c[1], decimals)]
+
+    for f in fc["features"]:
+        g = f["geometry"]
+        if g["type"] == "Point":
+            g["coordinates"] = rnd(g["coordinates"])
+            continue
+        line = _simplify(g["coordinates"], _SIMPLIFY_M)
+        short = [rnd(c) for c in line]
+        if any(a == b for a, b in zip(short, short[1:])):
+            # a sub-metre stub (netconvert leaves some between joined
+            # junctions) would collapse to a point: keep its full precision
+            short = [rnd(c, 7) for c in line]
+        g["coordinates"] = short
+        f["properties"].pop("junction_type", None)  # unused by the console
+    return json.dumps(fc, separators=(",", ":"))
+
+
 def main() -> None:
     net_path = sys.argv[1] if len(sys.argv) > 1 else str(_DEFAULT_NET)
     fc = build_feature_collection(net_path)
+    if len(sys.argv) > 2:
+        out = Path(sys.argv[2])
+        out.write_text(_compact(fc) + "\n")
+        print(f"wrote {out} ({len(fc['features'])} features)")
+        return
 
     _GEOJSON_OUT.write_text(json.dumps(fc, indent=2))
     print(f"wrote {_GEOJSON_OUT} ({len(fc['features'])} features)")

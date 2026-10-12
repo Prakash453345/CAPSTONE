@@ -88,6 +88,14 @@ const SIGNAL_FRESH_MS = 6_000;
  *  finished mission leaves the roster; it used to be 6s, which routinely beat
  *  the operator to it. */
 const TERMINAL_REQUEST_TTL_MS = 20 * 60_000;
+/** The backend re-announces every live request every 10 s of simulation
+ *  time. A live request it has stopped mentioning for this long, while the
+ *  stream is otherwise flowing, no longer exists there (the simulation run
+ *  restarted, or the backend did, while this tab stayed open), so it is
+ *  dropped instead of being drawn forever. Not applied while the stream is
+ *  quiet: a dropped connection must not erase what the operator was looking at. */
+const ORPHAN_REQUEST_MS = 45_000;
+const STREAM_LIVE_MS = 5_000;
 /** Safety-net TTL for a tracked fault that never got an explicit recovering
  *  `SignalChanged` (the normal, immediate clear path — see `signalFaults`). */
 const SIGNAL_FAULT_TTL_MS = 5 * 60_000;
@@ -345,6 +353,8 @@ export function createWebSocketProvider(): TrafficDataProvider {
       // this data-layer file must not depend on a Zustand store.
       const done = r.state === "completed" || r.state === "cancelled";
       if (done && now - r._at > TERMINAL_REQUEST_TTL_MS) emergencyRequests.delete(id);
+      const streamLive = now - lastMessageAt < STREAM_LIVE_MS;
+      if (!done && streamLive && now - r._at > ORPHAN_REQUEST_MS) emergencyRequests.delete(id);
     }
     for (const [id, f] of signalFaults) {
       if (now - f.at > SIGNAL_FAULT_TTL_MS) signalFaults.delete(id);

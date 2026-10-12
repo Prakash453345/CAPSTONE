@@ -38,13 +38,22 @@ export const CONGESTION_STOPS: Array<[number, string]> = [
   [1, "#811f1f"],
 ];
 
-/** The recommended route for every emergency mission — one constant "this is
- *  the path" colour (a classic radium/neon green), not the per-mission hash
- *  used for vehicle markers. A route needs to read as "the optimal route"
- *  instantly regardless of which mission it belongs to; hashing its colour
- *  the same way as the vehicle marker made every mission's route a
- *  different, unpredictable hue and none of them reliably legible. */
-export const EV_ROUTE_COLOR = "#16c864";
+/** The recommended route for every emergency mission: one constant "this is
+ *  the path" colour, not the per-mission hash used for vehicle markers, so a
+ *  route reads as "the optimal route" instantly whichever mission it is.
+ *
+ *  Blue, deliberately outside the traffic ramp above. Roads are coloured
+ *  green / orange / red by live congestion, so a green route disappeared into
+ *  free-flowing traffic. Blue with a darker outline (the convention Google
+ *  Maps uses for directions over its traffic layer) stays legible on every
+ *  congestion colour and on both basemap themes. */
+export const EV_ROUTE_COLOR = "#1a73e8";
+/** Outline under the route line, so it separates from the road beneath. */
+export const EV_ROUTE_CASING = "#0b3f8f";
+/** Alternatives of the selected mission: same family, lighter, so they read
+ *  as "other ways" and never compete with the recommended route. */
+export const EV_ROUTE_ALT_COLOR = "#9fc2f7";
+export const EV_ROUTE_ALT_CASING = "#4f6f9f";
 
 /** Green-corridor preemption — shared with `SignalLayer`'s ring around a
  *  currently-held junction, so the map has exactly one consistent "this is

@@ -34,11 +34,15 @@ Env vars:
                               dynamic router, green corridor, continuous re-routing)
                               on top of the same arbitration ladder.
   ITMS_SCENARIO        a scenario directory from scenarios/build_scenario.py (any road
-                       network); unset = the Vijayawada corridor. Both modes.
+                       network); unset = the Vijayawada network SIM_NETWORK names. Both modes.
   SUMOCFG_PATH         path to a .sumocfg (default: the scenario's SIM_DEMAND level) -- sumo mode
   SIM_ROUTE_PATH       path to the matching .rou.xml (default: SUMOCFG_PATH with a
                        .rou.xml suffix -- true for all three shipped demand levels) -- sumo mode
   SIM_DEMAND           "light" | "medium" (default) | "heavy" -- the demand level
+  SIM_NETWORK          "corridor" (default) | "district" -- which Vijayawada network, when
+                       ITMS_SCENARIO is unset (setting both is an error): the single MG
+                       Road arterial, or the surrounding arterial grid where emergency
+                       routes have real alternatives. Both modes.
   SIM_REALTIME_FACTOR  pacing for the demo loop (default 1.0 -- see traci_loop.run / run_live)
   SIM_STEP_LENGTH      seconds of sim time per step (default 1.0, matches the M1 gate's "1 Hz")
   SIM_MAX_STEPS         stop after N steps (unset = run to scenario end); mainly for tests
@@ -210,12 +214,13 @@ def _run_live() -> None:
     from sim_service.live.service import run_live
 
     demand = os.environ.get("SIM_DEMAND", "medium")
+    scenario_name = _scenario().name  # ITMS_SCENARIO / SIM_NETWORK
     realtime_factor = float(os.environ.get("SIM_REALTIME_FACTOR", "1.0"))
     step_length = float(os.environ.get("SIM_STEP_LENGTH", "1.0"))
     max_steps_env = os.environ.get("SIM_MAX_STEPS")
     max_steps = int(max_steps_env) if max_steps_env else None
 
-    log.info("starting LIVE corridor (demand=%s) via %s", demand, REDIS_URL)
+    log.info("starting LIVE %s (demand=%s) via %s", scenario_name, demand, REDIS_URL)
     run_number = 0
     while True:
         run_number += 1

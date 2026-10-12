@@ -23,6 +23,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 import traci
+import traci.constants as tc
 from itms_common.bus import RedisStreamsSyncBus
 from itms_common.events import encode_envelope
 
@@ -31,6 +32,8 @@ log = logging.getLogger("sim-service.traci_loop")
 _INTERNAL_EDGE_PREFIX = ":"
 _VEHICLE_TOPIC = "traffic.vehicle-positions"
 _APPROACH_TOPIC = "traffic.updated"
+_VEHICLE_VARS = (tc.VAR_POSITION, tc.VAR_SPEED, tc.VAR_ANGLE, tc.VAR_ROAD_ID)
+_EDGE_VARS = (tc.LAST_STEP_VEHICLE_NUMBER, tc.LAST_STEP_OCCUPANCY)
 
 
 def _ensure_sumo_home() -> None:
@@ -95,9 +98,25 @@ def publish_traffic_state(
     call on the control path.
     """
     vtype_of = _vtype_lookup(vtype_cache)
+    out: list[tuple[str, bytes]] = []
 
+    # Values come from TraCI variable subscriptions: SUMO returns every
+    # subscribed value with the step itself, instead of one socket round trip
+    # per vehicle per variable (on the district, ~1300 round trips a tick).
+    # A vehicle subscribed this tick has no results until the next step, so
+    # it is read directly once.
+    vehicles = traci.vehicle.getAllSubscriptionResults()
     for veh_id in traci.vehicle.getIDList():
-        x, y = traci.vehicle.getPosition(veh_id)
+        sub = vehicles.get(veh_id)
+        if sub is None:
+            traci.vehicle.subscribe(veh_id, _VEHICLE_VARS)
+            x, y = traci.vehicle.getPosition(veh_id)
+            speed = traci.vehicle.getSpeed(veh_id)
+            angle = traci.vehicle.getAngle(veh_id)
+            road = traci.vehicle.getRoadID(veh_id)
+        else:
+            x, y = sub[tc.VAR_POSITION]
+            speed, angle, road = sub[tc.VAR_SPEED], sub[tc.VAR_ANGLE], sub[tc.VAR_ROAD_ID]
         lon, lat = traci.simulation.convertGeo(x, y)
         raw = encode_envelope(
             event_type="VehiclePositionUpdated",
@@ -107,19 +126,26 @@ def publish_traffic_state(
                 "vehicle_type": vtype_of(veh_id),
                 "lat": lat,
                 "lon": lon,
-                "speed_mps": traci.vehicle.getSpeed(veh_id),
-                "heading_deg": traci.vehicle.getAngle(veh_id),
-                "edge_id": traci.vehicle.getRoadID(veh_id),
+                "speed_mps": speed,
+                "heading_deg": angle,
+                "edge_id": road,
                 "source": "sumo",
             },
             partition_key=veh_id,
         )
-        bus.publish(_VEHICLE_TOPIC, raw)
+        out.append((_VEHICLE_TOPIC, raw))
 
+    edges = traci.edge.getAllSubscriptionResults()
     for edge_id in traci.edge.getIDList():
         if edge_id.startswith(_INTERNAL_EDGE_PREFIX):
             continue
-        count = traci.edge.getLastStepVehicleNumber(edge_id)
+        sub = edges.get(edge_id)
+        if sub is None:
+            traci.edge.subscribe(edge_id, _EDGE_VARS)
+            count = traci.edge.getLastStepVehicleNumber(edge_id)
+            occupancy = traci.edge.getLastStepOccupancy(edge_id)
+        else:
+            count, occupancy = sub[tc.LAST_STEP_VEHICLE_NUMBER], sub[tc.LAST_STEP_OCCUPANCY]
         raw = encode_envelope(
             event_type="ApproachState",
             source="sim-service",
@@ -127,7 +153,7 @@ def publish_traffic_state(
                 "movement_id": edge_id,
                 "q_pcu": float(count),
                 # Already a fraction in [0, 1] -- see queue_state.py's unit note.
-                "occupancy": traci.edge.getLastStepOccupancy(edge_id),
+                "occupancy": occupancy,
                 "arrival_rate_pcu_s": count / step_length,
                 "queue_truncated": False,
                 "confidence": 1.0,
@@ -136,7 +162,15 @@ def publish_traffic_state(
             },
             partition_key=edge_id,
         )
-        bus.publish(_APPROACH_TOPIC, raw)
+        out.append((_APPROACH_TOPIC, raw))
+
+    # One pipelined round trip for the whole tick when the bus supports it.
+    publish_many = getattr(bus, "publish_many", None)
+    if publish_many is not None:
+        publish_many(out)
+    else:
+        for topic, raw in out:
+            bus.publish(topic, raw)
 
 
 def run(

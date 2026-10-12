@@ -68,7 +68,7 @@ def test_k_shortest_returns_diverse_routes_best_first():
     eng = GraphSearchEngine(g)
     routes = eng.k_shortest(
         "E0", "E5", lambda _f, ge: g.edges[ge.to_edge].free_flow_time_s, k=2
-    )
+    )  # unfiltered: plain Yen
     assert len(routes) == 2
     assert routes[0].total_weight <= routes[1].total_weight
     assert routes[0].edges != routes[1].edges

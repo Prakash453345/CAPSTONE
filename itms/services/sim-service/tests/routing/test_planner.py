@@ -127,7 +127,10 @@ def test_signalised_intersections_and_congested_segments_are_reported():
 
 
 def test_alternatives_are_returned_and_ranked():
-    planner = RoutePlanner(linear_graph(6), EmergencyRoutingConfig(max_alternatives=1))
+    # the bypass costs ~1.66x the direct chain: allow that much stretch here
+    planner = RoutePlanner(
+        linear_graph(6), EmergencyRoutingConfig(max_alternatives=1, alternative_max_stretch=2.0)
+    )
     routes = planner.plan("E0", "E5")
     assert len(routes) == 2
     assert routes[0].cost.total_score <= routes[1].cost.total_score
@@ -216,3 +219,9 @@ def test_evaluate_then_plan_is_the_monitoring_comparison():
     best = planner.plan("S", "T", cond)[0]
     assert best.edges == ("S", "B", "T")
     assert on_route.score > best.score
+
+
+def test_an_alternative_much_costlier_than_the_best_is_not_offered():
+    # same graph, default stretch 1.6: the 1.66x bypass is not a real choice
+    routes = RoutePlanner(linear_graph(6), EmergencyRoutingConfig(max_alternatives=1)).plan("E0", "E5")
+    assert [r.edges for r in routes] == [("E0", "E1", "E2", "E3", "E4", "E5")]

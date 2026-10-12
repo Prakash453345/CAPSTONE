@@ -27,6 +27,7 @@ import {
   type AnomalyTarget,
 } from "@/components/map/CreateAnomalyPanel";
 import { EmergencyPanel } from "@/components/map/EmergencyPanel";
+import { FollowCamera } from "@/components/map/FollowCamera";
 import { useMapStore } from "@/store/mapStore";
 import { useTransitionStore } from "@/store/transitionStore";
 import { useIncidentStore } from "@/store/incidentStore";
@@ -303,6 +304,10 @@ export function TrafficMap({
             <VehicleLayer visible={activeLayers.has("vehicles")} />
             <WeatherLayer visible={activeLayers.has("weather")} />
             <MapControls fullscreen={fullscreen} onExitFullscreen={onExitFullscreen} />
+            {/* the route panel covers the map's left edge on wide maps (308px + margin) */}
+            <FollowCamera
+              leftInset={operatorPanelOpen && (containerRef.current?.clientWidth ?? 0) >= 720 ? 336 : 0}
+            />
           </MapContext.Provider>
         )}
 

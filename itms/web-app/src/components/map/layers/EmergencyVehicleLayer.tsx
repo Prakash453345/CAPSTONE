@@ -15,6 +15,7 @@ import {
   upsertMapImage,
 } from "@/components/map/mapIcons";
 import { angleDelta, bearingDeg } from "@/utils/geo";
+import { renderedVehicles } from "@/components/map/renderedVehicles";
 import type { EmergencyVehicleKind } from "@/types";
 
 const SRC = "em-vehicles";
@@ -150,6 +151,7 @@ export function EmergencyVehicleLayer({ visible }: { visible: boolean }) {
           ? 1
           : Math.min(1, (performance.now() - updatedAt.current) / interval.current);
         const features: Feature<Point>[] = [];
+        for (const id of renderedVehicles.keys()) if (!target.current.has(id)) renderedVehicles.delete(id);
         for (const [id, t] of target.current) {
           const p = prev.current.get(id) ?? t;
           const lng = p.lng + (t.lng - p.lng) * f;
@@ -161,6 +163,7 @@ export function EmergencyVehicleLayer({ visible }: { visible: boolean }) {
           const fromHeading = heading.current.get(id) ?? targetHeading;
           const hdg = fromHeading + angleDelta(fromHeading, targetHeading) * (reduced ? 1 : f);
           heading.current.set(id, hdg);
+          renderedVehicles.set(id, { lng, lat, heading: hdg });
           features.push({
             type: "Feature",
             id,
@@ -217,6 +220,7 @@ export function EmergencyVehicleLayer({ visible }: { visible: boolean }) {
 
     return () => {
       cancelAnimationFrame(raf.current);
+      renderedVehicles.clear();
       if (!isMapAlive(map)) return;
       for (const id of [ICON, HALO]) if (map.getLayer(id)) map.removeLayer(id);
       if (map.getSource(SRC)) map.removeSource(SRC);

@@ -3,8 +3,12 @@ and script.
 
 The project was built on the Vijayawada corridor, and until this module every
 entry point named its files directly. Now they ask here. With no
-`ITMS_SCENARIO` set, the answer is the Vijayawada corridor, exactly as
-before. With `ITMS_SCENARIO=<dir>`, it is the scenario in that directory: one
+`ITMS_SCENARIO` set, the answer is one of the two Vijayawada networks named by
+`SIM_NETWORK`: "corridor" (the default, exactly as before -- the single MG
+Road arterial every offline gate is measured on) or "district" (the
+surrounding arterial grid, `scenarios/networks/vijayawada/build_district.sh`,
+where emergency routes genuinely compete). With `ITMS_SCENARIO=<dir>`, it is
+the scenario in that directory: one
 built by `scenarios/build_scenario.py` from any SUMO network (generated, or an
 OpenStreetMap export), described by its `scenario.json`:
 
@@ -26,6 +30,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 ENV = "ITMS_SCENARIO"
+NETWORK_ENV = "SIM_NETWORK"
+VIJAYAWADA_NETWORKS = ("corridor", "district")
 _REPO = Path(__file__).resolve().parents[3]
 
 
@@ -44,16 +50,19 @@ class Scenario:
         return self.levels[name]
 
 
-def vijayawada(repo: Path = _REPO) -> Scenario:
+def vijayawada(repo: Path = _REPO, network: str = "corridor") -> Scenario:
+    if network not in VIJAYAWADA_NETWORKS:
+        raise ValueError(f"network must be one of {list(VIJAYAWADA_NETWORKS)}, got {network!r}")
     net_dir = repo / "scenarios" / "networks" / "vijayawada"
     demand = repo / "scenarios" / "demand" / "vijayawada"
     suffix = {"light": "_light", "medium": "", "heavy": "_heavy"}
     return Scenario(
-        name="vijayawada",
+        name="vijayawada" if network == "corridor" else f"vijayawada-{network}",
         directory=net_dir,
-        net=net_dir / "vijayawada_corridor.net.xml",
-        levels={lv: (demand / f"vijayawada_corridor{s}.sumocfg",
-                     demand / f"vijayawada_corridor{s}.rou.xml") for lv, s in suffix.items()},
+        net=net_dir / f"vijayawada_{network}.net.xml",
+        levels={lv: (demand / f"vijayawada_{network}{s}.sumocfg",
+                     demand / f"vijayawada_{network}{s}.rou.xml") for lv, s in suffix.items()},
+        # planned against the corridor's junctions; not re-planned for the district
         cameras=net_dir / "cameras.json",
     )
 
@@ -71,6 +80,11 @@ def from_directory(directory: str | Path) -> Scenario:
 
 
 def current() -> Scenario:
-    """`ITMS_SCENARIO`'s scenario, or the Vijayawada corridor when unset."""
+    """`ITMS_SCENARIO`'s scenario, else the Vijayawada network `SIM_NETWORK`
+    names (the corridor when unset). Setting both is an error: they would name
+    two different networks."""
     d = os.environ.get(ENV)
-    return from_directory(d) if d else vijayawada()
+    network = os.environ.get(NETWORK_ENV)
+    if d and network:
+        raise ValueError(f"set {ENV} or {NETWORK_ENV}, not both ({ENV}={d!r}, {NETWORK_ENV}={network!r})")
+    return from_directory(d) if d else vijayawada(network=network or "corridor")

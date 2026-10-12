@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronDown, Radio, Search, Waypoints } from "lucide-react";
-import { edgeById, roadEdges, roadLabel, shortJunctionName, signalJunctions } from "@/data/network";
+import { edgeById, networkName, roadEdges, roadLabel, shortJunctionName, signalJunctions } from "@/data/network";
 import { useTrafficStore } from "@/store/trafficStore";
 import { useIncidentStore } from "@/store/incidentStore";
 import { useMapStore } from "@/store/mapStore";
@@ -187,7 +187,7 @@ function Signals() {
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
       <p className="px-3 pb-2 text-[12.5px] text-muted-foreground">
-        {signalJunctions.length} signalised junctions on the corridor.
+        {signalJunctions.length} signalised junctions across {networkName === "MG Road corridor" ? "the corridor" : networkName}.
       </p>
       <ul>
         {signalJunctions.map((j) => {

@@ -11,3 +11,9 @@ export const MAP_CHIP_ACTIVE =
 
 /** Google blue, used for the searched-road highlight and selection accents. */
 export const HIGHLIGHT_BLUE = "#1a73e8";
+
+/** Event data for camera moves the operator asked for through an on-map
+ *  control (zoom buttons, 3D, compass). Mouse, touch and keyboard gestures
+ *  already carry an `originalEvent`; these don't, so they say so explicitly.
+ *  `FollowCamera` pauses on either and on nothing else. */
+export const USER_GESTURE = { userGesture: true } as const;

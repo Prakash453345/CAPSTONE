@@ -4,10 +4,16 @@
  * imperative MapLibre wrappers around these) so the actual multi-request
  * rendering logic is unit-testable without a map instance.
  *
- * The contract this enforces: every non-terminal `EmergencyRequest` renders
- * something (route, points, corridor, vehicle) regardless of which one is
- * selected; only the selected request's alternatives / congested-segment
- * detail are drawn, and only the selected request's marker is emphasised.
+ * The contract this enforces, modelled on a navigation app: the map shows the
+ * trip you are looking at and the vehicles actually on the road, nothing else.
+ *
+ * - The selected request: its route(s). While it is still being planned, its
+ *   alternatives too (the operator is choosing); once its vehicle is driving,
+ *   only the road ahead of the vehicle.
+ * - Any other request whose vehicle is driving: only the road ahead, dimmed.
+ * - A planned request that is not selected: nothing on the map (it is listed
+ *   in the panel). Leaving every past plan drawn is what cluttered the map.
+ * - The part of a route the vehicle has already driven is never drawn.
  */
 import type { Feature, LineString, Point } from "geojson";
 import { edgeById, junctionById } from "@/data/network";
@@ -39,6 +45,88 @@ export function edgeMidpoint(edgeId: string | undefined): [number, number] | nul
   return [mid[0], mid[1]];
 }
 
+/** A request whose vehicle is out on the road (dispatched, not yet arrived). */
+export function isDriving(req: Pick<EmergencyRequest, "state">): boolean {
+  return req.state === "in_transit" || req.state === "green_corridor_active";
+}
+
+/** Where to start drawing a driving vehicle's route: a reported position,
+ *  with the road it was on and its progress as a fraction of the route, used
+ *  to pick the right stretch when two parts of a route run close together
+ *  (the two carriageways of a road after a U-turn). */
+export interface CutPoint {
+  lng: number;
+  lat: number;
+  edgeId?: string;
+  progress?: number;
+}
+
+/** The part of a route from `cut` onward: the polyline starts at `cut`
+ *  projected onto the route, then follows the route to its end. */
+export function trimRoute(edges: readonly string[], cut: CutPoint): number[][] {
+  const coords: number[][] = [];
+  const edgeOf: number[] = []; // index into `edges` for each coordinate
+  edges.forEach((eid, i) => {
+    const e = edgeById.get(eid);
+    if (!e) return;
+    for (const c of e.path) {
+      coords.push(c);
+      edgeOf.push(i);
+    }
+  });
+  if (coords.length < 2) return coords;
+
+  // local metric frame around the cut (equirectangular: exact enough over a
+  // few kilometres, and only used to compare distances)
+  const kx = 111_320 * Math.cos((cut.lat * Math.PI) / 180);
+  const ky = 110_540;
+  const xy = (c: number[]) => [(c[0] - cut.lng) * kx, (c[1] - cut.lat) * ky];
+
+  const segLen: number[] = [];
+  let total = 0;
+  for (let i = 1; i < coords.length; i++) {
+    const [ax, ay] = xy(coords[i - 1]);
+    const [bx, by] = xy(coords[i]);
+    const l = Math.hypot(bx - ax, by - ay);
+    segLen.push(l);
+    total += l;
+  }
+
+  // which segments may hold the vehicle: those on its road when that road is
+  // on the route, else those near its progress along the route
+  const onRoute = cut.edgeId ? edges.indexOf(cut.edgeId) : -1;
+  const allowed = (i: number, along: number): boolean => {
+    if (onRoute >= 0) return edgeOf[i - 1] === onRoute && edgeOf[i] === onRoute;
+    if (cut.progress == null || total === 0) return true;
+    return Math.abs(along / total - cut.progress) <= 0.08;
+  };
+
+  let best = { d: Infinity, seg: 1, t: 0 };
+  const search = (restrict: boolean) => {
+    let along = 0;
+    for (let i = 1; i < coords.length; i++) {
+      if (!restrict || allowed(i, along)) {
+        const [ax, ay] = xy(coords[i - 1]);
+        const [bx, by] = xy(coords[i]);
+        const dx = bx - ax;
+        const dy = by - ay;
+        const den = dx * dx + dy * dy;
+        const t = den === 0 ? 0 : Math.max(0, Math.min(1, (-ax * dx - ay * dy) / den));
+        const d = Math.hypot(ax + t * dx, ay + t * dy);
+        if (d < best.d) best = { d, seg: i, t };
+      }
+      along += segLen[i - 1];
+    }
+  };
+  search(true);
+  if (!Number.isFinite(best.d)) search(false); // nothing allowed: nearest point on the route
+
+  const a = coords[best.seg - 1];
+  const b = coords[best.seg];
+  const start = [a[0] + (b[0] - a[0]) * best.t, a[1] + (b[1] - a[1]) * best.t];
+  return [start, ...coords.slice(best.seg)];
+}
+
 export interface RouteFeatureProps {
   requestId: string;
   kind: "main" | "alt";
@@ -47,23 +135,38 @@ export interface RouteFeatureProps {
 }
 
 /**
- * One line feature per route actually drawn: every active request's
- * recommended route (as `"main"`), plus — for the selected request only —
- * every other route it offers (as `"alt"`), with whichever one the operator
- * is previewing promoted to `"main"` for that request.
+ * One line feature per route actually drawn (see the module contract): the
+ * selected request's routes while it is being planned, with whichever one the
+ * operator is previewing as `"main"` and the rest as `"alt"`; and, for every
+ * request whose vehicle is driving, its route from `cutAt` (the vehicle's
+ * position) onward.
  */
 export function buildRouteFeatures(
   requests: EmergencyRequest[],
   selectedRequestId: string | null,
   previewRank: number,
+  cutAt?: ReadonlyMap<string, CutPoint>,
 ): Feature<LineString, RouteFeatureProps>[] {
   const out: Feature<LineString, RouteFeatureProps>[] = [];
+  const color = EV_ROUTE_COLOR;
   for (const req of requests) {
     if (isTerminalRequest(req)) continue;
     const selected = req.id === selectedRequestId;
-    const color = EV_ROUTE_COLOR;
-    const routes = selected ? requestRoutes(req) : req.route ? [req.route] : [];
-    const mainIdx = selected ? (routes[previewRank] ? previewRank : 0) : 0;
+    if (isDriving(req)) {
+      if (!req.route) continue;
+      const cut = cutAt?.get(req.id);
+      const coords = cut ? trimRoute(req.route.edges, cut) : edgesToCoords(req.route.edges);
+      if (coords.length < 2) continue;
+      out.push({
+        type: "Feature",
+        properties: { requestId: req.id, kind: "main", selected, color },
+        geometry: { type: "LineString", coordinates: coords },
+      });
+      continue;
+    }
+    if (!selected) continue;
+    const routes = requestRoutes(req);
+    const mainIdx = routes[previewRank] ? previewRank : 0;
     routes.forEach((rt, i) => {
       const coords = edgesToCoords(rt.edges);
       if (coords.length < 2) return;
@@ -92,11 +195,16 @@ export function buildSegmentFeatures(
   const req = requests.find((r) => r.id === selectedRequestId);
   if (!req || isTerminalRequest(req)) return [];
   const routes = requestRoutes(req);
-  const previewed = routes[previewRank] ?? routes[0];
+  const driving = isDriving(req);
+  const previewed = driving ? req.route : (routes[previewRank] ?? routes[0]);
   if (!previewed) return [];
+  // once the vehicle is driving, only call out what is still ahead of it
+  const at = driving && req.live?.edgeId ? previewed.edges.indexOf(req.live.edgeId) : -1;
+  const ahead = new Set(at >= 0 ? previewed.edges.slice(at) : previewed.edges);
 
   const out: Feature<LineString | Point, SegmentFeatureProps>[] = [];
   for (const eid of previewed.congestedSegments) {
+    if (!ahead.has(eid)) continue;
     const e = edgeById.get(eid);
     if (e && e.path.length >= 2) {
       out.push({
@@ -125,11 +233,14 @@ export interface PointFeatureProps {
   selected: boolean;
 }
 
-const SOURCE_COLOR = "#46c46a";
+// Start in the route colour (green would read as free-flowing traffic), end in red.
+const SOURCE_COLOR = EV_ROUTE_COLOR;
 const DEST_COLOR = "#e5484d";
 
-/** Source/destination markers for every active request, plus the operator's
- *  in-progress draft (always drawn at full prominence). */
+/** Start/destination markers: both for the selected request while it is
+ *  being planned, the destination only for any request whose vehicle is
+ *  driving (its start is behind it), plus the operator's in-progress draft
+ *  (always drawn at full prominence). */
 export function buildPointFeatures(
   requests: EmergencyRequest[],
   selectedRequestId: string | null,
@@ -139,7 +250,9 @@ export function buildPointFeatures(
   for (const req of requests) {
     if (isTerminalRequest(req)) continue;
     const selected = req.id === selectedRequestId;
-    const src = edgeMidpoint(req.sourceEdge);
+    const driving = isDriving(req);
+    if (!driving && !selected) continue;
+    const src = driving ? null : edgeMidpoint(req.sourceEdge);
     const dst = edgeMidpoint(req.destinationEdge);
     if (src) out.push(pointFeature(req.id, src, SOURCE_COLOR, selected));
     if (dst) out.push(pointFeature(req.id, dst, DEST_COLOR, selected));

@@ -9,6 +9,8 @@ interface ImportMetaEnv {
   readonly VITE_GOOGLE_MAPS_API_KEY?: string;
   /** Map start centre, `"lat,lon"`. Defaults to the Vijayawada corridor. */
   readonly VITE_MAP_CENTER?: string;
+  /** Which SUMO network the console is built against (see network.config.ts). */
+  readonly VITE_ITMS_NETWORK?: "corridor" | "district";
 }
 
 interface ImportMeta {

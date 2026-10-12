@@ -28,14 +28,25 @@ if str(_SCEN) not in sys.path:
     sys.path.insert(0, str(_SCEN))
 
 from extract_tier0_config import load_configs  # noqa: E402
+from itms_domain.scenario import Scenario, vijayawada  # noqa: E402
 from itms_domain.scenario import current as _current_scenario  # noqa: E402
 from link_lanes import link_to_lane_map, link_to_receiving_lane_map  # noqa: E402
 from measure_flows import compute_link_flows  # noqa: E402
 
 # which network: ITMS_SCENARIO (any network built by scenarios/build_scenario.py),
-# else the Vijayawada corridor -- itms_domain.scenario
-_SCENARIO = _current_scenario()
-NET_PATH = _SCENARIO.net
+# else the Vijayawada network SIM_NETWORK names ("corridor", the default, or
+# "district") -- itms_domain.scenario. A live run can also name a Vijayawada
+# network directly (`network=`), which is how the tests pick one.
+NET_PATH = _current_scenario().net
+
+
+def scenario_for(network: str | None = None) -> Scenario:
+    """The configured scenario, or the named Vijayawada network."""
+    return _current_scenario() if network is None else vijayawada(network=network)
+
+
+def network_path(network: str | None = None) -> Path:
+    return scenario_for(network).net
 
 
 @dataclass(frozen=True)
@@ -51,18 +62,20 @@ class CorridorSetup:
     vtype_pcu: dict[str, float]
 
 
-def demand_paths(demand: str) -> tuple[Path, Path]:
-    return _SCENARIO.level(demand)
+def demand_paths(demand: str, network: str | None = None) -> tuple[Path, Path]:
+    return scenario_for(network).level(demand)
 
 
-def load_corridor(demand: str = "medium") -> CorridorSetup:
-    """Load the corridor at the given demand level with a Webster-tuned
+def load_corridor(demand: str = "medium", network: str | None = None) -> CorridorSetup:
+    """Load `network` (the configured scenario by default) at the given demand level with a Webster-tuned
     strategy per junction -- the same deterministic baseline
     `scripts/m6_record_features.py` runs. A demand-aware optimiser (A-CA-MP)
     can be swapped in later without touching the live loop."""
-    sumocfg, route = demand_paths(demand)
-    configs = load_configs(NET_PATH)
-    flows = compute_link_flows(NET_PATH, route)
+    scenario = scenario_for(network)
+    sumocfg, route = scenario.level(demand)
+    net = scenario.net
+    configs = load_configs(net)
+    flows = compute_link_flows(net, route)
     strategy = {
         tls_id: partial(
             webster.propose,
@@ -75,7 +88,7 @@ def load_corridor(demand: str = "medium") -> CorridorSetup:
         route_path=str(route),
         configs=configs,
         strategy=strategy,
-        link_lanes=link_to_lane_map(NET_PATH),
-        receiving_lanes=link_to_receiving_lane_map(NET_PATH),
+        link_lanes=link_to_lane_map(net),
+        receiving_lanes=link_to_receiving_lane_map(net),
         vtype_pcu=load_vtype_pcu(route),
     )

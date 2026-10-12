@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import type { GeoJSONSource } from "maplibre-gl";
 import type { FeatureCollection } from "geojson";
 import { useMapInstance } from "@/components/map/MapContext";
@@ -8,7 +8,15 @@ import {
   buildPointFeatures,
   buildRouteFeatures,
   buildSegmentFeatures,
+  isDriving,
+  type CutPoint,
 } from "@/components/map/emergencyGeo";
+import {
+  ANOMALY_SEVERITY_COLOR,
+  EV_ROUTE_ALT_CASING,
+  EV_ROUTE_ALT_COLOR,
+  EV_ROUTE_CASING,
+} from "@/components/map/mapColors";
 
 const ROUTE_SRC = "em-route";
 const PT_SRC = "em-route-pts";
@@ -17,6 +25,8 @@ const SEG_SRC = "em-route-segs";
 const ROUTE_GLOW = "em-route-glow";
 const ROUTE_LINE = "em-route-line";
 const ROUTE_ALT = "em-route-alt";
+const ROUTE_ALT_CASING = "em-route-alt-casing";
+const ROUTE_CASING = "em-route-casing";
 const SEG_CONGEST = "em-route-congest";
 const SEG_AVOID = "em-route-avoid";
 const PT_RING = "em-route-pt-ring";
@@ -25,7 +35,8 @@ const CORRIDOR_RING = "em-corridor-ring";
 const CORRIDOR_DOT = "em-corridor-dot";
 
 const CONGEST = "#f5b83d";
-const AVOID = "#46c46a";
+// an anomalous road the route steered around: anomaly colour, hollow ring
+const AVOID = ANOMALY_SEVERITY_COLOR.high;
 
 /**
  * Every active emergency request's route(s), vehicle-independent map state:
@@ -47,6 +58,11 @@ export function EmergencyRouteLayer({ visible }: { visible: boolean }) {
   const selectedRequestId = useEmergencyStore((s) => s.selectedRequestId);
   const previewRank = useEmergencyStore((s) => s.previewRank);
   const draft = useEmergencyStore((s) => s.draft);
+  // Per driving request, its last two distinct reported positions. The
+  // marker glides from the older one to the newer one between reports, so
+  // cutting the route at the older one keeps the line starting under the
+  // marker instead of running ahead of it.
+  const positions = useRef(new Map<string, { last: CutPoint; before?: CutPoint }>());
 
   useEffect(() => {
     if (!map.getSource(ROUTE_SRC)) {
@@ -91,7 +107,21 @@ export function EmergencyRouteLayer({ visible }: { visible: boolean }) {
         },
       });
 
-      // alternatives of the selected request only — preview detail, not a mission
+      // alternatives of the selected request only — preview detail, not a
+      // mission. Solid and outlined like the main route, but lighter and
+      // thinner, so they are clearly "other ways" and drawn beneath it.
+      map.addLayer({
+        id: ROUTE_ALT_CASING,
+        type: "line",
+        source: ROUTE_SRC,
+        filter: ["==", ["get", "kind"], "alt"],
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: {
+          "line-color": EV_ROUTE_ALT_CASING,
+          "line-width": ["interpolate", ["linear"], ["zoom"], 12, 4, 17, 9],
+          "line-opacity": 0.9,
+        },
+      });
       map.addLayer({
         id: ROUTE_ALT,
         type: "line",
@@ -99,10 +129,9 @@ export function EmergencyRouteLayer({ visible }: { visible: boolean }) {
         filter: ["==", ["get", "kind"], "alt"],
         layout: { "line-cap": "round", "line-join": "round" },
         paint: {
-          "line-color": "#7c8aa0",
-          "line-width": ["interpolate", ["linear"], ["zoom"], 12, 1.5, 17, 3],
-          "line-opacity": 0.5,
-          "line-dasharray": [2, 2],
+          "line-color": EV_ROUTE_ALT_COLOR,
+          "line-width": ["interpolate", ["linear"], ["zoom"], 12, 2.5, 17, 6],
+          "line-opacity": 1,
         },
       });
       // every active mission's main route — bright + glowing when selected,
@@ -120,6 +149,24 @@ export function EmergencyRouteLayer({ visible }: { visible: boolean }) {
           "line-blur": 3,
         },
       });
+      // dark outline under every main route: separates it from whatever
+      // congestion colour the road beneath it carries
+      map.addLayer({
+        id: ROUTE_CASING,
+        type: "line",
+        source: ROUTE_SRC,
+        filter: ["==", ["get", "kind"], "main"],
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: {
+          "line-color": EV_ROUTE_CASING,
+          "line-width": [
+            "interpolate", ["linear"], ["zoom"],
+            12, ["case", ["get", "selected"], 5.5, 3.5],
+            17, ["case", ["get", "selected"], 12, 7],
+          ],
+          "line-opacity": ["case", ["get", "selected"], 1, 0.85],
+        },
+      });
       map.addLayer({
         id: ROUTE_LINE,
         type: "line",
@@ -130,10 +177,10 @@ export function EmergencyRouteLayer({ visible }: { visible: boolean }) {
           "line-color": ["get", "color"],
           "line-width": [
             "interpolate", ["linear"], ["zoom"],
-            12, ["case", ["get", "selected"], 2.5, 1.5],
-            17, ["case", ["get", "selected"], 6, 3.5],
+            12, ["case", ["get", "selected"], 3.5, 2],
+            17, ["case", ["get", "selected"], 8, 4.5],
           ],
-          "line-opacity": ["case", ["get", "selected"], 1, 0.55],
+          "line-opacity": ["case", ["get", "selected"], 1, 0.85],
         },
       });
       // congested segments on the previewed route
@@ -194,7 +241,7 @@ export function EmergencyRouteLayer({ visible }: { visible: boolean }) {
     return () => {
       for (const id of [
         CORRIDOR_DOT, CORRIDOR_RING, SEG_AVOID, SEG_CONGEST,
-        PT_ICON, PT_RING, ROUTE_LINE, ROUTE_GLOW, ROUTE_ALT,
+        PT_ICON, PT_RING, ROUTE_LINE, ROUTE_CASING, ROUTE_GLOW, ROUTE_ALT, ROUTE_ALT_CASING,
       ]) {
         if (map.getLayer(id)) map.removeLayer(id);
       }
@@ -208,7 +255,7 @@ export function EmergencyRouteLayer({ visible }: { visible: boolean }) {
     const v = visible ? "visible" : "none";
     for (const id of [
       CORRIDOR_DOT, CORRIDOR_RING, SEG_AVOID, SEG_CONGEST,
-      PT_ICON, PT_RING, ROUTE_LINE, ROUTE_GLOW, ROUTE_ALT,
+      PT_ICON, PT_RING, ROUTE_LINE, ROUTE_CASING, ROUTE_GLOW, ROUTE_ALT, ROUTE_ALT_CASING,
     ]) {
       if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", v);
     }
@@ -221,9 +268,26 @@ export function EmergencyRouteLayer({ visible }: { visible: boolean }) {
     const segSrc = map.getSource(SEG_SRC) as GeoJSONSource | undefined;
     if (!routeSrc || !ptSrc || !corridorSrc || !segSrc) return;
 
+    const cutAt = new Map<string, CutPoint>();
+    const seen = new Set<string>();
+    for (const r of requests) {
+      const live = r.live;
+      if (!isDriving(r) || !live || live.lat == null || live.lon == null) continue;
+      seen.add(r.id);
+      const now: CutPoint = { lng: live.lon, lat: live.lat, edgeId: live.edgeId, progress: live.routeProgress };
+      const known = positions.current.get(r.id);
+      if (!known) positions.current.set(r.id, { last: now });
+      else if (known.last.lng !== now.lng || known.last.lat !== now.lat) {
+        positions.current.set(r.id, { last: now, before: known.last });
+      }
+      const p = positions.current.get(r.id)!;
+      cutAt.set(r.id, p.before ?? p.last);
+    }
+    for (const id of positions.current.keys()) if (!seen.has(id)) positions.current.delete(id);
+
     routeSrc.setData({
       type: "FeatureCollection",
-      features: buildRouteFeatures(requests, selectedRequestId, previewRank),
+      features: buildRouteFeatures(requests, selectedRequestId, previewRank, cutAt),
     });
     segSrc.setData({
       type: "FeatureCollection",

@@ -6,6 +6,7 @@ import { useMapStore, type MapLayerId } from "@/store/mapStore";
 import { useMapChromeStore } from "@/store/mapChromeStore";
 import { networkBounds } from "@/data/network";
 import { cn } from "@/utils/cn";
+import { USER_GESTURE } from "@/components/map/mapChrome";
 
 const LAYER_LABELS: Record<MapLayerId, string> = {
   vehicles: "Vehicles",
@@ -50,6 +51,7 @@ export function MapControls({
         [networkBounds.maxLng, networkBounds.maxLat],
       ],
       { padding: 64, duration: 700, pitch: map.getPitch() > 5 ? 55 : 0 },
+      USER_GESTURE,
     );
 
   // Camera state drives the 3D toggle and the compass, so a right-drag tilt
@@ -72,11 +74,11 @@ export function MapControls({
   const showCompass = is3d || Math.abs(camera.bearing) > 0.5;
 
   const toggle3d = () => {
-    map.easeTo({ pitch: is3d ? 0 : 55, duration: 700, easing: EASE_EMPHASIZED });
+    map.easeTo({ pitch: is3d ? 0 : 55, duration: 700, easing: EASE_EMPHASIZED }, USER_GESTURE);
   };
 
   const resetNorth = () => {
-    map.easeTo({ bearing: 0, pitch: 0, duration: 700, easing: EASE_EMPHASIZED });
+    map.easeTo({ bearing: 0, pitch: 0, duration: 700, easing: EASE_EMPHASIZED }, USER_GESTURE);
   };
 
   // Google Maps' arrangement: one-off tools stacked above the zoom pair,
@@ -160,11 +162,11 @@ export function MapControls({
       </ControlCard>
 
       <ControlCard>
-        <ControlBtn label="Zoom in" onClick={() => map.zoomIn()}>
+        <ControlBtn label="Zoom in" onClick={() => map.zoomIn(undefined, USER_GESTURE)}>
           <Plus />
         </ControlBtn>
         <div className="mx-auto h-px w-7 bg-border" />
-        <ControlBtn label="Zoom out" onClick={() => map.zoomOut()}>
+        <ControlBtn label="Zoom out" onClick={() => map.zoomOut(undefined, USER_GESTURE)}>
           <Minus />
         </ControlBtn>
       </ControlCard>
