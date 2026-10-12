@@ -54,10 +54,22 @@ class Phase:
     green_movements: frozenset[str]
     is_pedestrian: bool = False
     protected_movements: frozenset[str] | None = None
+    overlap_movements: frozenset[str] = frozenset()
+    """Shown green with this phase but not *owned* by it
+    (`itms_domain.overlaps`): the signal shows them and I1 checks them, but
+    no controller counts their queue toward this phase's demand, pressure or
+    extension, and no timing plan gives them a share of this phase's green.
+    Empty for every program as built."""
 
     def __post_init__(self) -> None:
         if self.protected_movements is None:
             object.__setattr__(self, "protected_movements", self.green_movements)
+
+    @property
+    def shown_movements(self) -> frozenset[str]:
+        """Everything green while this phase runs: its own movements and its
+        overlaps."""
+        return self.green_movements | self.overlap_movements
 
 
 @dataclass(frozen=True)

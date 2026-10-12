@@ -54,7 +54,8 @@ def no_conflicting_greens(plan: SignalPlan, cfg: Tier0Config) -> list[Violation]
                 Violation("I1", f"plan references unknown phase {step.phase_id!r}")
             )
             continue
-        movements = sorted(phase.protected_movements or phase.green_movements)
+        movements = sorted((phase.protected_movements or phase.green_movements)
+                           | phase.overlap_movements)
         for i, a in enumerate(movements):
             for b in movements[i + 1 :]:
                 if b in cfg.conflict_matrix.get(a, frozenset()):
@@ -140,8 +141,8 @@ def clearance_intervals_present(plan: SignalPlan, cfg: Tier0Config) -> list[Viol
             continue  # unknown-phase violations are no_conflicting_greens's job
         conflicts = any(
             b in cfg.conflict_matrix.get(a, frozenset())
-            for a in current_phase.green_movements
-            for b in next_phase.green_movements
+            for a in current_phase.shown_movements
+            for b in next_phase.shown_movements
         )
         if not conflicts:
             continue
@@ -205,7 +206,7 @@ def max_wait_not_exceeded(
     if not plan.steps:
         return violations
     first_phase = cfg.phases.get(plan.steps[0].phase_id)
-    served_now = first_phase.green_movements if first_phase else frozenset()
+    served_now = first_phase.shown_movements if first_phase else frozenset()
 
     for movement, waited in ctx.wait_times_s.items():
         if not ctx.has_demand.get(movement, False):

@@ -13,7 +13,8 @@ import pathlib
 import statistics as st
 import sys
 
-T95 = {2: 12.706, 3: 4.303, 4: 3.182, 5: 2.776, 6: 2.571, 7: 2.447, 8: 2.365, 9: 2.306, 10: 2.262}
+T95 = {2: 12.706, 3: 4.303, 4: 3.182, 5: 2.776, 6: 2.571, 7: 2.447, 8: 2.365, 9: 2.306, 10: 2.262,
+       20: 2.093}
 HERE = pathlib.Path(__file__).parent / (sys.argv[1] if len(sys.argv) > 1 else "results")
 ORDER = ["narrow_lh", "narrow_sweep", "narrow_sweep_parts", "corridor", "berlin_adlershof",
          "vijayawada_district", "narrow_sweep_cameras", "narrow_lh_cameras"]

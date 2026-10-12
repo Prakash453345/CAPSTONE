@@ -1,0 +1,104 @@
+{
+ "name": "narrow_rand_lh",
+ "net": "narrow_rand_lh.net.xml",
+ "mix": "india",
+ "levels": {
+  "d30": {
+   "sumocfg": "narrow_rand_lh_d30.sumocfg",
+   "route": "narrow_rand_lh_d30.rou.xml",
+   "target_ds": 0.3,
+   "achieved_ds": 0.297,
+   "busiest_tls": "37",
+   "period_s": 3.4601,
+   "iterations": [
+    [
+     4.0,
+     0.2532
+    ],
+    [
+     3.3759,
+     0.3075
+    ],
+    [
+     3.4601,
+     0.297
+    ]
+   ]
+  },
+  "d40": {
+   "sumocfg": "narrow_rand_lh_d40.sumocfg",
+   "route": "narrow_rand_lh_d40.rou.xml",
+   "target_ds": 0.4,
+   "achieved_ds": 0.4047,
+   "busiest_tls": "37",
+   "period_s": 2.5319,
+   "iterations": [
+    [
+     4.0,
+     0.2532
+    ],
+    [
+     2.5319,
+     0.4047
+    ]
+   ]
+  },
+  "d45": {
+   "sumocfg": "narrow_rand_lh_d45.sumocfg",
+   "route": "narrow_rand_lh_d45.rou.xml",
+   "target_ds": 0.45,
+   "achieved_ds": 0.4423,
+   "busiest_tls": "37",
+   "period_s": 2.3187,
+   "iterations": [
+    [
+     4.0,
+     0.2532
+    ],
+    [
+     2.2506,
+     0.4636
+    ],
+    [
+     2.3187,
+     0.4423
+    ]
+   ]
+  }
+ },
+ "demand": "randomTrips --fringe-factor 5, 0-1800 s, routed by duarouter",
+ "generated": {
+  "spec": "rand:40,150,1,7",
+  "lefthand": true,
+  "turn_lanes": 0,
+  "speed_mps": 13.89,
+  "tls_layout": "opposites",
+  "netgenerate": "netgenerate -o narrow_rand_lh.net.xml --default-junction-type traffic_light --default.speed 13.89 --no-turnarounds true --tls.layout opposites --rand --rand.iterations 40 --rand.min-distance 150 --rand.max-distance 450.0 --default.lanenumber 1 --seed 7 --rand.min-angle 45 --rand.neighbor-dist1 0 --rand.neighbor-dist2 0 --lefthand"
+ },
+ "signalised_junctions": 22,
+ "map_center": null,
+ "phases_per_junction": [
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  3,
+  3,
+  4,
+  4,
+  4,
+  4,
+  4,
+  4,
+  4
+ ]
+}

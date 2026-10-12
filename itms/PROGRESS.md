@@ -5890,3 +5890,144 @@ ruff clean.
 
 ## M8 accident candidate (2026-10-05)
 Rear-end-aftermath injector + `accident` operating point (opt-in, `VISION_RULES=accident`). Held-out: 0.4-1.5 false alarms/h on twins, but only 1/15 in-view injected aftermaths found (target >= 30 % missed). Not a default. Details: `baselines/2026-10-05_m8_accident/README.md`.
+
+## 2026-10-05 — Blocking-aware controller, round 2: three leads tried on fresh seeds, none adopted
+
+Not committed. Details: `baselines/2026-10-03_m8_blocking_aware/README.md`
+("Round 2"), `TARGETS.md` (amendment 2 and its outcome), `results_run3/`.
+
+- **Act at once, longer visit (`p0:b3`).** Training seeds (40 at 0.30-0.40,
+  30 at 0.45): delay unchanged, 27 of 30 runs at 0.45 without a teleport
+  against 19 of 30. Held-out run 3 on 20 fresh seeds (201-220): 11 of 20
+  against 13 of 20 for revision 6, delay unchanged. Two of its targets
+  failed; taken back. The training-seed advantage was chance.
+- **Green ceiling of 3x Webster for CC-A-CAMP.** -10.3 % at 0.25 on ten
+  training seeds, nothing at 0.30-0.40, no help at 0.45. Dropped.
+- **Waits past the maximum.** Now logged per run (`wait_overruns`). Most are
+  CC-A-CAMP's own (its 15 s margin does not cover a second phase coming
+  first); one followed a variant at a three-phase junction. A wider guard
+  (`HolConfig.wide_guard`, off) removed it on training seeds; untested on
+  held-out seeds.
+- **Revision 6 on 20 fresh seeds**, against CC-A-CAMP: 0.40 -13.1 %
+  [-19.6, -6.6], 0.45 -56.7 % [-63.4, -49.9] (20 of 20, 63 teleports against
+  946), 0.30 -4.1 % [-7.6, -0.7], nothing at 0.25 and 0.35. The same picture
+  as the first held-out run.
+
+New in the code, no change of behaviour: composed arm names in the harness
+(`hol:p0:b3`, `hol:c3`, `hol:rev6`), `ActuationDetector.longest_waiter`, the
+overrun log in the runner. Full suite: 877 passed, 6 skipped. ruff clean.
+
+## 2026-10-05/06 — Blocking-aware controller, round 3: the gain does not carry over to other networks
+
+Not committed. `baselines/2026-10-03_m8_blocking_aware/README.md` ("Round 3"),
+`TARGETS.md` (amendment 3 and outcomes), `results_run4/`, `dev/dev29`, `dev/dev30`.
+
+- **Other single-lane networks** (fresh seeds 201-210, against CC-A-CAMP):
+  5x4 grid with 150 m blocks +6.1 % [+1.7, +10.4] at 0.40 (worse) and +6.2 %
+  [-1.7, +14.2] at 0.45; irregular net and the real district at in-between
+  levels: no difference, a variant used about once per run. Diagnosis on
+  training seeds: 5x4 with 200 m blocks -1.1 % and -3.2 % (not significant),
+  3x3 with 150 m blocks no gain. The large gain is the rescue of the 3x3 /
+  200 m grid from a lock-up CC-A-CAMP runs into there; it is not general.
+- **Wider wait guard** (`HolConfig.wide_guard`): passed its targets on the
+  heavy district and corridor, now the default (revision 7). No wait overrun
+  after a variant visit with it; +1.6 % [-0.7, +3.8] on the district.
+- **Cameras, acting at once**: not confirmed on four fresh seeds (-10.6 %
+  [-50.3, +29.1]). Not adopted.
+- **0.50 jam**: a lock-up (throughput falls below the 0.45 level). Shutting
+  CC-A-CAMP's receiving-link gate earlier did not help. Metering not built.
+- **Measurement**: person-delay never counted the wait to enter the network
+  or vehicles unfinished at the end; records now carry `entry_delay_s`.
+
+New scenarios: `vijayawada_district_mid`, `narrow_grid54_lh`, `narrow_rand_lh`,
+`narrow_grid33_150`, `narrow_grid54_200`. Harness: `hol:r<x>`/`k<x>` (parent's
+gate), camera arms with controller settings (`...:hol:p0:b3`). Full suite:
+882 passed, 6 skipped. ruff clean.
+
+## 2026-10-06/07 — Amaravati added; a floor under the green ceiling: -4.6 % at light and medium over 11 networks
+
+Not committed. `baselines/2026-10-07_ceiling_floor/` (README, TARGETS,
+`summarise.py`).
+
+- **Amaravati as a test city.** `amaravati_plan` (planned arterial grid as a
+  model, 20 lights) and `amaravati` (real OpenStreetMap, roads under
+  construction promoted by `scenarios/osm_planned_roads.py`, 122 lights). The
+  real map's first measurement has vehicles removed from jams at light
+  demand around one junction; not usable yet.
+- **Finding.** On the plan grid CC-A-CAMP waited longer in light traffic
+  (48 s) than in heavy (31 s): 69 % of its phase changes were forced by the
+  green ceiling, which is 1.25 x Webster's green and so under 9 s there.
+- **Change.** No ceiling below 20 s (`CEILING_FLOOR_S` in
+  `scripts/m8_harness.py`; `truth:f0` is the controller without it).
+  Chosen on training seeds on six networks; held-out on seeds 221-225 over
+  23 network-levels of 11 networks: -4.6 % [-7.2, -1.9] at light and medium,
+  better on 16 of 20, significantly worse nowhere, heavy unchanged. Amaravati
+  plan grid: medium -14.8 % [-18.5, -11.0]; light missed on five seeds and
+  passed the follow-up on ten new ones, -16.4 % [-21.2, -11.6].
+
+Full suite: 884 passed, 6 skipped. ruff clean.
+
+
+
+## 2026-10-07 — The controller now sees every waiting vehicle: Amaravati plan grid -27 % light, -24 % medium
+
+Not committed. `baselines/2026-10-07_split_road_sensing/` (README, TARGETS,
+`summarise.py`).
+
+- **Finding.** Sensing read SUMO lanes, and some waiting vehicles stand on
+  none: the first vehicle of every queue on the Amaravati plan grid (the
+  stop-line piece of a road cut for a turn lane is under 2 m), and every
+  vehicle of an approach where two junctions almost touch (about ten lanes on
+  the Vijayawada district). No queue, no call, no wait clock. Found by tracing
+  vehicles that SUMO teleported under `rest_in_green`.
+- **Change.** `vias_from_sumo_net(..., short_m)`, `QueueStateSampler(vias=)`,
+  `ActuationDetector(extra_lanes=)`, `run_controlled_scenario(lane_vias=)`.
+  Default in `scripts/m8_harness.py` and `sim_service/main.py`
+  (`SHORT_APPROACH_M` = 5 m). `truth:nov` is the controller before it. No
+  controller rule changed.
+- **Held-out** (seeds 241-245, 11 network-levels that can be affected):
+  Amaravati plan grid light -27.2 % [-38.0, -16.5], medium -23.6 %
+  [-29.8, -17.4], heavy -6.9 % [-11.8, -1.9]; the other eight within noise;
+  significantly worse nowhere; no interlock violation. One clause missed
+  (district teleports 13 against 15). A weaker follow-up, written after that
+  failure, passed on seeds 246-255 (35 against 25); adoption rests on it.
+- **Rest in green** (`AcampConfig.rest_in_green`, `truth:rest`), on top:
+  light -6.5 % [-10.0, -3.0] over 10 network-levels, better on all 10;
+  medium -1.3 %. Failed its teleport target (87 against 81; district at
+  medium 23 against 15). **Left off.**
+- **Not done.** The camera pipeline was not changed or re-measured.
+  `sim_service/main.py` still does not apply the Webster-based green ceiling
+  or its 20 s floor that the benchmark's CC-A-CAMP arms use.
+
+Full suite: 897 passed, 6 skipped. ruff clean on `packages`, `services`,
+`scripts`.
+
+
+
+## 2026-10-11/12 — Free turns shown in every phase they fit: -6.4 % light/medium, -11.8 % heavy
+
+Not committed. `baselines/2026-10-11_overlaps/` (README, TARGETS, `summarise.py`).
+
+- **Change.** A movement that crosses nothing in a phase (a left turn in
+  left-hand traffic, many U-turns) is also shown green in that phase, read off
+  SUMO's conflict matrix; pedestrian signals never. Shown, not owned
+  (`Phase.overlap_movements`): the controller's pressure, demand, gap-out and
+  Webster timing read only the phase's own movements (wait clocks do reset
+  while a movement runs as an overlap). The interlocks, the cabinet and the wait clocks treat
+  overlaps as green. Default in `scripts/m8_harness.py` and
+  `sim_service/main.py`; `truth:noovl` is the controller before it.
+- **Two forms that failed first** (training seeds): overlaps owned by the
+  phase, timing worked out after (heavy +70 % on arterial_lh) or kept (+45 %).
+- **Held-out** (seeds 256-260, 19 network-levels, targets O1-O5 all passed):
+  light and medium -6.4 % [-12.2, -0.6] over 15, heavy -11.8 % over 3, no
+  interlock violation, significantly worse nowhere, no significant rise in
+  teleports. Arterial -17 % to -24 %, turn-lane grid -20 % to -22 %, corridor
+  medium -17 %; the other ten light/medium network-levels +0.4 % on average;
+  real Amaravati map -2.3 % (n.s.). `truth` now includes the overlaps (the
+  recorded `truth` is today's `truth:noovl`).
+- **Also measured** (training seeds, not adopted): rest-in-green on the
+  district at medium, ten more seeds, against the controller without
+  overlaps: -9.0 % [-27.8, +9.7] (not significant), teleports 18 against 25.
+
+Full suite: 904 passed, 6 skipped. ruff clean on `packages`, `services`,
+`scripts`.

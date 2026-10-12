@@ -157,8 +157,13 @@ class QueueStateSampler:
         upstream: Mapping[str, Chain] | None = None,
         downstream: Mapping[str, Chain] | None = None,
         internal_links: Mapping[str, str] | None = None,
+        vias: Mapping[str, list[tuple[str, float]]] | None = None,
     ):
         self._approach_lanes = approach_lanes
+        self._vias = vias or {}
+        """`itms_domain.lane_chains.vias_from_sumo_net`: the internal lanes
+        inside an approach's chain. Vehicles halted on them count toward the
+        queue (the first vehicle of a queue can stand there)."""
         self._upstream = upstream or {}
         self._downstream = downstream or {}
         # {junction-internal lane: "L{i}"} (`strategies.hol.internal_links`);
@@ -208,6 +213,8 @@ class QueueStateSampler:
         chain = chains.get(lane_id)
         if chain:
             total += sum(share * self._halting_pcu(x) for x, share, _ in chain)
+        if chains is self._upstream:
+            total += sum(share * self._halting_pcu(x) for x, share in self._vias.get(lane_id, ()))
         return total
 
     def _approaching(self, lane_id: str) -> float:

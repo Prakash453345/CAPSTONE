@@ -50,6 +50,7 @@ import statistics as st
 import sys
 import time
 from concurrent.futures import ProcessPoolExecutor
+from dataclasses import replace
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -57,7 +58,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import m5_harness as H  # noqa: E402
 import m8_harness as M  # noqa: E402
 from m5_ccacamp_gate import paired  # noqa: E402
-from m5_cycle_ceiling_probe import configs_with_ceiling  # noqa: E402
 from vision_service.sim.closed_loop import VisionLoop, VisionSensor  # noqa: E402
 
 METRICS = ("person_delay_s", "stops_per_vehicle", "person_throughput_per_hour")
@@ -96,22 +96,75 @@ def _job(args) -> dict:
         rec = M.run_scenario("webster", level, seed, inputs=H.scenario_inputs(level), tag=arm)
     elif arm == "truth":
         rec = M.run_scenario("ccacamp", level, seed, tag=arm)
-    elif arm.startswith("truth:c"):
-        # CC-A-CAMP with another green ceiling (x Webster's green; the gate's
-        # own is 1.25): does a longer green alone do what a variant does?
-        inputs = configs_with_ceiling(H.scenario_inputs(level), float(arm[len("truth:c"):]))
-        rec = M.run_scenario("ccacamp", level, seed, inputs=inputs, tag=arm.replace(":", "_"))
+    elif arm.startswith("truth:"):
+        # CC-A-CAMP with other settings, "truth:<mod>[:<mod>...]": c<x> green ceiling of
+        # x times Webster's green (alone: no floor, as it was first measured), f<s> floor
+        # under the ceiling in seconds (f0: the controller before the floor of
+        # 2026-10-07), rest: stay green at the ceiling while nobody else waits. Sensing
+        # (the default since 2026-10-07 is via2): nov: lanes only, as before; via: a split
+        # road is measured and watched whole, internal lanes included; vian: as via, but
+        # the road before the split raises no call; via2: as via, and an unchained approach
+        # lane under 5 m long is watched together with the lanes leading into it
+        mods = arm.split(":")[1:]
+        unknown = [t for t in mods
+                   if t not in ("rest", "restf", "nov", "via", "vian", "via2",
+                                "ovl", "ovl2", "ovl3", "ovl4", "noovl")
+                   and t[:1] not in ("c", "f") and not t.startswith(("restm", "restc"))]
+        if unknown:
+            raise SystemExit(f"arm {arm!r}: unknown modifier(s) {unknown}")
+        factor = next((float(t[1:]) for t in mods if t[:1] == "c"), None)
+        floor = next((float(t[1:]) for t in mods if t[:1] == "f"), None)
+        if floor is None:
+            floor = 0.0 if factor is not None else M.CEILING_FLOOR_S
+        # ovl: every phase also shows the movements that conflict with nothing it shows
+        # noovl: without the shown overlaps that are the default since 2026-10-11
+        other_overlaps = {"noovl", "ovl", "ovl2", "ovl3", "ovl4"} & set(mods)
+        inputs = M.ccacamp_inputs(level, factor if factor is not None else M.CEILING_FACTOR, floor,
+                                  overlaps="ovl" in mods, shown_overlaps=not other_overlaps)
+        # ovl2: the same extra greens, added after the timing is worked out
+        timing = inputs
+        if "ovl2" in mods:
+            inputs = M.overlaps_kept_timing(timing)
+        if "ovl3" in mods or "ovl4" in mods:
+            # ... shown but not owned: the controller decides as before (ovl4: no U-turns)
+            inputs = M.overlaps_kept_timing(timing, owned=False, uturns="ovl4" not in mods)
+        strategy = None
+        if "ovl2" in mods and "rest" not in mods:
+            strategy = H.build_acamp(timing[0], timing[1], acamp_cfg=M._ARMS["ccacamp"])  # noqa: SLF001
+        if "rest" in mods:
+            # restm<s>: rest at most s seconds past the ceiling; restf: rest only
+            # while nothing stands halted on the running phase's movements; restc<x>: rest only
+            # while the junction's congestion weight is below x
+            rest_max = next((float(t[5:]) for t in mods if t.startswith("restm")), None)
+            strategy = H.build_acamp(timing[0], timing[1], acamp_cfg=replace(
+                M._ARMS["ccacamp"], rest_in_green=True, rest_max_s=rest_max,  # noqa: SLF001
+                rest_needs_flow="restf" in mods,
+                rest_max_congestion=next((float(t[5:]) for t in mods if t.startswith("restc")),
+                                         None)))
+        rec = M.run_scenario("ccacamp", level, seed, inputs=inputs, strategy=strategy,
+                             tag=arm.replace(":", "_"),
+                             vias="nov" not in mods,
+                             detector_upstream="vian" not in mods,
+                             vias_short_m=None if {"via", "vian"} & set(mods)
+                             else M.SHORT_APPROACH_M)
     elif arm in M.HOL_ARMS:
         rec = M.run_scenario(arm, level, seed, tag=arm.replace(":", "_"))
     else:
         _, preset, mode, *extra = arm.split(":")
+        hol_arm = "hol"  # "...:hol:p0:b3": the controller's settings follow "hol"
+        if "hol" in extra:
+            mods = [t for t in extra[extra.index("hol") + 1:]
+                    if M._composed("hol:" + t) is not None]  # noqa: SLF001
+            hol_arm = ":".join(["hol", *mods])
+            extra = [t for t in extra if t not in mods]
         unknown = set(extra) - {"outage", "blind", "nocheck", "nogap", "hol"}
         if unknown:  # a mistyped modifier must not run a plain arm under its name
             raise SystemExit(f"arm {arm!r}: unknown modifier(s) {sorted(unknown)}")
         blocking_aware = "hol" in extra
         if blocking_aware:
-            inputs, base_of = M.hol_inputs(level)
-            base = M.build_hol("hol", inputs, base_of)
+            inputs, base_of = M.hol_inputs(level, M.HOL_ARMS[hol_arm].single_lane_only,
+                                           M.hol_ceiling(hol_arm), M.hol_floor(hol_arm))
+            base = M.build_hol(hol_arm, inputs, base_of)
         else:
             inputs = M.ccacamp_inputs(level)
             base = M.build_strategy("ccacamp", inputs)

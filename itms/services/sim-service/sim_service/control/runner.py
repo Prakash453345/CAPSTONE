@@ -238,7 +238,7 @@ def _recover_from_fault(
             (
                 p
                 for p in js.cfg.ring_order
-                if js.cfg.phases[p].green_movements & violated_movements
+                if js.cfg.phases[p].shown_movements & violated_movements
             ),
             recovery_phase,
         )
@@ -386,6 +386,8 @@ def run_controlled_scenario(
     pace_realtime_factor: float | None = None,
     preempt_source: arbiter.PreemptSource | None = None,
     lane_chains: tuple[Mapping, Mapping] | None = None,
+    lane_vias: Mapping[str, list[tuple[str, float]]] | None = None,
+    detector_upstream: bool = True,
     internal_links: Mapping[str, Mapping[str, str]] | None = None,
 ) -> dict:
     """Run one full scenario with `strategy` governing every junction in
@@ -619,7 +621,19 @@ def run_controlled_scenario(
             )
             detector = None
             if link_lanes is not None and tls_id in link_lanes:
-                detector = ActuationDetector(link_lanes[tls_id])
+                # with `lane_vias`: a split road is watched whole -- its upstream
+                # lanes and the internal lanes between them, not only its last piece
+                # (`detector_upstream=False`: the internal lanes only -- the road
+                # before the split still counts toward the queue, not as a call)
+                same_road = None
+                if lane_vias is not None:
+                    up = lane_chains[0] if lane_chains else {}
+                    same_road = {
+                        lane: [*((x for x, _, _ in up.get(lane, ())) if detector_upstream else ()),
+                               *(x for x, _ in lane_vias.get(lane, ()))]
+                        for lane in set(link_lanes[tls_id].values())
+                    }
+                detector = ActuationDetector(link_lanes[tls_id], extra_lanes=same_road)
             queue_sampler = None
             if (
                 link_lanes is not None
@@ -634,6 +648,7 @@ def run_controlled_scenario(
                     upstream=lane_chains[0] if lane_chains else None,
                     downstream=lane_chains[1] if lane_chains else None,
                     internal_links=internal_links.get(tls_id) if internal_links else None,
+                    vias=lane_vias,
                 )
             discharge = None
             if calibration is not None and link_lanes is not None and tls_id in link_lanes:
@@ -656,6 +671,11 @@ def run_controlled_scenario(
         # junction-ticks at which some call was past it.
         longest_wait_excess_s = -math.inf
         waits_over_bound = 0
+        # Where and after which phases a wait passed its bound: one entry per
+        # (junction, waiting call) episode, the first 30 of a run, with the
+        # junction's last phases and when each began.
+        wait_overruns: list[dict] = []
+        phase_log: dict[str, list[tuple[float, str]]] = {}
         fault_events: list[tuple[str, int, str]] = []
         # Gridlock measures, reported beside delay: vehicles SUMO removed from
         # a jam ("teleports" -- they flatter the delay of the arm that jams)
@@ -745,7 +765,23 @@ def run_controlled_scenario(
                         longest_wait_excess_s = max(longest_wait_excess_s,
                                                     waited_s - js.cfg.max_wait_s)
                         waits_over_bound += waited_s > js.cfg.max_wait_s
-                        served_movements = js.cfg.phases[js.ctx.current_phase_id].green_movements
+                        log = phase_log.setdefault(tls_id, [])
+                        if not log or log[-1][1] != js.ctx.current_phase_id:
+                            log.append((traci.simulation.getTime(), js.ctx.current_phase_id))
+                            del log[:-8]
+                        if waited_s > js.cfg.max_wait_s:
+                            waiter = getattr(js.detector, "longest_waiter", None)
+                            who = waiter(traci.simulation.getTime())[0] if waiter else None
+                            last = wait_overruns[-1] if wait_overruns else None
+                            if last and last["tls"] == tls_id and last["who"] == who:
+                                last["excess_s"] = round(waited_s - js.cfg.max_wait_s, 1)
+                            elif len(wait_overruns) < 30:
+                                wait_overruns.append({
+                                    "tls": tls_id, "who": who,
+                                    "t": traci.simulation.getTime(),
+                                    "excess_s": round(waited_s - js.cfg.max_wait_s, 1),
+                                    "phases": list(log)})
+                        served_movements = js.cfg.phases[js.ctx.current_phase_id].shown_movements
                         has_demand, wait_times_s = js.detector.sample(
                             traci.simulation.getTime(), served_movements
                         )
@@ -787,7 +823,7 @@ def run_controlled_scenario(
                         # skipped by the `continue` above, which is correct:
                         # nothing discharges during yellow or all-red, so
                         # those seconds belong to neither green's window.
-                        served = js.cfg.phases[js.ctx.current_phase_id].green_movements
+                        served = js.cfg.phases[js.ctx.current_phase_id].shown_movements
                         for movement, pcu, eff_green, remained in js.discharge.tick(
                             served, step_length, approaching_pcu
                         ):
@@ -937,6 +973,7 @@ def run_controlled_scenario(
         "longest_wait_excess_s": (round(longest_wait_excess_s, 1)
                                   if math.isfinite(longest_wait_excess_s) else None),
         "waits_over_bound": waits_over_bound,
+        "wait_overruns": wait_overruns,
         "unfinished_at_cap": unfinished,
         "corridor": corridor.stats() if corridor is not None else None,
     }

@@ -157,3 +157,67 @@ def from_sumo_net(net_path: str | Path, *, max_m: float = 1000.0) -> tuple[
         links.append(Link(f"{fe}_{fl}", f"{te}_{tl}", c.get("tl"),
                           int(li) if li is not None else None, c.get("dir", "")))
     return lane_chains(lanes, edge_nodes, junction_types, links, max_m=max_m)
+
+
+# An approach lane shorter than this cannot be relied on to hold the front of a
+# waiting vehicle (SUMO stops vehicles about 1 m short of the line; 0.2 m lanes
+# exist where two junctions almost touch). Held-out test of 2026-10-07:
+# baselines/2026-10-07_split_road_sensing.
+SHORT_APPROACH_M = 5.0
+
+
+def vias_from_sumo_net(net_path: str | Path, upstream: Mapping[str, Chain] | None = None,
+                       short_m: float | None = None) -> dict[str, list[tuple[str, float]]]:
+    """For every approach lane that has an upstream chain: the internal lanes
+    (`via`) joining the chain's lanes to one another and to the approach lane,
+    as `(internal lane id, share)`.
+
+    A vehicle stopped on one of them is on no normal lane. Where a road is
+    split a few metres before the stop line (a turn bay opening, a lane
+    added), the last piece can be shorter than a vehicle and the *first*
+    queued vehicle stands on the internal lane before it -- counted by
+    nothing that reads lanes only (seen 2026-10-07 on the planned Amaravati
+    grid: a lone vehicle waiting there had no queue, no call and no wait
+    clock). `share` is that of the lane the internal lane leads into.
+
+    `short_m`: also, for every signal-controlled approach lane shorter than
+    this that has no chain, the internal lanes leading straight into it
+    (share 1). Where another junction sits a fraction of a metre before the
+    stop line the approach lane is too short to hold a vehicle's front and is
+    not chained either (a junction ends a chain), so *every* vehicle waiting
+    there was unseen (the Vijayawada district has 12 such lanes, 0.2 m long;
+    seen 2026-10-07)."""
+    root = ET.parse(net_path).getroot()
+    if upstream is None:
+        upstream = from_sumo_net(net_path)[0]
+    via: dict[tuple[str, str], str] = {}
+    for c in root.findall("connection"):
+        fe, te, v = c.get("from"), c.get("to"), c.get("via")
+        if fe is None or te is None or not v or fe.startswith(":") or te.startswith(":"):
+            continue
+        via[(f"{fe}_{c.get('fromLane')}", f"{te}_{c.get('toLane')}")] = v
+    out: dict[str, list[tuple[str, float]]] = {}
+    for approach, chain in upstream.items():
+        share = {approach: 1.0, **{x: s for x, s, _ in chain}}
+        found = {v: share[t] for (f, t), v in via.items()
+                 if f in share and t in share and f != approach}
+        if found:
+            out[approach] = sorted(found.items())
+    if short_m is not None:
+        length = {lane.get("id"): float(lane.get("length"))
+                  for e in root.findall("edge") for lane in e.findall("lane")}
+        into: dict[str, set[str]] = {}
+        signalled: set[str] = set()
+        for c in root.findall("connection"):
+            fe, te, v = c.get("from"), c.get("to"), c.get("via")
+            if fe is None or te is None:
+                continue
+            if c.get("tl") and not fe.startswith(":"):
+                signalled.add(f"{fe}_{c.get('fromLane')}")
+            if v and not te.startswith(":"):
+                into.setdefault(f"{te}_{c.get('toLane')}", set()).add(v)
+        for approach in sorted(signalled):
+            if approach not in out and approach in into and length.get(approach, 1e9) < short_m:
+                out[approach] = [(v, 1.0) for v in sorted(into[approach])]
+    return out
+

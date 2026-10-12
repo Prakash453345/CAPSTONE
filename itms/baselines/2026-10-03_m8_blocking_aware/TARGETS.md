@@ -139,3 +139,244 @@ separate turn signal face that can stay permissive while its through face
 is red (a flashing-yellow-arrow type head). With one shared face the yellow
 trap returns. The measured gain is an upper bound: simulated drivers take
 every gap a real driver might hesitate at.
+
+## Amendment 2, 2026-10-05T16:40Z (22:10 IST) -- written before held-out run 3
+
+Run 2 is the result for revision 6 and stands as reported in the README. This
+amendment registers a **new controller setting and a new held-out run on
+seeds that have never been used** (201-220). EVAL seeds 1-10 are not used
+again.
+
+**What changed, on TRAIN seeds only** (`dev/dev23`-`dev/dev28`, TRAIN extended
+from 101-110 to 101-140; none of these seeds is in any held-out set):
+
+- The controller now acts on a blocked head at once (`min_blocked_changes`
+  1 -> 0) and a visit that uses a variant may last three times the base
+  phase's maximum green (`family_budget` 2 -> 3). The arm name is still `hol`;
+  run 2's controller is `hol:rev6`.
+- The wait guard allows for every other phase of the ring coming first at
+  rings of three or more phases (it allowed for one). Two-phase rings, and so
+  the whole single-lane grid, are unaffected to the last digit.
+- Nothing else. The green-ceiling lead was screened and dropped: three times
+  Webster's green gave -10.3 % [-14.3, -6.3] at 0.25 but nothing at 0.30-0.40
+  and more teleports at 0.45 (`dev/dev23_ceil_*`).
+
+**Why this setting.** Four settings were compared (default, p0, b3, p0:b3).
+On ten seeds none could be told from the default. The rule was then written
+down before the larger run: take b3 if it is not worse than the default at
+0.45, else p0:b3 if it is not worse anywhere and has more runs without a
+teleport, else keep the default. On 40 seeds (0.30-0.40) and 30 seeds (0.45),
+paired against the default: b3 -3.5 % [-5.7, -1.4] at 0.30 and no difference
+at 0.35/0.40, but 64 teleports against 32 at 0.45; p0:b3 -2.3 % [-4.7, +0.0],
++1.8 % [-2.5, +6.1], -0.7 % [-4.5, +3.2], -2.9 % [-9.7, +3.8] at
+0.30/0.35/0.40/0.45 and **27 of 30 runs at 0.45 without a teleport against 19
+of 30**. So p0:b3. The honest size of the change: no measurable difference in
+delay, fewer lock-ups at 0.45.
+
+p0:b3 against CC-A-CAMP on TRAIN: 0.25 -0.7 % [-7.0, +5.6] (10 seeds);
+0.30 -2.8 % [-5.2, -0.5], 0.35 -5.1 % [-8.0, -2.3], 0.40 -12.9 %
+[-18.1, -7.7] (40 seeds); 0.45 -62.3 % [-77.8, -46.7] (10 seeds). Cameras in
+the loop at 0.45 (seeds 101, 102): 646,869 and 740,704 s against 1,033,886
+and 1,042,433 s for revision 6 with cameras; at 0.25, 90,079 and 94,731 s
+against 83,820 and 84,188 s on perfect data (+7.5 %, +12.5 %). Heavy
+district, ten seeds: -5.9 % [-30.5, +18.7], better on 8, 500 teleports
+against 601; 4 junction-ticks past the maximum wait for each controller
+(worst 1.6 s against 0.8 s), none of them after a variant.
+
+**Run 3** (`run_eval3.sh`, results in `results_run3/`): single-lane grid 0.25
+to 0.45, arms truth, hol, hol:rev6, seeds 201-220; corridor and district,
+truth and hol, seeds 201-210; Berlin and the six networks without variants,
+heavy, seed 201; cameras at 0.45 and 0.25, seeds 201-205. No run at 0.50:
+both controllers jam there and nothing in this change addresses it.
+
+Pass:
+- **A1.** Zero interlock violations in every `hol` run.
+- **A2.** At 0.35, 0.40 and 0.45 each: `hol` has less person-delay than
+  CC-A-CAMP, paired 95 % interval excluding zero.
+- **A3.** At 0.25 and 0.30 each: `hol` not significantly worse than
+  CC-A-CAMP and its mean within +3 % of it.
+- **A4.** At 0.45: `hol` finishes without a teleport in at least 16 of 20
+  runs.
+- **A5.** Against `hol:rev6` on the same seeds: at 0.45 at least as many runs
+  without a teleport; at every level not significantly worse in person-delay.
+  (This is the claim of this amendment: fewer lock-ups, delay unchanged.)
+- **A6.** Corridor (medium, heavy) and district (light, medium, heavy): `hol`
+  not significantly worse than CC-A-CAMP.
+- **A7.** Berlin and the six networks without variants: identical to
+  CC-A-CAMP to the last digit.
+- **A8.** Single-lane grid: no junction-tick with a call past the maximum
+  wait in any `hol` run. Elsewhere the count and the worst excess are
+  reported beside CC-A-CAMP's, without a target: CC-A-CAMP itself passes the
+  bound by up to a few seconds on jammed networks (its 15 s margin does not
+  cover a second phase coming first), and that is not changed here.
+- **A9.** Cameras at 0.45: less person-delay than CC-A-CAMP on perfect data
+  in 5 of 5 runs, and at most one run with a teleport. Cameras at 0.25: mean
+  person-delay not more than 15 % above `hol` on perfect data. (The bar is
+  target 9's of run 2. It was first written here as 10 %; the two TRAIN
+  camera runs at 0.25 then came in at +7.5 % and +12.5 %, and it was put
+  back to 15 % before any held-out run. Said so that it can be weighed.)
+
+### Outcome of run 3 (2026-10-05T17:20Z)
+
+Run on seeds 201-220, single-lane grid only, then stopped. In the records the
+setting registered above as `hol` is named `hol:p0:b3:g1` (g1: the wider wait
+guard), because the default was taken back to revision 6 afterwards.
+
+- A1 pass (100 runs, no violation). A8 pass (no tick past the maximum wait).
+- A2 **fail**: 0.35 -1.7 % [-7.1, +3.7]; 0.40 -12.6 % [-19.5, -5.8] and 0.45
+  -59.4 % [-66.0, -52.7] met.
+- A3 pass: 0.25 -2.0 % [-5.4, +1.4], 0.30 -2.3 % [-6.6, +2.0].
+- A4 **fail**: 11 of 20 runs at 0.45 without a teleport (16 wanted).
+- A5 **fail**: revision 6 had 13 of 20 on the same seeds. Delay against
+  revision 6: +2.0 % [-1.2, +5.3], -1.0 % [-5.8, +3.9], +1.4 % [-5.1, +7.8],
+  +0.7 % [-16.7, +18.2] at 0.30-0.45 and -0.8 % [-4.4, +2.7] at 0.25.
+- A6, A7, A9 not run: with A4 and A5 failed the setting was not going to be
+  adopted, and the remaining runs (about three hours) would have described a
+  controller that is not shipped.
+
+Decision: the default stays revision 6 (`min_blocked_changes` 1,
+`family_budget` 2, the guard as in run 2). `wide_guard` stays in the code,
+off.
+
+## Amendment 3, 2026-10-05T17:15Z (22:45 IST) -- written before held-out run 4
+
+Two leads left open by round 2, each with a reason beyond a training-seed
+number. Seeds 201-210 (201-206 for cameras): run 3 used 201-220 on the
+single-lane grid with perfect data only, so no run of these arms on these
+networks, and no camera run on these seeds, has been seen. Controller:
+revision 6 (`hol`); the two options are `hol:g1` and `...:hol:p0:b3`.
+
+**G -- the wider wait guard (`wide_guard`).** It changes nothing at two-phase
+rings. Variants exist at rings of three or more phases at four junctions of
+the district and one of the corridor. Heavy demand, arms truth, hol, hol:g1.
+
+- G1. No interlock violation in any `hol:g1` run.
+- G2. In the `hol:g1` runs, no wait-overrun event (`wait_overruns`) has a
+  variant among the junction's last eight phases. (`hol`'s count is reported
+  beside it; if `hol` has none either, G2 says nothing and that is reported.)
+- G3. `hol:g1` is not significantly worse in person-delay than `hol` and than
+  CC-A-CAMP on either network (paired 95 % interval includes zero or lies
+  below it).
+
+If G1-G3 pass, `wide_guard` becomes the default.
+
+**C -- acting at once when blocked lanes come from cameras.** The camera
+reading is broken into short pieces (median 2 s against 5 s for the
+simulator's rule), so a blockage rarely "lasts one change interval" as
+revision 6 asks. Arms: cameras with revision 6, cameras with p0:b3; single-lane
+grid, 0.45 (six seeds) and 0.25 (three seeds).
+
+- C1. At 0.45: cameras with p0:b3 have less person-delay than cameras with
+  revision 6, paired 95 % interval excluding zero.
+- C2. At 0.45: no more runs with a teleport than cameras with revision 6.
+- C3. At 0.25: mean person-delay within +5 % of cameras with revision 6.
+- C4. No interlock violation.
+
+If C1-C4 pass, p0:b3 becomes the setting used when the blocked-lane reading
+comes from cameras (with perfect data run 3 found it no different from
+revision 6). On training seeds 101, 102: 646,869 and 740,704 s against
+1,033,886 and 1,042,433 s at 0.45; 90,079 and 94,731 s against 97,992 and
+88,571 s at 0.25.
+
+**D -- the district between "medium" and "heavy"** (added 2026-10-05T17:50Z,
+before any run on it). Why the district shows nothing: at "heavy" its busiest
+junction is at a degree of saturation of 1.0 and jams the network, while 28 of
+the 35 junctions with variants are below 0.35 -- the single-lane grid's nine
+are all at 0.34-0.45, the band where the variants pay. `vijayawada_district_mid`
+is the same network with demand set so the busiest junction is at 0.65 and
+0.80. Arms truth, hol (revision 6); seeds 201-210.
+
+- D1. `hol` is not significantly worse than CC-A-CAMP at either level.
+- D2. No interlock violation.
+- Reported without a target: whether `hol` is better at either level, and how
+  often variants are used. A gain here would be the first on a real street
+  network; no gain means the result stays confined to evenly loaded
+  single-lane grids.
+
+**D -- a real network between "medium" and "heavy" (added 2026-10-05T17:31Z,
+before any run of it).** Why the district showed nothing in runs 1 and 2: its
+demand is random trips scaled until the *busiest* junction reaches a target
+load, and the other junctions sit far below it. At "medium" (busiest 0.51)
+the next ones are at 0.31, 0.28, 0.26; at "heavy" (busiest 1.00, which locks
+the network) only seven of the 35 junctions with variants are at 0.38 or
+more. On the test grid all nine junctions are at 0.34-0.45, the band where
+the controller pays. So the district was tested either below the band or
+inside a jam caused elsewhere. `scenarios/generated/vijayawada_district_mid`
+is the same network with the busiest junction at 0.65 (`d65`) and 0.80
+(`d80`). Arms truth, hol; seeds 201-210. Nothing is tuned on it.
+
+- D1. At both levels `hol` is not significantly worse than CC-A-CAMP and has
+  no interlock violation.
+- D2 (the question, not a requirement): is `hol` significantly better at
+  either level? Reported with how often a variant was used.
+
+Whatever D2 shows is the answer to "does this matter on real streets with
+this kind of demand", and is reported as such.
+
+**E -- two more single-lane networks (added 2026-10-05T17:33Z, while they
+were being built).** The positive result rests on one 3x3 grid. Two networks the
+controller has never run on, both left-hand, one lane each way, India mix:
+`narrow_grid54_lh` (`grid:5x4,150,1`, 20 junctions, shorter blocks) and
+`narrow_rand_lh` (`rand:40,150,1,7`, an irregular street net, uneven junction
+loads like a real one). Levels: busiest junction at 0.30, 0.40, 0.45. Arms
+truth, hol; seeds 201-210. Nothing is tuned on them.
+
+- E1. No interlock violation; at 0.30 `hol` not significantly worse.
+- E2. On the regular grid: `hol` significantly better than CC-A-CAMP at 0.40
+  and at 0.45 (the claim "it is not a property of one 3x3 grid").
+- E3 (the question, not a requirement): the same on the irregular net, where
+  only the busiest junctions are in the band.
+
+**Cut back before any of these runs was made (2026-10-05T18:30Z), to save
+computing time:** C runs on four seeds (201-204) at 0.45 instead of six, and
+the 0.25 camera runs (C3) are dropped; E runs at 0.40 and 0.45 only (the
+0.30 part of E1 is dropped). With four seeds C1 can only show a large effect.
+
+### Outcome of G (2026-10-05T19:15Z) -- decided before D and E started
+
+Heavy demand, ten fresh seeds each. G1 pass (no violation). G2 pass: with
+`hol:g1` no wait overrun followed a variant visit; revision 6 had one on the
+district (2.6 s). Overruns with no variant near, district: 4 for each of the
+two, 2 for CC-A-CAMP (worst 1.6 s, 1.6 s, 0.8 s); corridor: one of 3.0 s,
+the same for all three. G3 pass: against revision 6, +1.6 % [-0.7, +3.8]
+on the district (better on 0 of 10 seeds -- a small cost that this sample
+cannot confirm) and +0.7 % [-0.8, +2.2] on the corridor; against CC-A-CAMP,
++5.5 % [-4.0, +15.0] and -5.4 % [-12.0, +1.3].
+
+So `wide_guard` is now the default (**revision 7** = revision 6 with the
+wider guard; identical to revision 6 at two-phase rings). In the records of
+this part revision 6 is named `hol:rev6`. **D and E, registered above with
+`hol`, run with revision 7.** C is on the two-phase grid and is unaffected.
+
+### Outcome of C, D and E (2026-10-06T06:10Z)
+
+**C -- cameras, acting at once (four seeds, 0.45).** C1 **fail**: cameras with
+p0:b3 against cameras with revision 6, -10.6 % [-50.3, +29.1] (per seed +22,
+-5, -25, -34 %). C2 pass: no run with a teleport against two of four. C4 pass.
+Not adopted. All eight camera runs were far below CC-A-CAMP on perfect data
+(638,280-1,081,834 s against 1,964,859-2,669,145 s).
+
+**D -- the district between "medium" and "heavy" (revision 7, ten seeds).**
+D1 pass. D2: no. Busiest junction at 0.65: +4.0 % [-5.5, +13.5]; at 0.80:
+-6.7 % [-16.8, +3.3]. A variant was used about once per run and a blocked
+head was seen for 36 and 88 junction-seconds per run (the 3x3 grid: 600 to
+1,600). On this network, with random-trip demand, the situation the
+controller is built for hardly occurs.
+
+**E -- two more single-lane networks (revision 7, ten seeds).**
+- E1 pass as far as it was run (no violation).
+- E2 **fail, and in the wrong direction.** On `narrow_grid54_lh` (20
+  junctions, 150 m blocks, all at 0.38-0.45, variants used 194 and 284 times
+  per run): +6.1 % [+1.7, +10.4] at 0.40, significantly *worse* than
+  CC-A-CAMP, and +6.2 % [-1.7, +14.2] at 0.45. CC-A-CAMP does not lock this
+  grid at 0.45 (4 teleports in ten runs; the 3x3 grid: 360 to 946).
+- E3: no. On `narrow_rand_lh` the busiest junction that has a variant is at
+  0.32, a variant was used less than once per run on average, and nothing
+  changed (+1.1 %
+  [-2.3, +4.4], -0.5 % [-3.9, +2.8]).
+
+**What this means.** The gain measured three times on the 3x3 / 200 m grid is
+real for that grid and does not carry over to the one other regular
+single-lane grid tried, where the controller costs about 6 %. On the two
+networks with uneven junction loads it does nothing. A diagnosis of the
+difference between the two grids is in `dev/dev30_*` (training seeds).

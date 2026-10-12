@@ -97,6 +97,33 @@ def junctions_to_signal(net: Path, *, min_class: str = "tertiary",
     )
 
 
+def zero_length_joins(net: Path, below_m: float = 1.0) -> list[list[str]]:
+    """Groups of OSM nodes that came out as separate junctions with an edge of
+    (almost) no length between them: a crossing of divided roads that
+    netconvert joined only in part. Each group is to be joined explicitly."""
+    root = ET.parse(net).getroot()
+    parent: dict[str, str] = {}
+
+    def find(x: str) -> str:
+        parent.setdefault(x, x)
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    for edge in root.findall("edge"):
+        if edge.get("function") == "internal":
+            continue
+        if float(edge.find("lane").get("length")) < below_m:
+            parent[find(edge.get("from"))] = find(edge.get("to"))
+    groups: dict[str, set[str]] = {}
+    for junction in parent:
+        members = junction.removeprefix("cluster_").split("_") if junction.startswith(
+            "cluster_") else [junction]
+        groups.setdefault(find(junction), set()).update(members)
+    return [sorted(g) for g in groups.values() if len(g) > 1]
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     src = ap.add_mutually_exclusive_group(required=True)
@@ -109,6 +136,14 @@ def main() -> None:
     ap.add_argument("--mix", default=None, help="india (default with --lefthand) or cars")
     ap.add_argument("--signal-class", default="tertiary", choices=CLASSES)
     ap.add_argument("--signal-approaches", type=int, default=3)
+    ap.add_argument("--join-parallel", action="store_true",
+                    help="also join junctions whose roads come in as two parallel carriageways "
+                         "(netconvert refuses these by default; without it a crossing of two "
+                         "divided roads stays several junctions with 0.2 m edges between them)")
+    ap.add_argument("--join-dist", type=float, default=25.0,
+                    help="join OSM nodes of one junction within this many metres. Wide roads "
+                         "drawn as two carriageways need more: nodes 30-60 m apart otherwise "
+                         "stay two junctions with a 0.2 m, one-lane edge between them")
     ap.add_argument("--max-speed", type=float, default=URBAN_ARTERIAL_MPS,
                     help="m/s cap on every lane (default 13.89 = 50 km/h; 0 keeps OSM's)")
     ap.add_argument("--no-cameras", action="store_true")
@@ -133,12 +168,29 @@ def main() -> None:
     raw = work / f"{args.name}_osm.net.xml"
     convert = [str(home / "bin" / "netconvert"), "--osm-files", str(osm), "-o", str(raw),
                "--type-files", str(home / "data" / "typemap" / "osmNetconvert.typ.xml"),
-               *NETCONVERT_OPTIONS]
+               *[f"{args.join_dist:g}" if prev == "--junctions.join-dist" else opt
+                 for prev, opt in zip([None, *NETCONVERT_OPTIONS], NETCONVERT_OPTIONS,
+                                      strict=False)]]
+    if args.join_parallel:
+        convert += ["--junctions.join.parallel-threshold", "0"]
     if crop:
         convert += ["--keep-edges.in-geo-boundary", crop]
     if args.lefthand:
         convert.append("--lefthand")
     subprocess.run(convert, check=True, env=env, capture_output=True)
+    if args.join_parallel:
+        # what the automatic join still left as junctions with nothing between them
+        joins_file = work / f"{args.name}_joins.nod.xml"
+        for _ in range(3):
+            groups = zero_length_joins(raw)
+            if not groups:
+                break
+            known = ET.parse(joins_file).getroot() if joins_file.exists() else ET.Element("nodes")
+            for group in groups:
+                ET.SubElement(known, "join", {"nodes": " ".join(group)})
+            ET.ElementTree(known).write(joins_file, encoding="UTF-8", xml_declaration=True)
+            subprocess.run([*convert, "--node-files", str(joins_file)], check=True, env=env,
+                           capture_output=True)
 
     extra = junctions_to_signal(raw, min_class=args.signal_class,
                                 approaches=args.signal_approaches)

@@ -114,6 +114,7 @@ class VisionService:
         model: str = "vision-m8",
         evidence: EvidenceStore | None = None,
         rules: str | RuleConfig = DEFAULT_OPERATING_POINT,
+        lane_chains: tuple[Mapping, Mapping] | None = None,
         fire: FireMonitorConfig | None = None,
     ):
         self.rig = rig
@@ -123,7 +124,8 @@ class VisionService:
             {tls: rig.network.phase_link_states(tls) for tls in approach})
         rule_config = OPERATING_POINTS[rules] if isinstance(rules, str) else rules
         self.system = VisionSystem(rig, approach, receiving, preset=preset, seed=seed, fps=fps,
-                                   signal_state=self.signal, rule_config=rule_config)
+                                   signal_state=self.signal, rule_config=rule_config,
+                                   lane_chains=lane_chains)
         self.book = _PositionBook(rig.network, ClassTable.default())
         self._prev_snap: WorldSnapshot | None = None
         self._last_status: dict[str, tuple[str, float]] = {}
@@ -174,7 +176,6 @@ class VisionService:
         mon = self.fire.get(camera_id)
         if mon is not None:
             mon.observe(t, score)
-    # ---- the tick ----------------------------------------------------------------------
 
     def step_simcam(self, t: float) -> None:
         snap = self.book.snapshot(t)
@@ -238,7 +239,6 @@ class VisionService:
                         uri = self.evidence.save(cand.candidate_id, cid, buf.redacted_clip(),
                                                  {"rule": "fire_smoke", "kind": cand.kind})
                         log.info("evidence for %s from %s -> %s", cand.candidate_id, cid, uri)
-    # ---- helpers -----------------------------------------------------------------------
 
     def _emit(self, topic: str, event_type: str, payload: dict, key: str | None) -> None:
         self.publish(topic, event_type, payload, key)

@@ -102,9 +102,9 @@ class TraCICabinet:
         whose harness has silently changed underneath it is worse than a
         recorded experiment with a known caveat. Those numbers are
         reproducible by passing the flag; new work should not."""
-        protected = phase.protected_movements or phase.green_movements
+        protected = (phase.protected_movements or phase.green_movements) | phase.overlap_movements
         prot_idx = {int(m.removeprefix("L")) for m in protected}
-        all_idx = {int(m.removeprefix("L")) for m in phase.green_movements}
+        all_idx = {int(m.removeprefix("L")) for m in phase.shown_movements}
         perm_idx = set() if not self._preserve_permissive else all_idx - prot_idx
         return "".join(
             "G" if i in (all_idx - perm_idx) else "g" if i in perm_idx else "r"

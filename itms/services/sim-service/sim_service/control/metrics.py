@@ -89,6 +89,11 @@ class TripRecord:
     time_loss_s: float
     waiting_time_s: float
     waiting_count: int
+    depart_delay_s: float = 0.0
+    """How long the vehicle waited to be let into the network after its
+    scheduled departure (SUMO's `departDelay`). `timeLoss` does not include
+    it, so a controller that keeps a queue outside the network -- by jamming
+    the entries or by metering them -- hides that time from person-delay."""
 
 
 @dataclass(frozen=True)
@@ -108,6 +113,10 @@ class RunMetrics:
     person_throughput_per_hour: float
     wait_time_s: WaitTimeDistribution
     stops_per_vehicle: float
+    entry_delay_person_s: float = 0.0
+    """Occupancy-weighted time the scored trips spent waiting to enter the
+    network. Add it to `person_delay_s` for a delay that cannot be improved
+    by holding traffic outside."""
 
 
 def parse_tripinfo(tripinfo_path: str | Path) -> list[TripRecord]:
@@ -127,6 +136,7 @@ def parse_tripinfo(tripinfo_path: str | Path) -> list[TripRecord]:
                 time_loss_s=float(trip.get("timeLoss", "0")),
                 waiting_time_s=float(trip.get("waitingTime", "0")),
                 waiting_count=int(trip.get("waitingCount", "0")),
+                depart_delay_s=float(trip.get("departDelay", "0")),
             )
         )
     return records
@@ -219,6 +229,9 @@ def score_trips(
         person_throughput_per_hour=person_throughput_per_hour,
         wait_time_s=wait_dist,
         stops_per_vehicle=stops_per_vehicle,
+        entry_delay_person_s=sum(
+            occupancy_by_vtype.get(t.vtype, 1.0) * t.depart_delay_s for t in scored
+        ),
     )
 
 

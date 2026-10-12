@@ -123,15 +123,26 @@ def _run_sumo() -> None:
     from measure_flows import compute_link_flows  # noqa: E402
 
     configs = load_configs(net_path)
+    # every phase also shows the movements that cross nothing it shows (a free
+    # left turn, many U-turns), without owning them -- itms_domain.overlaps
+    from itms_domain.overlaps import pedestrian_links, with_overlaps  # noqa: PLC0415
+
+    walks = pedestrian_links(net_path)
+    configs = {tls: with_overlaps(cfg, walks.get(tls, frozenset()), owned=False)
+               for tls, cfg in configs.items()}
     flows = compute_link_flows(net_path, Path(route))
     vtype_pcu = load_vtype_pcu(Path(route))
     link_lanes = link_to_lane_map(net_path)
     receiving_lanes = link_to_receiving_lane_map(net_path)
     # a road split into several edges (turn bays, OSM tag changes) measured
     # as the whole road -- see itms_domain.lane_chains
+    from itms_domain.lane_chains import SHORT_APPROACH_M, vias_from_sumo_net  # noqa: PLC0415
     from itms_domain.lane_chains import from_sumo_net as chains_from_net  # noqa: PLC0415
 
     chains = chains_from_net(net_path)
+    # ... and a vehicle standing between the pieces of a split road, or before a
+    # stop-line lane too short to hold it, is on no lane at all: watch those too
+    vias = vias_from_sumo_net(net_path, chains[0], SHORT_APPROACH_M)
 
     # One AdaptiveCamp per junction, cold-started (no warmed memory/
     # calibration profile) -- see this module's docstring for why.
@@ -195,6 +206,7 @@ def _run_sumo() -> None:
             receiving_lanes=receiving_lanes,
             vtype_pcu=vtype_pcu,
             lane_chains=chains if (chains[0] or chains[1]) else None,
+            lane_vias=vias or None,
             bus=bus,
             anomaly_graph=anomaly_graph,
             anomaly_feature_sink=live_detector.on_tick if live_detector is not None else None,
