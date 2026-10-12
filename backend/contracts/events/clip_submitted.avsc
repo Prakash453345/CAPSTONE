@@ -1,0 +1,17 @@
+{
+  "type": "record",
+  "name": "ClipSubmitted",
+  "namespace": "itms.contracts",
+  "doc": "An operator uploaded a road video for automatic incident detection. Published by api-service on `vision.clip-submitted` once the file is on disk; vision-service's clip worker (`python -m vision_service.clips`) analyses it and answers with ClipAnalysed. The video stands in for a camera on that road: whatever the analysis finds is a candidate for an operator to confirm or reject (ADR-006), never a dispatch on its own.",
+  "fields": [
+    { "name": "clip_id", "type": "string", "doc": "UUID chosen by api-service; names the clip's directory under the shared clips root." },
+    { "name": "video_path", "type": "string", "doc": "Absolute path of the uploaded file. api-service and vision-service share the clips root (same machine, or a shared volume)." },
+    { "name": "filename", "type": "string", "doc": "The name the operator's file had, for display only." },
+    { "name": "edge_id", "type": "string", "doc": "SUMO edge the operator says the video shows (picked on the map)." },
+    { "name": "road_name", "type": "string", "default": "" },
+    { "name": "latitude", "type": ["null", "double"], "default": null },
+    { "name": "longitude", "type": ["null", "double"], "default": null },
+    { "name": "operator", "type": "string", "default": "operator:console" },
+    { "name": "submitted_at", "type": { "type": "long", "logicalType": "timestamp-millis" } }
+  ]
+}

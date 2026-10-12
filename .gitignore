@@ -1,8 +1,58 @@
-itms/temp-2021.rdb
-*.rdb
+# ---------------------------------------------------------------- general
 .DS_Store
-__pycache__/
-*.pyc
+~$*
+*.log
+.env
+.env.*
+!.env.example
 
 # Personal Claude Code settings
 .claude/settings.local.json
+
+# ---------------------------------------------------------------- python (backend)
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+.coverage
+htmlcov/
+build/
+
+# Redis persistence snapshots: runtime artifacts, not source.
+*.rdb
+
+# Model weights and downloaded datasets. Large, shared out of band; the code
+# says where each one goes (see backend/README.md). The scenario data next to
+# them (backend/data/scenarios) IS committed.
+backend/data/models/
+backend/data/uvh26/
+backend/data/datasets/
+
+# Runtime state: uploaded road videos with their analysis and snapshots
+# (CLIPS_DIR), evidence clips, and local service logs.
+backend/var/
+backend/.run/
+
+# Regenerable raw OSM downloads (scenarios/networks/*/build.sh recreates them).
+backend/data/scenarios/networks/*/raw_osm.xml
+
+# M6 detector artifacts: recorded features (*.npy), trained weights and logs.
+# Recreate with experiments/m6_record_features.py + m6_train_detector.py. The
+# gate's JSON output under experiments/results/ IS committed.
+backend/experiments/results/m6_artifacts/
+
+# The archived test lab writes its runs here.
+docs/archive/testing_site/var/
+
+# ---------------------------------------------------------------- node (frontend)
+node_modules/
+frontend/dist/
+frontend/dist-ssr/
+frontend/test-results/
+frontend/playwright-report/
+frontend/*.tmp.mjs

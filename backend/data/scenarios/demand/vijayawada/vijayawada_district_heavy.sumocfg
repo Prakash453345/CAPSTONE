@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Ties the M1 network and demand together. Used by sim-service's TraCI
+     loop and by ad hoc `sumo-gui -c` runs during development. Not calibrated
+     demand; see README.md in this directory and in ../../networks/vijayawada/. -->
+<configuration>
+    <input>
+        <net-file value="../../networks/vijayawada/vijayawada_district.net.xml"/>
+        <route-files value="vijayawada_district_heavy.rou.xml"/>
+    </input>
+    <time>
+        <begin value="0"/>
+        <end value="1800"/>
+        <step-length value="1"/>
+    </time>
+    <processing>
+        <time-to-teleport value="300"/>
+    </processing>
+</configuration>

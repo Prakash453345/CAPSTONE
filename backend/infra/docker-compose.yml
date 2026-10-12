@@ -1,0 +1,61 @@
+# Infra only. sim-service and api-service run directly on the host (via `make dev`)
+# during Phase-1 dev — see Makefile. They get containerized once there's a reason
+# to (multi-machine dev, CI integration tests), not before.
+
+services:
+  postgres:
+    image: timescale/timescaledb-ha:pg16
+    container_name: itms-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: itms
+      POSTGRES_PASSWORD: itms
+      POSTGRES_DB: itms
+    ports:
+      - "5432:5432"
+    volumes:
+      - itms-postgres-data:/home/postgres/pgdata/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U itms -d itms"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: itms-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - itms-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: quay.io/minio/minio:latest
+    container_name: itms-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: itms
+      MINIO_ROOT_PASSWORD: itms12345
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # console
+    volumes:
+      - itms-minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  itms-postgres-data:
+  itms-redis-data:
+  itms-minio-data:
