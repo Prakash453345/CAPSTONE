@@ -1,9 +1,11 @@
-# Where this stands (2026-10-05)
+# Where this stands (2026-10-06, after round 3)
 
-Finished: controller revision 6, held-out run 2 (`results/`), README, TARGETS amendment,
-PROGRESS entry. 876 tests pass, ruff clean. Not committed.
+Controller: revision 7 (revision 6 + `wide_guard`). 882 tests pass, ruff clean.
+Committed on the Mac up to run 2 (`1f92094`); rounds 2 and 3 are not committed.
 
-Open: `dev/run_dev22.sh` leftovers (camera light on training seeds, blocked-lane
-agreement for the final design) may be unfinished -- resumable, not needed for the
-result. Leads: `hol:p0` did better than the default on held-out seeds; the few
-seconds past the maximum wait on the jammed district are not traced.
+Round 3 (README): the gain on the 3x3 / 200 m grid does not carry over -- +6 % on a
+5x4 / 150 m grid, nothing on uneven networks. Cameras-with-p0 not confirmed. The 0.50
+jam: cheap lead failed; metering not built. Person-delay misses entry delay and
+unfinished vehicles.
+
+Seeds used: TRAIN 101-140; held-out 1-10 (runs 1, 2), 201-220 (runs 3, 4). Fresh: 221 on.

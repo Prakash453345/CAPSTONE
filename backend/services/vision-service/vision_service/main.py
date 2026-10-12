@@ -50,12 +50,11 @@ import threading
 import time
 from pathlib import Path
 
-from itms_domain.paths import MODELS_DIR, VIJAYAWADA_NET_DIR
+from itms_domain.paths import MODELS_DIR
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s vision-service %(message)s")
 log = logging.getLogger("vision.main")
 
-_NET_DIR = VIJAYAWADA_NET_DIR
 # the adopted detector (baselines/2026-09-27_m8_finetune_v2/) and the simcam
 # error model fitted to it; data/ is not in git, `make vision-model` fills it
 DEFAULT_PRESET = "itms6_640"
@@ -112,6 +111,7 @@ def _publisher(redis_url: str):
 
 
 def build_service(mode: str):
+    from itms_domain.scenario import current  # noqa: PLC0415
     from itms_geo import RoadNetwork  # noqa: PLC0415
 
     from vision_service.cameras import CameraRig, load_registry  # noqa: PLC0415
@@ -119,8 +119,9 @@ def build_service(mode: str):
     from vision_service.privacy import EvidenceStore  # noqa: PLC0415
     from vision_service.service import VisionService  # noqa: PLC0415
 
-    registry = Path(os.environ.get("VISION_REGISTRY", _NET_DIR / "cameras.json"))
-    net_path = Path(os.environ.get("VISION_NET", _NET_DIR / "vijayawada_corridor.net.xml"))
+    scenario = current()   # ITMS_SCENARIO, else the Vijayawada corridor
+    registry = Path(os.environ.get("VISION_REGISTRY", scenario.cameras))
+    net_path = Path(os.environ.get("VISION_NET", scenario.net))
     specs, raw = load_registry(registry)
     if mode == "video":
         specs = [s for s in specs if s.source != "simcam"]
@@ -130,6 +131,9 @@ def build_service(mode: str):
     rig = CameraRig.build(net, specs, max_resolution_m_per_px=raw.get("max_resolution_m_per_px",
                                                                          0.6))
     approach, receiving = net.link_lane_maps()
+    from itms_domain.lane_chains import from_sumo_net as chains_from_net  # noqa: PLC0415
+
+    chains = chains_from_net(net_path)
     evidence = None
     if os.environ.get("VISION_EVIDENCE") or os.environ.get("MINIO_ENDPOINT"):
         evidence = EvidenceStore(
@@ -151,6 +155,7 @@ def build_service(mode: str):
     return VisionService(rig, approach, receiving, publish, preset=preset, fps=fps, model=model,
                          evidence=evidence,
                          rules=os.environ.get("VISION_RULES", DEFAULT_OPERATING_POINT),
+                         lane_chains=chains if (chains[0] or chains[1]) else None,
                          fire=fire), specs
 
 

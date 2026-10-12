@@ -612,6 +612,36 @@ class AcampConfig:
     `protect_allocated_green`'s own docstring for the full measurement
     and PROGRESS.md for the complete writeup."""
 
+    rest_in_green: bool = False
+    """At its green ceiling the running phase stays green while no other
+    phase has anything to serve (`_skippable`: no queue, nothing
+    approaching, no wait near its bound). Without it the ceiling always ends
+    the green, and with nobody waiting the ring moves to an empty phase and
+    pays a change interval for nothing. Off by default so recorded runs
+    stay reproducible. Pedestrian phases are never skippable, so a junction
+    that has one keeps cycling as before."""
+
+    rest_max_s: float | None = None
+    """With `rest_in_green`: the longest a green may rest past its ceiling
+    (None: no limit). A green that never ends also never leaves a gap, and
+    a give-way junction just past the stop line can depend on those gaps:
+    on the Vijayawada district a minor road merging 6 m after a signal's exit
+    starved while the signal rested (2026-10-10)."""
+
+    rest_max_congestion: float | None = None
+    """With `rest_in_green`: rest only while the junction's congestion weight
+    (`memory.congestion_weight` of its smoothed load, the signal
+    `protect_allocated_green` gates on; about 0.01 at light demand, 0.9 at
+    heavy) is below this. Resting is for quiet periods; on the Vijayawada
+    district at medium demand it stranded vehicles (2026-10-07). None: no
+    limit."""
+
+    rest_needs_flow: bool = False
+    """With `rest_in_green`: rest only while nothing stands halted on the
+    running phase's own movements. Past the ceiling a halted vehicle on a
+    green movement means its way out is blocked (a full junction box, a
+    give-way just downstream), and holding the green only holds the jam."""
+
     # -- cycle supervisor (CC-A-CAMP) --
     cycle_supervisor: bool = False
     """Whether the cyclical-structure supervisor is active. **Off by
@@ -1170,6 +1200,10 @@ class AdaptiveCamp:
             "extend_allocation_protected": 0,
             "switch_pressure": 0,
             "switch_max_green": 0,
+            "rest_in_green": 0,
+            "rest_capped": 0,
+            "rest_blocked": 0,
+            "rest_congested": 0,
             "switch_starvation": 0,
             "blended": 0,
             "blended_no_history": 0,
@@ -1194,6 +1228,24 @@ class AdaptiveCamp:
         phase differently (`hol_camp.HolAwareCamp`); here it is exactly the
         module-level `pressure`."""
         return pressure(cfg_t0, ctx, self.cfg, phase_id, urgency, owed_s, horizon_s)
+
+    def _may_rest(self, cfg_t0: Tier0Config, ctx: JunctionContext, current: str,
+                  elapsed: float, max_g: float) -> bool:
+        """`rest_max_s` and `rest_needs_flow` (both off by default)."""
+        if self.cfg.rest_max_s is not None and elapsed >= max_g + self.cfg.rest_max_s:
+            self.stats["rest_capped"] += 1
+            return False
+        if self.cfg.rest_max_congestion is not None and memory_mod.congestion_weight(
+            self._load_ewma, self.cfg.switch_scale_ref, self.cfg.switch_scale_exponent
+        ) >= self.cfg.rest_max_congestion:
+            self.stats["rest_congested"] += 1
+            return False
+        if self.cfg.rest_needs_flow and sum(
+            ctx.queue_pcu.get(m, 0.0) for m in cfg_t0.phases[current].green_movements
+        ) > 0.0:
+            self.stats["rest_blocked"] += 1
+            return False
+        return True
 
     def _phase_horizon_s(self, cfg_t0: Tier0Config) -> float:
         """How long one phase can expect to hold if it wins -- the horizon
@@ -1591,6 +1643,15 @@ class AdaptiveCamp:
                 )
             self.stats["switch_pressure"] += 1
         elif not current_faulted:
+            if cfg.rest_in_green and all(
+                _skippable(cfg_t0, ctx, p) for p in live if p != current
+            ) and self._may_rest(cfg_t0, ctx, current, elapsed, max_g):
+                self.stats["rest_in_green"] += 1
+                return SignalPlan(
+                    intersection_id=cfg_t0.intersection_id,
+                    steps=(PlanStep(phase_id=current, green_s=self.tick_s),),
+                    source="acamp",
+                )
             self.stats["switch_max_green"] += 1
 
         ring = [

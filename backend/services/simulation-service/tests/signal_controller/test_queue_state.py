@@ -314,3 +314,40 @@ def test_the_longest_standing_wait_is_readable_before_a_sample_resets_it(monkeyp
     _, waits = d.sample(55.0, frozenset({"L3"}))      # ... and is served now: its clock is wiped
     assert waits["L3"] == 0.0
     assert d.longest_wait_s(56.0) == 16.0             # L0 now: last green at t=40
+
+
+def test_a_vehicle_halted_between_the_pieces_of_a_split_approach_is_queued(monkeypatch):
+    """`vias`: the first vehicle of a queue can stand on the internal lane
+    between two pieces of a split road, on no normal lane at all."""
+    _fake_traci(
+        monkeypatch,
+        lane_vehicles={":P_0_0": ["v1"], "up_0": ["v2"]},
+        speeds={"v1": 0.0, "v2": 0.0},
+        types={"v1": "car", "v2": "bus"},
+        occupancies={},
+    )
+    chain = {"bay_0": [("up_0", 0.5, 4.0)]}
+    plain = QueueStateSampler({"L0": "bay_0"}, {}, _PCU_BY_VTYPE, upstream=chain)
+    assert plain.sample()[0] == {"L0": 0.5 * 3.0}           # the bus upstream only
+    seen = QueueStateSampler({"L0": "bay_0"}, {}, _PCU_BY_VTYPE, upstream=chain,
+                             vias={"bay_0": [(":P_0_0", 1.0)]})
+    assert seen.sample()[0] == {"L0": 0.5 * 3.0 + 1.0}
+
+
+def test_a_vehicle_anywhere_on_a_split_approach_raises_a_call(monkeypatch):
+    """`ActuationDetector(extra_lanes=...)`: a vehicle on the road before the
+    split, or between its pieces, calls the approach's links and starts their
+    wait clock, as one anywhere on an unsplit approach lane does."""
+    from sim_service.signal_controller import detectors
+
+    occupied = {"bay_0": 0, "up_0": 0, ":P_0_0": 1, "side_0": 0}
+    monkeypatch.setattr(detectors.traci.lane, "getLastStepVehicleNumber",
+                        lambda lane: occupied[lane])
+    links = {"L0": "bay_0", "L3": "side_0"}
+    blind = detectors.ActuationDetector(links)
+    assert blind.sample(10.0)[0] == {"L0": False, "L3": False}
+    d = detectors.ActuationDetector(links, extra_lanes={"bay_0": ["up_0", ":P_0_0"]})
+    demand, _ = d.sample(10.0)
+    assert demand == {"L0": True, "L3": False}
+    _, waits = d.sample(40.0)
+    assert waits["L0"] == 30.0 and d.longest_waiter(40.0) == ("L0", 30.0)

@@ -125,6 +125,14 @@ class HolConfig:
     ten seeds: not distinguishable from the default, which gives the other
     approach its green in the same visit."""
     family_budget: float = 2.0
+    wide_guard: bool = True
+    """The wait guard allows for *every* other phase of the ring coming
+    first at rings of three or more phases, not for one (False: revision
+    6). Nothing changes at two-phase rings. Default since held-out run 4
+    (2026-10-06, heavy district and corridor, ten fresh seeds each): no wait
+    overrun followed a variant visit with it (one without), at +1.6 %
+    [-0.7, +3.8] person-delay on the district and +0.7 % [-0.8, +2.2] on the
+    corridor against revision 6."""
     """A visit to a base phase that has used a variant may last this many
     times the base phase's maximum green in all (module docstring)."""
 
@@ -548,13 +556,21 @@ class HolAwareCamp(AdaptiveCamp):
         another phase first (a review's stateful test saw waits up to 8 s
         past the bound at three-phase junctions of the district network
         before this margin was widened). So the margin here covers the
-        family's own remaining changes and minimum green *plus* one whole
-        other phase: its minimum green and the change interval after it."""
+        family's own remaining changes and minimum green *plus* every other
+        phase the ring may still put first -- all but the family's and the
+        waiting one, each with its minimum green and the change interval
+        after it. Revision 6 allowed for one such phase: at a three-phase
+        junction of the jammed district the ring passed over the waiting
+        phase once after a variant visit, two phases came first and the wait
+        ran 4.6 s past. `wide_guard` (the default) allows for all of them.
+        The parent's own margin has the same gap without any variant."""
         change_s = cfg_t0.yellow_s + cfg_t0.all_red_s
         longest_min_g = max(cfg_t0.min_green_s.get(p, 0.0) for p in cfg_t0.ring_order)
         hold_s = (acamp._SKIP_WAIT_MARGIN_S + changes * change_s  # noqa: SLF001
                   + (cfg_t0.min_green_s.get(base, 0.0) if changes > 1 else 0.0)
-                  + (longest_min_g + change_s if len(cfg_t0.ring_order) > 2 else 0.0))
+                  + ((len(cfg_t0.ring_order) - 1 if self.hol.wide_guard else 1)
+                     if len(cfg_t0.ring_order) > 2 else 0)
+                  * (longest_min_g + change_s))
         family = cfg_t0.phases[base].green_movements
         return not any(
             has and m not in family

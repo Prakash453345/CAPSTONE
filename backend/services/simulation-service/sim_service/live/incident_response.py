@@ -45,7 +45,6 @@ from itms_domain import (
     EmergencyRequestState,
     EmergencyVehicle,
 )
-from itms_domain.paths import VIJAYAWADA_NET_DIR
 
 from sim_service.control.dispatch.dispatcher import IncidentRequest, choose
 from sim_service.control.dispatch.facilities import GENERAL, FacilityIndex
@@ -55,7 +54,12 @@ from sim_service.signal_controller.ev_routing import edge_latlon, traci_route_fn
 
 log = logging.getLogger("sim-service.live.incident_response")
 
-_SCEN = VIJAYAWADA_NET_DIR
+# the scenario's own facilities (itms_domain.scenario: the Vijayawada corridor
+# unless ITMS_SCENARIO names another network); a network without the files
+# gets no hospitals and no police depots, and the incident layer says so
+from itms_domain.scenario import current as _current_scenario  # noqa: E402
+
+_SCEN = _current_scenario().directory
 FACILITIES_PATH = _SCEN / "facilities.json"
 DEPOTS_PATH = _SCEN / "responder_depots.json"
 
@@ -143,7 +147,14 @@ class IncidentResponseOrchestrator:
     ):
         self.anomalies = anomalies
         self.emergency = emergency
-        self._facility_index = facility_index or FacilityIndex.from_json(FACILITIES_PATH)
+        if facility_index is None:
+            if FACILITIES_PATH.exists():
+                facility_index = FacilityIndex.from_json(FACILITIES_PATH)
+            else:
+                log.warning("no %s: this scenario has no hospitals to dispatch to",
+                            FACILITIES_PATH)
+                facility_index = FacilityIndex([])
+        self._facility_index = facility_index
         self._units: dict[EmergencyKind, list[_Unit]] = {
             EmergencyKind.POLICE: [
                 _Unit(vehicle_id=f"unit-police-{i}", kind=EmergencyKind.POLICE, depot=d)

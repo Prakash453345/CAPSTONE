@@ -1,6 +1,8 @@
 # Blocking-aware signal control (2026-10-03 to 2026-10-05)
 
-**Status: simulation result, not committed, not public.** Targets were written
+**Status: simulation result, not public. Read "Round 3" first: the gain
+below was confirmed three times on one network and did not carry over to the
+other single-lane networks tried afterwards.** Targets were written
 before the held-out runs (`TARGETS.md`, with a dated amendment). Four of the
 nine targets failed and a fifth (9) was missed as worded, on the good side; they are listed below as they came out.
 
@@ -112,6 +114,122 @@ does not hold completely on the jammed district. It is a few seconds, the
 interlock that enforces the wait bound did not fire, and it is not traced to
 a cause yet.
 
+## Round 2 (2026-10-05): three leads tried, none adopted
+
+After run 2 three leads were followed on training seeds (101-140) and the
+most promising one was put to a third held-out run on seeds never used
+before (201-220; `TARGETS.md` amendment 2, `run_eval3.sh`, `results_run3/`,
+`python summarise.py results_run3`). **The controller is unchanged: it is
+revision 6.**
+
+1. **Act on a blockage at once and allow a longer visit (`p0:b3`).** On
+   training seeds it had no measurable effect on delay but 27 of 30 runs at
+   0.45 without a teleport against 19 of 30. On 20 fresh seeds that did not
+   repeat: 11 of 20 against 13 of 20 for revision 6, and no difference in
+   delay at any level (0.45: +0.7 % [-16.7, +18.2]). Targets A4 (16 of 20)
+   and A5 (at least as many as revision 6) failed, A2 failed at 0.35 again,
+   A1, A3 and A8 passed. The run was stopped there; A6, A7 and A9 (other
+   networks, cameras) were not run. The training-seed advantage was chance.
+2. **A higher green ceiling for CC-A-CAMP.** Three times Webster's green
+   gave -10.3 % [-14.3, -6.3] at 0.25 on ten training seeds, nothing at
+   0.30-0.40 and no help at 0.45 (+18.2 % [-28.3, +64.7], 539 teleports
+   against 520). Not adopted; a ceiling that depends on traffic would be a
+   separate piece of work on CC-A-CAMP itself.
+3. **The waits past the maximum on the jammed district.** Traced on training
+   seeds (`wait_overruns` in every record, new). Most are CC-A-CAMP's own: its 15 s
+   margin does not cover a second phase coming first, and it passes the bound
+   by 0.8-1.6 s with no variant anywhere near. One followed a variant visit at
+   a three-phase junction (4.6 s). A wider guard (`HolConfig.wide_guard`,
+   off) removed that one on training seeds; it has not been run on held-out
+   seeds and is not the default.
+
+What run 3 does add is a **third, independent look at revision 6**
+(`hol:rev6`, 20 fresh seeds, against CC-A-CAMP):
+
+| flow ratio | difference, 95 % interval | better on | teleports new / old | runs without one new / old |
+|---|---|---|---|---|
+| 0.25 | -0.9 % [-4.2, +2.5] | 12/20 | 0 / 0 | 20 / 20 |
+| 0.30 | -4.1 % [-7.6, -0.7] | 15/20 | 0 / 0 | 20 / 20 |
+| 0.35 | -0.6 % [-4.3, +3.2] | 11/20 | 0 / 0 | 20 / 20 |
+| 0.40 | **-13.1 % [-19.6, -6.6]** | 16/20 | 0 / 10 | 20 / 16 |
+| 0.45 | **-56.7 % [-63.4, -49.9]** | 20/20 | 63 / 946 | 13 / 1 |
+
+Same picture as run 2: a clear gain at 0.40-0.45, nothing reliable at 0.35
+(training seeds, 40 of them, said -6.1 % [-8.5, -3.7]; two held-out sets say
+about zero), and about a third of the runs at 0.45 still lose vehicles to a
+jam. A lesson for the next round: ten seeds cannot separate settings that
+differ by less than about 10 % on this network.
+
+Open leads, none of them tested on held-out seeds: with cameras in the loop,
+acting at once looked better on two training seeds (646,869 and 740,704 s
+against 1,033,886 and 1,042,433 s); `wide_guard`; a traffic-dependent green
+ceiling; and metering inflow for the 0.50 jam.
+
+## Round 3 (2026-10-05/06): does it carry over? Mostly not
+
+Targets: `TARGETS.md` amendment 3 and its outcomes. Fresh seeds 201-210,
+results in `results_run4/`; diagnoses on training seeds in `dev/dev29`,
+`dev/dev30`. The controller is now **revision 7**: revision 6 with a wider
+wait guard, identical to revision 6 on the 3x3 grid.
+
+**Other single-lane networks** (new controller against CC-A-CAMP, ten seeds
+each, twenty in the first row; negative is better):
+
+| network | 0.40 | 0.45 | does CC-A-CAMP lock at 0.45? | seeds |
+|---|---|---|---|---|
+| 3x3 grid, 200 m blocks (runs 2 and 3) | -13.1 % [-19.6, -6.6] | -56.7 % [-63.4, -49.9] | yes (946 teleports in 20 runs) | held-out |
+| 5x4 grid, 150 m blocks | **+6.1 % [+1.7, +10.4]** | +6.2 % [-1.7, +14.2] | no (4 in 10) | held-out |
+| 5x4 grid, 200 m blocks | -1.1 % [-3.5, +1.4] | -3.2 % [-6.9, +0.6] | no (1 in 10) | training |
+| 3x3 grid, 150 m blocks | -2.5 % [-11.0, +6.0] | +2.1 % [-45.1, +49.3] | yes, and so does the new one (280 and 159) | training |
+| irregular single-lane net | +1.1 % [-2.3, +4.4] | -0.5 % [-3.9, +2.8] | no | held-out |
+
+On the irregular net the busiest junction that has a variant is at 0.32 and
+a variant was used less than once per run on average. On the real district at in-between
+levels (busiest junction at 0.65 and 0.80; before, it had only been tested
+below the useful range or inside a jam caused elsewhere): +4.0 %
+[-5.5, +13.5] and -6.7 % [-16.8, +3.3], a variant about once per run.
+
+**What this says.** The large gain is what it looks like when the new
+controller rescues the 3x3 / 200 m grid from a lock-up that CC-A-CAMP runs
+into there. Where CC-A-CAMP does not lock, the variants are used just as
+often (7-15 times per junction and run) and buy between -3 % and +6 %; on the
+5x4 / 150 m grid the cost is significant. Where junction loads are uneven,
+as on real streets with this kind of demand, the blocked-head situation is
+rare (36-88 junction-seconds per run on the district against 600-1,600 on
+the 3x3 grid) and nothing happens. So the claim that survives is narrow:
+*it prevents one kind of lock-up on a small, evenly loaded single-lane grid*.
+It is not a general improvement, and on one network it is a small loss.
+
+**The two small leads.**
+- Wider wait guard: passed its three targets (heavy district and corridor)
+  and is the default. No wait overrun followed a variant visit with it (one
+  without, 2.6 s); person-delay against revision 6 +1.6 % [-0.7, +3.8] on
+  the district, +0.7 % [-0.8, +2.2] on the corridor.
+- Acting at once when blocked lanes come from cameras: not confirmed. Four
+  seeds at 0.45: -10.6 % [-50.3, +29.1]; no run with a teleport against two
+  of four. Not adopted.
+
+**The 0.50 jam.** It is a lock-up, not plain overload: the 3x3 grid moves
+fewer people at 0.50 than at 0.45 (about 4,060 against 7,120 per hour for
+the new controller in run 2). The cheap lead -- CC-A-CAMP's gate against a
+full receiving link shuts at an occupancy of 0.85, which a standing queue
+may never reach -- did not help: shut at 0.6 or 0.7 the teleports stayed
+(319 and 326 against 359 on three training seeds), and the apparent 21 %
+less delay comes with 209 and 243 vehicles still in the network at the end
+against none, which are not counted. Metering traffic into the area is the
+standard answer and is not built.
+
+**A gap in the measurement, found on the way.** Person-delay is SUMO's
+`timeLoss` of trips that finish. It does not count the wait to enter the
+network, nor vehicles still inside at the end of a run, nor (as said
+before) vehicles removed from a jam. Records now carry `entry_delay_s`. On
+the single-lane networks of this round it is about 1 % of person-delay
+where nothing jams and 2-9 % where a run jams; in the two heavy-corridor
+records that have it, it is about a quarter of person-delay. Every one of
+these gaps flatters whichever controller jams more, so the jam-level
+percentages in this document are rough, and heavy-corridor comparisons
+anywhere in this project should be re-read with entry delay added.
+
 ## Limits -- read before quoting any number
 
 - **Signal hardware.** Every approach needs a separate turn face that can stay
@@ -125,8 +243,9 @@ a cause yet.
   cannot show, and it was rebuilt five times on training seeds only
   (`TARGETS.md`, amendment). The safety fixes cost the gain at 0.35 (run 1:
   -13.1 %).
-- One network family carries the positive result (a 3x3 single-lane grid).
-  On the real-city networks tested the controller changes little.
+- **One network carries the positive result** (the 3x3 single-lane grid with
+  200 m blocks). On a 5x4 grid with 150 m blocks the controller is about 6 %
+  worse; on the other networks tried it changes little (Round 3).
 - At 0.50 it still jams. Teleports remain at 0.45 in 4 of 10 runs.
 - The camera reading of a blocked lane exists only in the simulated loop; it
   is not in the live message contract. A camera cannot tell a waiting turner

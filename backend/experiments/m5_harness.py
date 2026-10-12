@@ -36,6 +36,7 @@ from pathlib import Path
 
 from itms_domain import Tier0Config
 from itms_domain.lane_chains import from_sumo_net as chains_from_net
+from itms_domain.lane_chains import vias_from_sumo_net as vias_from_net
 from sim_service.control import metrics
 from sim_service.control.memory import DemandMemory, LoadBaseline
 from sim_service.control.online_calibration import OnlineCalibration
@@ -110,6 +111,18 @@ def lane_chains() -> tuple[dict, dict] | None:
         return None
     up, down = chains_from_net(NET_PATH)
     return (up, down) if (up or down) else None
+
+
+@cache
+def lane_vias(short_m: float | None = None) -> dict | None:
+    """The internal lanes inside each approach's chain
+    (`itms_domain.lane_chains.vias_from_sumo_net`) and, with `short_m`, those
+    leading into an unchained approach lane shorter than that; None when the
+    network has neither or chains are switched off."""
+    if not LANE_CHAINS_ON:
+        return None
+    chains = lane_chains()
+    return vias_from_net(NET_PATH, chains[0] if chains else {}, short_m) or None
 
 
 def scenario_inputs(demand_level: str):

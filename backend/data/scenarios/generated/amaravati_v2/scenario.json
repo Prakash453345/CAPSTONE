@@ -1,0 +1,213 @@
+{
+ "name": "amaravati_v2",
+ "net": "amaravati_v2.net.xml",
+ "mix": "india",
+ "levels": {
+  "light": {
+   "sumocfg": "amaravati_v2_light.sumocfg",
+   "route": "amaravati_v2_light.rou.xml",
+   "target_ds": 0.25,
+   "achieved_ds": 0.2474,
+   "busiest_tls": "cluster_5823218308_8431116145",
+   "period_s": 1.8967,
+   "iterations": [
+    [
+     4.0,
+     0.1213
+    ],
+    [
+     1.9412,
+     0.2443
+    ],
+    [
+     1.8967,
+     0.2474
+    ]
+   ]
+  },
+  "medium": {
+   "sumocfg": "amaravati_v2_medium.sumocfg",
+   "route": "amaravati_v2_medium.rou.xml",
+   "target_ds": 0.5,
+   "achieved_ds": 0.4979,
+   "busiest_tls": "cluster_5823218308_8431116145",
+   "period_s": 0.9095,
+   "iterations": [
+    [
+     4.0,
+     0.1213
+    ],
+    [
+     0.9706,
+     0.4686
+    ],
+    [
+     0.9095,
+     0.4979
+    ]
+   ]
+  },
+  "heavy": {
+   "sumocfg": "amaravati_v2_heavy.sumocfg",
+   "route": "amaravati_v2_heavy.rou.xml",
+   "target_ds": 1.0,
+   "achieved_ds": 1.0054,
+   "busiest_tls": "5285641690",
+   "period_s": 0.4392,
+   "iterations": [
+    [
+     4.0,
+     0.1213
+    ],
+    [
+     0.4853,
+     0.9284
+    ],
+    [
+     0.4506,
+     0.9749
+    ],
+    [
+     0.4392,
+     1.0054
+    ]
+   ]
+  }
+ },
+ "demand": "randomTrips --fringe-factor 5, 0-1800 s, routed by duarouter",
+ "source_net": "/home/claude/capstone/itms/scenarios/generated/amaravati_v2/osm/amaravati_v2.net.xml",
+ "signalised_junctions": 120,
+ "map_center": "-35.560197,-98.411656",
+ "phases_per_junction": [
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  3,
+  3,
+  3,
+  3,
+  3,
+  3,
+  4,
+  4,
+  4,
+  4,
+  5,
+  6,
+  6
+ ],
+ "osm": {
+  "bbox": null,
+  "file": "/home/claude/capstone/itms/scenarios/generated/amaravati/osm/amaravati_planned.osm.xml",
+  "crop": null,
+  "netconvert": "--osm-files amaravati_planned.osm.xml -o amaravati_v2_osm.net.xml --type-files osmNetconvert.typ.xml --geometry.remove --geometry.remove.min-length 5 --junctions.join --junctions.join-dist 25 --tls.guess-signals --tls.discard-simple --tls.join --roundabouts.guess --ramps.guess --keep-edges.by-vclass passenger --remove-edges.isolated --junctions.join.parallel-threshold 0 --lefthand",
+  "signal_rule": "OSM signal tags, plus junctions where >= 3 entering roads are tertiary or above",
+  "signals_added": 121,
+  "max_speed_mps": 13.89,
+  "lanes_capped": 1884
+ }
+}

@@ -315,7 +315,7 @@ def test_a_blockage_must_outlast_a_change_interval_when_asked_to() -> None:
     cfg = _with_variants()
     blocked = {m: "L2" for m in ("L0", "L1", "L2")}
     ctx = JunctionContext("J", "P0", 8.0, queue_pcu=_queues(n=20.0, s=2.0), blocked_by=blocked)
-    assert HolConfig().min_blocked_changes == 1.0                      # the default
+    assert (HolConfig().min_blocked_changes, HolConfig().family_budget) == (1.0, 2.0)
     c = _controller(cfg, hol=HolConfig(), nominal_cycle_s=60.0)
     need = int(cfg.yellow_s + cfg.all_red_s)                           # 5 ticks of 1 s
     for _ in range(need - 1):
@@ -664,3 +664,38 @@ def test_a_variant_gives_way_when_another_phase_is_running_out_of_time() -> None
     plan = c(cfg, late)
     assert [s.phase_id for s in plan.steps][:2] == ["P0@0", "P1"]
     assert c.stats["hol_variant_cut_short"] == 1
+
+
+def test_the_wait_guard_allows_for_every_phase_the_ring_may_put_first() -> None:
+    """With `wide_guard` a ring of three or more phases allows for every other
+    phase coming first, each with its minimum green and a change interval (the
+    held-out run saw a wait pass its bound at a three-phase junction when the
+    ring passed over the waiting phase after a variant visit). Revision 6
+    (`wide_guard=False`) allowed for one."""
+    cfg = _with_variants()
+    assert HolConfig().wide_guard
+    c = _controller(cfg, hol=HolConfig(), nominal_cycle_s=60.0)
+    d = _controller(cfg, hol=HolConfig(wide_guard=False), nominal_cycle_s=60.0)
+    change = cfg.yellow_s + cfg.all_red_s
+    longest = max(cfg.min_green_s[p] for p in cfg.ring_order)
+    other = next(iter(cfg.phases["P1"].green_movements - cfg.phases["P0"].green_movements))
+
+    def ring(n: int):
+        extra = {f"X{i}": replace(cfg.phases["P1"], id=f"X{i}") for i in range(n - 2)}
+        return replace(cfg, phases={**cfg.phases, **extra}, ring_order=("P0", "P1", *extra),
+                       min_green_s={**cfg.min_green_s, **dict.fromkeys(extra, longest)},
+                       max_green_s={**cfg.max_green_s, **dict.fromkeys(extra, 40.0)})
+
+    def ctx(left_s: float) -> JunctionContext:
+        return JunctionContext("J", "P0", 10.0, queue_pcu=_queues(n=5.0, s=5.0),
+                               has_demand={other: True},
+                               wait_times_s={other: cfg.max_wait_s - left_s})
+
+    for n in (2, 3, 4, 5):
+        hold = (acamp._SKIP_WAIT_MARGIN_S + 2 * change + cfg.min_green_s["P0"]  # noqa: SLF001
+                + (n - 1 if n > 2 else 0) * (longest + change))
+        assert c._others_can_wait(ring(n), ctx(hold + 1.0), "P0")  # noqa: SLF001
+        assert not c._others_can_wait(ring(n), ctx(hold - 1.0), "P0")  # noqa: SLF001
+        narrow = hold - (n - 2 if n > 2 else 0) * (longest + change)
+        assert d._others_can_wait(ring(n), ctx(narrow + 1.0), "P0")  # noqa: SLF001
+        assert not d._others_can_wait(ring(n), ctx(narrow - 1.0), "P0")  # noqa: SLF001
