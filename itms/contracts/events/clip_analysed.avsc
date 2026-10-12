@@ -1,0 +1,23 @@
+{
+  "type": "record",
+  "name": "ClipAnalysed",
+  "namespace": "itms.contracts",
+  "doc": "Progress and result of analysing one uploaded clip, published by vision-service on `vision.clip-analysed`: ANALYSING (with `progress`) while it runs, then exactly one DONE or FAILED. A DONE with `anomaly_type` set is a candidate for an operator; it dispatches nothing until confirmed through api-service (ADR-006). `findings_json` and `timeline_json` are JSON text rather than nested records because their shape follows the detectors that ran, which vary by installation (see vision_service.clips.analyse).",
+  "fields": [
+    { "name": "clip_id", "type": "string" },
+    { "name": "status", "type": { "type": "enum", "name": "ClipAnalysisStatus", "symbols": ["ANALYSING", "DONE", "FAILED"] } },
+    { "name": "progress", "type": "double", "default": 0.0, "doc": "0..1 share of the video analysed." },
+    { "name": "anomaly_type", "type": ["null", "string"], "default": null, "doc": "Lower-case itms_domain.anomaly.AnomalyType of the main finding; null when the clip looks normal (or analysis failed)." },
+    { "name": "severity", "type": ["null", "string"], "default": null, "doc": "low | medium | high | blocked, from the explainable rules in vision_service.clips.severity." },
+    { "name": "confidence", "type": ["null", "double"], "default": null, "doc": "0..1, how sure the detector that raised the main finding was. Separate from severity: how bad versus how sure." },
+    { "name": "flagged_at_s", "type": ["null", "double"], "default": null, "doc": "Seconds into the video where the main finding starts -- where a reviewer's player should seek to." },
+    { "name": "reasons", "type": { "type": "array", "items": "string" }, "default": [], "doc": "Plain-language reasons for the type and severity, for the reviewer." },
+    { "name": "findings_json", "type": "string", "default": "[]", "doc": "Every finding (main one first): type, severity, confidence, start/end seconds, evidence." },
+    { "name": "timeline_json", "type": "string", "default": "{}", "doc": "Per-second detector signals for a chart: {\"t\": [...], \"<signal>\": [...]}." },
+    { "name": "detectors", "type": { "type": "array", "items": "string" }, "default": [], "doc": "Which detectors ran on this clip (e.g. vehicles, fire, accident). A detector that is not installed is absent, so 'nothing found' can be read correctly." },
+    { "name": "snapshot_path", "type": ["null", "string"], "default": null, "doc": "Absolute path of a JPEG of the flagged moment (people pixelated), when there is a finding." },
+    { "name": "duration_s", "type": ["null", "double"], "default": null },
+    { "name": "error", "type": "string", "default": "" },
+    { "name": "analysed_at", "type": { "type": "long", "logicalType": "timestamp-millis" } }
+  ]
+}

@@ -159,3 +159,30 @@ def test_restore_all_puts_every_lane_back(lanes):
     assert lanes.max_speed["E1_0"] == 14.0
     assert lanes.max_speed["E2_0"] == 10.0
     assert c.active_anomalies() == []
+
+
+def test_a_fire_confirmed_from_a_video_clip_becomes_a_fire_anomaly_with_its_detail(lanes):
+    """api-service's clip confirmation sends AnomalyCreateRequested with type
+    FIRE and the clip named in `detail`; through the wire contract it must
+    arrive as a FIRE anomaly (which the response chain pages a fire truck and
+    police for) carrying that detail."""
+    from datetime import UTC, datetime
+
+    from itms_common.events import decode_envelope, encode_envelope
+    from itms_domain import AnomalyType
+
+    sent = {
+        "anomaly_id": "clip-an-1", "edge_id": "E1", "lane_id": None,
+        "anomaly_type": "FIRE", "severity": "HIGH", "duration_s": None, "position_m": None,
+        "operator": "operator:asha", "detail": "confirmed from video clip fire.mp4: smoke",
+        "requested_at": datetime(2026, 10, 11, tzinfo=UTC),
+    }
+    received = decode_envelope(
+        encode_envelope(event_type="AnomalyCreateRequested", source="api-service", payload=sent)
+    )["payload"]
+    c = OperatorAnomalyController()
+    c.handle_create(received, step=1, sim_time_s=1.0)
+    (anomaly,) = c.active_anomalies()
+    assert anomaly.anomaly_type is AnomalyType.FIRE
+    assert anomaly.detail == "confirmed from video clip fire.mp4: smoke"
+    assert anomaly.operator == "operator:asha"

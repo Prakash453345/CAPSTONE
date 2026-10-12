@@ -11,6 +11,7 @@ import { EASE_OUT } from "@/components/console/motion";
 import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/notifications/Toaster";
 import { TrafficDataBridge } from "@/services/traffic/TrafficDataBridge";
+import { ClipBridge } from "@/services/traffic/ClipBridge";
 import { useSystemStore } from "@/store/systemStore";
 
 // Split view mounts two map pages, so it pulls in MapLibre; loading it on
@@ -85,6 +86,7 @@ export function AppShell() {
     <div className="flex h-full w-full overflow-hidden bg-background text-foreground">
       <a href="#workspace" className="skip-link">Skip to workspace</a>
       <TrafficDataBridge />
+      <ClipBridge />
       <Toaster />
       <div className={immersive ? "hidden" : "hidden lg:block"}>
         <SideNav

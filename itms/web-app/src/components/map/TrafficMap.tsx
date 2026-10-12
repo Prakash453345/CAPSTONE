@@ -27,6 +27,7 @@ import {
   type AnomalyTarget,
 } from "@/components/map/CreateAnomalyPanel";
 import { EmergencyPanel } from "@/components/map/EmergencyPanel";
+import { UploadClipPanel } from "@/components/map/UploadClipPanel";
 import { FollowCamera } from "@/components/map/FollowCamera";
 import { useMapStore } from "@/store/mapStore";
 import { useTransitionStore } from "@/store/transitionStore";
@@ -70,6 +71,7 @@ export function TrafficMap({
   const setDraftPoint = useEmergencyStore((s) => s.setDraftPoint);
 
   const [pendingTarget, setPendingTarget] = useState<AnomalyTarget | null>(null);
+  const [clipTarget, setClipTarget] = useState<AnomalyTarget | null>(null);
   const [pickHint, setPickHint] = useState<string | null>(null);
   const creatingAnomaly = interactionMode === "create-anomaly";
 
@@ -261,7 +263,8 @@ export function TrafficMap({
 
   const emergencyDraft = useEmergencyStore((s) => s.draft);
   const emergencySelected = useEmergencyStore(selectSelectedRequest);
-  const operatorPanelOpen = creatingAnomaly || Boolean(emergencyDraft || emergencySelected);
+  const operatorPanelOpen =
+    creatingAnomaly || clipTarget !== null || Boolean(emergencyDraft || emergencySelected);
   const panelOpen = operatorPanelOpen || selectedRoad !== null;
 
   const exitCreate = () => {
@@ -349,9 +352,14 @@ export function TrafficMap({
 
           <EmergencyPanel part="panel" />
 
+          {clipTarget && !creatingAnomaly && (
+            <UploadClipPanel target={clipTarget} onClose={() => setClipTarget(null)} />
+          )}
+
           {!operatorPanelOpen && (
             <RoadPlaceCard
               onCreateAnomaly={(target) => setPendingTarget(target)}
+              onUploadClip={(target) => setClipTarget(target)}
             />
           )}
         </div>

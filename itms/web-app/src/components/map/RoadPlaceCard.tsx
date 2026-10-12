@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { AlertTriangle, Ambulance, Gauge, Layers, Ruler, X } from "lucide-react";
+import { AlertTriangle, Ambulance, Gauge, Layers, Ruler, Video, X } from "lucide-react";
 import { edgeById } from "@/data/network";
 import { useMapChromeStore } from "@/store/mapChromeStore";
 import { useTrafficStore } from "@/store/trafficStore";
@@ -18,13 +18,16 @@ function trafficLevel(value: number | undefined) {
 
 /**
  * The place card for a road picked on the map or in search: live condition,
- * road facts and the two operator actions that start from a road. Rendered
+ * road facts and the operator actions that start from a road -- report an
+ * anomaly, send a unit, or upload a video of the road for automatic checks. Rendered
  * in the map's left column, so it follows the one-panel-at-a-time rule.
  */
 export function RoadPlaceCard({
   onCreateAnomaly,
+  onUploadClip,
 }: {
   onCreateAnomaly: (target: AnomalyTarget) => void;
+  onUploadClip: (target: AnomalyTarget) => void;
 }) {
   const selected = useMapChromeStore((s) => s.selectedRoad);
   const selectRoad = useMapChromeStore((s) => s.selectRoad);
@@ -118,6 +121,19 @@ export function RoadPlaceCard({
         >
           <Ambulance />
           Send unit here
+        </button>
+      </div>
+      <div className="border-t border-border px-4 py-3">
+        <button
+          type="button"
+          onClick={() => {
+            selectRoad(null);
+            onUploadClip(target);
+          }}
+          className="flex h-9 w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-full border border-input px-2.5 text-[13px] font-medium text-primary transition-colors hover:bg-primary-muted [&_svg]:size-4"
+        >
+          <Video />
+          Check a video of this road
         </button>
       </div>
     </section>

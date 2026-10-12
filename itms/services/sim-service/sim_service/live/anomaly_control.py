@@ -53,6 +53,7 @@ _TYPE_MAP = {
     "LANE_BLOCKAGE": AnomalyType.LANE_BLOCKAGE,
     "ROAD_OBSTRUCTION": AnomalyType.ROAD_OBSTRUCTION,
     "HEAVY_CONGESTION": AnomalyType.HEAVY_CONGESTION,
+    "FIRE": AnomalyType.FIRE,  # a confirmed fire/smoke finding from an uploaded clip
 }
 _SEV_MAP = {
     "LOW": AnomalySeverity.LOW,

@@ -37,23 +37,39 @@ import datetime as dt
 import logging
 import os
 import secrets
+import shutil
 import time
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import (
     Depends,
     FastAPI,
+    File,
+    Form,
     Header,
     HTTPException,
     Request,
+    UploadFile,
     WebSocket,
     WebSocketDisconnect,
 )
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from itms_common import RedisStreamsBus, decode_envelope, encode_envelope
 from itms_domain.incident import IllegalTransition, IncidentClass
 from pydantic import BaseModel, Field
 
+from api_service.clips import (
+    ALLOWED_EXTENSIONS,
+    SUBMITTED_TOPIC,
+    Clip,
+    ClipRegistry,
+    ClipStateError,
+    anomaly_request_payload,
+    clip_to_json,
+    submitted_payload,
+)
 from api_service.incidents import (
     IncidentRegistry,
     incident_to_json,
@@ -81,6 +97,7 @@ TOPICS = [
     "emergency.dispatched",  # incident -> authority alert (SIM_MODE=live)
     "vision.link-state",  # M8 camera-measured link state (vision-service)
     "vision.camera-status",  # M8 camera health changes (vision-service)
+    "vision.clip-analysed",  # uploaded-clip analysis progress/results (vision-service clip worker)
 ]
 _INCIDENT_EVENT_TYPES = {"IncidentCandidate", "IncidentDetected", "IncidentUpdated"}
 CONSUMER_GROUP = "api-service"
@@ -120,6 +137,14 @@ class RejectRequest(BaseModel):
 
 
 registry = IncidentRegistry()
+
+# Uploaded road videos (see api_service/clips.py). The directory is shared with
+# vision-service's clip worker, which reads the video and writes its result
+# and snapshot beside it.
+_REPO = Path(__file__).resolve().parents[3]
+CLIPS_DIR = Path(os.environ.get("CLIPS_DIR", _REPO / "var" / "clips")).resolve()
+CLIP_MAX_BYTES = int(float(os.environ.get("CLIP_MAX_MB", "300")) * 1024 * 1024)
+clips = ClipRegistry(CLIPS_DIR)
 
 
 class ConnectionManager:
@@ -183,6 +208,8 @@ async def _consume_topic(bus: RedisStreamsBus, topic: str, consumer: str) -> Non
                 try:
                     envelope = decode_envelope(msg.raw)
                     event_type = envelope["event_type"]
+                    if event_type == "ClipAnalysed":
+                        clips.apply_analysed(envelope["payload"])
                     if event_type in _INCIDENT_EVENT_TYPES:
                         # Builds/updates the registry from the stream -- see
                         # api_service/incidents.py's module docstring for why
@@ -374,3 +401,156 @@ async def reject_incident(incident_id: str, body: RejectRequest) -> dict:
 
     await publish_updated(app.state.bus, inc)
     return incident_to_json(inc)
+
+
+# ---- uploaded road videos -------------------------------------------------
+
+
+class ClipConfirmRequest(BaseModel):
+    actor: str = Field(min_length=1)
+    anomaly_type: str | None = None  # the reviewer's correction; default: what the analysis found
+    severity: str | None = None
+    note: str = ""
+
+
+class ClipRejectRequest(BaseModel):
+    actor: str = Field(min_length=1)
+    note: str = ""
+
+
+_VIDEO_TYPES = {".mp4": "video/mp4", ".m4v": "video/mp4", ".mov": "video/quicktime",
+                ".webm": "video/webm", ".mkv": "video/x-matroska", ".avi": "video/x-msvideo"}
+
+
+def _clip_or_404(clip_id: str) -> Clip:
+    clip = clips.get(clip_id)
+    if clip is None:
+        raise HTTPException(status_code=404, detail="unknown clip_id")
+    return clip
+
+
+def _inside_clips_dir(path: str) -> Path:
+    """Serve only files under CLIPS_DIR, whatever a stored path says."""
+    p = Path(path).resolve()
+    if CLIPS_DIR not in p.parents or not p.is_file():
+        raise HTTPException(status_code=404, detail="file not available")
+    return p
+
+
+@app.post("/v1/clips", status_code=201)
+async def upload_clip(
+    request: Request,
+    file: UploadFile = File(...),
+    edge_id: str = Form(..., min_length=1),
+    road_name: str = Form(""),
+    latitude: float | None = Form(None),
+    longitude: float | None = Form(None),
+    operator: str = Form("operator:console"),
+) -> dict:
+    """Store a road video and queue it for analysis. The video stands in for
+    a camera on `edge_id`; anything found becomes a review item, never a
+    dispatch on its own."""
+    name = Path(file.filename or "").name
+    ext = Path(name).suffix.lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            status_code=415,
+            detail=f"unsupported file type {ext or '(none)'}; use one of "
+                   f"{', '.join(sorted(ALLOWED_EXTENSIONS))}",
+        )
+    clip_id, clip_dir = clips.new_clip_dir()
+    dest = clip_dir / f"source{ext}"
+    size = 0
+    try:
+        with dest.open("wb") as out:
+            while chunk := await file.read(1 << 20):
+                size += len(chunk)
+                if size > CLIP_MAX_BYTES:
+                    raise HTTPException(
+                        status_code=413,
+                        detail=f"video is over the {CLIP_MAX_BYTES // (1024 * 1024)} MB limit",
+                    )
+                out.write(chunk)
+        if size == 0:
+            raise HTTPException(status_code=422, detail="the uploaded file is empty")
+    except HTTPException:
+        shutil.rmtree(clip_dir, ignore_errors=True)
+        raise
+
+    clip = clips.add(Clip(
+        clip_id=clip_id, filename=name, video_path=str(dest), edge_id=edge_id,
+        road_name=road_name, latitude=latitude, longitude=longitude, operator=operator,
+        submitted_ms=int(time.time() * 1000),
+    ))
+    raw = encode_envelope(event_type="ClipSubmitted", source="api-service",
+                          payload=submitted_payload(clip), partition_key=clip_id)
+    bus: RedisStreamsBus = request.app.state.bus
+    await bus.publish(SUBMITTED_TOPIC, raw)
+    log.info("clip %s uploaded (%s, %.1f MB) for edge %s", clip_id, name, size / 1e6, edge_id)
+    return clip_to_json(clip)
+
+
+@app.get("/v1/clips")
+async def list_clips() -> list[dict]:
+    """Every uploaded clip, newest first."""
+    return [clip_to_json(c) for c in clips.all()]
+
+
+@app.get("/v1/clips/{clip_id}")
+async def get_clip(clip_id: str) -> dict:
+    return clip_to_json(_clip_or_404(clip_id))
+
+
+@app.get("/v1/clips/{clip_id}/video")
+async def clip_video(clip_id: str) -> FileResponse:
+    """The uploaded video, with range requests so a player can seek to the
+    flagged moment."""
+    path = _inside_clips_dir(_clip_or_404(clip_id).video_path)
+    return FileResponse(path, media_type=_VIDEO_TYPES.get(path.suffix.lower(), "video/mp4"))
+
+
+@app.get("/v1/clips/{clip_id}/snapshot")
+async def clip_snapshot(clip_id: str) -> FileResponse:
+    """The flagged moment as a JPEG, people and plates pixelated."""
+    snap = (_clip_or_404(clip_id).result or {}).get("snapshot_path") or ""
+    if not snap:
+        raise HTTPException(status_code=404, detail="no snapshot for this clip")
+    return FileResponse(_inside_clips_dir(snap), media_type="image/jpeg")
+
+
+@app.post("/v1/clips/{clip_id}/confirm", dependencies=[Depends(require_api_key)])
+async def confirm_clip(clip_id: str, body: ClipConfirmRequest, request: Request) -> dict:
+    """ADR-006's human gate for a clip finding: confirm it into a live
+    anomaly. Publishes the same `AnomalyCreateRequested` the Create Anomaly
+    panel sends, so the simulation (SIM_MODE=live) applies it and the
+    response chain dispatches. Requires `X-API-Key`."""
+    try:
+        clip = clips.confirm(clip_id, actor=body.actor, at_ms=int(time.time() * 1000),
+                             anomaly_type=body.anomaly_type, severity=body.severity,
+                             note=body.note)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="unknown clip_id") from None
+    except ClipStateError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from None
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
+    raw = encode_envelope(event_type="AnomalyCreateRequested", source="api-service",
+                          payload=anomaly_request_payload(clip))
+    bus: RedisStreamsBus = request.app.state.bus
+    await bus.publish(COMMANDS_TOPIC, raw)
+    log.info("clip %s confirmed by %s as %s/%s -> anomaly %s", clip_id, body.actor,
+             clip.confirmed_type, clip.confirmed_severity, clip.anomaly_id)
+    return clip_to_json(clip)
+
+
+@app.post("/v1/clips/{clip_id}/reject", dependencies=[Depends(require_api_key)])
+async def reject_clip(clip_id: str, body: ClipRejectRequest) -> dict:
+    """Dismiss a clip finding as a false alarm. Requires `X-API-Key`."""
+    try:
+        clip = clips.reject(clip_id, actor=body.actor, at_ms=int(time.time() * 1000),
+                            note=body.note)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="unknown clip_id") from None
+    except ClipStateError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from None
+    return clip_to_json(clip)
