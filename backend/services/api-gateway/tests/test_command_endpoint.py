@@ -5,7 +5,7 @@ lifespan; the envelope it builds is decoded back to prove the wire shape."""
 from __future__ import annotations
 
 import pytest
-from api_gateway.api.routes.commands import post_command
+from api_gateway.controllers.commands import post_command
 from api_gateway.core.config import COMMANDS_TOPIC
 from api_gateway.models.commands import CommandRequest
 from fastapi import HTTPException

@@ -1,6 +1,7 @@
 """Uploaded road videos: storage, the analysis read model, and the operator's
 review -- the api-gateway's half of clip-based incident detection. The HTTP
-side is api/routes/clips.py; this module holds the state and rules.
+side is routes/clips.py (URLs) and controllers/clips.py (request handling);
+this module holds the state and rules.
 
 Flow:
 

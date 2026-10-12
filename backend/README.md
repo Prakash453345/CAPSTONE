@@ -270,10 +270,12 @@ backend/
 │   ├── api-gateway/               # FastAPI: the console's one HTTP/WebSocket entry point
 │   │   └── api_gateway/
 │   │       ├── main.py            # create_app(): settings, state, routers, lifespan
+│   │       ├── routes/            # URL map only: path + method -> controller, API-key policy
+│   │       ├── controllers/       # request handling: read input, call a service, map errors
+│   │       ├── services/          # business logic + state: registries, bus -> WebSocket relay
+│   │       ├── models/            # request bodies, stored records
 │   │       ├── core/              # config (env settings), security (API key)
-│   │       ├── api/routes/        # controllers: health, commands, stream, incidents, clips
-│   │       ├── services/          # incident + clip registries, bus -> WebSocket relay
-│   │       └── models/            # request bodies, stored records
+│   │       └── dependencies.py    # hands shared state (registries, bus) to controllers
 │   ├── simulation-service/        # SUMO, signal control, routing, live emergency layer
 │   │   └── sim_service/
 │   │       ├── adapters/sumo/       # TraCI loop (M1)

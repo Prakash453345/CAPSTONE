@@ -6,11 +6,13 @@ confirm/reject endpoints for detector incidents and uploaded-clip findings.
 Everything else (simulation, signal control, routing, vision) lives in the
 other services and talks to this one only through the bus.
 
-Layout:
-    core/        settings and the API-key check
-    api/routes/  controllers: one module per resource, HTTP only
-    services/    state and rules: registries, the bus relay, WebSocket clients
-    models/      request bodies and stored records
+Layers, each calling only the one below it:
+    routes/        the URL map: path + method -> controller, route policy (API key)
+    controllers/   request handling: read input, call a service, map errors to HTTP
+    services/      business logic and state: registries, the bus relay, WebSocket clients
+    models/        request bodies and stored records
+    core/          settings and the API-key check; dependencies.py hands shared
+                   state (registries, bus) to controllers
 
 Run: uvicorn api_gateway.main:app --port 8000
 """
@@ -26,8 +28,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from itms_common import RedisStreamsBus
 
-from api_gateway.api.routes import clips, commands, health, incidents, stream
 from api_gateway.core.config import Settings
+from api_gateway.routes import api_router
 from api_gateway.services.clip_registry import ClipRegistry
 from api_gateway.services.connections import ConnectionManager
 from api_gateway.services.event_relay import EventRelay
@@ -69,8 +71,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    for module in (health, commands, stream, incidents, clips):
-        app.include_router(module.router)
+    app.include_router(api_router)
     return app
 
 

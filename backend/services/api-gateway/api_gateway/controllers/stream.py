@@ -1,13 +1,10 @@
-"""The live WebSocket: every relayed bus event, pushed to every client."""
+"""Controller: the live WebSocket -- every relayed bus event, pushed to every client."""
 
 from __future__ import annotations
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-
-router = APIRouter(prefix="/v1", tags=["stream"])
+from fastapi import WebSocket, WebSocketDisconnect
 
 
-@router.websocket("/stream")
 async def stream(ws: WebSocket) -> None:
     connections = ws.app.state.connections
     await connections.connect(ws)

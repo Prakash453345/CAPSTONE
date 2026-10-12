@@ -1,21 +1,19 @@
-"""Operator commands onto the bus (`commands.operator`)."""
+"""Controller: operator commands onto the bus (`commands.operator`)."""
 
 from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, HTTPException
+from fastapi import HTTPException
 from itms_common import encode_envelope
 
-from api_gateway.api.deps import BusDep
 from api_gateway.core.config import COMMANDS_TOPIC, EVENT_SOURCE
+from api_gateway.dependencies import BusDep
 from api_gateway.models.commands import CommandRequest
 
 log = logging.getLogger("api-service.commands")
-router = APIRouter(prefix="/v1", tags=["commands"])
 
 
-@router.post("/commands")
 async def post_command(cmd: CommandRequest, bus: BusDep) -> dict:
     payload = {**cmd.payload, "operator": cmd.payload.get("operator", cmd.operator)}
     try:

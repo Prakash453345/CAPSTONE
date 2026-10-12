@@ -1,7 +1,7 @@
 """Uploaded road videos: upload, read, stream, and the operator's review.
 
-The rules and state live in services/clip_registry.py; this module is only
-the HTTP layer.
+Controller: request handling only. URLs are mapped in routes/clips.py; the
+rules and state live in services/clip_registry.py.
 """
 
 from __future__ import annotations
@@ -12,13 +12,12 @@ import time
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from itms_common import encode_envelope
 
-from api_gateway.api.deps import BusDep, ClipsDep, SettingsDep
 from api_gateway.core.config import COMMANDS_TOPIC, EVENT_SOURCE
-from api_gateway.core.security import require_api_key
+from api_gateway.dependencies import BusDep, ClipsDep, SettingsDep
 from api_gateway.models.clips import Clip, ClipConfirmRequest, ClipRejectRequest
 from api_gateway.services.clip_registry import (
     ALLOWED_EXTENSIONS,
@@ -31,7 +30,6 @@ from api_gateway.services.clip_registry import (
 )
 
 log = logging.getLogger("api-service.clips")
-router = APIRouter(prefix="/v1/clips", tags=["clips"])
 
 _VIDEO_TYPES = {".mp4": "video/mp4", ".m4v": "video/mp4", ".mov": "video/quicktime",
                 ".webm": "video/webm", ".mkv": "video/x-matroska", ".avi": "video/x-msvideo"}
@@ -52,7 +50,6 @@ def _inside(root: Path, path: str) -> Path:
     return p
 
 
-@router.post("", status_code=201)
 async def upload_clip(
     file: Annotated[UploadFile, File()],
     edge_id: Annotated[str, Form(min_length=1)],
@@ -105,18 +102,15 @@ async def upload_clip(
     return clip_to_json(clip)
 
 
-@router.get("")
 async def list_clips(clips: ClipsDep) -> list[dict]:
     """Every uploaded clip, newest first."""
     return [clip_to_json(c) for c in clips.all()]
 
 
-@router.get("/{clip_id}")
 async def get_clip(clip_id: str, clips: ClipsDep) -> dict:
     return clip_to_json(_clip_or_404(clips, clip_id))
 
 
-@router.get("/{clip_id}/video")
 async def clip_video(clip_id: str, clips: ClipsDep) -> FileResponse:
     """The uploaded video, with range requests so a player can seek to the
     flagged moment."""
@@ -124,7 +118,6 @@ async def clip_video(clip_id: str, clips: ClipsDep) -> FileResponse:
     return FileResponse(path, media_type=_VIDEO_TYPES.get(path.suffix.lower(), "video/mp4"))
 
 
-@router.get("/{clip_id}/snapshot")
 async def clip_snapshot(clip_id: str, clips: ClipsDep) -> FileResponse:
     """The flagged moment as a JPEG, people and plates pixelated."""
     snap = (_clip_or_404(clips, clip_id).result or {}).get("snapshot_path") or ""
@@ -133,7 +126,6 @@ async def clip_snapshot(clip_id: str, clips: ClipsDep) -> FileResponse:
     return FileResponse(_inside(clips.root, snap), media_type="image/jpeg")
 
 
-@router.post("/{clip_id}/confirm", dependencies=[Depends(require_api_key)])
 async def confirm_clip(
     clip_id: str,
     body: ClipConfirmRequest,
@@ -162,7 +154,6 @@ async def confirm_clip(
     return clip_to_json(clip)
 
 
-@router.post("/{clip_id}/reject", dependencies=[Depends(require_api_key)])
 async def reject_clip(
     clip_id: str, body: ClipRejectRequest, clips: ClipsDep
 ) -> dict:

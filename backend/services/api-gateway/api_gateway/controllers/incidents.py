@@ -1,4 +1,4 @@
-"""ADR-006's human-in-the-loop gate for detector incidents.
+"""Controller for ADR-006's human-in-the-loop gate on detector incidents.
 
 The simulation service's `LiveIncidentDetector` may only ever *raise* a
 candidate; only an operator, through confirm/reject here, may turn one into a
@@ -10,11 +10,10 @@ from __future__ import annotations
 
 import time
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import HTTPException
 from itms_domain.incident import IllegalTransition, IncidentClass
 
-from api_gateway.api.deps import BusDep, IncidentsDep
-from api_gateway.core.security import require_api_key
+from api_gateway.dependencies import BusDep, IncidentsDep
 from api_gateway.models.incidents import ConfirmRequest, RejectRequest
 from api_gateway.services.incident_registry import (
     incident_to_json,
@@ -22,10 +21,7 @@ from api_gateway.services.incident_registry import (
     publish_updated,
 )
 
-router = APIRouter(prefix="/v1/incidents", tags=["incidents"])
 
-
-@router.get("")
 async def list_incidents(incidents: IncidentsDep) -> list[dict]:
     """Every incident this process has seen since it started (the registry is
     in-memory, rebuilt from the bus on each restart), newest first."""
@@ -34,7 +30,6 @@ async def list_incidents(incidents: IncidentsDep) -> list[dict]:
     )]
 
 
-@router.get("/{incident_id}")
 async def get_incident(incident_id: str,
                        incidents: IncidentsDep) -> dict:
     inc = incidents.get(incident_id)
@@ -43,7 +38,6 @@ async def get_incident(incident_id: str,
     return incident_to_json(inc)
 
 
-@router.post("/{incident_id}/confirm", dependencies=[Depends(require_api_key)])
 async def confirm_incident(
     incident_id: str,
     body: ConfirmRequest,
@@ -69,7 +63,6 @@ async def confirm_incident(
     return incident_to_json(inc)
 
 
-@router.post("/{incident_id}/reject", dependencies=[Depends(require_api_key)])
 async def reject_incident(
     incident_id: str,
     body: RejectRequest,
