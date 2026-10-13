@@ -65,8 +65,10 @@ def evaluate(det, images, truth, data: Path, op: float, limit: int | None) -> di
             times.append(time.perf_counter() - t0)
         gt = truth[im["id"]]
         ev.add([b for b, _ in gt], [c for _, c in gt], [d.box for d in dets],
-               [d.score for d in dets], [d.vclass for d in dets])
+               [d.score for d in dets], [d.vclass for d in dets], image=im["file_name"])
     s = ev.summary()
+    s["per_image"] = ev.per_image          # for scripts/m8_detector_compare.py
+    s["per_box"] = ev.per_box              # for scripts/m8_simcam_calibrate.py
     s["cpu_ms_per_image"] = {"median": 1000 * statistics.median(times) if times else None,
                              "mean": 1000 * statistics.mean(times) if times else None,
                              "n": len(times)}

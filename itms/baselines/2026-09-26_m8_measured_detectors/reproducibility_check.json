@@ -1,0 +1,79 @@
+{
+ "meta": {
+  "fps": 5.0,
+  "seeds": [
+   1
+  ],
+  "levels": [
+   "medium"
+  ],
+  "arms": [
+   "vision:finetuned_day:failsafe"
+  ],
+  "wall_min": 5.1
+ },
+ "summary": {
+  "medium": {
+   "arms": {
+    "vision:finetuned_day:failsafe": {
+     "n": 1,
+     "person_delay_s": 70837.60300000003,
+     "stops_per_vehicle": 1.6983122362869199,
+     "p95_wait_s": 56.0,
+     "person_throughput_per_hour": 3434.3122460824043,
+     "interlock_violations": 0,
+     "fallback_fixed_time": 0,
+     "ticks": 11212,
+     "confidence_fed_mean": 0.8996732646829151,
+     "confidence_below_0.8": 0.0015973875934265438
+    }
+   },
+   "paired": {}
+  }
+ },
+ "records": [
+  {
+   "controller": "ccacamp",
+   "demand_level": "medium",
+   "seed": 1,
+   "steps": 2324,
+   "interlock_violations": 0,
+   "person_delay_s": 70837.60300000003,
+   "person_throughput_per_hour": 3434.3122460824043,
+   "stops_per_vehicle": 1.6983122362869199,
+   "wait_time_s": {
+    "mean_s": 19.62447257383966,
+    "p95_s": 56.0,
+    "max_s": 103.0
+   },
+   "wall_s": 302.8,
+   "decision_stats": {
+    "ticks": 11212,
+    "switch_cycle_supervisor": 3,
+    "switch_gap_out": 247,
+    "cycles_completed": 3616,
+    "extend": 10368,
+    "extend_allocation_protected": 0,
+    "switch_pressure": 366,
+    "switch_max_green": 228,
+    "switch_starvation": 0,
+    "blended": 0,
+    "blended_no_history": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "vision": {
+    "confidence_fed": {
+     "mean": 0.8996732646829151,
+     "below_0.8": 0.0015973875934265438,
+     "below_0.5": 0.0,
+     "link_ticks": 169652
+    },
+    "ticks": 2324,
+    "blind_check_junction_ticks": 0
+   },
+   "arm": "vision:finetuned_day:failsafe"
+  }
+ ]
+}

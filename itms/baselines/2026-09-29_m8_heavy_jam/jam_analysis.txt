@@ -1,0 +1,141 @@
+# Jam trace tables (scripts/m8_jam_trace.py; heavy demand; traces not kept, ~2 MB each)
+# 'truth' is what the runner measured; 'fed' is what the controller was given.
+# truth_s5 = perfect data seed 5 (454,138); itms6_640_s5 = cameras, no counting, seed 5 (728,941);
+# itms6_640_s5_oracle = cameras + true out-of-view halted PCU added (506,303; its 'fed' column is
+# logged before the oracle adds the hidden part).
+
+## Lane-level queue per junction (mean PCU over 300 s buckets): truth_s5 / itms6_640_s5
+truth_queue_pcu truth_s5.json / itms6_640_s5.json
+                             0             300             600             900            1200            1500            1800            2100            2400            2700            3000
+1880441505              0/   1          1/   1          1/   2          1/   1          2/   1          1/   2          0/   0          0/   0          0/   0        nan/   0        nan/   0
+2833253632              0/   0          1/   1          3/   3          1/   1          1/   1          2/   1          1/   1          0/   0          0/   0        nan/   0        nan/   0
+7871074777              0/   0          1/   0          1/   1          1/   0          0/   1          1/   0          0/   0          0/   0          0/   0        nan/   0        nan/   0
+460_6354264758          0/   0          1/   1          1/   2          1/   1          2/   1          2/   3          2/   1          0/   1          0/   0        nan/   0        nan/   0
+905_6357870906          1/   2          3/   2          2/   7          6/  15          8/  17         13/  14          6/   3          1/   1          0/   0        nan/   0        nan/   0
+541_4393295474          1/   0          1/   1          2/   2          2/   2          1/   1          2/   2          1/   1          0/   0          0/   0        nan/   0        nan/   0
+740_4393296791          5/   5         15/  16         26/  26         31/  40         35/  58         31/  62         20/  67          3/  34          0/   7        nan/   0        nan/   0
+truth_s5.json running [154, 198, 207, 215, 243, 251, 55, 16] pending [0, 12, 21, 29, 40, 52, 44, 0]
+itms6_640_s5.json running [161, 207, 252, 254, 303, 308, 134, 47, 2] pending [0, 9, 7, 18, 18, 26, 4, 0, 0]
+
+## cluster_1880441740_4393296791, per lane, 600-1800 s
+truth_s5.json n 113
+  -848411147_0     L8,L9,L10      truth   4.5 fed   4.5
+  219187869_0      L11,L12        truth   1.4 fed   1.4
+  219187869_1      L13            truth   0.7 fed   0.7
+  219187869_2      L14,L15        truth   0.8 fed   0.8
+  374043424_0      L0,L1,L2       truth  12.3 fed  12.3
+  470178558_0      L3             truth   1.2 fed   1.2
+  470178558_1      L4             truth   1.4 fed   1.4
+  470178558_2      L5,L6,L7       truth   8.2 fed   8.2
+  phase share {'P0': 49, 'P1': 33, 'P2': 19, 'P3': 12}
+itms6_640_s5.json n 112
+  -848411147_0     L8,L9,L10      truth   4.6 fed   4.2
+  219187869_0      L11,L12        truth   1.5 fed   1.2
+  219187869_1      L13            truth   0.6 fed   0.6
+  219187869_2      L14,L15        truth   0.9 fed   1.0
+  374043424_0      L0,L1,L2       truth   6.6 fed   4.9
+  470178558_0      L3             truth   2.2 fed   2.1
+  470178558_1      L4             truth   3.6 fed   3.3
+  470178558_2      L5,L6,L7       truth  26.4 fed   6.9
+  phase share {'P0': 42, 'P1': 34, 'P2': 19, 'P3': 17}
+itms6_640_s5_oracle.json n 113
+  -848411147_0     L8,L9,L10      truth   4.8 fed   4.4
+  219187869_0      L11,L12        truth   1.4 fed   1.4
+  219187869_1      L13            truth   0.6 fed   0.6
+  219187869_2      L14,L15        truth   1.1 fed   1.2
+  374043424_0      L0,L1,L2       truth  14.9 fed   6.9
+  470178558_0      L3             truth   1.3 fed   1.0
+  470178558_1      L4             truth   1.9 fed   1.7
+  470178558_2      L5,L6,L7       truth  11.6 fed   6.2
+  phase share {'P0': 50, 'P1': 27, 'P2': 18, 'P3': 18}
+
+## Seed 4 (counting version 1 was +28.5 %): truth / no count / count v1, 900-2100 s
+truth_s4.json n 112
+  -848411147_0     L8,L9,L10      truth   4.6 fed   4.6
+  219187869_0      L11,L12        truth   1.0 fed   1.0
+  219187869_1      L13            truth   0.9 fed   0.9
+  219187869_2      L14,L15        truth   1.2 fed   1.2
+  374043424_0      L0,L1,L2       truth   8.3 fed   8.3
+  470178558_0      L3             truth   1.2 fed   1.2
+  470178558_1      L4             truth   1.3 fed   1.3
+  470178558_2      L5,L6,L7       truth   8.6 fed   8.6
+  phase share {'P0': 41, 'P1': 37, 'P2': 19, 'P3': 15}
+nogap_s4.json n 111
+  -848411147_0     L8,L9,L10      truth   4.6 fed   4.0
+  219187869_0      L11,L12        truth   1.0 fed   1.0
+  219187869_1      L13            truth   0.6 fed   0.6
+  219187869_2      L14,L15        truth   0.7 fed   0.7
+  374043424_0      L0,L1,L2       truth  11.1 fed   5.8
+  470178558_0      L3             truth   2.1 fed   1.8
+  470178558_1      L4             truth   2.1 fed   2.1
+  470178558_2      L5,L6,L7       truth  13.3 fed   6.1
+  phase share {'P0': 43, 'P1': 32, 'P2': 19, 'P3': 17}
+gap_s4.json n 112
+  -848411147_0     L8,L9,L10      truth   4.6 fed   4.3
+  219187869_0      L11,L12        truth   1.7 fed   1.4
+  219187869_1      L13            truth   0.7 fed   0.7
+  219187869_2      L14,L15        truth   0.8 fed   0.8
+  374043424_0      L0,L1,L2       truth  17.7 fed   7.1
+  470178558_0      L3             truth   2.0 fed   2.8
+  470178558_1      L4             truth   2.8 fed   3.8
+  470178558_2      L5,L6,L7       truth  22.1 fed  14.2
+  phase share {'P0': 41, 'P1': 50, 'P2': 13, 'P3': 8}
+
+## Perfect data, TRAIN seeds: a good run (110), a bad one (107, 101) and EVAL 5, 900-1900 s
+truth_s110.json n 93
+  -848411147_0     L8,L9,L10      truth   4.2 fed   4.2
+  219187869_0      L11,L12        truth   1.2 fed   1.2
+  219187869_1      L13            truth   0.6 fed   0.6
+  219187869_2      L14,L15        truth   0.6 fed   0.6
+  374043424_0      L0,L1,L2       truth   9.1 fed   9.1
+  470178558_0      L3             truth   1.3 fed   1.3
+  470178558_1      L4             truth   1.5 fed   1.5
+  470178558_2      L5,L6,L7       truth   8.3 fed   8.3
+  phase share {'P0': 34, 'P1': 29, 'P2': 15, 'P3': 15}
+truth_s107.json n 95
+  -848411147_0     L8,L9,L10      truth   5.3 fed   5.3
+  219187869_0      L11,L12        truth   1.3 fed   1.3
+  219187869_1      L13            truth   0.8 fed   0.8
+  219187869_2      L14,L15        truth   0.8 fed   0.8
+  374043424_0      L0,L1,L2       truth  14.5 fed  14.5
+  470178558_0      L3             truth   2.3 fed   2.3
+  470178558_1      L4             truth   2.4 fed   2.4
+  470178558_2      L5,L6,L7       truth  16.2 fed  16.2
+  phase share {'P0': 32, 'P1': 40, 'P2': 15, 'P3': 8}
+truth_s101.json n 94
+  -848411147_0     L8,L9,L10      truth   5.7 fed   5.7
+  219187869_0      L11,L12        truth   1.1 fed   1.1
+  219187869_1      L13            truth   0.4 fed   0.4
+  219187869_2      L14,L15        truth   0.8 fed   0.8
+  374043424_0      L0,L1,L2       truth  16.5 fed  16.5
+  470178558_0      L3             truth   1.3 fed   1.3
+  470178558_1      L4             truth   2.9 fed   2.9
+  470178558_2      L5,L6,L7       truth  20.7 fed  20.7
+  phase share {'P0': 46, 'P1': 27, 'P2': 12, 'P3': 9}
+truth_s5.json n 95
+  -848411147_0     L8,L9,L10      truth   4.4 fed   4.4
+  219187869_0      L11,L12        truth   1.4 fed   1.4
+  219187869_1      L13            truth   0.5 fed   0.5
+  219187869_2      L14,L15        truth   0.7 fed   0.7
+  374043424_0      L0,L1,L2       truth  14.3 fed  14.3
+  470178558_0      L3             truth   0.8 fed   0.8
+  470178558_1      L4             truth   1.1 fed   1.1
+  470178558_2      L5,L6,L7       truth   8.4 fed   8.4
+  phase share {'P0': 41, 'P1': 26, 'P2': 18, 'P3': 10}
+
+## Webster timing at the bottleneck (the degree of saturation)
+medium cycle 54.8 greens {'P0': 14.1, 'P1': 14.1, 'P2': 7.0, 'P3': 7.0} y {'P0': 0.171, 'P1': 0.171, 'P2': 0.069, 'P3': 0.061} DS 0.471
+heavy cycle 180.0 greens {'P0': 60.2, 'P1': 60.2, 'P2': 22.9, 'P3': 20.8} y {'P0': 0.366, 'P1': 0.366, 'P2': 0.139, 'P3': 0.126} DS 0.996
+
+## Run logs quoted in the README (verbatim lines)
+# no counting, seed 5 (scripts/m8_jam_trace.py):
+Warning: Teleporting vehicle 'veh869'; waited too long (yield), lane='470178558_2', time=1638.00.
+Warning: Vehicle 'veh869' ends teleporting on edge '848411147', time=1638.00.
+vision:itms6_640:failsafe heavy seed 5: delay 728,941 steps 3047 teleports 1 (812.4s) -> results/jam/itms6_640_s5.json
+# oracle, seed 5:
+vision:itms6_640:failsafe heavy seed 5: delay 506,303 steps 2614 teleports 0 (739.0s) -> results/jam/itms6_640_s5_oracle.json
+# counting version 1 with the evidence zone at the far end of the near view, seed 5 (scripts/m8_lane_undercount.py):
+delay 794087 steps 3265
+# counting version 1 as measured (evidence zone around line B), seed 5 (scripts/m8_lane_undercount.py):
+delay 468551 steps 2603
+# (the far-end run above, at 2,100 s: edge hidden 1.3 PCU just after a re-anchor, while 37.6 PCU really stood beyond the view; 22.1 against 40.8 at 2,000 s)

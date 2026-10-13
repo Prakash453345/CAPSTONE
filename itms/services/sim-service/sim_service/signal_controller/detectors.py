@@ -45,7 +45,7 @@ stateful, I/O-touching infrastructure the runner assembles a
 from __future__ import annotations
 
 import math
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 
 import traci
 
@@ -54,9 +54,18 @@ class ActuationDetector:
     """One instance per signal-controlled junction. `link_lanes` is that
     junction's `link_lanes.link_to_lane_map()[tls_id]` -- `{"L{i}": lane_id}`."""
 
-    def __init__(self, link_lanes: Mapping[str, str], *, gap_timeout_s: float = 3.0):
+    def __init__(self, link_lanes: Mapping[str, str], *, gap_timeout_s: float = 3.0,
+                 extra_lanes: Mapping[str, Sequence[str]] | None = None):
         self._link_lanes = link_lanes
         self._gap_timeout_s = gap_timeout_s
+        self._extra_lanes = extra_lanes or {}
+        """`{approach lane: other lanes that are the same road}` -- the
+        upstream lanes of a road SUMO split before the stop line and the
+        internal lanes between them (`itms_domain.lane_chains`). A vehicle
+        on any of them is a call on the approach lane's links, as a vehicle
+        anywhere on an unsplit approach lane is. Without it a split road's
+        last piece, sometimes shorter than a vehicle, is all the detector
+        watches and a waiting vehicle raises no call and no wait clock."""
         self._last_seen_s: dict[str, float] = {}
         self._call_started_s: dict[str, float] = {}
 
@@ -73,7 +82,9 @@ class ActuationDetector:
         has_demand: dict[str, bool] = {}
         wait_times_s: dict[str, float] = {}
         for link_id, lane_id in self._link_lanes.items():
-            occupied = traci.lane.getLastStepVehicleNumber(lane_id) > 0
+            occupied = traci.lane.getLastStepVehicleNumber(lane_id) > 0 or any(
+                traci.lane.getLastStepVehicleNumber(x) > 0
+                for x in self._extra_lanes.get(lane_id, ()))
             if occupied:
                 self._last_seen_s[link_id] = sim_time_s
                 self._call_started_s.setdefault(link_id, sim_time_s)
@@ -89,6 +100,23 @@ class ActuationDetector:
                 wait_times_s[link_id] = 0.0
                 self._call_started_s.pop(link_id, None)
         return has_demand, wait_times_s
+
+
+    def longest_wait_s(self, sim_time_s: float) -> float:
+        """The longest any standing call has waited, as of `sim_time_s` and
+        before the next `sample` resets the links being served. Read-only.
+        It is how a wait that passed its bound *during* a change interval
+        gets seen at all: the kernel's I5 is only asked on the ticks a plan
+        is arbitrated, and on the first tick after a change the link that
+        waited is already green."""
+        return max((sim_time_s - t for t in self._call_started_s.values()), default=0.0)
+
+    def longest_waiter(self, sim_time_s: float) -> tuple[str | None, float]:
+        """Which standing call has waited longest, and for how long. Read-only."""
+        if not self._call_started_s:
+            return None, 0.0
+        who = min(self._call_started_s, key=self._call_started_s.__getitem__)
+        return who, sim_time_s - self._call_started_s[who]
 
 
 class StopBarLoops:

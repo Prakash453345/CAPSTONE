@@ -8,6 +8,10 @@ markers = [
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+# Colab notebooks: run top to bottom in a hosted runtime and carry data inline
+# (the M8 fine-tuning notebook embeds the test set's fingerprints); tested by
+# running them, not linted as modules.
+extend-exclude = ["notebooks/*.ipynb", "baselines/**/*.ipynb"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]

@@ -38,8 +38,8 @@ FrameSource (RTSP | file | SimCam)             LinkStateEstimator  -> vision.lin
 |---|---|
 | `classes`, `records` | ITMS classes and PCU (IRC SP:41, same as `assign_vtypes.py`); `Detection`, `ImageTrack`, `GroundTrack` |
 | `cameras`, `placement` | the registry (`scenarios/networks/vijayawada/cameras.json`), `CameraRig` coverage, one-camera-per-approach planner |
-| `simcam` | world snapshots from TraCI or the position stream, 5 fps interpolation, cuboid projection with occlusion, the `PerceptionErrorModel` (presets `ideal`, `finetuned_day`, `coco_pretrained`, `night_rain`: bursty misses, sticky class confusion, jitter, ghosts, detector hotspots) |
-| `detect` | `UltralyticsDetector`, `OnnxDetector` (own letterbox/decode/NMS, no torch); a model with several types per ITMS class (UVH-26, BMD-45) has its scores summed per class before threshold and NMS |
+| `simcam` | world snapshots from TraCI or the position stream, 5 fps interpolation, cuboid projection with occlusion, the `PerceptionErrorModel` (presets `ideal`, `finetuned_day`, `coco_pretrained`, `night_rain`, and `uvh26_640`, `uvh26_1280`, `stock_640`, `itms6_640`, `itms6_960` fitted to measured detectors: bursty misses, sticky class confusion, a size curve per vehicle type, jitter, ghosts, detector hotspots) |
+| `detect` | `UltralyticsDetector`, `OnnxDetector` (own letterbox/decode/NMS, no torch); a model with several types per ITMS class (UVH-26, BMD-45) has its scores summed per class before threshold and NMS; `batchnorm_health` and a load-time warning for a model file whose BatchNorm statistics are non-finite or clipped by a half-precision save (IISc's release is) |
 | `track` | ByteTrack from scratch (Hungarian with component decomposition) |
 | `ground` | image tracks -> metres: footprint correction, border handling, batched Kalman, lanes |
 | `state` | `LinkStateEstimator` -- the `QueueSample` fields and their confidence |
@@ -61,7 +61,12 @@ make vision-dev     # in another shell: SimCam mode on the live position stream
 
 `VISION_MODE=video` reads every registry camera whose `source` is a file or
 `rtsp://` URL through a real detector (`pip install -e
-'services/vision-service[yolo]'`, `VISION_DETECTOR=yolo11n.pt`). A source
+'services/vision-service[onnx]'`). The default detector is the adopted
+fine-tune of IISc's UVH-26 model, `data/models/itms_six_fp32_640.onnx`
+(`make vision-model` copies it from the fine-tune results;
+`baselines/2026-09-27_m8_finetune_v2/`); `VISION_DETECTOR` picks another
+(`yolo11n.pt` is the stock COCO model). SimCam mode's default error preset,
+`itms6_640`, is the one fitted to that detector. A source
 may name environment variables (`rtsp://${CAM_USER}:${CAM_PASS}@10.0.0.12/s1`)
 so the registry holds no password; logs show URLs with the user-info
 masked. A detector slower than the cameras skips frames (the newest frame
@@ -89,7 +94,14 @@ the existing `AnomalyUpdated` with `source=VISION`.
 | `make m8-incidents` | M6's injector and scoring; thresholds chosen on TRAIN seeds, reported on EVAL |
 | `make m8-video VIDEO=clip.mp4` | real detector on real footage: speed, ONNX parity, tracks, health, redaction |
 | `scripts/m8_fetch_uvh26_sample.py` + `scripts/m8_detector_eval.py` | UVH-26's Indian-traffic YOLO11 vs stock weights on labelled Bengaluru CCTV frames: AP50, recall / precision per class, confusions, PCU error, CPU time (`baselines/2026-09-25_m8_uvh26_detector/`) |
+| `scripts/m8_detector_compare.py` | two detectors on the same frames, image by image, with bootstrap intervals and the adoption bar |
+| `scripts/m8_simcam_calibrate.py` | fits SimCam's error model to a measured detector (`baselines/2026-09-26_m8_measured_detectors/`) |
+| `notebooks/m8_uvh26_finetune.ipynb` | Colab: fine-tunes IISc's model to the six vehicle types, test frames kept out; version 2 keeps BatchNorm statistics in full precision and exports a repaired-only control. Its 640 and 960 px models are the adopted detectors (`baselines/2026-09-27_m8_finetune_v2/`) |
+| `scripts/m8_notebook_dryrun.py` | runs that notebook's cells on CPU against a small fake repository: every edge case, a disconnect and resume, the fallbacks |
+| `notebooks/m8_fire_smoke.ipynb` | Colab: a two-class fire and smoke detector (YOLO11-S) on D-Fire plus Bengaluru frames with no fire; alarm threshold chosen on validation, test scored once |
+| `scripts/m8_fire_eval.py` | that detector's false alarms on the 250 Bengaluru test frames, against the bar set in advance (≤ 1 %) |
+| `scripts/m8_fire_notebook_dryrun.py` | runs the fire notebook's cells on CPU against a fake D-Fire |
 
 ## Tests
 
-`make test-vision` (or `pytest packages/geo services/vision-service`): 162 tests.
+`make test-vision` (or `pytest packages/geo services/vision-service`): 168 tests (2 need torch and skip without it).

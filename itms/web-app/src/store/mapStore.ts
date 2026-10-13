@@ -13,7 +13,8 @@ export type MapLayerId =
   | "congestion"
   | "incidents"
   | "anomalies"
-  | "emergency";
+  | "emergency"
+  | "weather";
 
 export const DEFAULT_MAP_LAYERS: MapLayerId[] = [
   "vehicles",
@@ -22,6 +23,7 @@ export const DEFAULT_MAP_LAYERS: MapLayerId[] = [
   "incidents",
   "anomalies",
   "emergency",
+  "weather",
 ];
 
 /**
@@ -35,8 +37,24 @@ export type MapInteractionMode =
   | "pick-source"
   | "pick-destination";
 
-/** Vijayawada corridor centroid — matches the ITMS SUMO scenario. */
-export const DEFAULT_CENTER: LatLng = { latitude: 16.5062, longitude: 80.6335 };
+/** Vijayawada corridor centroid — the default ITMS SUMO scenario. */
+const VIJAYAWADA_CENTER: LatLng = { latitude: 16.5062, longitude: 80.6335 };
+
+/** `VITE_MAP_CENTER="lat,lon"` for any other scenario — `build_scenario.py`
+ * writes the value to use as `map_center` in its `scenario.json`. Anything
+ * unparseable falls back to the corridor. */
+export function parseCenter(raw: string | undefined, fallback: LatLng): LatLng {
+  if (!raw) return fallback;
+  const [lat, lon] = raw.split(",").map((v) => Number(v.trim()));
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return fallback;
+  if (Math.abs(lat) > 90 || Math.abs(lon) > 180) return fallback;
+  return { latitude: lat, longitude: lon };
+}
+
+export const DEFAULT_CENTER: LatLng = parseCenter(
+  import.meta.env.VITE_MAP_CENTER as string | undefined,
+  VIJAYAWADA_CENTER,
+);
 export const DEFAULT_ZOOM = 14;
 
 export interface MapFocus {

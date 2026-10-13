@@ -1,0 +1,110 @@
+{
+ "name": "amaravati_plan",
+ "net": "amaravati_plan.net.xml",
+ "mix": "india",
+ "levels": {
+  "light": {
+   "sumocfg": "amaravati_plan_light.sumocfg",
+   "route": "amaravati_plan_light.rou.xml",
+   "target_ds": 0.25,
+   "achieved_ds": 0.2548,
+   "busiest_tls": "D0",
+   "period_s": 2.5491,
+   "iterations": [
+    [
+     4.0,
+     0.1836
+    ],
+    [
+     2.9371,
+     0.2298
+    ],
+    [
+     2.6996,
+     0.2361
+    ],
+    [
+     2.5491,
+     0.2548
+    ]
+   ]
+  },
+  "medium": {
+   "sumocfg": "amaravati_plan_medium.sumocfg",
+   "route": "amaravati_plan_medium.rou.xml",
+   "target_ds": 0.5,
+   "achieved_ds": 0.4948,
+   "busiest_tls": "E2",
+   "period_s": 1.256,
+   "iterations": [
+    [
+     4.0,
+     0.1836
+    ],
+    [
+     1.4685,
+     0.4276
+    ],
+    [
+     1.256,
+     0.4948
+    ]
+   ]
+  },
+  "heavy": {
+   "sumocfg": "amaravati_plan_heavy.sumocfg",
+   "route": "amaravati_plan_heavy.rou.xml",
+   "target_ds": 1.0,
+   "achieved_ds": 0.9875,
+   "busiest_tls": "E2",
+   "period_s": 0.606,
+   "iterations": [
+    [
+     4.0,
+     0.1836
+    ],
+    [
+     0.7343,
+     0.8254
+    ],
+    [
+     0.606,
+     0.9875
+    ]
+   ]
+  }
+ },
+ "demand": "randomTrips --fringe-factor 5, 0-1800 s, routed by duarouter",
+ "generated": {
+  "spec": "grid:5x4,1000,3",
+  "lefthand": true,
+  "turn_lanes": 1,
+  "speed_mps": 13.89,
+  "tls_layout": "opposites",
+  "netgenerate": "netgenerate -o amaravati_plan.net.xml --default-junction-type traffic_light --default.speed 13.89 --no-turnarounds true --tls.layout opposites --grid --grid.x-number 5 --grid.y-number 4 --grid.length 1000 --default.lanenumber 3 --grid.attach-length 1000 --lefthand --turn-lanes 1"
+ },
+ "signalised_junctions": 20,
+ "map_center": null,
+ "phases_per_junction": [
+  4,
+  4,
+  4,
+  4,
+  4,
+  4,
+  4,
+  4,
+  4,
+  4,
+  4,
+  4,
+  4,
+  4,
+  4,
+  4,
+  4,
+  4,
+  4,
+  4
+ ]
+}

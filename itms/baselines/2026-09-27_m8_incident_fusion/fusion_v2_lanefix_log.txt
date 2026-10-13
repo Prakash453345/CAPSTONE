@@ -1,0 +1,24 @@
+selftest: raise_candidates == candidates_under on 300 random patterns
+20 TRAIN runs, 20 EVAL runs
+features ready (23s); arms ['C_lane', 'C_lane_noz', 'E_lane']; bar arm E_cam2
+A_quiet: eval recall in view 0.17 ({'stall': [6, 19], 'lane_block': [2, 27]}) all 0.14  FA/h 1.82 (twins 1.95, lenient 0.91)  P 0.38  F1(iv) 0.24  lat 59.50
+A_hand: eval recall in view 0.28 ({'stall': [8, 19], 'lane_block': [5, 27]}) all 0.23  FA/h 54.28 (twins 54.51, lenient 35.82)  P 0.03  F1(iv) 0.05  lat 50.23
+A_rules@1: eval recall in view 0.11 ({'stall': [3, 19], 'lane_block': [2, 27]}) all 0.09  FA/h 1.69 (twins 1.95, lenient 0.52)  P 0.31  F1(iv) 0.16  lat 43.60 (109s)
+A_rules@5: eval recall in view 0.24 ({'stall': [7, 19], 'lane_block': [4, 27]}) all 0.19  FA/h 2.85 (twins 2.86, lenient 1.68)  P 0.33  F1(iv) 0.28  lat 72.09 (198s)
+C_lane@1: theta -2.771 K 45 train FA/h 0.72 | eval recall in view 0.37 ({'stall': [11, 19], 'lane_block': [6, 27]}) all 0.40  FA/h 0.26 (twins 0.39, lenient 0.00)  P 0.96  F1(iv) 0.53  lat 74.53
+C_lane@5: theta -3.73 K 30 train FA/h 4.42 | eval recall in view 0.54 ({'stall': [14, 19], 'lane_block': [11, 27]}) all 0.60  FA/h 2.98 (twins 3.25, lenient 1.55)  P 0.62  F1(iv) 0.58  lat 52.44
+C_lane@f1: theta -1.915 K 5 train FA/h 3.16 | eval recall in view 0.52 ({'stall': [13, 19], 'lane_block': [11, 27]}) all 0.56  FA/h 1.56 (twins 1.69, lenient 0.78)  P 0.74  F1(iv) 0.61  lat 41.25
+  (206s)
+C_lane_noz@1: theta -3.539 K 60 train FA/h 0.92 | eval recall in view 0.07 ({'stall': [2, 19], 'lane_block': [1, 27]}) all 0.05  FA/h 0.52 (twins 0.65, lenient 0.13)  P 0.50  F1(iv) 0.12  lat 104.67
+C_lane_noz@5: theta -4.021 K 60 train FA/h 4.35 | eval recall in view 0.11 ({'stall': [4, 19], 'lane_block': [1, 27]}) all 0.14  FA/h 3.63 (twins 3.51, lenient 2.33)  P 0.22  F1(iv) 0.14  lat 84.20
+C_lane_noz@f1: theta -4.498 K 60 train FA/h 9.49 | eval recall in view 0.30 ({'stall': [7, 19], 'lane_block': [7, 27]}) all 0.33  FA/h 9.01 (twins 9.24, lenient 4.91)  P 0.22  F1(iv) 0.25  lat 86.64
+  (211s)
+E_lane@1: theta -2.905 K 45 train FA/h 0.79 | eval recall in view 0.43 ({'stall': [9, 19], 'lane_block': [11, 27]}) all 0.47  FA/h 0.19 (twins 0.26, lenient 0.00)  P 0.96  F1(iv) 0.60  lat 71.50
+E_lane@5: theta -3.473 K 30 train FA/h 4.35 | eval recall in view 0.57 ({'stall': [13, 19], 'lane_block': [13, 27]}) all 0.60  FA/h 2.53 (twins 2.34, lenient 1.55)  P 0.62  F1(iv) 0.59  lat 50.92
+E_lane@f1: theta -2.219 K 20 train FA/h 2.37 | eval recall in view 0.52 ({'stall': [12, 19], 'lane_block': [12, 27]}) all 0.56  FA/h 1.04 (twins 1.04, lenient 0.52)  P 0.80  F1(iv) 0.63  lat 51.38
+  (220s)
+E_lane@1 - A_rules@1: +0.326 [+0.136, +0.520]
+E_lane@1 - C_lane@1: +0.065 [-0.023, +0.137]
+C_lane@1 - C_lane_noz@1: +0.304 [+0.111, +0.489]
+E_lane@5 - A_rules@5: +0.326 [+0.156, +0.489]
+wrote data/m8_fusion/fusion_v2_lanefix.json

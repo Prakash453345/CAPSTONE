@@ -33,6 +33,7 @@ there's nothing left to arbitrate until it completes.
 from __future__ import annotations
 
 import logging
+import math
 import os
 import shutil
 import sys
@@ -138,6 +139,7 @@ class _Transition:
     remaining_yellow_s: float
     remaining_all_red_s: float
     stage: str  # "yellow" | "all_red"
+    red_state: str | None = None  # the all-red stage's state when links are carried through
 
 
 @dataclass
@@ -236,7 +238,7 @@ def _recover_from_fault(
             (
                 p
                 for p in js.cfg.ring_order
-                if js.cfg.phases[p].green_movements & violated_movements
+                if js.cfg.phases[p].shown_movements & violated_movements
             ),
             recovery_phase,
         )
@@ -329,13 +331,28 @@ def _apply_decision(
         )
         return
 
-    js.cabinet.set_raw_state(js.cabinet.yellow_state_for(step0.phase_id))
+    # A change from a ring phase into one of its alternates (the ring phase
+    # with some protected streams stopped, `Tier0Config.alternates`) keeps
+    # every green that continues and puts only the stopped streams through
+    # the change interval -- when the cabinet confirms the change stops
+    # protected links and does nothing else (`TraCICabinet.can_carry`).
+    # Every other change, the way back included, is the ordinary one:
+    # everything through yellow and all-red, so whatever starts, starts
+    # into an empty junction.
+    red_state = None
+    a, b = step0.phase_id, step1.phase_id
+    if js.cfg.alternates.get(b) == a and js.cabinet.can_carry(a, b):
+        yellow_state, red_state = js.cabinet.carried_clearance_states(a, b)
+    else:
+        yellow_state = js.cabinet.yellow_state_for(a)
+    js.cabinet.set_raw_state(yellow_state)
     js.transition = _Transition(
         outgoing_phase=step0.phase_id,
         incoming_phase=step1.phase_id,
         remaining_yellow_s=step0.yellow_s,
         remaining_all_red_s=step0.all_red_s,
         stage="yellow",
+        red_state=red_state,
     )
 
 
@@ -368,6 +385,11 @@ def run_controlled_scenario(
     on_tick: Callable[[int, float], None] | None = None,
     pace_realtime_factor: float | None = None,
     preempt_source: arbiter.PreemptSource | None = None,
+    lane_chains: tuple[Mapping, Mapping] | None = None,
+    lane_vias: Mapping[str, list[tuple[str, float]]] | None = None,
+    detector_upstream: bool = True,
+    arrival_horizon_s: float | None = None,
+    internal_links: Mapping[str, Mapping[str, str]] | None = None,
 ) -> dict:
     """Run one full scenario with `strategy` governing every junction in
     `configs`. Returns run stats: step count, how many times the arbiter
@@ -507,6 +529,18 @@ def run_controlled_scenario(
     service's own equivalent pacing knob (see below) -- callers use one or
     the other, never both.
 
+    `lane_chains` (`itms_domain.lane_chains`' `(upstream, downstream)`),
+    if given, lets each `QueueStateSampler` measure a road SUMO has split
+    into several edges as the whole road rather than the last edge before
+    the stop line (see `queue_state`'s module docstring). `None` (the
+    default) and a network without such splits behave exactly as before.
+
+    `internal_links` (`strategies.hol.internal_links(net)`), if given, lets
+    each `QueueStateSampler` report head-of-line blocking
+    (`JunctionContext.blocked_by`): a lane whose front vehicle stands behind a
+    turner waiting inside the junction. Only `hol_camp.HolAwareCamp` reads
+    it; left `None`, the field stays empty and nothing else changes.
+
     `on_tick(step, sim_time)`, if given, is called once per step after any
     injector tick and before this tick's sampling -- the live service
     drains its `commands.*` topic and applies operator actions
@@ -569,6 +603,12 @@ def run_controlled_scenario(
     spillback = SpillbackTracker(spillback_lane_ids) if spillback_lane_ids is not None else None
     try:
         for tls_id, cfg in configs.items():
+            # What makes an alternate as safe as its ring phase is a property
+            # of the configuration (`Tier0Config.validate`); a junction whose
+            # alternates do not have it is not run.
+            broken = cfg.alternate_problems()
+            if broken:
+                raise ValueError(f"{tls_id}: {'; '.join(broken)}")
             live_state = traci.trafficlight.getRedYellowGreenState(tls_id)
             cabinet = TraCICabinet(tls_id, cfg.phases, state_len=len(live_state))
             # A defined start, not an assumed one (same spirit as C4's forced
@@ -582,7 +622,19 @@ def run_controlled_scenario(
             )
             detector = None
             if link_lanes is not None and tls_id in link_lanes:
-                detector = ActuationDetector(link_lanes[tls_id])
+                # with `lane_vias`: a split road is watched whole -- its upstream
+                # lanes and the internal lanes between them, not only its last piece
+                # (`detector_upstream=False`: the internal lanes only -- the road
+                # before the split still counts toward the queue, not as a call)
+                same_road = None
+                if lane_vias is not None:
+                    up = lane_chains[0] if lane_chains else {}
+                    same_road = {
+                        lane: [*((x for x, _, _ in up.get(lane, ())) if detector_upstream else ()),
+                               *(x for x, _ in lane_vias.get(lane, ()))]
+                        for lane in set(link_lanes[tls_id].values())
+                    }
+                detector = ActuationDetector(link_lanes[tls_id], extra_lanes=same_road)
             queue_sampler = None
             if (
                 link_lanes is not None
@@ -594,6 +646,12 @@ def run_controlled_scenario(
                 queue_sampler = QueueStateSampler(
                     link_lanes[tls_id], receiving_lanes[tls_id], vtype_pcu,
                     lane_cache=lane_cache,
+                    upstream=lane_chains[0] if lane_chains else None,
+                    downstream=lane_chains[1] if lane_chains else None,
+                    internal_links=internal_links.get(tls_id) if internal_links else None,
+                    vias=lane_vias,
+                    **({"arrival_horizon_s": arrival_horizon_s}
+                       if arrival_horizon_s is not None else {}),
                 )
             discharge = None
             if calibration is not None and link_lanes is not None and tls_id in link_lanes:
@@ -610,7 +668,23 @@ def run_controlled_scenario(
             )
 
         step = 0
+        # The longest wait against its bound, measured where the kernel cannot
+        # (`ActuationDetector.longest_wait_s`): the worst excess over
+        # `max_wait_s` in seconds (negative: never reached) and the number of
+        # junction-ticks at which some call was past it.
+        longest_wait_excess_s = -math.inf
+        waits_over_bound = 0
+        # Where and after which phases a wait passed its bound: one entry per
+        # (junction, waiting call) episode, the first 30 of a run, with the
+        # junction's last phases and when each began.
+        wait_overruns: list[dict] = []
+        phase_log: dict[str, list[tuple[float, str]]] = {}
         fault_events: list[tuple[str, int, str]] = []
+        # Gridlock measures, reported beside delay: vehicles SUMO removed from
+        # a jam ("teleports" -- they flatter the delay of the arm that jams)
+        # and vehicles still in the network when the run-length cap ends it.
+        teleports = 0
+        unfinished = 0
         # Only ever populated when publish_traffic_state is set -- see that
         # parameter's docstring. A vehicle's vType never changes over its
         # life, so this is one getTypeID call per vehicle for the whole run.
@@ -626,6 +700,7 @@ def run_controlled_scenario(
             tick_start = time.monotonic()
             traci.simulationStep()
             step += 1
+            teleports += traci.simulation.getStartingTeleportNumber()
             # Invalidate the per-tick memo exactly once, right after the
             # simulation advances and before any sampler reads.
             lane_cache.advance(float(step))
@@ -689,7 +764,27 @@ def run_controlled_scenario(
                     has_demand: Mapping[str, bool] = {}
                     wait_times_s: Mapping[str, float] = {}
                     if js.detector is not None:
-                        served_movements = js.cfg.phases[js.ctx.current_phase_id].green_movements
+                        waited_s = js.detector.longest_wait_s(traci.simulation.getTime())
+                        longest_wait_excess_s = max(longest_wait_excess_s,
+                                                    waited_s - js.cfg.max_wait_s)
+                        waits_over_bound += waited_s > js.cfg.max_wait_s
+                        log = phase_log.setdefault(tls_id, [])
+                        if not log or log[-1][1] != js.ctx.current_phase_id:
+                            log.append((traci.simulation.getTime(), js.ctx.current_phase_id))
+                            del log[:-8]
+                        if waited_s > js.cfg.max_wait_s:
+                            waiter = getattr(js.detector, "longest_waiter", None)
+                            who = waiter(traci.simulation.getTime())[0] if waiter else None
+                            last = wait_overruns[-1] if wait_overruns else None
+                            if last and last["tls"] == tls_id and last["who"] == who:
+                                last["excess_s"] = round(waited_s - js.cfg.max_wait_s, 1)
+                            elif len(wait_overruns) < 30:
+                                wait_overruns.append({
+                                    "tls": tls_id, "who": who,
+                                    "t": traci.simulation.getTime(),
+                                    "excess_s": round(waited_s - js.cfg.max_wait_s, 1),
+                                    "phases": list(log)})
+                        served_movements = js.cfg.phases[js.ctx.current_phase_id].shown_movements
                         has_demand, wait_times_s = js.detector.sample(
                             traci.simulation.getTime(), served_movements
                         )
@@ -697,6 +792,7 @@ def run_controlled_scenario(
                     receiving_occupancy: Mapping[str, float] = {}
                     receiving_queue_pcu: Mapping[str, float] = {}
                     approaching_pcu: Mapping[str, float] = {}
+                    blocked_by: Mapping[str, str] = {}
                     if js.queue_sampler is not None:
                         if time_aware:
                             # Strictly more TraCI work per tick -- only paid
@@ -708,6 +804,7 @@ def run_controlled_scenario(
                             receiving_occupancy = sample.receiving_occupancy
                             receiving_queue_pcu = sample.receiving_queue_pcu
                             approaching_pcu = sample.approaching_pcu
+                            blocked_by = sample.blocked_by
                         else:
                             queue_pcu, receiving_occupancy = js.queue_sampler.sample()
                     js.ctx = JunctionContext(
@@ -720,6 +817,7 @@ def run_controlled_scenario(
                         receiving_occupancy=receiving_occupancy,
                         receiving_queue_pcu=receiving_queue_pcu,
                         approaching_pcu=approaching_pcu,
+                        blocked_by=blocked_by,
                         preempt_seconds_last_hour=js.ctx.preempt_seconds_last_hour,
                     )
                     if js.discharge is not None and calibration is not None:
@@ -728,7 +826,7 @@ def run_controlled_scenario(
                         # skipped by the `continue` above, which is correct:
                         # nothing discharges during yellow or all-red, so
                         # those seconds belong to neither green's window.
-                        served = js.cfg.phases[js.ctx.current_phase_id].green_movements
+                        served = js.cfg.phases[js.ctx.current_phase_id].shown_movements
                         for movement, pcu, eff_green, remained in js.discharge.tick(
                             served, step_length, approaching_pcu
                         ):
@@ -845,6 +943,7 @@ def run_controlled_scenario(
                     time.sleep(slack)
 
             if max_steps is not None and step >= max_steps:
+                unfinished = traci.simulation.getMinExpectedNumber()
                 break
 
         if incident_injector is not None:
@@ -873,6 +972,12 @@ def run_controlled_scenario(
         "interlock_violations": interlock_violations,
         "fault_events": fault_events,
         "spillback_events": spillback.episode_count if spillback is not None else None,
+        "teleports": teleports,
+        "longest_wait_excess_s": (round(longest_wait_excess_s, 1)
+                                  if math.isfinite(longest_wait_excess_s) else None),
+        "waits_over_bound": waits_over_bound,
+        "wait_overruns": wait_overruns,
+        "unfinished_at_cap": unfinished,
         "corridor": corridor.stats() if corridor is not None else None,
     }
 
@@ -883,7 +988,7 @@ def _advance_transition(js: _JunctionState, step_length: float) -> None:
     if t.stage == "yellow":
         t.remaining_yellow_s -= step_length
         if t.remaining_yellow_s <= 1e-9:
-            js.cabinet.set_raw_state(js.cabinet.all_red_state())
+            js.cabinet.set_raw_state(t.red_state or js.cabinet.all_red_state())
             t.stage = "all_red"
     elif t.stage == "all_red":
         t.remaining_all_red_s -= step_length

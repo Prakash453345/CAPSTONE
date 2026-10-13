@@ -111,6 +111,7 @@ class VisionService:
         model: str = "vision-m8",
         evidence: EvidenceStore | None = None,
         rules: str | RuleConfig = DEFAULT_OPERATING_POINT,
+        lane_chains: tuple[Mapping, Mapping] | None = None,
     ):
         self.rig = rig
         self.publish = publish
@@ -119,7 +120,8 @@ class VisionService:
             {tls: rig.network.phase_link_states(tls) for tls in approach})
         rule_config = OPERATING_POINTS[rules] if isinstance(rules, str) else rules
         self.system = VisionSystem(rig, approach, receiving, preset=preset, seed=seed, fps=fps,
-                                   signal_state=self.signal, rule_config=rule_config)
+                                   signal_state=self.signal, rule_config=rule_config,
+                                   lane_chains=lane_chains)
         self.book = _PositionBook(rig.network, ClassTable.default())
         self._prev_snap: WorldSnapshot | None = None
         self._last_status: dict[str, tuple[str, float]] = {}

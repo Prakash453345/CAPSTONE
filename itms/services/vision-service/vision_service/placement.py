@@ -22,6 +22,16 @@ For each approach edge the planner:
 This is a starting layout for simulation and for a site survey, not a
 substitute for one; a surveyed installation replaces each pose with a
 point-correspondence calibration and nothing downstream changes.
+
+**The junction overview ("box") camera** (`plan_box_camera`). An approach
+camera stands inside or across the junction looking outward, so the junction
+interior is below its frame: on the single-lane grid the vehicle that blocks
+a lane from 4 m inside the box was never in an approach camera's view (its
+track coasted out of frame). One wide camera per junction, on a pole beside
+it, looking at its middle, sees the box and the first metres of every
+approach. The planner tries pole positions on circles around the junction
+and keeps the pose that covers most of the links' paths through the box
+(`RoadNetwork.box_paths`).
 """
 
 from __future__ import annotations
@@ -123,6 +133,85 @@ def plan_approach_camera(
         ),
     )
     return PlacementResult(spec, setback, got)
+
+
+def plan_box_camera(
+    network: RoadNetwork,
+    tls_id: str,
+    *,
+    mount_height_m: float = 10.0,
+    hfov_deg: float = 90.0,
+    width_px: int = 1920,
+    height_px: int = 1080,
+    fps: float = 5.0,
+    standoffs_m: Sequence[float] = (6.0, 10.0, 14.0),
+    pitches_deg: Iterable[float] = tuple(np.arange(25.0, 61.0, 5.0)),
+    max_resolution_m_per_px: float = DEFAULT_MAX_RESOLUTION_M_PER_PX,
+) -> PlacementResult | None:
+    """One camera overlooking junction `tls_id`, or None when the network
+    has no paths through it (built without internal lanes). The pole stands
+    on a corner -- at a bearing halfway between two neighbouring arms, not
+    on a road -- `standoffs_m` outside the box (the circle around its paths'
+    ends)."""
+    paths = list(network.box_paths.get(tls_id, {}).values())
+    if not paths:
+        return None
+    # the box itself: the paths without their lead-in
+    inside = np.vstack([p.path.point_at(np.linspace(p.stop_s, p.length, 8)) for p in paths])
+    centre = inside.mean(axis=0)
+    radius = float(np.sqrt(((inside - centre) ** 2).sum(axis=1)).max())
+    pitches = list(pitches_deg)
+    # the arms: where each path crosses its stop line, and where it leaves
+    ends = np.vstack([p.path.point_at(np.array([p.stop_s, p.length])) for p in paths])
+    arms = np.unique(np.round(heading_of(ends - centre) / 5.0) * 5.0 % 360.0)
+    corners = [float((a + ((b - a) % 360.0 or 360.0) / 2.0) % 360.0)
+               for a, b in zip(arms, np.roll(arms, -1), strict=True)]
+    best: tuple[float, float, PinholeCamera, dict[str, float]] | None = None
+    for standoff in standoffs_m:
+        dist = radius + standoff
+        for bearing in corners:
+            b = math.radians(float(bearing))
+            pos = centre + dist * np.array([math.sin(b), math.cos(b)])
+            heading = float(heading_of((centre - pos)[None])[0])
+            for pitch in pitches:
+                cam = PinholeCamera(
+                    x=round(float(pos[0]), 2), y=round(float(pos[1]), 2),
+                    height_m=mount_height_m,
+                    heading_deg=round(heading, 2), pitch_deg=float(pitch),
+                    width_px=width_px, height_px=height_px, hfov_deg=hfov_deg,
+                    camera_id=f"cam_{tls_id}_box",
+                )
+                got = {
+                    p.path.lane_id: lane_coverage(
+                        cam, p.path, max_resolution_m_per_px=max_resolution_m_per_px, step_m=1.0
+                    ).fraction * p.length
+                    for p in paths
+                }
+                score = sum(got.values())
+                if best is None or score > best[0] + 1e-6:
+                    best = (score, standoff, cam, got)
+    assert best is not None
+    _, standoff, cam, got = best
+    spec = CameraSpec(
+        camera_id=cam.camera_id, camera=cam, tls_id=tls_id, approach_edge=None, fps=fps,
+        source="simcam", role="box",
+        notes=(
+            f"planned: junction overview, {standoff:.0f} m outside the box, height "
+            f"{mount_height_m:.0f} m, pitch {cam.pitch_deg:.0f} deg, hfov {hfov_deg:.0f} deg"
+        ),
+    )
+    return PlacementResult(spec, standoff, got)
+
+
+def plan_box_cameras(
+    network: RoadNetwork, tls_ids: Iterable[str] | None = None, **kwargs
+) -> list[PlacementResult]:
+    out = []
+    for tls in tls_ids if tls_ids is not None else network.tls_ids():
+        r = plan_box_camera(network, tls, **kwargs)
+        if r is not None:
+            out.append(r)
+    return out
 
 
 def plan_network_cameras(

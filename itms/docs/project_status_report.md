@@ -479,7 +479,7 @@ mitigations are still worth reading.
 
 ### M8 — Vision on real footage 🟡 ~55%
 
-**Built** (`services/vision-service/`, `packages/geo/`, 162 tests): a
+**Built** (`services/vision-service/`, `packages/geo/`, 168 tests): a
 camera is treated as one more sensor. It reports the same per-link queue
 numbers the controller already reads from the simulator, plus a
 **confidence** value, so the controller runs on cameras unchanged. The
@@ -526,8 +526,19 @@ planned cameras with realistic detector errors:
 - **Incident spotting from cameras is weak**: counted correctly, the rules
   catch about a fifth (19 %) of the injected incidents a camera can see at
   under two false alarms an hour for the whole corridor, or 37 % at 37 an
-  hour. Useful as one input to the M6 detector, not on its own. Along the way the M8 tests found that M6's
-  incident injector let "broken-down" cars keep changing lanes; fixed.
+  hour. Useful as one input to the M6 detector, not on its own. Along the
+  way the M8 tests found that M6's incident injector let "broken-down" cars
+  keep changing lanes; fixed.
+  - **A trained combiner was tested.** It uses each link's normal
+    behaviour, contrast features and the rules' evidence
+    (`baselines/2026-09-27_m8_incident_fusion/`).
+  - **With whole-lane speed and halting** (SUMO's, noise-free: an upper
+    bound) it catches 37–43 % on fresh test seeds at under 0.3 false alarms
+    an hour. That is about four times what the re-tuned rules catch, and
+    two to three times the shipped setting.
+  - **With the cameras alone** it catches 28 % with 1 false alarm in 15
+    hours, where the rules catch 11 % with 26. That did not meet the bar set
+    in advance, so it was not adopted.
 - **Real footage** (short public clips, CPU only): the stock detector and
   the whole pipeline run end to end at ~14 frames per second; camera health
   raised no false alarm and caught every injected fault; evidence is
@@ -541,12 +552,46 @@ planned cameras with realistic detector errors:
   "sedan" and "hatchback" was thrown away; fixed. The digital twin's
   detector settings turned out optimistic about motorbikes and
   auto-rickshaws, the "stock" one badly.
+- **The controller on real detectors** (26 September). The digital twin's
+  cameras now detect the way the measured models do. With IISc's model
+  reading images at 1280 pixels wide, the controller costs +2 % (medium
+  traffic) and +8 % (heavy) against perfect data, neither significant, and
+  still beats Webster by 30 % and 24 %. At 640 pixels, the setting a
+  laptop runs at about 18 frames a second (enough for three or four
+  cameras, not 19), it loses more (+9 % and +17 %). With the stock model it costs
+  +17 %, three times the old estimate. So a deployment needs IISc's model
+  run on a GPU. A Colab notebook to fine-tune it on more Bengaluru frames
+  is ready, with the test that will judge the result.
+- **The first fine-tuning run** (26 September). At 640 pixels it found
+  more vehicles than IISc's model (82 % against 71 %), with a smaller
+  error in the per-image vehicle count (in car units),
+  but more of its boxes were wrong (precision 0.876). That misses the 0.90
+  bar set in advance, so it was not adopted. Its training had in fact
+  broken down. IISc's model file stores some internal normalisation
+  numbers (BatchNorm variances) that are too large for the compact number
+  format used to save and to speed up training. Some are stored as
+  infinity, and the training stopped learning part-way through. A second
+  version of the notebook keeps these numbers in full precision throughout.
+  It also makes a copy of IISc's model with only those numbers repaired,
+  which is itself a candidate: on a diagnostic split of the test frames,
+  the repair alone raised precision from 0.90 to 0.93.
+- **The corrected fine-tune, adopted** (27 September). It passed the bar
+  set in advance at both image sizes. At 640 pixels, the laptop setting,
+  it finds 79 % of vehicles against IISc's 71 %, with about the same share
+  of boxes right (91 % against 92 %), and more than twice as many of the
+  smallest, most distant ones. With the digital twin's cameras fitted to it, the
+  controller at medium traffic costs +4.7 % against perfect data, half of
+  what IISc's model cost at that setting. The difference between the two
+  is not yet statistically certain. That is close to IISc's model at 1280
+  pixels, which needs a GPU. In heavy traffic one run in five went into a
+  long jam with either fine-tune, so the heavy-traffic average did not
+  improve. Runs on perfect data never jammed, so something in the camera
+  path causes these jams; finding what is the next job.
 
-**Not done:** testing on Vijayawada footage (the real detector has only
-been measured on Bengaluru's cameras), re-running the controller test with
-the twin's detector settings matched to the measured ones, fine-tuning if
-Vijayawada shows it is needed (a GPU job), and incident rules good enough
-to use on their own.
+**Not done:** testing
+on Vijayawada footage (the real detector has only been measured on
+Bengaluru's cameras), a fix for a standing jam that can look like a blind
+camera, and incident rules good enough to use on their own.
 
 ---
 
@@ -714,8 +759,9 @@ flattering your own headline, found and reported rather than left alone.
 3. **Train M6 properly** — the 30-scenario dataset and 50–80 epochs from the
    accuracy plan. Only then connect the detector to the response chain.
 4. **Give M8 real eyes.** The pipeline is built and measured; what it lacks
-   is a detector trained on Indian traffic (YOLO11 fine-tuned on BMD-45 or
-   IDD, a GPU job) and some real Vijayawada junction footage to calibrate
+   is a detector trained on Indian traffic (IISc's UVH-26 model is
+   measured; its corrected fine-tune is ready to run in Colab) and some real Vijayawada
+   junction footage to calibrate
    one camera (`itms_geo.lanecal`) and check the twin's numbers against.
    One camera at one junction is enough to demonstrate it.
 5. **Decide what to do about `A(p)` / `D(p)`.** Three options, in rising cost:

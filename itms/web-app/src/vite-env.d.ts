@@ -7,6 +7,8 @@ interface ImportMetaEnv {
   readonly VITE_WS_URL?: string;
   /** Google Maps Platform key with the Map Tiles API enabled. Unset = CARTO basemap. */
   readonly VITE_GOOGLE_MAPS_API_KEY?: string;
+  /** Map start centre, `"lat,lon"`. Defaults to the Vijayawada corridor. */
+  readonly VITE_MAP_CENTER?: string;
 }
 
 interface ImportMeta {

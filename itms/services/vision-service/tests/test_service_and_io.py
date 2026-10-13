@@ -218,8 +218,9 @@ def test_a_near_tie_does_not_count_as_an_identity_switch() -> None:
 
 
 class _FakeLoop:
-    def __init__(self, qs):
+    def __init__(self, qs, blocked=None):
         self.qs = qs
+        self.blocked = blocked or {}
 
     def stopbar(self, tls):
         return {}
@@ -229,7 +230,8 @@ class _FakeLoop:
             pass
 
         s = S()
-        s.estimator = type("E", (), {"queue_sample": lambda _self, tls: self.qs})()
+        s.estimator = type("E", (), {"queue_sample": lambda _self, tls: self.qs,
+                                     "blocked": self.blocked})()
         return s
 
 
@@ -261,6 +263,32 @@ def test_closed_loop_wrapper_swaps_exactly_the_queue_fields() -> None:
         assert got.queue_pcu == {"L0": 5.0} and got.receiving_occupancy == {"L0": 0.3}
         assert dict(got.confidence) == conf
         assert got.wait_times_s == {"L0": 9.0} and got.has_demand == {"L0": True}
+        assert got.blocked_by == {}
+
+
+def test_closed_loop_wrapper_takes_blocked_lanes_from_the_cameras_only() -> None:
+    """What the simulator knows about a blocked lane never reaches a
+    camera-fed controller; what the overview camera saw does."""
+    qs = {"queue_pcu": {}, "approaching_pcu": {}, "receiving_occupancy": {},
+          "receiving_queue_pcu": {}, "confidence": {}}
+    seen = {}
+
+    class Inner:
+        stats: dict = {}
+
+        def set_sim_time(self, t):
+            pass
+
+        def __call__(self, cfg, ctx):
+            seen["ctx"] = ctx
+
+    ctx = JunctionContext(intersection_id="J", current_phase_id="P0",
+                          current_phase_elapsed_s=3.0, blocked_by={"L0": "L2"})
+    VisionSensor(Inner(), _FakeLoop(qs), "J", "honest")(None, ctx)  # type: ignore[arg-type]
+    assert seen["ctx"].blocked_by == {}
+    cams = _FakeLoop(qs, {"J": {"L4": "?"}, "K": {"L0": "?"}})
+    VisionSensor(Inner(), cams, "J", "honest")(None, ctx)  # type: ignore[arg-type]
+    assert seen["ctx"].blocked_by == {"L4": "?"}
 
 
 def test_evidence_redacts_tracked_people_the_detector_missed() -> None:
@@ -322,6 +350,21 @@ def test_a_slow_detector_gets_the_newest_frame_of_every_camera() -> None:
     assert latest.take(0.0) == ("b", 1.1, "b1")   # oldest capture first: no camera starves
     assert latest.take(0.0) == ("a", 1.2, "a2")
     assert latest.take(0.0) is None and latest.dropped == 1
+
+
+def test_the_service_defaults_to_the_adopted_detector(monkeypatch, tmp_path) -> None:
+    import vision_service.main as vm
+    from vision_service.simcam.errors import PRESETS
+
+    assert vm.DEFAULT_PRESET == "itms6_640" and vm.DEFAULT_PRESET in PRESETS
+    monkeypatch.setenv("VISION_DETECTOR", "yolo11n.pt")          # an explicit choice wins
+    assert vm.detector_path() == "yolo11n.pt"
+    monkeypatch.delenv("VISION_DETECTOR")
+    monkeypatch.setattr(vm, "DEFAULT_DETECTOR", tmp_path / "missing.onnx")
+    with pytest.raises(SystemExit, match="make vision-model"):   # no silent fallback
+        vm.detector_path()
+    (tmp_path / "missing.onnx").write_bytes(b"x")
+    assert vm.detector_path() == str(tmp_path / "missing.onnx")
 
 
 def test_a_box_on_a_barely_visible_vehicle_is_not_scored() -> None:

@@ -1,0 +1,88 @@
+{
+ "name": "narrow_grid54_200",
+ "net": "narrow_grid54_200.net.xml",
+ "mix": "india",
+ "levels": {
+  "d40": {
+   "sumocfg": "narrow_grid54_200_d40.sumocfg",
+   "route": "narrow_grid54_200_d40.rou.xml",
+   "target_ds": 0.4,
+   "achieved_ds": 0.3969,
+   "busiest_tls": "C0",
+   "period_s": 0.7607,
+   "iterations": [
+    [
+     4.0,
+     0.0876
+    ],
+    [
+     0.8756,
+     0.3475
+    ],
+    [
+     0.7607,
+     0.3969
+    ]
+   ]
+  },
+  "d45": {
+   "sumocfg": "narrow_grid54_200_d45.sumocfg",
+   "route": "narrow_grid54_200_d45.rou.xml",
+   "target_ds": 0.45,
+   "achieved_ds": 0.4442,
+   "busiest_tls": "C0",
+   "period_s": 0.6797,
+   "iterations": [
+    [
+     4.0,
+     0.0876
+    ],
+    [
+     0.7783,
+     0.3843
+    ],
+    [
+     0.6648,
+     0.4601
+    ],
+    [
+     0.6797,
+     0.4442
+    ]
+   ]
+  }
+ },
+ "demand": "randomTrips --fringe-factor 5, 0-1800 s, routed by duarouter",
+ "generated": {
+  "spec": "grid:5x4,200,1",
+  "lefthand": true,
+  "turn_lanes": 0,
+  "speed_mps": 13.89,
+  "tls_layout": "opposites",
+  "netgenerate": "netgenerate -o narrow_grid54_200.net.xml --default-junction-type traffic_light --default.speed 13.89 --no-turnarounds true --tls.layout opposites --grid --grid.x-number 5 --grid.y-number 4 --grid.length 200 --default.lanenumber 1 --grid.attach-length 200 --lefthand"
+ },
+ "signalised_junctions": 20,
+ "map_center": null,
+ "phases_per_junction": [
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2
+ ]
+}

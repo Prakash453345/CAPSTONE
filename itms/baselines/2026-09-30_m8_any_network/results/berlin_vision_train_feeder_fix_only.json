@@ -1,0 +1,346 @@
+{
+ "meta": {
+  "fps": 5.0,
+  "seeds": [
+   101,
+   102
+  ],
+  "levels": [
+   "light"
+  ],
+  "arms": [
+   "webster",
+   "truth",
+   "vision:itms6_640:failsafe"
+  ],
+  "wall_min": 29.0
+ },
+ "summary": {
+  "light": {
+   "arms": {
+    "webster": {
+     "n": 2,
+     "person_delay_s": 25491.982500000006,
+     "stops_per_vehicle": 1.5623100303951367,
+     "p95_wait_s": 108.0,
+     "person_throughput_per_hour": 1238.9609366451473,
+     "interlock_violations": 0,
+     "fallback_fixed_time": 0,
+     "ticks": 0
+    },
+    "truth": {
+     "n": 2,
+     "person_delay_s": 15751.53000000001,
+     "stops_per_vehicle": 1.1854103343465046,
+     "p95_wait_s": 44.0,
+     "person_throughput_per_hour": 1270.8180515759313,
+     "interlock_violations": 0,
+     "fallback_fixed_time": 0,
+     "ticks": 43042
+    },
+    "vision:itms6_640:failsafe": {
+     "n": 2,
+     "person_delay_s": 20175.179999999993,
+     "stops_per_vehicle": 1.3206686930091185,
+     "p95_wait_s": 83.5,
+     "person_throughput_per_hour": 1241.5245910605663,
+     "interlock_violations": 0,
+     "fallback_fixed_time": 7850,
+     "ticks": 41998,
+     "confidence_fed_mean": 0.9397260051473935,
+     "confidence_below_0.8": 0.009649169711087867
+    }
+   },
+   "paired": {
+    "webster_vs_truth:person_delay_s": {
+     "n": 2,
+     "mean": 9740.4525,
+     "pct": 61.8381357239582,
+     "ci95": [
+      9339.392212500004,
+      10141.512787499994
+     ],
+     "significant": true,
+     "n_better": 0
+    },
+    "webster_vs_truth:stops_per_vehicle": {
+     "n": 2,
+     "mean": 0.37689969604863216,
+     "pct": 31.79487179487179,
+     "ci95": [
+      0.3396048632218843,
+      0.41419452887538
+     ],
+     "significant": true,
+     "n_better": 0
+    },
+    "truth_vs_webster:person_delay_s": {
+     "n": 2,
+     "mean": -9740.4525,
+     "pct": -38.20986657275478,
+     "ci95": [
+      -10141.512787499994,
+      -9339.392212500004
+     ],
+     "significant": true,
+     "n_better": 2
+    },
+    "truth_vs_webster:stops_per_vehicle": {
+     "n": 2,
+     "mean": -0.37689969604863216,
+     "pct": -24.12451361867704,
+     "ci95": [
+      -0.41419452887538,
+      -0.3396048632218843
+     ],
+     "significant": true,
+     "n_better": 2
+    },
+    "vision:itms6_640:failsafe_vs_webster:person_delay_s": {
+     "n": 2,
+     "mean": -5316.8025000000125,
+     "pct": -20.856763494169243,
+     "ci95": [
+      -6647.376637499996,
+      -3986.228362500029
+     ],
+     "significant": true,
+     "n_better": 2
+    },
+    "vision:itms6_640:failsafe_vs_webster:stops_per_vehicle": {
+     "n": 2,
+     "mean": -0.24164133738601823,
+     "pct": -15.46692607003891,
+     "ci95": [
+      -0.34420212765957453,
+      -0.13908054711246193
+     ],
+     "significant": true,
+     "n_better": 2
+    },
+    "vision:itms6_640:failsafe_vs_truth:person_delay_s": {
+     "n": 2,
+     "mean": 4423.649999999986,
+     "pct": 28.08393851263962,
+     "ci95": [
+      3494.136149999998,
+      5353.163849999974
+     ],
+     "significant": true,
+     "n_better": 0
+    },
+    "vision:itms6_640:failsafe_vs_truth:stops_per_vehicle": {
+     "n": 2,
+     "mean": 0.13525835866261393,
+     "pct": 11.410256410256405,
+     "ci95": [
+      0.06999240121580545,
+      0.2005243161094224
+     ],
+     "significant": true,
+     "n_better": 0
+    }
+   }
+  }
+ },
+ "records": [
+  {
+   "scenario": "berlin_adlershof",
+   "lane_chains": true,
+   "controller": "ccacamp",
+   "demand_level": "light",
+   "seed": 101,
+   "steps": 2027,
+   "interlock_violations": 0,
+   "person_delay_s": 20614.064999999995,
+   "person_throughput_per_hour": 1245.8625525946704,
+   "stops_per_vehicle": 1.3617021276595744,
+   "wait_time_s": {
+    "mean_s": 20.05775075987842,
+    "p95_s": 89.0,
+    "max_s": 138.0
+   },
+   "wall_s": 1672.9,
+   "decision_stats": {
+    "ticks": 20877,
+    "switch_cycle_supervisor": 10,
+    "switch_gap_out": 233,
+    "cycles_completed": 9486,
+    "extend": 15863,
+    "extend_allocation_protected": 0,
+    "switch_pressure": 106,
+    "switch_max_green": 673,
+    "switch_starvation": 0,
+    "blended": 0,
+    "blended_no_history": 0,
+    "fallback_fixed_time": 3992,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "vision": {
+    "confidence_fed": {
+     "mean": 0.9384845848683837,
+     "below_0.8": 0.012390421615877955,
+     "below_0.5": 0.010894137929165063,
+     "link_ticks": 368914
+    },
+    "ticks": 2027,
+    "blind_check_junction_ticks": 3190
+   },
+   "arm": "vision:itms6_640:failsafe"
+  },
+  {
+   "scenario": "berlin_adlershof",
+   "lane_chains": true,
+   "controller": "ccacamp",
+   "demand_level": "light",
+   "seed": 102,
+   "steps": 2037,
+   "interlock_violations": 0,
+   "person_delay_s": 19736.294999999995,
+   "person_throughput_per_hour": 1237.1866295264624,
+   "stops_per_vehicle": 1.2796352583586625,
+   "wait_time_s": {
+    "mean_s": 18.19148936170213,
+    "p95_s": 78.0,
+    "max_s": 153.0
+   },
+   "wall_s": 1618.2,
+   "decision_stats": {
+    "ticks": 21121,
+    "switch_cycle_supervisor": 10,
+    "switch_gap_out": 228,
+    "cycles_completed": 9844,
+    "extend": 16241,
+    "extend_allocation_protected": 0,
+    "switch_pressure": 97,
+    "switch_max_green": 687,
+    "switch_starvation": 0,
+    "blended": 0,
+    "blended_no_history": 0,
+    "fallback_fixed_time": 3858,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "vision": {
+    "confidence_fed": {
+     "mean": 0.9409674254264032,
+     "below_0.8": 0.006907917806297777,
+     "below_0.5": 0.006907917806297777,
+     "link_ticks": 370734
+    },
+    "ticks": 2037,
+    "blind_check_junction_ticks": 2938
+   },
+   "arm": "vision:itms6_640:failsafe"
+  },
+  {
+   "scenario": "berlin_adlershof",
+   "lane_chains": false,
+   "controller": "webster",
+   "demand_level": "light",
+   "seed": 101,
+   "steps": 2026,
+   "interlock_violations": 0,
+   "person_delay_s": 25280.220000000016,
+   "person_throughput_per_hour": 1246.7368421052631,
+   "stops_per_vehicle": 1.553191489361702,
+   "wait_time_s": {
+    "mean_s": 28.51063829787234,
+    "p95_s": 108.0,
+    "max_s": 165.0
+   },
+   "wall_s": 20.0,
+   "arm": "webster"
+  },
+  {
+   "scenario": "berlin_adlershof",
+   "lane_chains": false,
+   "controller": "webster",
+   "demand_level": "light",
+   "seed": 102,
+   "steps": 2044,
+   "interlock_violations": 0,
+   "person_delay_s": 25703.745,
+   "person_throughput_per_hour": 1231.1850311850312,
+   "stops_per_vehicle": 1.5714285714285714,
+   "wait_time_s": {
+    "mean_s": 29.075987841945288,
+    "p95_s": 108.0,
+    "max_s": 162.0
+   },
+   "wall_s": 20.2,
+   "arm": "webster"
+  },
+  {
+   "scenario": "berlin_adlershof",
+   "lane_chains": true,
+   "controller": "ccacamp",
+   "demand_level": "light",
+   "seed": 101,
+   "steps": 1997,
+   "interlock_violations": 0,
+   "person_delay_s": 15735.885000000015,
+   "person_throughput_per_hour": 1272.6361031518625,
+   "stops_per_vehicle": 1.1945288753799392,
+   "wait_time_s": {
+    "mean_s": 10.945288753799392,
+    "p95_s": 45.0,
+    "max_s": 92.0
+   },
+   "wall_s": 47.9,
+   "decision_stats": {
+    "ticks": 21493,
+    "switch_cycle_supervisor": 2,
+    "switch_gap_out": 425,
+    "cycles_completed": 11171,
+    "extend": 20080,
+    "extend_allocation_protected": 0,
+    "switch_pressure": 130,
+    "switch_max_green": 856,
+    "switch_starvation": 0,
+    "blended": 0,
+    "blended_no_history": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "truth"
+  },
+  {
+   "scenario": "berlin_adlershof",
+   "lane_chains": true,
+   "controller": "ccacamp",
+   "demand_level": "light",
+   "seed": 102,
+   "steps": 2001,
+   "interlock_violations": 0,
+   "person_delay_s": 15767.175000000003,
+   "person_throughput_per_hour": 1269.0,
+   "stops_per_vehicle": 1.1762917933130699,
+   "wait_time_s": {
+    "mean_s": 10.94224924012158,
+    "p95_s": 43.0,
+    "max_s": 80.0
+   },
+   "wall_s": 62.6,
+   "decision_stats": {
+    "ticks": 21549,
+    "switch_cycle_supervisor": 2,
+    "switch_gap_out": 418,
+    "cycles_completed": 11246,
+    "extend": 20135,
+    "extend_allocation_protected": 0,
+    "switch_pressure": 127,
+    "switch_max_green": 867,
+    "switch_starvation": 0,
+    "blended": 0,
+    "blended_no_history": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "truth"
+  }
+ ]
+}

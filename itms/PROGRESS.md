@@ -5032,3 +5032,1073 @@ precision, confusions, recall by box height, per-image PCU error, CPU time).
 
 Tests: `test_detection_eval.py` (5), `test_detector_decode.py` (4).
 `make test-vision`: 162; full suite 784 passed, 4 skipped; ruff clean.
+
+## 2026-09-26 — M8: the controller on measured detectors; fine-tuning set up
+
+Baseline: `baselines/2026-09-26_m8_measured_detectors/`.
+
+**Fine-tuning, ready to run** (`notebooks/m8_uvh26_finetune.ipynb`, Google
+Colab, T4). Transfer learning from IISc's UVH-26 YOLO11-S to the six types
+the controller counts, on a seeded 3,000-frame sample of UVH-26's training
+split (plus 300 held out to decide when to stop), at 640 and 960 px. It
+handles these edge cases:
+- **Keeping the test frames out:** the 250 test frames never reach
+  training, whether matched by name, by checksum, or by a 256-bit image
+  fingerprint within 72 bits (checked by eye: six test pairs from 32 to 70
+  bits apart were all the same camera).
+- **Labels:** an unknown label stops the run; "Others", crowd, empty,
+  duplicate and out-of-image boxes are dropped and counted; boxes are
+  clipped; images that do not open or disagree with their label file are
+  skipped.
+- **Class head:** the new 6-way layer starts from IISc's rows for the
+  matching labels. Ultralytics matches rows by name only, so car,
+  auto-rickshaw and two-wheeler would otherwise start random. Before any
+  training, the warm-started head already found 35 of IISc's 52 boxes on 5
+  frames, every one with the right type.
+- **Reproducibility:** fixed seeds, a pinned Ultralytics version, and
+  checksums for the model file and the labels.
+- **Disconnects:** Drive checkpoints, and a dataset tarball, so a
+  disconnect resumes. A finished run is recognised by its missing optimizer
+  state.
+- **The export is checked:** the ONNX model loads and has the right outputs.
+
+The whole notebook was run here on CPU with a fake repository that holds
+every one of those cases, including the resume. The results arrive as a
+zip for `data/uvh26/finetune/`.
+
+**The detector test is ready to judge it.** Per-image counts and every
+labelled box's height and outcome; `scripts/m8_detector_compare.py` pairs
+two runs image by image (95 % interval from 10,000 image resamples) and
+applies a bar set in advance. A new model is adopted only if all of these
+hold:
+- more vehicles found, interval above zero;
+- a smaller queue PCU error per image, interval below zero;
+- precision at least 0.90;
+- at most 1.25× the CPU time.
+
+IISc's model at 960 px finds more than at 640 (0.775 against 0.711) at
+precision 0.85 and 2.9× the CPU time. It beats 1280 on everything but the
+average bias.
+
+**SimCam fitted to the real detectors.** `scripts/m8_simcam_calibrate.py`
+gives three new presets:
+- `uvh26_640` and `uvh26_1280`: IISc's model at 640 and 1280 px input;
+- `stock_640`: the stock model.
+
+Each has a base recall and a size curve per vehicle type (a new
+`size_h50_by_class` field), plus confusions as measured. The old presets'
+draws are unchanged, and a test checks it. The furthest-off assumption was
+the size curve: recall was assumed to halve at 14 px, while the real model
+at 640 px halves it at 53 px for a car and 59 px for a two-wheeler.
+
+**The controller on them** (held-out seeds, `failsafe`, against perfect
+data):
+
+| detector | medium | heavy | vs Webster (medium / heavy) |
+|---|---|---|---|
+| assumed well-trained (`finetuned_day`) | +1.7 % n.s. | +17.3 % SIG | −30.2 % SIG / −17.3 % n.s. |
+| **IISc, 1280 px** | **+2.3 % n.s.** | **+8.0 % n.s.** | **−29.8 % / −23.9 %** SIG |
+| IISc, 640 px | +9.3 % n.s. | +16.8 % n.s. | −25.0 % / −17.6 % SIG |
+| stock, 640 px | +17.2 % SIG | — | −19.6 % SIG |
+
+- **A real in-domain detector at 1280 px input keeps nearly the whole win**
+  over Webster.
+- **At 640 px input the controller loses more**: it was worse than at 1280
+  on 5/5 medium seeds and 4/5 heavy seeds, though not significant at n = 5.
+- **The real stock detector costs three times the old assumption** (+17.2 %
+  against +5.5 %).
+- **Deployment:** IISc's model at 1280 px input, which for 19 cameras is a
+  GPU's work. 960 did better than 1280 on still frames but has not been run
+  in the loop.
+
+**Found, not fixed: a standing jam can look like a blind camera.**
+- **What happened:** on heavy seed 1 with `uvh26_640`, the stop-line check
+  latched one junction into fixed-time for 555 junction-ticks.
+- **Why:** in a long jam, vehicles hidden for more than 10 s come back as
+  new tracks that have "never moved". The furniture rule drops them after
+  90 s, or at once in a spot the clutter map has learned. When every track
+  on the approach had gone that way, the camera "saw" nothing over an
+  occupied loop.
+- **Cost:** about 3.5 % on that run (597,910 with the check off, 618,910
+  with it on). The same mechanism undercounts a standing queue.
+- **Next:**
+  1. Count every track the camera holds, furniture included, as "seen" for
+     the check.
+  2. Stop the clutter map learning spots where a vehicle that drove in was
+     lost.
+  3. Choose both on TRAIN seeds with `uvh26_640` at heavy demand.
+  4. Re-run every `failsafe` arm.
+
+Tests: `test_detection_eval.py` (paired bootstrap, per-box records), and
+`test_simcam.py` (the measured presets; old presets unchanged).
+`make test-vision`: 165; full suite 787 passed, 4 skipped. ruff clean;
+notebooks are excluded from ruff and tested by running them.
+
+## 2026-09-26 — M8: the first fine-tune scored; IISc's BatchNorm statistics are broken
+
+Baseline: `baselines/2026-09-26_m8_finetune_v1_bn/`.
+
+**The first Colab run is not adopted.** On the 250 test frames at 640 px:
+- **Vehicles found:** 0.711 → 0.820, interval [+0.096, +0.122].
+- **PCU error per image:** 2.63 → 1.91, interval below zero.
+- **CPU time:** 0.86×.
+- **Precision:** 0.917 → 0.876, under the 0.90 bar set in advance. It
+  adds 0.64 false boxes per image.
+
+At 640 px every type was found as its right type more often; two-wheelers
+went 0.66 → 0.78 and trucks 0.55 → 0.68. At 960 px it failed precision
+(0.842) and its PCU-error gain was not significant.
+
+**Its training had broken down.** Every loss was `nan`, and the hold-out
+mAP was 0 for the first 7 epochs (640 px) and 5 epochs (960 px). After
+that the hold-out figures were identical from epoch 17 to 27 (640 px) and
+from 7 to 17 (960 px): the model stopped changing, and early stopping
+ended both runs.
+
+The cause is IISc's model file:
+- **584 BatchNorm channels store an infinite variance.** Their true
+  variances reach about 2.5 × 10⁷, far past half precision's 65,504.
+- **How:** IISc trained in full precision, but Ultralytics saves
+  checkpoints in half precision. Today's Ultralytics clips such values to
+  65,504 instead. The v1 fine-tunes have 405 and 417 channels sitting at
+  exactly that value.
+- **At inference:** an infinite variance switches its channel off, and a
+  clipped one leaves the channel's output up to about 20 times too large.
+- **In training** (inferred; the logs do not show the sequence):
+  - Mixed-precision training most likely overflowed on this network's
+    large layer outputs, which reach about 38,000.
+  - An infinite running variance cannot heal by averaging. It became
+    finite only when Ultralytics' NaN recovery reloaded a half-precision
+    checkpoint, where it had been clipped.
+
+**Repairing the statistics.** Diagnostic: they were re-estimated in full
+precision on half the test frames and scored on the other half. This
+chose the method; it is not a result.
+- **IISc's model with the repair made through Ultralytics' training
+  pipeline:**
+  - vehicles found 0.706 → 0.743;
+  - precision 0.902 → 0.928;
+  - false boxes per image 0.94 → 0.70;
+  - AP50 0.693 → 0.755.
+- **Version 1's fine-tune:** precision rose 0.868 → 0.892, still under
+  0.90, with recall unchanged.
+- **Fine-tuning still gains when both models are repaired:** +0.076
+  vehicles found and −0.49 PCU error, both significant. It costs 0.037
+  precision, also significant.
+
+**Notebook version 2** (`notebooks/m8_uvh26_finetune.ipynb`; version 1 is
+in the baseline's `superseded/`):
+- **Control first:** it repairs IISc's statistics on 1,024 training
+  frames, augmented as IISc trained, at each input size. The result is
+  exported as a control, `iisc_bnfix_*`, and is also the start of
+  training.
+- **Full precision throughout:**
+  - training runs with `amp=False`;
+  - a check before the first epoch, and a NaN guard during training;
+  - full-precision copies of the best and last epochs;
+  - a resume from those copies, with no precision lost;
+  - ONNX exported from the full-precision model and checked against it.
+- **A zip after each size.**
+
+`scripts/m8_notebook_dryrun.py` runs the notebook's own cells on CPU
+against a fake repository. It covers:
+- every dataset guard;
+- a disconnect, and a resume with no precision lost;
+- the fallback;
+- the NaN guard.
+
+Repeating the repair gives the same statistics to within float rounding.
+
+**Judged by rules set now** (baseline §5): the unchanged bar, at 640 and
+960 px, for three comparisons:
+1. the repair alone against IISc's model as released;
+2. the fine-tune against IISc's model as released;
+3. the fine-tune against the repair.
+
+The deciding rule:
+- If only one of the two candidates passes its comparison with IISc's
+  model (1 or 2), it is adopted.
+- If both pass, the fine-tune is adopted only if it also passes 3.
+  Otherwise the repaired control is adopted.
+- If neither passes, IISc's model as released stays.
+
+The rule is applied to each input size on its own.
+
+`UltralyticsDetector` now warns about a model file with non-finite or
+clipped BatchNorm statistics (`batchnorm_health`).
+
+Tests: `test_detector_decode.py` +2. They need torch, so they skip in the
+project venv and were run in a torch environment.
+
+## 2026-09-27 — M8: the fine-tune adopted
+
+Baseline: `baselines/2026-09-27_m8_finetune_v2/`.
+
+**Training.** Notebook version 2 ran in Colab without trouble:
+- finite losses every epoch;
+- 61 min at 640 px and 139 min at 960 px, 25 epochs each;
+- best epochs 17 and 19;
+- hold-out mAP50 0.860 and 0.874 (version 1: 0.842 and 0.763).
+
+The models keep 350 and 369 BatchNorm variances above half precision's
+limit, in full precision, with none clipped.
+
+**Scored by the rules set in advance** (250 PNG test frames; all six
+models run in one session on the laptop, so CPU times compare):
+
+| model | input | vehicles found | precision | PCU error / image | CPU |
+|---|---:|---:|---:|---:|---:|
+| IISc as released | 640 | 0.711 | 0.917 | 2.63 | 47 ms |
+| IISc, statistics repaired | 640 | 0.731 | 0.937 | 2.54 | 49 ms |
+| **fine-tune** | **640** | **0.790** | **0.914** | **2.02** | 51 ms |
+| IISc as released | 960 | 0.775 | 0.851 | 2.32 | 146 ms |
+| IISc, statistics repaired | 960 | 0.870 | 0.838 | 2.03 | 152 ms |
+| **fine-tune** | **960** | **0.823** | **0.908** | **1.90** | 136 ms |
+
+- **The fine-tune passes against IISc's model at both sizes.**
+  - 640 px: vehicles found +0.080 and PCU error −0.61, both intervals
+    clear of zero.
+  - 960 px: vehicles found +0.048 and PCU error −0.42, both clear of zero.
+- **The repaired control fails at both sizes.**
+  - 640 px: its PCU-error gain is not significant.
+  - 960 px: precision 0.838.
+- **So the fine-tune is adopted at both sizes.** The rule consults the
+  fine-tune-against-control comparison only when both candidates pass. At
+  960 px the control finds more vehicles (0.870) at far lower precision.
+- **Where it gains most:** at 640 px the fine-tune finds the smallest boxes
+  (20–40 px) 0.44 of the time against IISc's 0.19. By type (found as the
+  right type), bicycles go 0.25 → 0.44 (only 32 boxes), trucks
+  0.55 → 0.67 and two-wheelers 0.66 → 0.75.
+
+**SimCam presets** `itms6_640` and `itms6_960` are fitted to it. For the
+63 smallest boxes the fit is pessimistic (0.26 fitted against 0.44
+measured at 640 px).
+
+**The controller on it** (held-out seeds, `failsafe`, against perfect
+data):
+
+| detector | medium | heavy (mean) | heavy (median) |
+|---|---|---|---|
+| IISc, 640 px | +9.3 % n.s. | +16.8 % n.s. | 518k |
+| IISc, 1280 px | +2.3 % n.s. | +8.0 % n.s. | 494k |
+| **fine-tune, 640 px** | **+4.7 % SIG** (seeds 74–79k) | +17.0 % n.s. | 494k |
+| fine-tune, 960 px | +4.8 % n.s. | +18.4 % n.s. | 494k |
+
+(Truth's heavy median is 454k.)
+
+- **Medium demand:** the 640 px fine-tune costs about half what IISc's
+  model did at 640 px (+4.7 % against +9.3 %). The direct comparison
+  between the two, −4.2 %, is not significant. It gets within 2.4 % (n.s.)
+  of IISc's model at 1280 px, for about a fifth of the CPU.
+- **Heavy demand:** each fine-tune had one run go into a long jam (SUMO
+  teleported gridlocked vehicles during the new runs):
+  - 640 px, seed 5: 728,941;
+  - 960 px, seed 2: 720,081.
+
+  Their other runs matched IISc's at 1280 px.
+  - Perfect data never jammed (longest wait 557 s).
+  - Every camera arm is worse than perfect data on at least 4 of 5 heavy
+    seeds, the optimistic assumed detector included.
+  - So at heavy demand the camera path still costs a lot, and a better
+    still-frame detector did not reduce that measurably.
+  - What turns a heavy run into a jam was not traced.
+- A fresh run of `vision:uvh26_640:failsafe` (medium, seed 1) reproduced
+  its earlier record.
+
+**Deployment:** the 640 px fine-tune on a CPU. The 960 px one is better on
+still frames but was not better in the loop.
+
+**Next:**
+1. Trace what turns a heavy run into a jam with cameras in the loop
+   (fine-tune seeds 5 and 2), then choose any fix on TRAIN seeds.
+2. The jam/blind-camera fix from 2026-09-26.
+3. Vijayawada footage, which the model has never seen.
+
+Tests: `test_simcam.py` (the new presets follow their fits; the fine-tune's
+fit finds at least as much as IISc's). `make test-vision`: 168 (2 skip
+without torch); full suite 788 passed, 6 skipped; ruff clean.
+
+## 2026-09-27 — M8: a fire and smoke detector, set up (not yet trained)
+
+The vision incident rules read vehicle tracks, and none of them can see a
+fire. This adds the one incident type that needs its own detector.
+
+**`notebooks/m8_fire_smoke.ipynb` (Colab):**
+- **The model:** YOLO11-S from Ultralytics' COCO weights, two classes (fire,
+  smoke), 640 px, up to 30 epochs.
+- **The data:**
+  - D-Fire: 21,527 images, CC0, 9,838 of them with neither fire nor smoke;
+  - 1,500 Bengaluru traffic frames with no fire as extra negatives, since
+    orange autos, red buses, brake lights, sodium lamps and dust are what
+    fool fire detectors on Indian roads;
+  - 300 more Bengaluru frames in validation.
+- **Getting D-Fire:** a zip in Drive, else Kaggle, else OneDrive; if none
+  works, the notebook stops with instructions.
+- **Edge cases handled:**
+  - D-Fire test images, and training images identical to or within 40 bits
+    (of 256) of one, are kept out of training;
+  - which label id is fire is decided from the boxes' colours and checked
+    against the dataset's names file, and a disagreement stops the run;
+  - clipped, degenerate, malformed and non-finite boxes, unknown class ids,
+    missing label files and unreadable images are all counted;
+  - validation is carved from training (seeded) when the download has
+    none;
+  - a download with no split at all is split by groups of near-copies,
+    so no video straddles train and test;
+  - it warns if keeping the test clean removes more than a quarter of the
+    training images, and stops if it removes all of them.
+- **Resuming:** it resumes after a disconnect, and the dataset is reused
+  from Drive.
+- **Export:** ONNX, checked against the full-precision model.
+
+**The bar, set now, before training:**
+- **Threshold:** the alarm threshold is chosen on validation. It is the
+  lowest threshold that keeps false alarms on the Bengaluru validation
+  frames at or under 1 %.
+- **Recall:** at least 85 % of D-Fire's test images with fire or smoke must
+  then raise an alarm.
+- **False alarms:** at most 1 % of the 250 Bengaluru test frames may
+  (`scripts/m8_fire_eval.py`). None of them shows a fire. They were never
+  used to train or tune the model, and the Bengaluru negatives used in
+  training exclude these frames' cameras.
+- **Review:** a frame that alarms is looked at by eye, and a real fire or
+  smoke in it is recorded as such, not as a false alarm.
+
+**Not measurable yet:**
+- fire in Indian junction footage (no labelled clips);
+- the persistence settings, which need video.
+
+**Dry run:** `scripts/m8_fire_notebook_dryrun.py` runs the notebook's own
+cells on CPU against a fake D-Fire painted onto real frames (orange flames,
+grey smoke, D-Fire's ids with smoke = 0 and fire = 1). It covers:
+- the class ids read from colour and from the names file, and a names file
+  that disagrees (the run stops);
+- every broken-label case, a missing label, an unreadable image;
+- a training copy and a training near-copy of a test image;
+- a download with no split (grouped split, no near-copies across it);
+- the Bengaluru negatives;
+- a disconnect after epoch 1 and the resume;
+- the threshold, the test scored once, the export check;
+- a session with nothing left to do, and a changed setting.
+
+It passed. `m8_fire_eval.py` was run on the dry run's model.
+
+
+## 2026-09-27/28 — M8 + M6: incident detection with a normal baseline and a trained combiner
+
+The vision incident rules on their own catch about one in five in-view
+incidents (19 %, Gate 4; 14–17 % under the stricter count used here) at
+under 2 false alarms an hour. This tests three additions:
+
+1. **what is normal here:** z-scores against the same link's own behaviour,
+   at the same demand level and in the same 10-minute slot, from
+   incident-free TRAIN runs;
+2. **contrast features:**
+   - stopped while it has green;
+   - slower than the sibling lanes on the same green;
+   - halted while the road ahead is empty;
+   - the queue never cleared in a cycle;
+3. **a trained combiner:** a logistic regression over those features and
+   the rules' evidence. It raises candidates with a tuned persistence and
+   the rules' own clear and cooldown.
+
+The details are in `baselines/2026-09-27_m8_incident_fusion/`.
+
+**Built:**
+- `m8_incident_gate.py --features-dir` also records, each second:
+  - M6's per-link features from SUMO;
+  - the cameras' per-link estimates;
+  - the tracker's per-lane counts.
+
+  All of it is read-only, and a re-recording was bit-identical.
+- `m8_harness.run_scenario(runner_kwargs=)`.
+- `scripts/m8_incident_fusion.py`: the study, with a self-test of the
+  candidate logic against `candidates_under`.
+
+**Setup:** TRAIN seeds 101–105; held-out seeds 1–5 and then fresh seeds
+6–10; medium and heavy demand; each with an incident-free twin. Scoring is
+stricter than Gate 4's: any candidate not on an incident counts as a false
+alarm.
+
+**Results** (in-view recall and false alarms/h, at the point TRAIN chose
+for 1 alarm/h, fresh seeds 6–10):
+
+| | recall in view | false alarms/h | stalls found |
+|---|---|---|---|
+| rules, re-tuned | 11 % | 1.69 | 3/19 |
+| rules, `quiet` | 17 % | 1.82 | 6/19 |
+| lane sensors + rules, learned (corrected) | 43 % | 0.19 | 9/19 |
+| cameras + tracker + rules, learned | 28 % | 0.06 | 8/19 |
+
+- **With lane-wide speed and halting it finds about four times what the
+  re-tuned rules find, and two to three times `quiet`.**
+  - The sensors are SUMO's, noise-free and whole-lane: an upper bound.
+  - On seeds 6–10 it catches 37–43 % of in-view incidents at 0.19–0.26
+    false alarms/h, and 9–11 of 19 stalled vehicles.
+  - With the post-hoc seeds 1–5 included: 37–45 % at up to 0.85/h.
+  - F1 (in view) is 0.52–0.60, against 0.14–0.24 for the rules.
+- **A SUMO artefact inflated these numbers at first.** The fact-check found
+  that SUMO reports an *empty* lane's mean speed as its current limit, so a
+  blocked lane read as crawling with nobody on it. The runs set in advance
+  showed 57–64 %. `--empty-lane-free` removes the artefact. It does not
+  arise for stalls, and the camera arms do not read these features.
+- **The normal baseline is the largest gain that was ablated:** +29 to +30
+  points (corrected), with the interval above zero on both seed sets.
+- **The cameras alone fail the bar that was set in advance, twice:**
+  - **v1:** 3.1 false alarms/h held-out, against a cap of 2.
+  - **v2:** 13 of 46 in-view incidents found with 1 false alarm in 15.4 h.
+    The re-tuned rules found 5 with 26. The recall gain is +17 points with a
+    95 % interval of [0.0, +37], and the bar wants it above zero.
+  - **At 5 alarms/h** the camera model beats the rules by +24 points
+    [+8.5, +40].
+  - **The same model without the tracker** would have met the bar on seeds
+    6–10. It was not the arm named in advance, so that is not a test.
+- **Why v2 exists.** Most of version 1's held-out false alarms were counting
+  faults:
+  - the links of one lane each raised an alarm for the same event;
+  - alarms were raised while the network was still filling at the start of
+    a run.
+
+  They were fixed (one candidate per lane, none in the first 300 s, for the
+  rules too) and judged on fresh seeds.
+- **Decision.** `quiet` stays the default, and the camera-only combiner is
+  not adopted. The layered design is the direction for M6's fusion wherever
+  lane- or link-wide speed exists.
+
+**Caveats:**
+- noise-free whole-lane sensors;
+- SUMO's blocked lane crawls along its whole length;
+- small samples (42–46 in-view incidents per evaluation);
+- the artefact fix and the seeds 1–5 re-scoring are post hoc;
+- EVAL seeds 1–10 are now used up for this corridor.
+
+**Cost:** about 0.1 ms per second of traffic for all 73 links.
+
+**Next:**
+- a larger test with a joint criterion (recall at no more false alarms than
+  the rules), on a new seed set declared in advance;
+- a real source of link-wide speed;
+- wiring the lane feature set into M6's `FusionLayer`.
+
+## 2026-09-28 — M8: the fire and smoke detector, version 1, failed
+
+The details are in `baselines/2026-09-28_m8_fire_v1/`.
+
+**Verdict:** version 1 fails both bars that were set before training, and it
+is not adopted.
+
+- **Bengaluru false alarms:** it alarmed on **32 of the 250 Bengaluru
+  traffic test frames (12.8 %)**, against a bar of at most 1 %. Every frame
+  was checked by eye, and none shows fire or smoke. The alarms were on:
+  - orange trucks, autos, signs and clothing;
+  - hazy road, read as smoke;
+  - one corrupted grey frame;
+  - night lights.
+- **D-Fire test recall:** it found **79 %** of the test images with fire or
+  smoke (fire 89 %, smoke 72 %), against a bar of at least 85 %. It missed
+  mostly tiny distant night fires and faint hillside smoke; D-Fire is
+  largely wildfire surveillance.
+
+**Why it failed:**
+- **No Bengaluru frames.** `My Drive/itms_uvh26_finetune/dataset.tar` was not
+  found, and the notebook carried on with D-Fire alone. It chose its
+  threshold (0.29) on D-Fire's own negatives, a fallback that should not
+  have existed.
+- **Half the training data was dropped.** The test-leakage filter removed
+  6,821 training and 1,464 validation images as near-copies of test images.
+  This D-Fire copy splits frames of one video across train and test.
+
+**Version 2 of the notebook:**
+- **The Bengaluru frames.** The vehicle notebook's Drive folder no longer
+  exists, so version 2 downloads 1,800 Bengaluru frames itself from UVH-26
+  on Hugging Face. It never takes a test frame or a frame from a test
+  camera, and it keeps a copy in Drive.
+- **The stops.** It stops if it ends up without the frames, or if the
+  dataset it finds in Drive was built without them.
+- **Otherwise unchanged.** It works in a fresh Drive folder, `itms_fire_v2`,
+  and both bars stay as they were.
+- **Dry run.** The dry run covers the download's edge cases and both stops.
+
+## 2026-09-28 — M8: the fire and smoke detector, version 2: passes its bars, fails the street probe
+
+The details are in `baselines/2026-09-28_m8_fire_v2/`.
+
+**Both bars that were set before training are met:**
+- **D-Fire test recall:** it found **93.1 %** of the test images with fire
+  or smoke (fire 97.9 %, smoke 89.5 %), against a bar of at least 85 %.
+- **Bengaluru false alarms:** it alarmed on **1 of the 250 Bengaluru
+  traffic test frames (0.4 %)**, against a bar of at most 1 %. The one
+  alarm is an orange truck container with no fire.
+
+**What changed from version 1:** the notebook downloaded 1,800 Bengaluru
+frames itself from UVH-26. It skipped 138 frames that looked like the test
+cameras.
+
+**The threshold** came out at 0.05, the bottom of its grid.
+
+**Why it was checked further:** at that threshold the model alarms on 28 %
+of D-Fire's no-fire test images, yet it scores Bengaluru frames near zero
+(median 0.0007). It may have learned that a Bengaluru CCTV picture is never
+a fire, and neither bar can tell.
+
+**The street probe fails, and the model is not adopted:**
+- `notebooks/m8_fire_crops.ipynb` cut 400 fire and 400 smoke boxes from
+  D-Fire's test split.
+- `scripts/m8_fire_paste_probe.py` pasted them into the 250 Bengaluru test
+  frames and onto plain grey.
+- **Fire found in the street against on grey:**
+  - 0.48 against 0.94 at 128 px (ratio 0.52);
+  - 0.67 against 0.92 at 256 px (ratio 0.73).
+
+  The bar, set before the run, was a ratio of at least 0.8.
+- The street hides fires the model sees on grey. It partly learned
+  "Bengaluru CCTV means no fire".
+
+**Next for fire:** the training needs fires in street or traffic scenes.
+Pasted fires in the training would need a new independent test.
+
+## 2026-09-29 — M8: the fine-tuned detector in the live system; the heavy-demand jam traced
+
+Baseline: `baselines/2026-09-29_m8_heavy_jam/`.
+
+**The fine-tune is the live default.** `vision_service.main`:
+- video mode reads `data/models/itms_six_fp32_640.onnx`. `make vision-model`
+  copies it there from the fine-tune's results. If it is missing, the service
+  stops with that instruction rather than falling back to a weaker model.
+- SimCam mode's default preset is `itms6_640`.
+- `VISION_DETECTOR` and `VISION_PRESET` still override both.
+
+`scripts/m8_live_e2e.sh` passed: link state both ways, no errors, and the
+controller used the feed. The detector reads the ONNX file's own class names
+(the six ITMS classes).
+
+**The jam, traced** (`scripts/m8_jam_trace.py`; heavy seed 5, the 728,941 s
+run).
+- **Where:** `cluster_1880441740_4393296791`, on its shared lane
+  `470178558_2` (L5 in P0, L6–L7 in P1).
+- **How far off:** the lane is 599 m long and the camera films its last
+  98 m. It held 20–65 halted vehicles (26 PCU on average over 600–1,800 s)
+  while the camera's estimate stayed at 11 PCU or less.
+- **Why:** up to 54 of 65 halted vehicles were beyond the view, and a few
+  more were in view but hidden behind others. The visible queue mostly ended
+  45–70 m back. The truncation rule needs it within 8 m of the view's end,
+  and fired only once, briefly (1.4 PCU).
+- **Result:** the controller favoured the approaches it could see in full,
+  and the lane spilled back to the junction upstream.
+- **Confirmed by an oracle:** giving the controller the true out-of-view
+  queue removed the jam (506,303).
+
+**The fix: count the queue past the view** (`vision_service/state/gap_count.py`).
+- **Edges filmed at both ends** (9 of 19 approach edges): a long approach lane
+  is usually the upstream junction's receiving lane, so its first ~100 m are
+  filmed too. Vehicles are counted in there and out in the near view. Of what
+  is between, less what is visible and what is still driving through, the
+  rest is queued out of sight.
+- **Entries** (8 edges nobody films upstream): the inflow is the arrival rate
+  learned while nothing queues.
+- **Drift:** the count is thrown away whenever the near view shows that no
+  queue reaches past it.
+- **Reporting:** only an edge's excess over 10 PCU is reported. Below that,
+  the estimate is exactly what it was.
+- **Accuracy (open loop):** on lane-ticks with 15 PCU or more really
+  standing, the estimate's bias went from −8.5 to −3.7 PCU. That was with
+  every counted PCU reported; the adopted version, which reports only the
+  excess over 10, lands between the two.
+
+**In the loop at heavy demand** (`failsafe`, the fine-tune at 640 px):
+
+| | EVAL 1–10: mean | vs no count | worst run | longest wait | TRAIN 101–110: mean | worst |
+|---|---:|---|---:|---:|---:|---:|
+| Webster | 645,098 | | 686,492 | 727 s | 664,035 | 681,674 |
+| perfect data | 475,779 | | 546,084 | 613 s | 504,153 | 638,597 |
+| no count (before) | 508,718 | | 728,941 | 1,150 s | 555,790 | 701,979 |
+| **count, adopted (v3)** | **504,052** | **−0.9 % n.s.** (4/10 lower) | **593,316** | 822 s | 554,801 | **602,174** |
+
+- **Adopted by a rule written before any of its held-out results came in.**
+  The rule: on the held-out seeds, no worse on the mean and a better worst
+  run, with medium demand unchanged. TRAIN showed the same. Its effect is on the tail
+  (seed 5: 728,941 → 584,516; TRAIN 109: 701,979 → 602,174), not on the
+  average.
+- **Against perfect data:** +5.9 % n.s. (was +6.9 % n.s.; TRAIN +10.0 %,
+  significant, against +10.2 % n.s. without counting). The held-out worst
+  run fell because seed 5 fell, and seed 5 is the traced seed. TRAIN 109 is
+  the cleaner evidence. Against Webster:
+  −21.9 %, better on 10/10 seeds.
+- **Medium demand:** bit-identical on seeds 1–5. No edge ever counted 10 PCU.
+- **Two earlier versions failed:**
+  - v1: counted edges only, all reported. It unbalanced partly counted
+    junctions: +28.5 % on seed 4.
+  - v2: entries modelled, all reported. +4.4 % n.s. on EVAL 1–10.
+
+  §4 of the baseline has both.
+
+**The larger finding: heavy demand is chaotic, with perfect data too.**
+- **The bottleneck is at capacity.** The four-phase junction runs at Webster
+  degree of saturation **0.996**.
+- **Perfect data varies widely.** Over TRAIN seeds 101–110 it spans
+  409k–639k, with waits up to 821 s. Seed 101 came within 2 % of Webster.
+- **A tiny change moves runs a lot.** A probe that changed 12–22 signal
+  decisions per run moved single perfect-data runs by −17 % to +37 %.
+  It was not adopted (mean +3.5 %).
+- **Five seeds are not enough.** Over 10 EVAL seeds the camera system was
+  +6.9 % n.s. against perfect data, and −2.4 % on the five seeds no camera arm
+  had run before. So the 2026-09-27 "one heavy run in five jams" was one run
+  in ten (seed 7 was also poor: +31 % against perfect data). "Perfect data never jammed (longest wait 557 s)" held only on
+  seeds 1–5. On TRAIN seeds its longest waits reached 821 s, and one run
+  (101) came within 2 % of Webster.
+- **So at heavy demand, a difference under about 10 % on five seeds is noise,
+  and a two-seed verdict of any size cannot be told from it.** That includes
+  the two-seed verdict that switched the occlusion horizon off (+21.8 % and
+  +14.7 %). Future heavy-demand gates need 10 seeds or more.
+
+**Next:**
+1. The bottleneck junction itself: shared lane `470178558_2` serves two
+   phases, and P2's single lane is capped at 28.6 s. A controller that is
+   stable there at degree of saturation 1 would need its own study, with 20
+   or more seeds.
+2. The jam/blind-camera fix from 2026-09-26 (still open).
+3. Vijayawada footage.
+
+Tests: `test_gap_count.py` (7: count lines, conservation, jitter,
+re-anchoring, lane shares and caps, entries, the estimator hook);
+`test_service_and_io.py` (the adopted detector is the default, no silent
+fallback). The live end-to-end check (`scripts/m8_live_e2e.sh`) passed with counting on. Full suite: 796 passed, 6 skipped. ruff clean.
+
+New scripts:
+- `m8_jam_trace.py`: per-junction trace, with an oracle option;
+- `m8_lane_undercount.py`: where the missing queue is;
+- `m8_gap_count_accuracy.py`: the count's accuracy, open loop;
+- `m8_split_floor_probe.py`;
+- `m8_gap_report.py`.
+
+`m8_closed_loop_gate.py` gains `--seed-list` and the `:nogap` arm modifier.
+
+## 2026-09-29/30 — The controller on any road network: nine networks, three real ones
+
+Baseline: `baselines/2026-09-30_m8_any_network/`.
+
+**Question:** does the system work on road networks it was never built or
+tuned on, or only on the Vijayawada corridor?
+
+**Any network is now a scenario.**
+- `scenarios/build_scenario.py` takes any SUMO network, generated (grid,
+  radial, irregular) or given (an OpenStreetMap export, gzipped too), and
+  writes the network, three demand levels, cameras and a `scenario.json`.
+- `ITMS_SCENARIO=<dir>` points every service and gate at it
+  (`itms_domain.scenario`). Unset, it is the corridor, exactly as before.
+- Demand levels are set by load: the busiest light's flow ratio `Y` (what
+  `webster.compute_timing` calls `degree_of_saturation`; lost time not
+  counted, so 1.0 is past capacity), 0.25 / 0.5 / 1.0, where the corridor's
+  own levels measure.
+- The web map takes `VITE_MAP_CENTER`; the builder writes it as `map_center`.
+- **Any city from OpenStreetMap in one command:** `scenarios/city_from_osm.py
+  --bbox W,S,E,N --name <city> --lefthand` downloads the box (normal
+  internet; not from the sandbox), converts it with the corridor's netconvert
+  options and 50 km/h cap, places lights and builds the scenario (the
+  download step has not been run from here). OSM marks one signal in the
+  whole Vijayawada extract, so a junction also gets a light where three or
+  more entering roads are tertiary or above.
+
+**No controller setting was changed.** What broke on other networks was how a
+network was read. Each fix leaves the corridor's configuration identical, and
+all 15 perfect-data corridor runs that could be compared with the earlier
+gate are bit-identical.
+- **A road cut into several edges** (turn bays, lane changes, OSM tags) was
+  measured on its last edge only: 4 m on a turn-bay grid, where the
+  controller did 2.2x Webster's delay at heavy demand (0/10 seeds better).
+  `itms_domain.lane_chains` measures the road back to the previous real
+  junction, in the simulator sampler, the camera estimator and both live
+  services. Heavy: +120.3 % → −40.5 % against Webster.
+- **Signal programs** list more than phases (`itms_domain.signal_program`):
+  change intervals that keep one movement green (these sent a radial
+  network's lights to the readback failsafe about 970 times a run: +176 % at
+  heavy, 24–112 interlock violations per level), German red+amber, pedestrian clearances inside a stage
+  (these doubled a Berlin light to ten phases), and repeats. The camera
+  service now numbers phases with the same function.
+- **Link numbering:** a light over several junctions, or one numbering its
+  links its own way (Ingolstadt, edited in netedit), takes its conflicts from
+  its own program. Before this, one Ingolstadt light was refused by the
+  interlocks on every step of the one run made.
+- Networks without a map projection, and without hospital and police files,
+  run.
+
+**Perfect data against Webster, 10 held-out seeds, light / medium / heavy**
+(mean person-delay, paired):
+
+| network | lights | light | medium | heavy |
+|---|---:|---|---|---|
+| grid3_lh (3x3 grid, 2 lanes) | 9 | −41.7 % | −26.1 % | −10.6 % |
+| arterial_lh (6 lights in a row, 4 phases) | 6 | −52.3 % | −41.7 % | −53.1 % |
+| spider_lh (radial) | 15 | −50.3 % | −44.6 % | −56.8 % |
+| random_lh (irregular streets) | 28 | −41.4 % | −40.3 % | −28.7 % |
+| grid4_rh_turns (right-hand, turn bays) | 16 | −31.8 % | −21.2 % | −40.5 % |
+| **berlin_adlershof** (SUMO's OSM Berlin) | 15 | −38.1 % | −35.1 % | −33.1 % |
+| **ingolstadt** (SUMO's Ingolstadt) | 2 | −28.0 % | −35.1 % | −55.2 % n.s. |
+| **vijayawada_district** (raw OSM street grid, `city_from_osm.py`) | 37 | −33.4 % | −39.0 % | −15.1 % n.s. (8/10) |
+| narrow_lh (3x3 grid, one lane) | 9 | −41.9 % | +13.5 % n.s. | every run capped, both |
+
+- All significant unless marked n.s. Every significant result is better on
+  10/10 seeds except Berlin heavy (9/10).
+- **Zero interlock violations in all 290 perfect-data runs** (these nine
+  networks and the corridor).
+- **The three real networks passed every perfect-data target written before
+  their held-out runs** (`TARGETS.md` in the baseline). Ingolstadt heavy is
+  n.s. because Webster jammed on three seeds (392–427k against 97–107k); the
+  controller stayed at 79–100k on all ten. Without those three it is
+  −11.6 % (significant), so its −55 % is mostly Webster's jams. Heavy on
+  Berlin is badly jammed for both (Webster reached the run-length cap on 3
+  seeds, the controller on none).
+- The first radial and random runs had their demand set while the old
+  phase rule still counted change intervals, so their heavy level was
+  saturation 0.77 and 0.63. Both were rebuilt and rerun (the table); the
+  first runs point the same way.
+
+**Where it still fails: single-lane roads with turning traffic** (`narrow_lh`).
+At heavy demand every run of both controllers reaches the run-length cap. At
+medium the controller reaches it on 4 of 10 seeds, Webster on 1. Webster's
+nominal saturation flow overstates what a single lane with turns carries, so
+"medium" there is already past capacity (Webster's delay rises 32-fold from
+light to medium, against 2-fold on the two-lane grid). Not tuned.
+
+**Not handled:** a signal index that controls several lanes (3 of
+Ingolstadt's 22; no other network here): the controller measures one of the
+lanes.
+
+**Cameras on other networks** (EVAL 1–5, against perfect data / Webster):
+grid3_lh medium +4.6 % n.s. / −25.1 %, heavy −5.9 % / −15.2 %; arterial_lh
+medium +7.8 % n.s. / −36.4 %, heavy +3.8 % n.s. / −52.6 %. Zero interlock
+violations; confidence fed 0.88–0.93, never below 0.5. About what the
+cameras cost on the corridor at medium (+4.7 %).
+
+**Cameras on Berlin** (62 cameras, EVAL 1–5, light and medium): passed the
+three targets set before the runs. Against Webster −33.0 % and −33.7 %
+(5/5 seeds each); against perfect data +8.1 % (significant) and +0.8 %
+(n.s.); zero interlock violations.
+- **First attempt stopped** after two light runs at +25.9 % and +38.7 %
+  against perfect data. The stop-bar cross-check was calling working cameras
+  blind on about 22 % of the controller's junction-ticks.
+- **Two causes in very short approach lanes**, fixed on TRAIN seeds 101–102
+  before the rerun:
+  - the gates' emulated stop-bar loop read an empty lane shorter than its
+    20 m zone as occupied;
+  - a car over the loop of an approach lane shorter than 30 m is tracked on
+    the lane before it, so "vehicles seen" now also counts the feeding lanes
+    up to 30 m from the stop line.
+- Neither fix changes a network whose approach lanes are all 30 m or longer
+  (the corridor, grid3_lh, arterial_lh).
+- **Still costing:** the ladder drops to fixed time on 3.4–6.3 % of Berlin's
+  junction-ticks (none on the grid, at most 0.9 % on the arterial). One
+  source found: a light whose approach no vehicle in the demand uses. After
+  600 s without a vehicle its camera counts as never having worked, its
+  health is capped at 0.3, and the junction goes to fixed time.
+  In the first 900 s of a TRAIN run every fallback came from it; over whole
+  runs other low-confidence links add more (most at light), not traced. On
+  an empty road the cap is a false alarm. The loops could confirm the road
+  is empty; that cross-check is not built.
+
+**Live services on another network:** the end-to-end check (SUMO,
+controller and camera service over Redis) on the 3x3 grid, with the machine
+otherwise idle: 0.0 % of junction-ticks with a link in hard failure over
+300 s, no interlock violation. The earlier 70–73 % was measured while two gate
+workers shared the machine (the simulation managed 150 steps in about nine
+minutes).
+
+**Next:**
+1. Single-lane roads with turning traffic: the level definition (measured
+   capacity) and the controller past capacity.
+2. A queue past a give-way junction just before a light is not measured
+   (45 of the district's 174 approach lanes are under 30 m for that reason).
+3. A real city of the user's choosing: `city_from_osm.py --bbox` on a normal
+   machine, and the city's own signal list where there is one.
+4. A camera on a road with no traffic is distrusted after 600 s (Berlin
+   above): check it against the stop-bar loops before calling it broken, and
+   test that on runs other than Berlin's held-out ones.
+
+Tests: `packages/domain/tests/test_lane_chains.py` (3),
+`test_signal_program.py` (5), `services/sim-service/tests/control/test_any_network.py`
+(7), chain cases in `test_queue_state.py` (3), and in
+`test_ground_and_state.py` one chain case and two short-lane cases (the
+emulated loop, the feeding lanes). Full suite: 818 passed, 6 skipped. ruff
+clean. Web app: the map-store tests pass (5).
+
+New scripts: `scenarios/build_scenario.py`, `scenarios/city_from_osm.py`,
+`scripts/any_network_report.py`.
+
+## 2026-10-03/05 — A blocking-aware controller for single-lane approaches: helps where junctions lock, four of nine targets failed
+
+Not committed. Baseline: `baselines/2026-10-03_m8_blocking_aware/` (README,
+TARGETS with a dated amendment, `summarise.py`).
+
+**Why.** On a one-lane approach a vehicle waiting to turn across oncoming
+traffic blocks the lane; CC-A-CAMP answers the growing queue with more green
+that nobody can use. On the single-lane 3x3 grid that locks the network at a
+flow ratio of 0.45.
+
+**What.** `strategies/hol.py` builds, for a single-lane approach, a variant
+of each ring phase with the conflicting *protected* streams of the other
+approaches switched off (an early cut-off). `strategies/hol_camp.py`
+(`HolAwareCamp`) uses it when a blocked head has lasted one change interval
+and the others can still be served within their maximum wait, for at most
+twice the base phase's maximum green; in with the continuing greens kept
+(`TraCICabinet.can_carry`), out by an ordinary yellow and all-red. Blocked
+lanes: `JunctionContext.blocked_by`, from the simulator
+(`QueueStateSampler._blocked_by`) or from one overview camera per junction
+(`CameraSpec.role == "box"`, `LinkStateEstimator._find_blocked`). The kernel
+refuses a malformed variant (`Tier0Config.alternate_problems`, interlock
+`PLAN_CONTINUITY`). Where no variant can be built the controller is
+CC-A-CAMP to the last digit.
+
+**Held-out result** (EVAL seeds 1-10, against CC-A-CAMP): 0.25 +0.4 %
+[-7.6, +8.4]; 0.30 -5.1 % [-10.2, +0.0]; 0.35 +1.4 % [-10.8, +13.5];
+0.40 -13.1 % [-19.3, -6.8]; 0.45 -46.5 % [-61.4, -31.6] with 53 teleports
+against 360; 0.50 -17.8 % [-36.1, +0.5]. Corridor, Berlin, district: identical
+or within noise. Six networks without single-lane approaches: identical. No
+interlock violation in 186 runs. Cameras in the loop at 0.45: -43.3 %
+[-80.7, -5.8].
+
+**Failed targets.** No gain at 0.35 (target 2); 6 of 10 runs at 0.45 without
+a teleport, 9 wanted (3); not significantly better than Webster at 0.45 (5);
+cameras at 0.45, 3 of 5 runs without a teleport, 4 wanted (8). Target 9
+(cameras within 15 % of perfect data) was missed as worded at 0.45, on the
+good side: the camera mean was 18.5 % lower, which is seed noise.
+
+**What went wrong on the way.** The first version passed the simulator and
+its held-out run and was unsafe: four independent code reviews found a yellow
+trap, a protected green facing a kept permissive movement, a late release on
+exit, and wait overruns at rings of three or more phases. None of these shows
+in SUMO. Six revisions; the safety fixes cost the gain at 0.35 (run 1:
+-13.1 %). The held-out seeds were therefore used twice, and the README says so.
+
+**Limits.** Needs a separate turn face per approach that can stay permissive
+while the through face is red; the gain is an upper bound (simulated drivers
+take every gap); one network family carries the result; a few seconds past the
+maximum wait on the jammed district (10 junction-ticks, worst 4.6 s, against
+2 for CC-A-CAMP), not yet traced; `hol:p0` (no persistence wait) did better
+than the default on held-out seeds and is a lead, not a result.
+
+Tests: `tests/control/strategies/test_hol.py` (43), runner, interlock,
+queue-state and vision blocked-lane cases. Full suite: 876 passed, 6 skipped.
+ruff clean.
+
+## 2026-10-05 — Blocking-aware controller, round 2: three leads tried on fresh seeds, none adopted
+
+Not committed. Details: `baselines/2026-10-03_m8_blocking_aware/README.md`
+("Round 2"), `TARGETS.md` (amendment 2 and its outcome), `results_run3/`.
+
+- **Act at once, longer visit (`p0:b3`).** Training seeds (40 at 0.30-0.40,
+  30 at 0.45): delay unchanged, 27 of 30 runs at 0.45 without a teleport
+  against 19 of 30. Held-out run 3 on 20 fresh seeds (201-220): 11 of 20
+  against 13 of 20 for revision 6, delay unchanged. Two of its targets
+  failed; taken back. The training-seed advantage was chance.
+- **Green ceiling of 3x Webster for CC-A-CAMP.** -10.3 % at 0.25 on ten
+  training seeds, nothing at 0.30-0.40, no help at 0.45. Dropped.
+- **Waits past the maximum.** Now logged per run (`wait_overruns`). Most are
+  CC-A-CAMP's own (its 15 s margin does not cover a second phase coming
+  first); one followed a variant at a three-phase junction. A wider guard
+  (`HolConfig.wide_guard`, off) removed it on training seeds; untested on
+  held-out seeds.
+- **Revision 6 on 20 fresh seeds**, against CC-A-CAMP: 0.40 -13.1 %
+  [-19.6, -6.6], 0.45 -56.7 % [-63.4, -49.9] (20 of 20, 63 teleports against
+  946), 0.30 -4.1 % [-7.6, -0.7], nothing at 0.25 and 0.35. The same picture
+  as the first held-out run.
+
+New in the code, no change of behaviour: composed arm names in the harness
+(`hol:p0:b3`, `hol:c3`, `hol:rev6`), `ActuationDetector.longest_waiter`, the
+overrun log in the runner. Full suite: 877 passed, 6 skipped. ruff clean.
+
+
+
+## 2026-10-05/06 — Blocking-aware controller, round 3: the gain does not carry over to other networks
+
+Not committed. `baselines/2026-10-03_m8_blocking_aware/README.md` ("Round 3"),
+`TARGETS.md` (amendment 3 and outcomes), `results_run4/`, `dev/dev29`, `dev/dev30`.
+
+- **Other single-lane networks** (fresh seeds 201-210, against CC-A-CAMP):
+  5x4 grid with 150 m blocks +6.1 % [+1.7, +10.4] at 0.40 (worse) and +6.2 %
+  [-1.7, +14.2] at 0.45; irregular net and the real district at in-between
+  levels: no difference, a variant used about once per run. Diagnosis on
+  training seeds: 5x4 with 200 m blocks -1.1 % and -3.2 % (not significant),
+  3x3 with 150 m blocks no gain. The large gain is the rescue of the 3x3 /
+  200 m grid from a lock-up CC-A-CAMP runs into there; it is not general.
+- **Wider wait guard** (`HolConfig.wide_guard`): passed its targets on the
+  heavy district and corridor, now the default (revision 7). No wait overrun
+  after a variant visit with it; +1.6 % [-0.7, +3.8] on the district.
+- **Cameras, acting at once**: not confirmed on four fresh seeds (-10.6 %
+  [-50.3, +29.1]). Not adopted.
+- **0.50 jam**: a lock-up (throughput falls below the 0.45 level). Shutting
+  CC-A-CAMP's receiving-link gate earlier did not help. Metering not built.
+- **Measurement**: person-delay never counted the wait to enter the network
+  or vehicles unfinished at the end; records now carry `entry_delay_s`.
+
+New scenarios: `vijayawada_district_mid`, `narrow_grid54_lh`, `narrow_rand_lh`,
+`narrow_grid33_150`, `narrow_grid54_200`. Harness: `hol:r<x>`/`k<x>` (parent's
+gate), camera arms with controller settings (`...:hol:p0:b3`). Full suite:
+882 passed, 6 skipped. ruff clean.
+
+
+
+## 2026-10-06/07 — Amaravati added; a floor under the green ceiling: -4.6 % at light and medium over 11 networks
+
+Not committed. `baselines/2026-10-07_ceiling_floor/` (README, TARGETS,
+`summarise.py`).
+
+- **Amaravati as a test city.** `amaravati_plan` (planned arterial grid as a
+  model, 20 lights) and `amaravati` (real OpenStreetMap, roads under
+  construction promoted by `scenarios/osm_planned_roads.py`, 122 lights). The
+  real map's first measurement has vehicles removed from jams at light
+  demand around one junction; not usable yet.
+- **Finding.** On the plan grid CC-A-CAMP waited longer in light traffic
+  (48 s) than in heavy (31 s): 69 % of its phase changes were forced by the
+  green ceiling, which is 1.25 x Webster's green and so under 9 s there.
+- **Change.** No ceiling below 20 s (`CEILING_FLOOR_S` in
+  `scripts/m8_harness.py`; `truth:f0` is the controller without it).
+  Chosen on training seeds on six networks; held-out on seeds 221-225 over
+  23 network-levels of 11 networks: -4.6 % [-7.2, -1.9] at light and medium,
+  better on 16 of 20, significantly worse nowhere, heavy unchanged. Amaravati
+  plan grid: medium -14.8 % [-18.5, -11.0]; light missed on five seeds and
+  passed the follow-up on ten new ones, -16.4 % [-21.2, -11.6].
+
+Full suite: 884 passed, 6 skipped. ruff clean.
+
+
+
+
+## 2026-10-07 — The controller now sees every waiting vehicle: Amaravati plan grid -27 % light, -24 % medium
+
+Not committed. `baselines/2026-10-07_split_road_sensing/` (README, TARGETS,
+`summarise.py`).
+
+- **Finding.** Sensing read SUMO lanes, and some waiting vehicles stand on
+  none: the first vehicle of every queue on the Amaravati plan grid (the
+  stop-line piece of a road cut for a turn lane is under 2 m), and every
+  vehicle of an approach where two junctions almost touch (about ten lanes on
+  the Vijayawada district). No queue, no call, no wait clock. Found by tracing
+  vehicles that SUMO teleported under `rest_in_green`.
+- **Change.** `vias_from_sumo_net(..., short_m)`, `QueueStateSampler(vias=)`,
+  `ActuationDetector(extra_lanes=)`, `run_controlled_scenario(lane_vias=)`.
+  Default in `scripts/m8_harness.py` and `sim_service/main.py`
+  (`SHORT_APPROACH_M` = 5 m). `truth:nov` is the controller before it. No
+  controller rule changed.
+- **Held-out** (seeds 241-245, 11 network-levels that can be affected):
+  Amaravati plan grid light -27.2 % [-38.0, -16.5], medium -23.6 %
+  [-29.8, -17.4], heavy -6.9 % [-11.8, -1.9]; the other eight within noise;
+  significantly worse nowhere; no interlock violation. One clause missed
+  (district teleports 13 against 15). A weaker follow-up, written after that
+  failure, passed on seeds 246-255 (35 against 25); adoption rests on it.
+- **Rest in green** (`AcampConfig.rest_in_green`, `truth:rest`), on top:
+  light -6.5 % [-10.0, -3.0] over 10 network-levels, better on all 10;
+  medium -1.3 %. Failed its teleport target (87 against 81; district at
+  medium 23 against 15). **Left off.**
+- **Not done.** The camera pipeline was not changed or re-measured.
+  `sim_service/main.py` still does not apply the Webster-based green ceiling
+  or its 20 s floor that the benchmark's CC-A-CAMP arms use.
+
+Full suite: 897 passed, 6 skipped. ruff clean on `packages`, `services`,
+`scripts`.
+
+
+
+## 2026-10-11/12 — Free turns shown in every phase they fit: -6.4 % light/medium, -11.8 % heavy
+
+Not committed. `baselines/2026-10-11_overlaps/` (README, TARGETS, `summarise.py`).
+
+- **Change.** A movement that crosses nothing in a phase (a left turn in
+  left-hand traffic, many U-turns) is also shown green in that phase, read off
+  SUMO's conflict matrix; pedestrian signals never. Shown, not owned
+  (`Phase.overlap_movements`): the controller's pressure, demand, gap-out and
+  Webster timing read only the phase's own movements (wait clocks do reset
+  while a movement runs as an overlap). The interlocks, the cabinet and the wait clocks treat
+  overlaps as green. Default in `scripts/m8_harness.py` and
+  `sim_service/main.py`; `truth:noovl` is the controller before it.
+- **Two forms that failed first** (training seeds): overlaps owned by the
+  phase, timing worked out after (heavy +70 % on arterial_lh) or kept (+45 %).
+- **Held-out** (seeds 256-260, 19 network-levels, targets O1-O5 all passed):
+  light and medium -6.4 % [-12.2, -0.6] over 15, heavy -11.8 % over 3, no
+  interlock violation, significantly worse nowhere, no significant rise in
+  teleports. Arterial -17 % to -24 %, turn-lane grid -20 % to -22 %, corridor
+  medium -17 %; the other ten light/medium network-levels +0.4 % on average;
+  real Amaravati map -2.3 % (n.s.). `truth` now includes the overlaps (the
+  recorded `truth` is today's `truth:noovl`).
+- **Also measured** (training seeds, not adopted): rest-in-green on the
+  district at medium, ten more seeds, against the controller without
+  overlaps: -9.0 % [-27.8, +9.7] (not significant), teleports 18 against 25.
+
+Full suite: 904 passed, 6 skipped. ruff clean on `packages`, `services`,
+`scripts`.
+
+
+
+## 2026-10-12 — Rest in green as an off-peak mode: -6.8 % at light, not adopted (teleports on one network)
+
+Not committed. `baselines/2026-10-12_rest_offpeak/` (README, TARGETS, `summarise.py`).
+
+- On top of the default (floor, sensing, shown overlaps), light demand only,
+  seeds 264-268: -6.8 % [-11.6, -1.9] over ten networks, better on 8,
+  significantly worse nowhere, no interlock violation. Failed the teleport
+  target on spider_lh (SUMO collision teleports on lane A1B4: 8 against 15).
+  `rest_in_green` stays off.
+- Guards tried on training seeds and dropped: `restm` (cap), `restc` (load
+  threshold), `restq` (no call on any other road), `restd` (only while the
+  running road has traffic). Gate arms `truth:rest:<guard>`.
+- Same seeds before and after this week's three adopted changes (seeds
+  261-263, `results/before_after/`): Amaravati plan grid light -43 %, medium
+  -36 %; arterial_lh light -29 %, medium -27 %; real Amaravati map light
+  -3.5 %. Webster against the controller of 2026-10-06: +36 % to +108 %.
+
+
+
+## 2026-10-13 — Check-up of the whole controller; next: phase layouts
+
+Not committed. `results/checkup/README.md` (findings), `scripts/m8_checkup.py`,
+`results/switch/` (switching-cost sweep). Gate: `truth:s.<field>=<value>`
+overrides any AcampConfig field.
+
+- Change intervals take 22-38 % of every signal's time on every network.
+  Making switching costlier makes delay worse (+3 % to +25 % on six
+  networks, training seeds), so the tuning is right for that lever.
+- On arterial_lh and the turn-lane grid every phase serves one approach:
+  four changes per cycle. Next: build phases from each junction's conflict map
+  (pair opposite approaches, crossing turns yield), then green waves for the
+  real Amaravati map.
+
+
+
+## 2026-10-13 — Facing approaches share a green: -23 % to -42 % on split-phased networks
+
+Not committed. `baselines/2026-10-13_paired_phases/` (README, TARGETS, `summarise.py`).
+
+- **Change.** `itms_domain.phase_layout.paired_layout` rebuilds a split-phased
+  junction (one phase per approach) from its geometry and conflict map: facing
+  approaches share a phase; the turn across the oncoming stream gives way.
+  Default in `scripts/m8_harness.py` (`PHASE_LAYOUT`) and `sim_service/main.py`;
+  `truth:nopair` is the controller before it. Only arterial_lh and
+  grid4_rh_turns are split-phased.
+- **Held-out** (seeds 269-273, targets P1-P3 all passed): arterial_lh -23.2 %,
+  -26.6 %, -30.0 % (light, medium, heavy); grid4_rh_turns -30.6 %, -41.6 %;
+  every seed better; no violation, collision or teleport.
+- **Fair comparison** (training seeds): Webster gains as much from the same
+  layout; on paired phases CC-A-CAMP still has 32-45 % less delay than Webster.
+
+Full suite: 909 passed, 6 skipped. ruff clean on `packages`, `services`, `scripts`.
+
+## 2026-10-13 — Rest in green adopted as an off-peak mode: -9 % light traffic, -15 % on the real map
+
+Not committed. `baselines/2026-10-13_rest_offpeak_v2/` (README, TARGETS, `summarise.py`).
+
+- **Why a second test.** The first (2026-10-12) failed only on spider_lh teleports.
+  Those are a network defect: the spider's centre junction A1 was generated
+  `unregulated` (nobody yields); all 113 collisions in the logs are on its exits.
+  `scenarios/generated/spider_lh_tl` signalises A1: zero collisions with rest on or off.
+- **Held-out** (light, seeds 274-278, targets L1-L4 all passed): -9.0 % [-12.4, -5.7]
+  over ten networks, lower on all ten (significantly on six); real Amaravati map
+  -15.3 % [-18.8, -11.8], stops 3.33 -> 2.29 per vehicle; no violation; teleports
+  unchanged except the original spider (7 -> 10, excluded from that target in advance).
+- **Use.** Off by default; `SIGNAL_OFFPEAK_REST=1` in the live service for
+  light-traffic hours. Not for medium/heavy (lost on arterial_lh training seeds).
+- **All day?** Not yet: at medium on the Vijayawada district rest cut delay 9.6 % but
+  starved a give-way lane past a signal (teleports 2 -> 5); a cap on resting did not fix it.
+- **Also tried today, not adopted:** fewest-phases layout (`truth:minph`,
+  `compact_layout`): no gain beyond noise, random_lh +37 % at medium
+  (`results/compact/README.md`).
+
+Full suite: 914 passed, 6 skipped. ruff clean on changed files.

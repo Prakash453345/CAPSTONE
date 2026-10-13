@@ -1,0 +1,93 @@
+{
+ "name": "spider_lh",
+ "net": "spider_lh.net.xml",
+ "mix": "india",
+ "levels": {
+  "light": {
+   "sumocfg": "spider_lh_light.sumocfg",
+   "route": "spider_lh_light.rou.xml",
+   "target_ds": 0.25,
+   "achieved_ds": 0.2548,
+   "busiest_tls": "B1",
+   "period_s": 2.0087,
+   "iterations": [
+    [
+     4.0,
+     0.1255
+    ],
+    [
+     2.0087,
+     0.2548
+    ]
+   ]
+  },
+  "medium": {
+   "sumocfg": "spider_lh_medium.sumocfg",
+   "route": "spider_lh_medium.rou.xml",
+   "target_ds": 0.5,
+   "achieved_ds": 0.5096,
+   "busiest_tls": "B5",
+   "period_s": 1.0043,
+   "iterations": [
+    [
+     4.0,
+     0.1255
+    ],
+    [
+     1.0043,
+     0.5096
+    ]
+   ]
+  },
+  "heavy": {
+   "sumocfg": "spider_lh_heavy.sumocfg",
+   "route": "spider_lh_heavy.rou.xml",
+   "target_ds": 1.0,
+   "achieved_ds": 1.0013,
+   "busiest_tls": "B5",
+   "period_s": 0.5149,
+   "iterations": [
+    [
+     4.0,
+     0.1255
+    ],
+    [
+     0.5022,
+     1.0253
+    ],
+    [
+     0.5149,
+     1.0013
+    ]
+   ]
+  }
+ },
+ "demand": "randomTrips --fringe-factor 5, 0-1800 s, routed by duarouter",
+ "generated": {
+  "spec": "spider:5,3,200,2",
+  "lefthand": true,
+  "turn_lanes": 0,
+  "speed_mps": 13.89,
+  "tls_layout": "opposites",
+  "netgenerate": "netgenerate -o spider_lh.net.xml --default-junction-type traffic_light --default.speed 13.89 --no-turnarounds true --tls.layout opposites --spider --spider.arm-number 5 --spider.circle-number 3 --spider.space-radius 200 --default.lanenumber 2 --lefthand"
+ },
+ "signalised_junctions": 15,
+ "map_center": null,
+ "phases_per_junction": [
+  2,
+  2,
+  2,
+  2,
+  2,
+  3,
+  3,
+  3,
+  3,
+  3,
+  3,
+  3,
+  3,
+  3,
+  3
+ ]
+}

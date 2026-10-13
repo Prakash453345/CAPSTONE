@@ -141,6 +141,41 @@ of vehicles at the tracker's line (precision 0.92, 58 ms a frame on a
 laptop CPU) against the stock model's 32 %, and recognises 75 % of
 auto-rickshaws, which the stock model cannot name at all.
 
+**IISc's model file has broken BatchNorm statistics.** 584 of its 14,992
+BatchNorm channels store an infinite variance. Re-estimated, the largest
+true variances reach about 2.5 × 10⁷, far past half precision's largest
+number (65,504), and Ultralytics saves checkpoints in half precision. At inference, an infinite
+variance switches a channel off. A variance clipped to 65,504, which is
+what a later half-precision save does, normalises it wrongly. The measured
+numbers above are for the model as released. Re-estimating the statistics
+in full precision changes its detections. A diagnostic on half the test
+frames, repaired through Ultralytics' training pipeline, gave:
+- precision 0.90 → 0.93;
+- vehicles found 0.71 → 0.74;
+- false boxes per image 0.94 → 0.70.
+
+`UltralyticsDetector` now logs a warning for such a file
+(`batchnorm_health`). Fine-tuning has to keep these numbers in full
+precision (`baselines/2026-09-26_m8_finetune_v1_bn/`).
+
+**Fine-tuning.** `notebooks/m8_uvh26_finetune.ipynb` (Colab) fine-tunes
+the model to the six ITMS types on 3,000 UVH-26 training frames, keeping
+the test frames and their cameras out. Version 1 of the notebook trained in
+mixed precision. Its losses were `nan`, and it stopped learning after
+epoch 17 (640 px) and epoch 7 (960 px). Even so, at 640 px it found more
+vehicles than IISc's model (0.711 → 0.820) with a smaller PCU error, but
+its precision fell to 0.876. That misses the 0.90 bar set in advance, so it
+was not adopted. Version 2 trained in full precision from repaired
+statistics, and passed the same bar at both input sizes, so it is the
+adopted detector (`baselines/2026-09-27_m8_finetune_v2/`):
+- at 640 px, vehicles found 0.711 → 0.790, precision 0.914, PCU error per
+  image 2.63 → 2.02, 51 ms a frame on the laptop;
+- at 960 px, vehicles found 0.775 → 0.823, precision 0.851 → 0.908.
+
+At 640 px it more than doubles what IISc's model finds among boxes 20–40 px
+tall (0.19 → 0.44). IISc's model with only its statistics repaired finds
+more too, but did not pass the bar at either size.
+
 ### 3.3 Tracking
 
 ByteTrack, implemented here rather than imported: constant-velocity Kalman on
@@ -264,6 +299,51 @@ and a pressure controller minds the second more. It ships switched off
 A less biased estimate is not automatically a better input: the closed
 loop is the judge.
 
+**Queue past the view, counted (built 2026-09-29, on by default).** The
+heavy-demand jam that five seeds had shown as one run in five
+(`baselines/2026-09-29_m8_heavy_jam/`) was this under-count.
+- **Where:** a 599 m shared lane at the four-phase junction, filmed for its
+  last 98 m, really held 20–65 halted vehicles while the camera's estimate
+  stayed at 11 PCU or less.
+- **Confirmed:** an oracle that added the true out-of-view queue removed the
+  jam.
+
+`state/gap_count.py` counts that queue instead of extrapolating it:
+- **Edges filmed at both ends** (9 of the 19 approach edges; a long
+  approach is usually the upstream junction's receiving lane): vehicles are
+  counted in across the middle of the upstream view and out across the
+  middle of the near view. What is between, less what is visible and what is
+  still driving through, is queued out of sight. That includes what hides
+  behind other vehicles inside the view.
+- **Entries:** the inflow is the arrival rate learned while nothing queues.
+- **Drift:** the count is thrown away whenever the near view proves no queue
+  reaches past it.
+- **Reporting:** only an edge's excess over 10 PCU reaches the lane
+  estimate, so ordinary runs are left exactly as they were. Reporting
+  everything was +4.4 % (n.s.) against no counting over ten held-out heavy
+  seeds.
+
+**Results** (heavy demand, ten seeds each set):
+- held-out: mean −0.9 % (n.s.) against no counting; worst run 593k against
+  729k;
+- TRAIN: mean −0.2 %; worst run 602k against 702k;
+- medium demand: bit-identical.
+
+It guards against the runaway. It does not close the camera's gap to
+perfect data at heavy demand (+5.9 %, not significant).
+
+**How far to trust heavy-demand comparisons.** The same study found heavy
+demand chaotic:
+- **The bottleneck is at capacity.** The four-phase junction runs at Webster
+  degree of saturation 0.996.
+- **Perfect data varies widely.** Over ten TRAIN seeds it spans 409k–639k.
+- **A tiny change moves runs a lot.** 12–22 changed decisions per run moved
+  single runs by up to 37 %.
+
+So a heavy-demand difference under about 10 % on five seeds is noise, and a
+two-seed verdict of any size cannot be told from it. That includes the
+occlusion horizon's "+21.8 % and +14.7 %" above.
+
 **Confidence** = coverage × camera health × visibility × truncation ×
 (0.9 + 0.1 × receiving-lane coverage), each factor in [0, 1] and each
 reported separately in the event. Coverage compares the metres seen from the
@@ -312,11 +392,81 @@ per run and under-stated every rate. `collision_cue` fires on overlapping
 footprints in dense queues and is off at both points.
 The rules are a feature for M6's fusion layer, not a detector on their own.
 
+**Measured as a fusion input** (`baselines/2026-09-27_m8_incident_fusion/`,
+`scripts/m8_incident_fusion.py`). A logistic regression over three kinds of
+feature was tested on held-out seeds:
+- z-scores against each link's normal behaviour;
+- contrast features (stopped on green, slower than its green siblings,
+  queue never cleared);
+- the rules' evidence.
+
+What it found:
+- **With M6's whole-lane SUMO features** (noise-free, an upper bound) it
+  catches 37–43 % of in-view incidents on fresh seeds 6–10, including 9–11
+  of 19 stalls, at 0.19–0.26 false alarms/h. The re-tuned rules catch 11 %.
+  The post-hoc seeds 1–5 give 40–45 %.
+  - These figures are after removing a SUMO artefact: an empty blocked lane
+    reports its 0.1 m/s limit as its mean speed.
+- **The normal baseline** is worth +29 to +30 points of that.
+- **With the cameras alone** it did better than the rules: 28 % with 1 false
+  alarm in 15 h, against 11 % with 26. But it failed the bar set in advance,
+  because the recall gain's interval touched zero. It was not adopted.
+- **The rule evidence** added to camera traffic features on seeds 6–10 (+15
+  points), not in the first run on seeds 1–5, and hardly at all to lane
+  sensors.
+
 The link's `vision_score` is the maximum rule score, and goes straight into
 `FusionLayer`'s existing `vision_score` feature. A persistence gate (score
 ≥ 0.5 for 3 s) turns sustained scores into `AnomalyUpdated(source=VISION)`
 candidates — which still only become incidents through an operator
 (ADR-006). There is no person rule.
+
+**Fire and smoke (version 2 passed its bars but failed the street probe; not wired in).** No rule over
+vehicle tracks can see a fire, so this is the one incident type with its own
+detector.
+- **The model:** a two-class YOLO11-S (fire, smoke), trained in Colab
+  (`notebooks/m8_fire_smoke.ipynb`). It is trained on the public D-Fire
+  dataset (21,527 images, CC0) plus Bengaluru traffic frames with no fire,
+  because orange autos, red buses, brake lights, sodium lamps and dust are
+  what fool a fire detector on Indian roads.
+- **How it will run:**
+  - once a second per camera, not at 5 fps;
+  - its boxes are the evidence;
+  - a detection must persist, like every other rule;
+  - it then becomes an `AnomalyUpdated` candidate for an operator to
+    confirm (ADR-006).
+- **The alarm threshold** is chosen on the notebook's validation split, as
+  the lowest one that keeps false alarms on its Bengaluru validation
+  frames at or under 1 %.
+- **The bar, set before training:**
+  - at least 85 % of D-Fire's test images with fire or smoke raise an
+    alarm;
+  - at most 1 % of the 250 Bengaluru test frames do
+    (`scripts/m8_fire_eval.py`). None of those frames shows a fire, and
+    none was used to train or tune the model.
+- **Version 1 failed both bars and is not adopted**
+  (`baselines/2026-09-28_m8_fire_v1/`).
+  - It alarmed on 12.8 % of the Bengaluru frames, on orange vehicles and
+    signs and on hazy road.
+  - It found 79 % of D-Fire's test fires.
+  - Its training never got the Bengaluru frames: the notebook carried on
+    without them. Version 2 downloads them itself from UVH-26 (never a
+    test frame or test camera), and stops if it cannot.
+- **Version 2 passes both bars** (`baselines/2026-09-28_m8_fire_v2/`).
+  - It found 93 % of D-Fire's test fires and smoke.
+  - It alarmed on 0.4 % of the Bengaluru frames: one orange container.
+  - At its threshold (0.05) it also alarms on 28 % of D-Fire's no-fire
+    images, yet it scores Bengaluru frames near zero. So it may have learned
+    that a Bengaluru CCTV picture is never a fire.
+  - `scripts/m8_fire_paste_probe.py` pasted D-Fire test flames into the
+    Bengaluru frames and onto grey to check this. **It failed.** Fire was
+    found about half as often in the street at 128 px (0.48 against 0.94),
+    and at 256 px 0.67 against 0.92. The bar, set before the run, was a
+    ratio of at least 0.8. So the detector is not wired in. It needs street
+    fires in its training.
+- **Not yet measured:**
+  - fire in Indian junction footage, of which there is none labelled;
+  - the persistence settings, which need video.
 
 ### 3.8 Camera health, including calibration drift
 
@@ -543,6 +693,37 @@ it runs live under `make dev` — and films it through a camera:
    finds one two-wheeler in eight and recognises no auto. For cars the
    twin's measured recall is close to the real one (0.89 and 0.76 against
    0.84 and 0.72).
+
+   Three presets are now **fitted to those measurements**
+   (`scripts/m8_simcam_calibrate.py`, maximum likelihood on every labelled
+   box's size and outcome): `uvh26_640` and `uvh26_1280` (IISc's model at
+   640 and 1280 px input) and `stock_640`. Each has a base recall and a size
+   curve per vehicle type (`size_h50_by_class`), and confusions as
+   measured. Bursts, false positives and person recall stay as in the
+   preset each starts from, because a still image cannot measure them. The
+   size curve was the assumption furthest off: `finetuned_day` halved its
+   recall at a 14 px box, while the real model at 640 px halves it at 53 px
+   for a car. A car about 35 px tall, at the edge of a planned camera's
+   coverage, is found about 19 % of the time at 640 px input and 55 % at
+   1280. On held-out seeds the controller on `uvh26_1280` costs +2.3 %
+   against perfect data at medium, as the assumed detector did (+1.7 %),
+   and +8.0 % at heavy, where the assumed detector cost +17.3 % (the
+   difference is not significant); on `uvh26_640` +9.3 % and +16.8 %; on
+   `stock_640` +17.2 % at medium, three times the old assumption's +5.5 %
+   (`baselines/2026-09-26_m8_measured_detectors/`).
+
+   Two more presets, `itms6_640` and `itms6_960`, are fitted to the
+   adopted fine-tune (`baselines/2026-09-27_m8_finetune_v2/`). At 640 px
+   it halves recall at a 42.5 px car rather than 53 px.
+   - **Medium demand:** the controller on `itms6_640` costs +4.7 %
+     (significant, 0/5 seeds lower), about half what IISc's model cost at
+     640 px (+9.3 %). The direct comparison between the two (−4.2 %) is
+     not significant. It is within 2.4 % (n.s.) of IISc's model at
+     1280 px, which needs about five times the CPU.
+   - **Heavy demand:** both fine-tune presets had one run each go into a
+     long jam, which pulled their means to +17–18 % (n.s.). Their medians
+     matched IISc's model at 1280 px. Runs on perfect data never jammed,
+     so these jams come from the camera path; they were not traced.
 4. Positions are interpolated between SUMO steps, so the vision pipeline runs
    at 5 fps while the simulation and the controller keep their 1 Hz tick.
 
@@ -618,8 +799,9 @@ preset it was measured under.
 
 - Training or fine-tuning YOLO11 on BMD-45 (needs a GPU and the dataset; the
   adapters, class maps and evaluator are ready for the result). IISc's own
-  UVH-26-trained YOLO11-S has been measured instead (§3.2); fine-tuning is
-  for when Vijayawada footage shows it falls short there.
+  UVH-26-trained YOLO11-S has been measured instead, and a corrected
+  fine-tune of it on UVH-26 is ready to run in Colab (§3.2). Fine-tuning on local footage is
+  for when Vijayawada footage shows the model falls short there.
 - Multi-camera re-identification across junctions (would create exactly the
   cross-camera join key ARCH §21 forbids).
 - Fully automatic calibration. Lane-mark calibration (`itms_geo.lanecal`)
@@ -663,4 +845,5 @@ preset it was measured under.
 | RTSP credentials in the registry and in logs | `${VAR}` in the source URL; user-info masked in every log line | a camera password in a config file and a log is a leaked password |
 | the best single class against the threshold | scores summed per ITMS class before threshold and NMS | UVH-26's model spreads a car over five types; three in ten of the cars it found were dropped |
 | free-text labels matched as far as "SUV" | every BMD-45 / UVH-26 label mapped, with a test | "MUV" matched nothing, so a model trained on either would never have counted one |
+| detector presets assumed | three fitted to measured detectors, with a size curve per vehicle type | the assumed size curve credited a 640 px detector with far vehicles it misses; the controller's cost of a stock detector was a third of the measured one |
 

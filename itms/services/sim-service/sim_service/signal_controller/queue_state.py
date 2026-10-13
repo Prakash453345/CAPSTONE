@@ -43,6 +43,21 @@ tick of every run -- disabling A-CA-MP's spillback discount entirely
 (ablating the gate reproduced the shipped results bit-for-bit) and
 `corridor/engine.py`'s `rho_couple` test with it.
 
+**A road SUMO splits into several edges (added 2026-09-29).** A turn bay,
+a change in lane count or, in an OpenStreetMap import, any change of tag
+ends one edge and starts another, and the signal's approach lane is then
+only the last stretch -- 4 m on a generated grid with turn bays. Measured
+on that lane alone, a queue of forty vehicles reads as one. `upstream` and
+`downstream` (`itms_domain.lane_chains`) name the lanes that continue
+an approach or receiving lane through nodes where nothing but the edge
+changes, each with its share of the lane's traffic and its distance
+from the stop line. With them the sampler measures the road rather than
+the edge: halted vehicles on the chain count toward the queue (share-
+weighted), moving ones toward `approaching_pcu` by their distance to the
+stop line, and receiving occupancy is length-weighted over the chain --
+what a single unsplit lane of the same length would have read. Without
+them (the default) nothing changes.
+
 Unlike `ActuationDetector` (a gap-timeout clock) or `SpillbackTracker` (a
 rising-edge counter), neither measurement here needs memory across ticks
 -- both are pure live snapshots. `sample()` still takes no arguments
@@ -55,7 +70,7 @@ the same layer as every other detector, not inside a pure strategy.
 from __future__ import annotations
 
 import xml.etree.ElementTree as ET
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -66,9 +81,16 @@ import traci
 # not a cutoff invented for this sampler.
 _HALTING_SPEED_MPS = 0.1
 
+# `itms_domain.lane_chains`' entries: (lane id, share, offset in metres)
+Chain = Sequence[tuple[str, float, float]]
+
 # Fallback PCU for a vType with no `pcu` param -- car-equivalent, the same
 # default `load_vtype_occupancy` uses for a missing `occupancy` param.
 _DEFAULT_PCU = 1.0
+
+# Head-of-line blocking: the front vehicle counts as blocked when the tail of
+# a vehicle stopped in the junction ahead of it is closer than this.
+_BLOCK_GAP_M = 3.0
 
 # How far ahead the arrival test looks, in seconds. Sized to one clearance
 # interval plus a short green: a vehicle further out than this cannot be
@@ -92,6 +114,7 @@ class QueueSample:
     receiving_occupancy: dict[str, float] = field(default_factory=dict)
     receiving_queue_pcu: dict[str, float] = field(default_factory=dict)
     approaching_pcu: dict[str, float] = field(default_factory=dict)
+    blocked_by: dict[str, str] = field(default_factory=dict)
 
 
 def load_vtype_pcu(route_path: str | Path) -> dict[str, float]:
@@ -131,8 +154,21 @@ class QueueStateSampler:
         halting_speed_mps: float = _HALTING_SPEED_MPS,
         arrival_horizon_s: float = _ARRIVAL_HORIZON_S,
         lane_cache=None,
+        upstream: Mapping[str, Chain] | None = None,
+        downstream: Mapping[str, Chain] | None = None,
+        internal_links: Mapping[str, str] | None = None,
+        vias: Mapping[str, list[tuple[str, float]]] | None = None,
     ):
         self._approach_lanes = approach_lanes
+        self._vias = vias or {}
+        """`itms_domain.lane_chains.vias_from_sumo_net`: the internal lanes
+        inside an approach's chain. Vehicles halted on them count toward the
+        queue (the first vehicle of a queue can stand there)."""
+        self._upstream = upstream or {}
+        self._downstream = downstream or {}
+        # {junction-internal lane: "L{i}"} (`strategies.hol.internal_links`);
+        # when given, `sample_extended` also reports head-of-line blocking
+        self._internal_links = internal_links
         self._receiving_lanes = receiving_lanes
         self._pcu_by_vtype = pcu_by_vtype
         self._halting_speed_mps = halting_speed_mps
@@ -147,6 +183,7 @@ class QueueStateSampler:
         # a network property, not live state, so caching it cannot go stale
         # the way a queue reading would.
         self._lane_length_m: dict[str, float] = {}
+        self._box: dict[str, list[tuple[str, float, str]]] | None = None
 
     def _length_of(self, lane_id: str) -> float:
         cached = self._lane_length_m.get(lane_id)
@@ -169,7 +206,39 @@ class QueueStateSampler:
                 total += self._pcu_by_vtype.get(vtype_id, _DEFAULT_PCU)
         return total
 
-    def _approaching_pcu(self, lane_id: str) -> float:
+    def _queue(self, lane_id: str, chains: Mapping[str, Chain]) -> float:
+        """Halted PCU on `lane_id` and on the lanes that continue it
+        (share-weighted)."""
+        total = self._halting_pcu(lane_id)
+        chain = chains.get(lane_id)
+        if chain:
+            total += sum(share * self._halting_pcu(x) for x, share, _ in chain)
+        if chains is self._upstream:
+            total += sum(share * self._halting_pcu(x) for x, share in self._vias.get(lane_id, ()))
+        return total
+
+    def _approaching(self, lane_id: str) -> float:
+        total = self._approaching_pcu(lane_id)
+        for x, share, offset_m in self._upstream.get(lane_id, ()):
+            total += share * self._approaching_pcu(x, offset_m)
+        return total
+
+    def _occupancy(self, lane_id: str) -> float:
+        """Receiving occupancy; over a chain, length-weighted -- what one lane
+        the chain's length would read."""
+        occ = traci.lane.getLastStepOccupancy(lane_id)
+        chain = self._downstream.get(lane_id)
+        if not chain:
+            return occ
+        length = self._length_of(lane_id)
+        covered, total = occ * length, length
+        for x, share, _ in chain:
+            lx = share * self._length_of(x)
+            covered += lx * traci.lane.getLastStepOccupancy(x)
+            total += lx
+        return covered / total if total > 0 else occ
+
+    def _approaching_pcu(self, lane_id: str, offset_m: float = 0.0) -> float:
         """PCU-weighted count of vehicles still *moving* on `lane_id` whose
         time-to-stopline is inside `arrival_horizon_s`.
 
@@ -202,7 +271,7 @@ class QueueStateSampler:
             for distance_m, speed, pcu in self._cache.state(lane_id).values():
                 if speed < self._halting_speed_mps:
                     continue  # already counted as queue -- see docstring
-                if distance_m / speed <= self._arrival_horizon_s:
+                if (distance_m + offset_m) / speed <= self._arrival_horizon_s:
                     total += pcu
             return total
         length_m = self._length_of(lane_id)
@@ -211,10 +280,85 @@ class QueueStateSampler:
             if speed < self._halting_speed_mps:
                 continue  # already counted as queue -- see docstring
             distance_m = max(0.0, length_m - traci.vehicle.getLanePosition(veh_id))
-            if distance_m / speed <= self._arrival_horizon_s:
+            if (distance_m + offset_m) / speed <= self._arrival_horizon_s:
                 vtype_id = traci.vehicle.getTypeID(veh_id)
                 total += self._pcu_by_vtype.get(vtype_id, _DEFAULT_PCU)
         return total
+
+    def _box_lanes(self) -> dict[str, list[tuple[str, float, str]]]:
+        """`{approach lane: [(internal lane, metres from the stop line to its
+        start, its link)]}`: for every link leaving the lane, its lane
+        through the box and -- where the link has a waiting position inside
+        the box -- the lane that continues it. Network geometry, read once."""
+        if self._box is None:
+            links = self._internal_links or {}
+            box: dict[str, list[tuple[str, float, str]]] = {}
+            for lane_id in set(self._approach_lanes.values()):
+                found: dict[str, tuple[float, str]] = {}
+                for link in traci.lane.getLinks(lane_id):
+                    via, offset_m = link[4], 0.0
+                    while via and via in links and via not in found:
+                        found[via] = (offset_m, links[via])
+                        offset_m += self._length_of(via)
+                        onward = traci.lane.getLinks(via)
+                        via = onward[0][4] if onward else ""
+                box[lane_id] = [(il, off, lk) for il, (off, lk) in found.items()]
+            self._box = box
+        return self._box
+
+    def _blocked_by(self) -> dict[str, str]:
+        """`{movement: blocking vehicle's movement}` -- see
+        `JunctionContext.blocked_by`. A lane is blocked when its front
+        vehicle is stopped and a vehicle that left this lane is stopped
+        inside the junction with its tail within `_BLOCK_GAP_M` of that
+        front vehicle: a turner waiting in the box for a gap. What a camera
+        over the junction sees, not what a stop-bar loop does.
+
+        The first version asked SUMO for the front vehicle's leader
+        (`traci.vehicle.getLeader`). That is the vehicle ahead *on the front
+        vehicle's own path*, so a through vehicle held up by a turner whose
+        tail had cleared the stop line -- on the turn's own internal lane,
+        0.2 m to the side -- had no leader and its lane was not reported.
+        Motorcycles and auto-rickshaws are shorter than the 4 m to the
+        waiting position, so most of the traffic blocked that way. It showed
+        when the cameras' reading was scored against this one: 233 of 536
+        "false" camera detections in 900 s were such lanes."""
+        if not self._internal_links:
+            return {}
+        out: dict[str, str] = {}
+        by_lane: dict[str, list[str]] = {}
+        for link_id, lane_id in self._approach_lanes.items():
+            by_lane.setdefault(lane_id, []).append(link_id)
+        box = self._box_lanes()
+        for lane_id, movements in by_lane.items():
+            front, best = None, None
+            if self._cache is not None:
+                for veh_id, (distance_m, speed, _) in self._cache.state(lane_id).items():
+                    if best is None or distance_m < best:
+                        front, best, front_speed = veh_id, distance_m, speed
+            else:
+                length_m = self._length_of(lane_id)
+                for veh_id in traci.lane.getLastStepVehicleIDs(lane_id):
+                    distance_m = length_m - traci.vehicle.getLanePosition(veh_id)
+                    if best is None or distance_m < best:
+                        front, best = veh_id, distance_m
+                        front_speed = traci.vehicle.getSpeed(veh_id)
+            if front is None or front_speed >= self._halting_speed_mps:
+                continue
+            nearest: tuple[float, str] | None = None   # (tail, metres past the stop line; link)
+            for internal_lane, offset_m, link in box.get(lane_id, ()):
+                for veh_id in traci.lane.getLastStepVehicleIDs(internal_lane):
+                    if traci.vehicle.getSpeed(veh_id) >= self._halting_speed_mps:
+                        continue
+                    tail_m = (offset_m + traci.vehicle.getLanePosition(veh_id)
+                              - traci.vehicle.getLength(veh_id))
+                    if nearest is None or tail_m < nearest[0]:
+                        nearest = (tail_m, link)
+            if nearest is None or best + nearest[0] > _BLOCK_GAP_M:
+                continue
+            for m in movements:
+                out[m] = nearest[1]
+        return out
 
     def sample(self) -> tuple[dict[str, float], dict[str, float]]:
         """Poll every tracked lane once via live TraCI state. Returns
@@ -232,11 +376,11 @@ class QueueStateSampler:
         keeps working exactly as before -- `sample_extended` below is the
         superset, not a replacement."""
         queue_pcu = {
-            link_id: self._halting_pcu(lane_id)
+            link_id: self._queue(lane_id, self._upstream)
             for link_id, lane_id in self._approach_lanes.items()
         }
         receiving_occupancy = {
-            link_id: traci.lane.getLastStepOccupancy(lane_id)
+            link_id: self._occupancy(lane_id)
             for link_id, lane_id in self._receiving_lanes.items()
         }
         return queue_pcu, receiving_occupancy
@@ -260,18 +404,19 @@ class QueueStateSampler:
         queue_pcu: dict[str, float] = {}
         approaching_pcu: dict[str, float] = {}
         for link_id, lane_id in self._approach_lanes.items():
-            queue_pcu[link_id] = self._halting_pcu(lane_id)
-            approaching_pcu[link_id] = self._approaching_pcu(lane_id)
+            queue_pcu[link_id] = self._queue(lane_id, self._upstream)
+            approaching_pcu[link_id] = self._approaching(lane_id)
 
         receiving_occupancy: dict[str, float] = {}
         receiving_queue_pcu: dict[str, float] = {}
         for link_id, lane_id in self._receiving_lanes.items():
-            receiving_occupancy[link_id] = traci.lane.getLastStepOccupancy(lane_id)
-            receiving_queue_pcu[link_id] = self._halting_pcu(lane_id)
+            receiving_occupancy[link_id] = self._occupancy(lane_id)
+            receiving_queue_pcu[link_id] = self._queue(lane_id, self._downstream)
 
         return QueueSample(
             queue_pcu=queue_pcu,
             receiving_occupancy=receiving_occupancy,
             receiving_queue_pcu=receiving_queue_pcu,
             approaching_pcu=approaching_pcu,
+            blocked_by=self._blocked_by(),
         )

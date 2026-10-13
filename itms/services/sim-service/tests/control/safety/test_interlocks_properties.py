@@ -278,3 +278,22 @@ def test_empty_plan_is_a_violation_not_a_crash():
     plan = SignalPlan(intersection_id="J", steps=())
     violations = interlocks.check(plan, ctx, _CFG)
     assert violations and violations[0].rule == "EMPTY_PLAN"
+
+
+@given(elapsed=st.floats(min_value=0.0, max_value=120.0),
+       green_s=st.floats(min_value=0.1, max_value=50.0))
+@settings(max_examples=N_CASES, deadline=None)
+def test_a_plan_must_start_at_the_phase_the_junction_is_showing(elapsed, green_s):
+    """A one-step plan naming another phase used to pass every predicate
+    (minimum green is judged on the running phase, a clearance is only asked
+    for between steps) and the runner applies a one-step plan by relabelling
+    the current phase: a change with no yellow and no all-red."""
+    ctx = JunctionContext(intersection_id="J", current_phase_id="NS",
+                          current_phase_elapsed_s=elapsed)
+    jump = SignalPlan(intersection_id="J", steps=(PlanStep("EW", green_s),))
+    assert any(v.rule == "PLAN_CONTINUITY" for v in interlocks.check(jump, ctx, _CFG))
+    for steps in ((PlanStep("NS", green_s),),
+                  (PlanStep("NS", green_s, yellow_s=_CFG.yellow_s, all_red_s=_CFG.all_red_s),
+                   PlanStep("EW", 10.0))):
+        ok = interlocks.check(SignalPlan(intersection_id="J", steps=steps), ctx, _CFG)
+        assert not any(v.rule == "PLAN_CONTINUITY" for v in ok)

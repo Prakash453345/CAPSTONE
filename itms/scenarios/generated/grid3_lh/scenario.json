@@ -1,0 +1,97 @@
+{
+ "name": "grid3_lh",
+ "net": "grid3_lh.net.xml",
+ "mix": "india",
+ "levels": {
+  "light": {
+   "sumocfg": "grid3_lh_light.sumocfg",
+   "route": "grid3_lh_light.rou.xml",
+   "target_ds": 0.25,
+   "achieved_ds": 0.2466,
+   "busiest_tls": "B2",
+   "period_s": 2.245,
+   "iterations": [
+    [
+     4.0,
+     0.1403
+    ],
+    [
+     2.245,
+     0.2466
+    ]
+   ]
+  },
+  "medium": {
+   "sumocfg": "grid3_lh_medium.sumocfg",
+   "route": "grid3_lh_medium.rou.xml",
+   "target_ds": 0.5,
+   "achieved_ds": 0.4937,
+   "busiest_tls": "B2",
+   "period_s": 1.052,
+   "iterations": [
+    [
+     4.0,
+     0.1403
+    ],
+    [
+     1.1225,
+     0.4686
+    ],
+    [
+     1.052,
+     0.4937
+    ]
+   ]
+  },
+  "heavy": {
+   "sumocfg": "grid3_lh_heavy.sumocfg",
+   "route": "grid3_lh_heavy.rou.xml",
+   "target_ds": 1.0,
+   "achieved_ds": 1.0022,
+   "busiest_tls": "B2",
+   "period_s": 0.4972,
+   "iterations": [
+    [
+     4.0,
+     0.1403
+    ],
+    [
+     0.5612,
+     0.9106
+    ],
+    [
+     0.5111,
+     0.9729
+    ],
+    [
+     0.4972,
+     1.0022
+    ]
+   ]
+  }
+ },
+ "demand": "randomTrips --fringe-factor 5, 0-1800 s, routed by duarouter",
+ "generated": {
+  "spec": "grid:3x3,300,2",
+  "lefthand": true,
+  "turn_lanes": 0,
+  "speed_mps": 13.89,
+  "tls_layout": "opposites",
+  "netgenerate": "netgenerate -o grid3_lh.net.xml --default-junction-type traffic_light --default.speed 13.89 --no-turnarounds true --tls.layout opposites --grid --grid.x-number 3 --grid.y-number 3 --grid.length 300 --default.lanenumber 2 --grid.attach-length 300 --lefthand"
+ },
+ "signalised_junctions": 9,
+ "phases_per_junction": [
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2
+ ],
+ "cameras": 36,
+ "cameras_file": "cameras.json",
+ "map_center": null
+}

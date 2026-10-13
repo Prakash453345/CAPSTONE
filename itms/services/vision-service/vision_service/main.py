@@ -11,16 +11,21 @@ Env vars:
                      cameras.json written by scripts/m8_plan_cameras.py)
   VISION_NET         SUMO net the registry's lanes come from (default: the
                      Vijayawada corridor)
-  VISION_PRESET      simcam detector-error preset (default finetuned_day;
-                     ideal | finetuned_day | coco_pretrained | night_rain)
+  VISION_PRESET      simcam detector-error preset (default itms6_640: the
+                     error model fitted to the adopted fine-tuned detector at
+                     640 px, baselines/2026-09-27_m8_finetune_v2/; others:
+                     ideal | finetuned_day | coco_pretrained | night_rain |
+                     uvh26_640 | uvh26_1280 | stock_640 | itms6_960)
   VISION_FPS         processing rate per camera (default 5)
   VISION_RULES       incident-rule operating point: "quiet" (default; held-out
                      19 % of in-view incidents at ~1.7 false alarms/h for the
                      corridor), "assist" (19 % at ~10/h -- no better on
                      held-out seeds) or "hand_set" (37 % at ~37/h) --
                      see vision_service.incidents.rules.OPERATING_POINTS
-  VISION_DETECTOR    video mode: a .pt (Ultralytics) or .onnx model
-                     (default yolo11n.pt)
+  VISION_DETECTOR    video mode: a .pt (Ultralytics) or .onnx model (default
+                     data/models/itms_six_fp32_640.onnx, the adopted fine-tune
+                     of IISc's UVH-26 model: `make vision-model` puts it there;
+                     yolo11n.pt is the stock COCO model)
   VISION_EVIDENCE    directory for redacted evidence clips (video mode;
                      unset = keep no evidence at all)
   MINIO_ENDPOINT / MINIO_ACCESS_KEY / MINIO_SECRET_KEY
@@ -40,7 +45,24 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s vision-service %(mes
 log = logging.getLogger("vision.main")
 
 _REPO = Path(__file__).resolve().parents[3]
-_NET_DIR = _REPO / "scenarios" / "networks" / "vijayawada"
+# the adopted detector (baselines/2026-09-27_m8_finetune_v2/) and the simcam
+# error model fitted to it; data/ is not in git, `make vision-model` fills it
+DEFAULT_PRESET = "itms6_640"
+DEFAULT_DETECTOR = _REPO / "data" / "models" / "itms_six_fp32_640.onnx"
+
+
+def detector_path() -> str:
+    """VISION_DETECTOR, else the adopted fine-tune -- which must be there: a
+    silent fallback to a weaker model would look like it works."""
+    weights = os.environ.get("VISION_DETECTOR")
+    if weights:
+        return weights
+    if not DEFAULT_DETECTOR.exists():
+        raise SystemExit(
+            f"no detector at {DEFAULT_DETECTOR}. Run `make vision-model` (it copies the adopted "
+            "fine-tune from data/uvh26/finetune_v2/, where the fine-tune notebook's results "
+            "go), or set VISION_DETECTOR to a .onnx/.pt model (yolo11n.pt is the stock COCO one).")
+    return str(DEFAULT_DETECTOR)
 
 
 def _publisher(redis_url: str):
@@ -57,6 +79,7 @@ def _publisher(redis_url: str):
 
 
 def build_service(mode: str):
+    from itms_domain.scenario import current  # noqa: PLC0415
     from itms_geo import RoadNetwork  # noqa: PLC0415
 
     from vision_service.cameras import CameraRig, load_registry  # noqa: PLC0415
@@ -64,8 +87,9 @@ def build_service(mode: str):
     from vision_service.privacy import EvidenceStore  # noqa: PLC0415
     from vision_service.service import VisionService  # noqa: PLC0415
 
-    registry = Path(os.environ.get("VISION_REGISTRY", _NET_DIR / "cameras.json"))
-    net_path = Path(os.environ.get("VISION_NET", _NET_DIR / "vijayawada_corridor.net.xml"))
+    scenario = current()   # ITMS_SCENARIO, else the Vijayawada corridor
+    registry = Path(os.environ.get("VISION_REGISTRY", scenario.cameras))
+    net_path = Path(os.environ.get("VISION_NET", scenario.net))
     specs, raw = load_registry(registry)
     if mode == "video":
         specs = [s for s in specs if s.source != "simcam"]
@@ -75,6 +99,9 @@ def build_service(mode: str):
     rig = CameraRig.build(net, specs, max_resolution_m_per_px=raw.get("max_resolution_m_per_px",
                                                                          0.6))
     approach, receiving = net.link_lane_maps()
+    from itms_domain.lane_chains import from_sumo_net as chains_from_net  # noqa: PLC0415
+
+    chains = chains_from_net(net_path)
     evidence = None
     if os.environ.get("VISION_EVIDENCE") or os.environ.get("MINIO_ENDPOINT"):
         evidence = EvidenceStore(
@@ -83,14 +110,15 @@ def build_service(mode: str):
             minio_access_key=os.environ.get("MINIO_ACCESS_KEY"),
             minio_secret_key=os.environ.get("MINIO_SECRET_KEY"),
         )
-    preset = os.environ.get("VISION_PRESET", "finetuned_day") if mode == "simcam" else None
+    preset = os.environ.get("VISION_PRESET", DEFAULT_PRESET) if mode == "simcam" else None
     fps = float(os.environ.get("VISION_FPS", "5"))
     publish = _publisher(os.environ.get("REDIS_URL", "redis://localhost:6379/0"))
     model = f"vision-m8/simcam:{preset}" if mode == "simcam" else \
-        f"vision-m8/{os.environ.get('VISION_DETECTOR', 'yolo11n.pt')}"
+        f"vision-m8/{Path(detector_path()).name}"
     return VisionService(rig, approach, receiving, publish, preset=preset, fps=fps, model=model,
                          evidence=evidence,
-                         rules=os.environ.get("VISION_RULES", DEFAULT_OPERATING_POINT)), specs
+                         rules=os.environ.get("VISION_RULES", DEFAULT_OPERATING_POINT),
+                         lane_chains=chains if (chains[0] or chains[1]) else None), specs
 
 
 class LatestFrames:
@@ -127,7 +155,7 @@ def _run_video(service, specs) -> None:
     from vision_service.detect.base import Detector  # noqa: PLC0415
     from vision_service.sources import VideoSource  # noqa: PLC0415
 
-    weights = os.environ.get("VISION_DETECTOR", "yolo11n.pt")
+    weights = detector_path()
     detector: Detector
     if weights.endswith(".onnx"):
         from vision_service.detect.yolo import OnnxDetector  # noqa: PLC0415
@@ -176,7 +204,7 @@ def main() -> None:
             from vision_service.service import run_simcam_forever  # noqa: PLC0415
 
             run_simcam_forever(service, os.environ.get("REDIS_URL", "redis://localhost:6379/0"),
-                               preset_note=os.environ.get("VISION_PRESET", "finetuned_day"))
+                               preset_note=os.environ.get("VISION_PRESET", DEFAULT_PRESET))
     except KeyboardInterrupt:
         pass
 

@@ -33,10 +33,12 @@ Env vars:
                               emergency-response layer (operator anomaly injection,
                               dynamic router, green corridor, continuous re-routing)
                               on top of the same arbitration ladder.
-  SUMOCFG_PATH         path to a .sumocfg (default: the Vijayawada corridor scenario) -- sumo mode
+  ITMS_SCENARIO        a scenario directory from scenarios/build_scenario.py (any road
+                       network); unset = the Vijayawada corridor. Both modes.
+  SUMOCFG_PATH         path to a .sumocfg (default: the scenario's SIM_DEMAND level) -- sumo mode
   SIM_ROUTE_PATH       path to the matching .rou.xml (default: SUMOCFG_PATH with a
                        .rou.xml suffix -- true for all three shipped demand levels) -- sumo mode
-  SIM_DEMAND           "light" | "medium" (default) | "heavy" -- live mode's demand level
+  SIM_DEMAND           "light" | "medium" (default) | "heavy" -- the demand level
   SIM_REALTIME_FACTOR  pacing for the demo loop (default 1.0 -- see traci_loop.run / run_live)
   SIM_STEP_LENGTH      seconds of sim time per step (default 1.0, matches the M1 gate's "1 Hz")
   SIM_MAX_STEPS         stop after N steps (unset = run to scenario end); mainly for tests
@@ -64,11 +66,15 @@ log = logging.getLogger("sim-service.main")
 
 # services/sim-service/sim_service/main.py -> repo root is three parents up.
 _REPO_ROOT = Path(__file__).resolve().parents[3]
+# the generic network parsers (extract_tier0_config, link_lanes,
+# measure_flows) live beside the corridor they were written for
 _NET_DIR = _REPO_ROOT / "scenarios" / "networks" / "vijayawada"
-_NET_PATH = _NET_DIR / "vijayawada_corridor.net.xml"
-_DEFAULT_SUMOCFG = (
-    _REPO_ROOT / "scenarios" / "demand" / "vijayawada" / "vijayawada_corridor.sumocfg"
-)
+
+
+def _scenario():
+    from itms_domain.scenario import current  # noqa: PLC0415
+
+    return current()
 
 REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
 
@@ -87,15 +93,21 @@ def _run_sumo() -> None:
     from sim_service.control.strategies import acamp, webster
     from sim_service.signal_controller.queue_state import load_vtype_pcu
 
-    sumocfg = os.environ.get("SUMOCFG_PATH", str(_DEFAULT_SUMOCFG))
-    route = os.environ.get("SIM_ROUTE_PATH", str(Path(sumocfg).with_suffix(".rou.xml")))
-    for label, path in (("scenario", sumocfg), ("route file", route), ("network", str(_NET_PATH))):
+    scenario = _scenario()
+    net_path = scenario.net
+    default_cfg, default_route = scenario.level(os.environ.get("SIM_DEMAND", "medium"))
+    sumocfg = os.environ.get("SUMOCFG_PATH", str(default_cfg))
+    route = os.environ.get("SIM_ROUTE_PATH",
+                           str(default_route) if "SUMOCFG_PATH" not in os.environ
+                           else str(Path(sumocfg).with_suffix(".rou.xml")))
+    for label, path in (("scenario", sumocfg), ("route file", route), ("network", str(net_path))):
         if not Path(path).exists():
             raise SystemExit(
-                f"no {label} at {path} -- run scenarios/networks/vijayawada/build.sh "
-                f"and scenarios/demand/vijayawada/build.sh first, or set SUMOCFG_PATH/"
-                f"SIM_ROUTE_PATH"
+                f"no {label} at {path} -- build the scenario first (scenarios/build_scenario.py, "
+                f"or the Vijayawada corridor's build.sh scripts), or set ITMS_SCENARIO/"
+                f"SUMOCFG_PATH/SIM_ROUTE_PATH"
             )
+    log.info("scenario %s: %s", scenario.name, sumocfg)
 
     realtime_factor = float(os.environ.get("SIM_REALTIME_FACTOR", "1.0"))
     step_length = float(os.environ.get("SIM_STEP_LENGTH", "1.0"))
@@ -110,11 +122,40 @@ def _run_sumo() -> None:
     from link_lanes import link_to_lane_map, link_to_receiving_lane_map  # noqa: E402
     from measure_flows import compute_link_flows  # noqa: E402
 
-    configs = load_configs(_NET_PATH)
-    flows = compute_link_flows(_NET_PATH, Path(route))
+    configs = load_configs(net_path)
+    # a split-phased junction (one phase per approach) runs facing approaches
+    # together, the turn across the oncoming stream giving way -- itms_domain.phase_layout
+    from itms_domain.phase_layout import net_links, paired_layout  # noqa: PLC0415
+
+    _links, _heading, _lefthand = net_links(net_path)
+    configs = {tls: paired_layout(cfg, _links.get(tls, {}), _heading, _lefthand)
+               for tls, cfg in configs.items()}
+    # every phase also shows the movements that cross nothing it shows (a free
+    # left turn, many U-turns), without owning them -- itms_domain.overlaps
+    from itms_domain.overlaps import pedestrian_links, with_overlaps  # noqa: PLC0415
+
+    walks = pedestrian_links(net_path)
+    configs = {tls: with_overlaps(cfg, walks.get(tls, frozenset()), owned=False)
+               for tls, cfg in configs.items()}
+    flows = compute_link_flows(net_path, Path(route))
     vtype_pcu = load_vtype_pcu(Path(route))
-    link_lanes = link_to_lane_map(_NET_PATH)
-    receiving_lanes = link_to_receiving_lane_map(_NET_PATH)
+    link_lanes = link_to_lane_map(net_path)
+    receiving_lanes = link_to_receiving_lane_map(net_path)
+    # a road split into several edges (turn bays, OSM tag changes) measured
+    # as the whole road -- see itms_domain.lane_chains
+    from itms_domain.lane_chains import SHORT_APPROACH_M, vias_from_sumo_net  # noqa: PLC0415
+    from itms_domain.lane_chains import from_sumo_net as chains_from_net  # noqa: PLC0415
+
+    chains = chains_from_net(net_path)
+    # ... and a vehicle standing between the pieces of a split road, or before a
+    # stop-line lane too short to hold it, is on no lane at all: watch those too
+    vias = vias_from_sumo_net(net_path, chains[0], SHORT_APPROACH_M)
+
+    # Off-peak mode (SIGNAL_OFFPEAK_REST=1, for light-traffic hours only): at its
+    # ceiling a green stays on while no other road has anyone waiting or arriving
+    # -- baselines/2026-10-13_rest_offpeak_v2 (light: -9.0 % over ten networks,
+    # -15.3 % on the Amaravati map). Off by default; not for medium or heavy traffic.
+    offpeak = os.environ.get("SIGNAL_OFFPEAK_REST", "0") == "1"
 
     # One AdaptiveCamp per junction, cold-started (no warmed memory/
     # calibration profile) -- see this module's docstring for why.
@@ -122,6 +163,7 @@ def _run_sumo() -> None:
         tls_id: acamp.AdaptiveCamp(
             nominal_cycle_s=webster.compute_timing(cfg, flows.get(tls_id, {})).cycle_s,
             tick_s=step_length,
+            cfg=acamp.AcampConfig(rest_in_green=True) if offpeak else None,
         )
         for tls_id, cfg in configs.items()
     }
@@ -147,11 +189,11 @@ def _run_sumo() -> None:
 
     anomaly_graph: AnomalyGraph | None = None
     try:
-        anomaly_graph = AnomalyGraph.from_network(_NET_PATH)
+        anomaly_graph = AnomalyGraph.from_network(net_path)
     except Exception:
         log.exception(
             "could not build the anomaly graph from %s -- incident detection disabled for this run",
-            _NET_PATH,
+            net_path,
         )
 
     bus = RedisStreamsSyncBus(REDIS_URL)
@@ -177,6 +219,8 @@ def _run_sumo() -> None:
             link_lanes=link_lanes,
             receiving_lanes=receiving_lanes,
             vtype_pcu=vtype_pcu,
+            lane_chains=chains if (chains[0] or chains[1]) else None,
+            lane_vias=vias or None,
             bus=bus,
             anomaly_graph=anomaly_graph,
             anomaly_feature_sink=live_detector.on_tick if live_detector is not None else None,

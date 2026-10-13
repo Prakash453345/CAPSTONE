@@ -177,7 +177,8 @@ def test_cross_camera_duplicates_are_merged(network, rig, links) -> None:
 
 
 def test_queue_past_the_view_is_extrapolated_and_trusted_less(network, rig, links) -> None:
-    cfg = EstimatorConfig()
+    # the growth rule, for a lane the queue count (`test_gap_count.py`) does not cover
+    cfg = EstimatorConfig(gap_counting=False)
     est = LinkStateEstimator(rig, links[0], links[1], cfg)
     lane = network.lanes["in_0"]
     view = rig.coverage("in_0").covered_from_end_m
@@ -229,7 +230,8 @@ def test_a_queue_hidden_by_occlusion_is_still_seen_as_truncated(network, rig, li
             k += 1
         return out
 
-    est = LinkStateEstimator(rig, links[0], links[1], EstimatorConfig(horizon_quantile=0.9))
+    est = LinkStateEstimator(rig, links[0], links[1],
+                             EstimatorConfig(horizon_quantile=0.9, gap_counting=False))
     t = 0.0
     for _cycle in range(6):           # red phases: queues build to 20-40 m, then clear
         for back in np.linspace(10.0, 40.0, 30):
@@ -361,3 +363,81 @@ def test_a_stalled_vehicle_reacquired_keeps_its_history(network, rig, camera) ->
         passing = gt.update(t, [ImageTrack(3, box_at(s), 0.9, VClass.CAR, 3, 3, False)])[0]
         t, s = t + 0.2, s + 2.0
     assert not passing.stopped and passing.speed > 5.0
+
+
+def test_a_link_reads_the_lanes_that_continue_its_approach(network, rig, links) -> None:
+    """Where SUMO cuts an approach into edges, the link also reads the lane
+    before its own (`itms_domain.lane_chains`): here in_1 stands in for it,
+    feeding in_0 and one other lane, so half its queue is L0's."""
+    def cars():
+        return [_gt(track_id=i, lane_id=ln, s=s, xy=network.lanes[ln].point_at(s)[0])
+                for i, (ln, s) in enumerate([("in_0", 196.0), ("in_1", 190.0),
+                                             ("in_1", 180.0)])]
+    plain = LinkStateEstimator(rig, links[0], links[1])
+    plain.update(100.0, cars())
+    chained = LinkStateEstimator(rig, links[0], links[1],
+                                 lane_chains=({"in_0": [("in_1", 0.5, 200.0)]}, {}))
+    chained.update(100.0, cars())
+    assert plain.links[("J", "L0")].queue_pcu == pytest.approx(1.0)
+    assert chained.links[("J", "L0")].queue_pcu == pytest.approx(1.0 + 0.5 * 2)
+    assert chained.links[("J", "L1")].queue_pcu == pytest.approx(2.0)   # L1 has no chain
+
+
+def test_a_car_over_the_loop_of_a_very_short_approach_lane_counts_as_seen(camera) -> None:
+    """A 4 m approach lane (the stretch after a turn bay opens): a car whose
+    front is over the stop-bar loop is tracked on the lane before it. Counted
+    on the approach edge alone the camera 'sees nothing' while the loop sees a
+    car, and the cross-check calls the camera blind."""
+    from itms_geo.road import Connection, Lane, RoadNetwork
+    from vision_service.cameras import CameraRig, CameraSpec
+
+    def lane(lid, edge, x0, x1):
+        return Lane(lid, edge, 0, abs(x1 - x0), 3.2, 13.89, np.array([[x0, -1.6], [x1, -1.6]]))
+
+    lanes = {"up_0": lane("up_0", "up", 0.0, 196.0), "bay_0": lane("bay_0", "bay", 196.0, 200.0),
+             "out_0": lane("out_0", "out", 215.0, 415.0)}
+    net = RoadNetwork(lanes, {"up": ("up_0",), "bay": ("bay_0",), "out": ("out_0",)},
+                      {"up": ("W", "P"), "bay": ("P", "J"), "out": ("J", "E")},
+                      {"W": (0.0, 0.0, "priority"), "P": (196.0, 0.0, "priority"),
+                       "J": (207.5, 0.0, "traffic_light"), "E": (415.0, 0.0, "priority")},
+                      [Connection("up_0", "bay_0", None, None, "s"),
+                       Connection("bay_0", "out_0", "J", 0, "s")])
+    rig = CameraRig.build(net, [CameraSpec("camJ", camera, tls_id="J", approach_edge="bay")])
+    links = ({"J": {"L0": "bay_0"}}, {"J": {"L0": "out_0"}})
+    car = _gt(lane_id="up_0", s=193.0, xy=lanes["up_0"].point_at(193.0)[0])  # front at 195.1 m
+    far = _gt(track_id=2, lane_id="up_0", s=120.0, xy=lanes["up_0"].point_at(120.0)[0])
+    est = LinkStateEstimator(rig, *links)
+    est.update(100.0, [car, far])
+    # the car over the loop counts; the one 76 m back does not
+    assert est.links[("J", "L0")].vehicles_seen == 1
+    off = LinkStateEstimator(rig, *links, EstimatorConfig(seen_zone_m=0.0))
+    off.update(100.0, [car, far])
+    assert off.links[("J", "L0")].vehicles_seen == 0
+
+
+def test_the_emulated_stop_bar_loop_on_a_lane_shorter_than_its_zone_is_empty_when_it_is(
+        network) -> None:
+    """The gates' loop (`VisionLoop.stopbar`) read an empty lane shorter than
+    its 20 m zone as occupied, and the cross-check then called working
+    cameras blind."""
+    from types import SimpleNamespace
+
+    from itms_geo.road import Lane
+    from vision_service.sim.closed_loop import VisionLoop
+
+    lanes = dict(network.lanes)
+    lanes["bay_0"] = Lane("bay_0", "bay", 0, 4.0, 3.2, 13.89, np.array([[196.0, -4.8],
+                                                                        [200.0, -4.8]]))
+    system = SimpleNamespace(rig=SimpleNamespace(network=SimpleNamespace(lanes=lanes)),
+                             estimator=SimpleNamespace(approach_links={
+                                 "J": {"L0": "bay_0", "L1": "in_1"}}))
+    loop = VisionLoop.__new__(VisionLoop)
+    loop.system, loop._front, loop._front_t = system, {}, None  # noqa: SLF001
+
+    def at(t, lane_ids, positions):
+        loop._prev = SimpleNamespace(t=t, lane_id=lane_ids, lane_pos=positions)  # noqa: SLF001
+        return loop.stopbar("J")
+
+    assert at(1.0, [], []) == {"L0": False, "L1": False}
+    assert at(2.0, ["bay_0", "in_1"], [2.5, 150.0]) == {"L0": True, "L1": False}
+    assert at(3.0, ["in_1"], [190.0]) == {"L0": False, "L1": True}

@@ -14,7 +14,9 @@ rest of the pipeline will use it, not only the way detection papers do:
   - the confusion table, truth class -> reported class, with misses,
   - false positives per image,
   - recall by box height (the SimCam error model's size curve),
-  - the per-image **PCU count error**: the quantity `queue_pcu` is made of.
+  - the per-image **PCU count error**: the quantity `queue_pcu` is made of;
+- **per-image counts** (`per_image`), so two detectors scored on the same
+  images can be compared pairwise (`paired_bootstrap`).
 
 Truth boxes labelled with a class the taxonomy drops (UVH-26's "Others")
 are *ignore regions*: a detection on one is neither a hit nor a false
@@ -74,9 +76,15 @@ class DetectionEval:
     _size_all: list = field(default_factory=lambda: [0] * (len(SIZE_BINS_PX) - 1))
     pcu_truth: list = field(default_factory=list)
     pcu_found: list = field(default_factory=list)
+    # per class and box height, at the operating threshold: [found, all] per bin
+    _size_cls: dict = field(default_factory=lambda: defaultdict(
+        lambda: [[0, 0] for _ in range(len(SIZE_BINS_PX) - 1)]))
+    per_image: list = field(default_factory=list)   # what a paired comparison resamples
+    per_box: list = field(default_factory=list)     # per truth box: class, height, found, type ok
 
     def add(self, truth_boxes, truth_cls: Sequence[VClass | None],
-            pred_boxes, pred_scores: Sequence[float], pred_cls: Sequence[VClass]) -> None:
+            pred_boxes, pred_scores: Sequence[float], pred_cls: Sequence[VClass],
+            image: str = "") -> None:
         """One image. `truth_cls[i] is None` marks an ignore region."""
         tb, pb = _as_boxes(truth_boxes), _as_boxes(pred_boxes)
         ps = np.asarray(pred_scores, dtype=np.float64)
@@ -123,13 +131,23 @@ class DetectionEval:
         for pi_ in un_p:
             self.false_pos[pred_cls[op[pi_]]] += 1
         found = {ti_ for _, ti_ in matches}
+        right = {ti_ for pi_, ti_ in matches if pred_cls[op[pi_]] == tcls[ti_]}
         for j in range(len(tcls)):
             h = tb_k[j, 3] - tb_k[j, 1]
             b = int(np.searchsorted(SIZE_BINS_PX, h, side="right") - 1)
             self._size_all[b] += 1
             self._size_hit[b] += j in found
-        self.pcu_truth.append(sum(self.classes.pcu(c) for c in tcls))
-        self.pcu_found.append(sum(self.classes.pcu(pred_cls[k]) for k in op))
+            self._size_cls[tcls[j]][b][0] += j in found
+            self._size_cls[tcls[j]][b][1] += 1
+            self.per_box.append((tcls[j].value, round(float(h), 1), j in found, j in right))
+        pcu_t = sum(self.classes.pcu(c) for c in tcls)
+        pcu_f = sum(self.classes.pcu(pred_cls[k]) for k in op)
+        self.pcu_truth.append(pcu_t)
+        self.pcu_found.append(pcu_f)
+        self.per_image.append({
+            "image": image, "truth": len(tcls), "found": len(matches),
+            "correct": sum(1 for pi_, ti_ in matches if pred_cls[op[pi_]] == tcls[ti_]),
+            "false_pos": len(un_p), "pcu_truth": pcu_t, "pcu_found": pcu_f})
 
     def summary(self) -> dict:
         per_class = {}
@@ -172,8 +190,51 @@ class DetectionEval:
             "recall_by_height": {b: (self._size_hit[i] / self._size_all[i]
                                      if self._size_all[i] else None, self._size_all[i])
                                  for i, b in enumerate(bins)},
+            "recall_by_height_by_class": {
+                c.value: {b: (f / n if n else None, n)
+                          for b, (f, n) in zip(bins, rows, strict=True)}
+                for c, rows in sorted(self._size_cls.items(), key=lambda kv: kv[0].value)},
             "pcu_per_image": {"truth_mean": float(t.mean()) if len(t) else float("nan"),
                               "bias": float((f - t).mean()) if len(t) else float("nan"),
                               "mae": float(np.abs(f - t).mean()) if len(t) else float("nan")},
             "per_class": per_class,
         }
+
+
+
+PAIRED_STATS = ("vehicle_recall", "correct_type_recall", "vehicle_precision",
+                "false_pos_per_image", "pcu_mae", "pcu_bias")
+
+
+def _stats(r: dict[str, np.ndarray], idx: np.ndarray) -> dict[str, np.ndarray]:
+    """Every paired statistic for each resample (rows of `idx`)."""
+    t, f, c, fp = (r[k][idx].sum(axis=-1) for k in ("truth", "found", "correct", "false_pos"))
+    err = (r["pcu_found"] - r["pcu_truth"])[idx]
+    with np.errstate(invalid="ignore", divide="ignore"):
+        return {"vehicle_recall": f / t, "correct_type_recall": c / t,
+                "vehicle_precision": f / (f + fp), "false_pos_per_image": fp / idx.shape[-1],
+                "pcu_mae": np.abs(err).mean(axis=-1), "pcu_bias": err.mean(axis=-1)}
+
+
+def paired_bootstrap(a: list[dict], b: list[dict], *, n: int = 10_000, seed: int = 0) -> dict:
+    """B minus A on the same images, with a 95 % interval from resampling
+    images (both detectors keep the same resample). Images are matched by
+    name; a mismatch is an error, not a silent partial comparison."""
+    ia = {r["image"]: r for r in a}
+    ib = {r["image"]: r for r in b}
+    if set(ia) != set(ib) or len(ia) != len(a) or len(ib) != len(b):
+        raise ValueError("the two runs were not scored on the same images")
+    names = sorted(ia)
+    keys = ("truth", "found", "correct", "false_pos", "pcu_truth", "pcu_found")
+    ra = {k: np.array([ia[x][k] for x in names], dtype=np.float64) for k in keys}
+    rb = {k: np.array([ib[x][k] for x in names], dtype=np.float64) for k in keys}
+    whole = np.arange(len(names))
+    pa, pb = _stats(ra, whole), _stats(rb, whole)
+    idx = np.random.default_rng(seed).integers(0, len(names), size=(n, len(names)))
+    sa, sb = _stats(ra, idx), _stats(rb, idx)
+    out = {}
+    for s in PAIRED_STATS:
+        lo, hi = np.nanpercentile(sb[s] - sa[s], [2.5, 97.5])
+        out[s] = {"a": float(pa[s]), "b": float(pb[s]), "diff": float(pb[s] - pa[s]),
+                  "ci95": [float(lo), float(hi)], "excludes_zero": bool(lo > 0 or hi < 0)}
+    return out

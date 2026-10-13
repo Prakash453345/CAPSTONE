@@ -1,0 +1,100 @@
+{
+ "name": "grid4_rh_turns",
+ "net": "grid4_rh_turns.net.xml",
+ "mix": "cars",
+ "levels": {
+  "light": {
+   "sumocfg": "grid4_rh_turns_light.sumocfg",
+   "route": "grid4_rh_turns_light.rou.xml",
+   "target_ds": 0.25,
+   "achieved_ds": 0.2466,
+   "busiest_tls": "C1",
+   "period_s": 2.6839,
+   "iterations": [
+    [
+     4.0,
+     0.1677
+    ],
+    [
+     2.6839,
+     0.2466
+    ]
+   ]
+  },
+  "medium": {
+   "sumocfg": "grid4_rh_turns_medium.sumocfg",
+   "route": "grid4_rh_turns_medium.rou.xml",
+   "target_ds": 0.5,
+   "achieved_ds": 0.5085,
+   "busiest_tls": "C2",
+   "period_s": 1.2801,
+   "iterations": [
+    [
+     4.0,
+     0.1677
+    ],
+    [
+     1.3419,
+     0.477
+    ],
+    [
+     1.2801,
+     0.5085
+    ]
+   ]
+  },
+  "heavy": {
+   "sumocfg": "grid4_rh_turns_heavy.sumocfg",
+   "route": "grid4_rh_turns_heavy.rou.xml",
+   "target_ds": 1.0,
+   "achieved_ds": 1.0044,
+   "busiest_tls": "C2",
+   "period_s": 0.621,
+   "iterations": [
+    [
+     4.0,
+     0.1677
+    ],
+    [
+     0.671,
+     0.9255
+    ],
+    [
+     0.621,
+     1.0044
+    ]
+   ]
+  }
+ },
+ "demand": "randomTrips --fringe-factor 5, 0-1800 s, routed by duarouter",
+ "generated": {
+  "spec": "grid:4x4,250,2",
+  "lefthand": false,
+  "turn_lanes": 1,
+  "speed_mps": 13.89,
+  "tls_layout": "incoming",
+  "netgenerate": "netgenerate -o grid4_rh_turns.net.xml --default-junction-type traffic_light --default.speed 13.89 --no-turnarounds true --tls.layout incoming --grid --grid.x-number 4 --grid.y-number 4 --grid.length 250 --default.lanenumber 2 --grid.attach-length 250 --turn-lanes 1"
+ },
+ "signalised_junctions": 16,
+ "phases_per_junction": [
+  4,
+  4,
+  4,
+  4,
+  4,
+  4,
+  4,
+  4,
+  4,
+  4,
+  4,
+  4,
+  4,
+  4,
+  4,
+  4
+ ],
+ "cameras": 64,
+ "cameras_file": "cameras.json",
+ "map_center": null
+}

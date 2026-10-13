@@ -166,6 +166,7 @@ class VisionSystem:
         signal_state: SignalStateProvider | None = None,
         tracker_config: ByteTrackConfig | None = None,
         ground_config: GroundConfig | None = None,
+        lane_chains: tuple[Mapping, Mapping] | None = None,
     ):
         self.rig = rig
         self.classes = classes or ClassTable.default()
@@ -175,7 +176,9 @@ class VisionSystem:
             em = None
             if preset is not None:
                 em = PerceptionErrorModel(preset, seed=seed, camera_id=cid)
-                cov = rig.coverage_by_camera.get(cid, {})
+                # an overview camera gets its roadside clutter too: its false
+                # detections are what the blocked-lane test has to live with
+                cov = rig.coverage_by_camera.get(cid) or rig.box_coverage.get(cid, {})
                 em.place_hotspots([rig.network.lanes[lid] for lid in cov], cov)
             tcfg = tracker_config or ByteTrackConfig(fps=fps)
             self.pipelines[cid] = CameraPipeline(
@@ -183,7 +186,7 @@ class VisionSystem:
                 ground_config=ground_config, error_model=em,
             )
         self.estimator = LinkStateEstimator(rig, approach_links, receiving_links,
-                                            estimator_config)
+                                            estimator_config, lane_chains=lane_chains)
         self.incidents = IncidentEngine(rig, approach_links, receiving_links, rule_config,
                                         signal_state)
         self.last: TickResult | None = None
@@ -205,6 +208,7 @@ class VisionSystem:
 
     def tick(self, t: float, *, keep_tracks: bool = False) -> TickResult:
         tracks: list[GroundTrack] = []
+        box_tracks: list[GroundTrack] = []  # junction-overview cameras (cameras.py)
         status: dict[str, tuple[CameraStatus, float, list[str]]] = {}
         net = self.rig.network
         for cid, p in self.pipelines.items():
@@ -221,9 +225,9 @@ class VisionSystem:
             p.health.activity.observe(t, gts)
             status[cid] = p.health.assess(t)
             if status[cid][0] is not CameraStatus.FAILED:
-                tracks.extend(gts)
+                (box_tracks if p.spec.role == "box" else tracks).extend(gts)
         health = {cid: s[1] for cid, s in status.items()}
-        links = self.estimator.update(t, tracks, health)
+        links = self.estimator.update(t, tracks, health, box_tracks=box_tracks)
         scores = self.incidents.update(t, tracks, self.estimator)
         self.last = TickResult(t, links, scores, status, tracks if keep_tracks else [])
         return self.last

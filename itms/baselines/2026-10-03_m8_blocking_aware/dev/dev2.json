@@ -1,0 +1,132 @@
+{
+ "meta": {
+  "fps": 5.0,
+  "seeds": [
+   101
+  ],
+  "levels": [
+   "d40",
+   "d45"
+  ],
+  "arms": [
+   "hol"
+  ],
+  "wall_min": 0.7
+ },
+ "summary": {
+  "d40": {
+   "arms": {
+    "hol": {
+     "n": 1,
+     "person_delay_s": 319748.27000000037,
+     "stops_per_vehicle": 4.165625,
+     "p95_wait_s": 142.0,
+     "person_throughput_per_hour": 8382.751540041127,
+     "interlock_violations": 0,
+     "fallback_fixed_time": 0,
+     "ticks": 12295
+    }
+   },
+   "paired": {}
+  },
+  "d45": {
+   "arms": {
+    "hol": {
+     "n": 1,
+     "person_delay_s": 740392.1399999993,
+     "stops_per_vehicle": 7.011029411764706,
+     "p95_wait_s": 337.0,
+     "person_throughput_per_hour": 8072.681463707324,
+     "interlock_violations": 0,
+     "fallback_fixed_time": 0,
+     "ticks": 13968
+    }
+   },
+   "paired": {}
+  }
+ },
+ "records": [
+  {
+   "scenario": "narrow_sweep",
+   "lane_chains": false,
+   "controller": "hol",
+   "demand_level": "d45",
+   "seed": 101,
+   "steps": 2268,
+   "interlock_violations": 0,
+   "teleports": 0,
+   "unfinished_at_cap": 0,
+   "person_delay_s": 740392.1399999993,
+   "person_throughput_per_hour": 8072.681463707324,
+   "stops_per_vehicle": 7.011029411764706,
+   "wait_time_s": {
+    "mean_s": 146.09558823529412,
+    "p95_s": 337.0,
+    "max_s": 571.0
+   },
+   "wall_s": 38.7,
+   "decision_stats": {
+    "ticks": 13968,
+    "switch_cycle_supervisor": 3,
+    "switch_gap_out": 84,
+    "cycles_completed": 1789,
+    "extend": 9094,
+    "extend_allocation_protected": 3981,
+    "switch_pressure": 534,
+    "switch_max_green": 272,
+    "switch_starvation": 0,
+    "blended": 0,
+    "blended_no_history": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0,
+    "hol_blocked_ticks": 998,
+    "hol_variant_ticks": 1326,
+    "hol_variant_switch": 147,
+    "hol_variant_exit": 35
+   },
+   "arm": "hol"
+  },
+  {
+   "scenario": "narrow_sweep",
+   "lane_chains": false,
+   "controller": "hol",
+   "demand_level": "d40",
+   "seed": 101,
+   "steps": 2062,
+   "interlock_violations": 0,
+   "teleports": 0,
+   "unfinished_at_cap": 0,
+   "person_delay_s": 319748.27000000037,
+   "person_throughput_per_hour": 8382.751540041127,
+   "stops_per_vehicle": 4.165625,
+   "wait_time_s": {
+    "mean_s": 63.70729166666667,
+    "p95_s": 142.0,
+    "max_s": 254.0
+   },
+   "wall_s": 17.8,
+   "decision_stats": {
+    "ticks": 12295,
+    "switch_cycle_supervisor": 0,
+    "switch_gap_out": 85,
+    "cycles_completed": 1701,
+    "extend": 9197,
+    "extend_allocation_protected": 2177,
+    "switch_pressure": 665,
+    "switch_max_green": 171,
+    "switch_starvation": 0,
+    "blended": 0,
+    "blended_no_history": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0,
+    "hol_blocked_ticks": 529,
+    "hol_variant_ticks": 835,
+    "hol_variant_switch": 92,
+    "hol_variant_exit": 31
+   },
+   "arm": "hol"
+  }
+ ]
+}

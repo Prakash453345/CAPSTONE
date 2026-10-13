@@ -1,0 +1,35 @@
+{
+ "scenario": "narrow_lh",
+ "level": "medium",
+ "seed": 101,
+ "preset": "itms6_640",
+ "steps": 900,
+ "lane_seconds": {
+  "both": 404,
+  "cameras_only": 136,
+  "simulator_only": 662,
+  "neither": 31198
+ },
+ "to_the_second": {
+  "precision": 0.748,
+  "recall": 0.379
+ },
+ "within_2s": {
+  "precision": 0.933,
+  "recall": 0.608
+ },
+ "blockage_length": {
+  "simulator": {
+   "n": 163,
+   "median_s": 5,
+   "p90_s": 14,
+   "share_lasting_5s_or_more": 0.521
+  },
+  "cameras": {
+   "n": 253,
+   "median_s": 2,
+   "p90_s": 4,
+   "share_lasting_5s_or_more": 0.075
+  }
+ }
+}

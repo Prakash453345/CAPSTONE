@@ -130,3 +130,15 @@ def test_lonlat_roundtrip(net) -> None:
     assert 80.6 < ll[0, 0] < 80.7 and 16.49 < ll[0, 1] < 16.52
     np.testing.assert_allclose(net.lonlat_to_xy(ll), xy, atol=1e-3)
     assert math.isfinite(ll[0, 0])
+
+
+def test_a_network_without_a_projection_uses_plain_coordinates(net) -> None:
+    """netgenerate's networks carry projParameter="!": SUMO then reports
+    positions as plain network coordinates (less the offset), and so must we."""
+    from dataclasses import replace
+
+    plain = replace(net, proj_parameter="!", net_offset=(10.0, -5.0))
+    assert not plain.georeferenced and net.georeferenced
+    xy = np.array([[100.0, 250.0]])
+    np.testing.assert_allclose(plain.xy_to_lonlat(xy), [[90.0, 255.0]])
+    np.testing.assert_allclose(plain.lonlat_to_xy(plain.xy_to_lonlat(xy)), xy)
