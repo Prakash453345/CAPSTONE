@@ -1,0 +1,92 @@
+{
+ "name": "berlin_adlershof",
+ "net": "berlin_adlershof.net.xml",
+ "mix": "cars",
+ "levels": {
+  "light": {
+   "sumocfg": "berlin_adlershof_light.sumocfg",
+   "route": "berlin_adlershof_light.rou.xml",
+   "target_ds": 0.25,
+   "achieved_ds": 0.253,
+   "busiest_tls": "joinedS_2",
+   "period_s": 3.646,
+   "iterations": [
+    [
+     4.0,
+     0.2279
+    ],
+    [
+     3.646,
+     0.253
+    ]
+   ]
+  },
+  "medium": {
+   "sumocfg": "berlin_adlershof_medium.sumocfg",
+   "route": "berlin_adlershof_medium.rou.xml",
+   "target_ds": 0.5,
+   "achieved_ds": 0.4927,
+   "busiest_tls": "joinedS_2",
+   "period_s": 1.6586,
+   "iterations": [
+    [
+     4.0,
+     0.2279
+    ],
+    [
+     1.823,
+     0.4549
+    ],
+    [
+     1.6586,
+     0.4927
+    ]
+   ]
+  },
+  "heavy": {
+   "sumocfg": "berlin_adlershof_heavy.sumocfg",
+   "route": "berlin_adlershof_heavy.rou.xml",
+   "target_ds": 1.0,
+   "achieved_ds": 1.0021,
+   "busiest_tls": "joinedS_2",
+   "period_s": 0.764,
+   "iterations": [
+    [
+     4.0,
+     0.2279
+    ],
+    [
+     0.9115,
+     0.8382
+    ],
+    [
+     0.764,
+     1.0021
+    ]
+   ]
+  }
+ },
+ "demand": "randomTrips --fringe-factor 5, 0-1800 s, routed by duarouter",
+ "source_net": "/home/claude/capstone/itms/.venv/lib/python3.11/site-packages/sumo/tools/game/DRT/osm.net.xml",
+ "signalised_junctions": 15,
+ "phases_per_junction": [
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  3,
+  3,
+  3,
+  4,
+  4,
+  5,
+  5
+ ],
+ "map_center": "52.439276,13.530403",
+ "cameras": 62,
+ "cameras_file": "cameras.json"
+}

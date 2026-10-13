@@ -388,6 +388,7 @@ def run_controlled_scenario(
     lane_chains: tuple[Mapping, Mapping] | None = None,
     lane_vias: Mapping[str, list[tuple[str, float]]] | None = None,
     detector_upstream: bool = True,
+    arrival_horizon_s: float | None = None,
     internal_links: Mapping[str, Mapping[str, str]] | None = None,
 ) -> dict:
     """Run one full scenario with `strategy` governing every junction in
@@ -649,6 +650,8 @@ def run_controlled_scenario(
                     downstream=lane_chains[1] if lane_chains else None,
                     internal_links=internal_links.get(tls_id) if internal_links else None,
                     vias=lane_vias,
+                    **({"arrival_horizon_s": arrival_horizon_s}
+                       if arrival_horizon_s is not None else {}),
                 )
             discharge = None
             if calibration is not None and link_lanes is not None and tls_id in link_lanes:

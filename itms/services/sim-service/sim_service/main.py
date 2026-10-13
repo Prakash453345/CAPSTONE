@@ -123,6 +123,13 @@ def _run_sumo() -> None:
     from measure_flows import compute_link_flows  # noqa: E402
 
     configs = load_configs(net_path)
+    # a split-phased junction (one phase per approach) runs facing approaches
+    # together, the turn across the oncoming stream giving way -- itms_domain.phase_layout
+    from itms_domain.phase_layout import net_links, paired_layout  # noqa: PLC0415
+
+    _links, _heading, _lefthand = net_links(net_path)
+    configs = {tls: paired_layout(cfg, _links.get(tls, {}), _heading, _lefthand)
+               for tls, cfg in configs.items()}
     # every phase also shows the movements that cross nothing it shows (a free
     # left turn, many U-turns), without owning them -- itms_domain.overlaps
     from itms_domain.overlaps import pedestrian_links, with_overlaps  # noqa: PLC0415
@@ -144,12 +151,19 @@ def _run_sumo() -> None:
     # stop-line lane too short to hold it, is on no lane at all: watch those too
     vias = vias_from_sumo_net(net_path, chains[0], SHORT_APPROACH_M)
 
+    # Off-peak mode (SIGNAL_OFFPEAK_REST=1, for light-traffic hours only): at its
+    # ceiling a green stays on while no other road has anyone waiting or arriving
+    # -- baselines/2026-10-13_rest_offpeak_v2 (light: -9.0 % over ten networks,
+    # -15.3 % on the Amaravati map). Off by default; not for medium or heavy traffic.
+    offpeak = os.environ.get("SIGNAL_OFFPEAK_REST", "0") == "1"
+
     # One AdaptiveCamp per junction, cold-started (no warmed memory/
     # calibration profile) -- see this module's docstring for why.
     strategy = {
         tls_id: acamp.AdaptiveCamp(
             nominal_cycle_s=webster.compute_timing(cfg, flows.get(tls_id, {})).cycle_s,
             tick_s=step_length,
+            cfg=acamp.AcampConfig(rest_in_green=True) if offpeak else None,
         )
         for tls_id, cfg in configs.items()
     }

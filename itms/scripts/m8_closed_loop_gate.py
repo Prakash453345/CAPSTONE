@@ -94,6 +94,12 @@ def _job(args) -> dict:
     t0 = time.time()
     if arm == "webster":
         rec = M.run_scenario("webster", level, seed, inputs=H.scenario_inputs(level), tag=arm)
+    elif arm == "webster:pair":
+        # Webster's fixed timing on the paired phases: how much of the paired layout's
+        # gain any controller would get
+        inputs = M._scenario_inputs(level, layout="pair")  # noqa: SLF001
+        rec = M.run_scenario("webster", level, seed, inputs=inputs,
+                             strategy=H.build_webster(inputs[0], inputs[1]), tag="webster_pair")
     elif arm == "truth":
         rec = M.run_scenario("ccacamp", level, seed, tag=arm)
     elif arm.startswith("truth:"):
@@ -108,8 +114,9 @@ def _job(args) -> dict:
         mods = arm.split(":")[1:]
         unknown = [t for t in mods
                    if t not in ("rest", "restf", "nov", "via", "vian", "via2",
-                                "ovl", "ovl2", "ovl3", "ovl4", "noovl")
-                   and t[:1] not in ("c", "f") and not t.startswith(("restm", "restc"))]
+                                "ovl", "ovl2", "ovl3", "ovl4", "noovl", "restq", "restd",
+                                "pair", "pairt", "nopair", "minph")
+                   and t[:1] not in ("c", "f") and not t.startswith(("restm", "restc", "s.", "hz"))]
         if unknown:
             raise SystemExit(f"arm {arm!r}: unknown modifier(s) {unknown}")
         factor = next((float(t[1:]) for t in mods if t[:1] == "c"), None)
@@ -120,7 +127,11 @@ def _job(args) -> dict:
         # noovl: without the shown overlaps that are the default since 2026-10-11
         other_overlaps = {"noovl", "ovl", "ovl2", "ovl3", "ovl4"} & set(mods)
         inputs = M.ccacamp_inputs(level, factor if factor is not None else M.CEILING_FACTOR, floor,
-                                  overlaps="ovl" in mods, shown_overlaps=not other_overlaps)
+                                  overlaps="ovl" in mods, shown_overlaps=not other_overlaps,
+                                  layout=None if "nopair" in mods else next(
+                                      ({"minph": "compact"}.get(t, t) for t in mods
+                                       if t in ("pair", "pairt", "minph")),
+                                      M.PHASE_LAYOUT))
         # ovl2: the same extra greens, added after the timing is worked out
         timing = inputs
         if "ovl2" in mods:
@@ -131,22 +142,36 @@ def _job(args) -> dict:
         strategy = None
         if "ovl2" in mods and "rest" not in mods:
             strategy = H.build_acamp(timing[0], timing[1], acamp_cfg=M._ARMS["ccacamp"])  # noqa: SLF001
+        # s.<field>=<value>: any AcampConfig field (numbers; true/false)
+        overrides = {}
+        for t in mods:
+            if t.startswith("s."):
+                k, v = t[2:].split("=", 1)
+                overrides[k] = {"true": True, "false": False}.get(v.lower(), None)
+                if overrides[k] is None:
+                    overrides[k] = float(v)
         if "rest" in mods:
             # restm<s>: rest at most s seconds past the ceiling; restf: rest only
             # while nothing stands halted on the running phase's movements; restc<x>: rest only
             # while the junction's congestion weight is below x
             rest_max = next((float(t[5:]) for t in mods if t.startswith("restm")), None)
-            strategy = H.build_acamp(timing[0], timing[1], acamp_cfg=replace(
-                M._ARMS["ccacamp"], rest_in_green=True, rest_max_s=rest_max,  # noqa: SLF001
-                rest_needs_flow="restf" in mods,
+            overrides.update(
+                rest_in_green=True, rest_max_s=rest_max,
+                rest_needs_flow="restf" in mods, rest_needs_no_call="restq" in mods,
+                rest_needs_own_demand="restd" in mods,
                 rest_max_congestion=next((float(t[5:]) for t in mods if t.startswith("restc")),
-                                         None)))
+                                         None))
+        if overrides:
+            strategy = H.build_acamp(timing[0], timing[1], acamp_cfg=replace(
+                M._ARMS["ccacamp"], **overrides))  # noqa: SLF001
         rec = M.run_scenario("ccacamp", level, seed, inputs=inputs, strategy=strategy,
                              tag=arm.replace(":", "_"),
                              vias="nov" not in mods,
                              detector_upstream="vian" not in mods,
                              vias_short_m=None if {"via", "vian"} & set(mods)
-                             else M.SHORT_APPROACH_M)
+                             else M.SHORT_APPROACH_M,
+                             arrival_horizon_s=next((float(t[2:]) for t in mods
+                                                     if t.startswith("hz")), None))
     elif arm in M.HOL_ARMS:
         rec = M.run_scenario(arm, level, seed, tag=arm.replace(":", "_"))
     else:
