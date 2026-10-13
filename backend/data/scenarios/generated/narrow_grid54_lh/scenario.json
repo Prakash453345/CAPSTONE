@@ -1,0 +1,106 @@
+{
+ "name": "narrow_grid54_lh",
+ "net": "narrow_grid54_lh.net.xml",
+ "mix": "india",
+ "levels": {
+  "d30": {
+   "sumocfg": "narrow_grid54_lh_d30.sumocfg",
+   "route": "narrow_grid54_lh_d30.rou.xml",
+   "target_ds": 0.3,
+   "achieved_ds": 0.3012,
+   "busiest_tls": "C3",
+   "period_s": 0.9366,
+   "iterations": [
+    [
+     4.0,
+     0.0791
+    ],
+    [
+     1.055,
+     0.2663
+    ],
+    [
+     0.9366,
+     0.3012
+    ]
+   ]
+  },
+  "d40": {
+   "sumocfg": "narrow_grid54_lh_d40.sumocfg",
+   "route": "narrow_grid54_lh_d40.rou.xml",
+   "target_ds": 0.4,
+   "achieved_ds": 0.4053,
+   "busiest_tls": "C3",
+   "period_s": 0.708,
+   "iterations": [
+    [
+     4.0,
+     0.0791
+    ],
+    [
+     0.7912,
+     0.3579
+    ],
+    [
+     0.708,
+     0.4053
+    ]
+   ]
+  },
+  "d45": {
+   "sumocfg": "narrow_grid54_lh_d45.sumocfg",
+   "route": "narrow_grid54_lh_d45.rou.xml",
+   "target_ds": 0.45,
+   "achieved_ds": 0.4474,
+   "busiest_tls": "D3",
+   "period_s": 0.6351,
+   "iterations": [
+    [
+     4.0,
+     0.0791
+    ],
+    [
+     0.7033,
+     0.4064
+    ],
+    [
+     0.6351,
+     0.4474
+    ]
+   ]
+  }
+ },
+ "demand": "randomTrips --fringe-factor 5, 0-1800 s, routed by duarouter",
+ "generated": {
+  "spec": "grid:5x4,150,1",
+  "lefthand": true,
+  "turn_lanes": 0,
+  "speed_mps": 13.89,
+  "tls_layout": "opposites",
+  "netgenerate": "netgenerate -o narrow_grid54_lh.net.xml --default-junction-type traffic_light --default.speed 13.89 --no-turnarounds true --tls.layout opposites --grid --grid.x-number 5 --grid.y-number 4 --grid.length 150 --default.lanenumber 1 --grid.attach-length 150 --lefthand"
+ },
+ "signalised_junctions": 20,
+ "map_center": null,
+ "phases_per_junction": [
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2
+ ]
+}

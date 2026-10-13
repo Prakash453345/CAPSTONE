@@ -1,0 +1,1412 @@
+{
+ "meta": {
+  "fps": 5.0,
+  "seeds": [
+   101,
+   102,
+   103
+  ],
+  "python_hash_seed": "0",
+  "levels": [
+   "light"
+  ],
+  "arms": [
+   "truth:ovl4",
+   "truth",
+   "truth:ovl3"
+  ],
+  "wall_min": 25.9
+ },
+ "summary": {
+  "light": {
+   "arms": {
+    "truth:ovl4": {
+     "n": 3,
+     "person_delay_s": 266772.99866666674,
+     "stops_per_vehicle": 3.3902053712480256,
+     "p95_wait_s": 127.0,
+     "person_throughput_per_hour": 2920.777386608872,
+     "interlock_violations": 0,
+     "fallback_fixed_time": 0,
+     "ticks": 1012970,
+     "teleports": 5,
+     "runs_with_teleports": 3,
+     "runs_unfinished_at_cap": 0,
+     "longest_wait_excess_s": 5.5,
+     "waits_over_bound": 11
+    },
+    "truth": {
+     "n": 3,
+     "person_delay_s": 251883.99599999996,
+     "stops_per_vehicle": 3.438651922064244,
+     "p95_wait_s": 114.66666666666667,
+     "person_throughput_per_hour": 2907.0869711584805,
+     "interlock_violations": 0,
+     "fallback_fixed_time": 0,
+     "ticks": 1017157,
+     "teleports": 3,
+     "runs_with_teleports": 2,
+     "runs_unfinished_at_cap": 0,
+     "longest_wait_excess_s": 5.0,
+     "waits_over_bound": 10
+    },
+    "truth:ovl3": {
+     "n": 3,
+     "person_delay_s": 226627.68500000006,
+     "stops_per_vehicle": 3.335966298051606,
+     "p95_wait_s": 91.33333333333333,
+     "person_throughput_per_hour": 2896.4361749881687,
+     "interlock_violations": 0,
+     "fallback_fixed_time": 0,
+     "ticks": 1020320,
+     "teleports": 0,
+     "runs_with_teleports": 0,
+     "runs_unfinished_at_cap": 0,
+     "longest_wait_excess_s": 5.0,
+     "waits_over_bound": 4
+    }
+   },
+   "paired": {
+    "truth:ovl4_vs_truth:person_delay_s": {
+     "n": 3,
+     "mean": 14889.002666666775,
+     "pct": 5.911055447392052,
+     "ci95": [
+      -38233.88613601564,
+      68011.89146934918
+     ],
+     "significant": false,
+     "n_better": 0
+    },
+    "truth:ovl4_vs_truth:stops_per_vehicle": {
+     "n": 3,
+     "mean": -0.048446550816218924,
+     "pct": -1.4088820826952488,
+     "ci95": [
+      -0.2603200408906069,
+      0.16342693925816903
+     ],
+     "significant": false,
+     "n_better": 1
+    },
+    "truth:ovl3_vs_truth:person_delay_s": {
+     "n": 3,
+     "mean": -25256.3109999999,
+     "pct": -10.026961379475615,
+     "ci95": [
+      -54424.40203109344,
+      3911.78003109364
+     ],
+     "significant": false,
+     "n_better": 3
+    },
+    "truth:ovl3_vs_truth:stops_per_vehicle": {
+     "n": 3,
+     "mean": -0.1026856240126383,
+     "pct": -2.986217457886679,
+     "ci95": [
+      -0.3383967485774304,
+      0.13302550055215384
+     ],
+     "significant": false,
+     "n_better": 2
+    }
+   }
+  }
+ },
+ "records": [
+  {
+   "scenario": "amaravati_v2",
+   "lane_chains": true,
+   "controller": "ccacamp",
+   "demand_level": "light",
+   "seed": 101,
+   "steps": 3568,
+   "interlock_violations": 0,
+   "teleports": 0,
+   "longest_wait_excess_s": 5.0,
+   "waits_over_bound": 1,
+   "wait_overruns": [
+    {
+     "tls": "cluster_3302353029_7905475494",
+     "who": "L17",
+     "t": 1421.0,
+     "excess_s": 5.0,
+     "phases": [
+      [
+       1303.0,
+       "P3"
+      ],
+      [
+       1317.0,
+       "P2"
+      ],
+      [
+       1331.0,
+       "P0"
+      ],
+      [
+       1352.0,
+       "P3"
+      ],
+      [
+       1366.0,
+       "P2"
+      ],
+      [
+       1393.0,
+       "P3"
+      ],
+      [
+       1407.0,
+       "P2"
+      ],
+      [
+       1421.0,
+       "P1"
+      ]
+     ]
+    }
+   ],
+   "unfinished_at_cap": 0,
+   "person_delay_s": 223902.03499999992,
+   "entry_delay_s": 1378.723,
+   "person_throughput_per_hour": 3006.5520728008114,
+   "stops_per_vehicle": 3.387045813586098,
+   "wait_time_s": {
+    "mean_s": 34.87045813586098,
+    "p95_s": 96.0,
+    "max_s": 253.0
+   },
+   "wall_s": 474.6,
+   "decision_stats": {
+    "ticks": 329135,
+    "switch_cycle_supervisor": 6,
+    "switch_gap_out": 3044,
+    "cycles_completed": 203964,
+    "extend": 312617,
+    "extend_allocation_protected": 0,
+    "switch_pressure": 1350,
+    "switch_max_green": 12105,
+    "rest_in_green": 0,
+    "rest_capped": 0,
+    "rest_blocked": 0,
+    "rest_congested": 0,
+    "switch_starvation": 13,
+    "blended": 0,
+    "blended_no_history": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "truth"
+  },
+  {
+   "scenario": "amaravati_v2",
+   "lane_chains": true,
+   "controller": "ccacamp",
+   "demand_level": "light",
+   "seed": 102,
+   "steps": 3666,
+   "interlock_violations": 0,
+   "teleports": 2,
+   "longest_wait_excess_s": 4.0,
+   "waits_over_bound": 2,
+   "wait_overruns": [
+    {
+     "tls": "cluster_2747626025_5823222905_7017737095",
+     "who": "L26",
+     "t": 912.0,
+     "excess_s": 2.0,
+     "phases": [
+      [
+       762.0,
+       "P0"
+      ],
+      [
+       776.0,
+       "P3"
+      ],
+      [
+       803.0,
+       "P2"
+      ],
+      [
+       830.0,
+       "P3"
+      ],
+      [
+       857.0,
+       "P0"
+      ],
+      [
+       871.0,
+       "P3"
+      ],
+      [
+       898.0,
+       "P0"
+      ],
+      [
+       912.0,
+       "P1"
+      ]
+     ]
+    },
+    {
+     "tls": "cluster_11806412110_11944362608_6449290286",
+     "who": "L13",
+     "t": 1570.0,
+     "excess_s": 4.0,
+     "phases": [
+      [
+       1457.0,
+       "P0"
+      ],
+      [
+       1473.0,
+       "P2"
+      ],
+      [
+       1487.0,
+       "P0"
+      ],
+      [
+       1501.0,
+       "P2"
+      ],
+      [
+       1515.0,
+       "P1"
+      ],
+      [
+       1542.0,
+       "P3"
+      ],
+      [
+       1556.0,
+       "P0"
+      ],
+      [
+       1570.0,
+       "P4"
+      ]
+     ]
+    }
+   ],
+   "unfinished_at_cap": 0,
+   "person_delay_s": 265939.547,
+   "entry_delay_s": 1370.3229999999999,
+   "person_throughput_per_hour": 2910.420880913545,
+   "stops_per_vehicle": 3.4218009478672986,
+   "wait_time_s": {
+    "mean_s": 42.649289099526065,
+    "p95_s": 131.0,
+    "max_s": 352.0
+   },
+   "wall_s": 508.4,
+   "decision_stats": {
+    "ticks": 338739,
+    "switch_cycle_supervisor": 3,
+    "switch_gap_out": 2931,
+    "cycles_completed": 211308,
+    "extend": 321658,
+    "extend_allocation_protected": 203,
+    "switch_pressure": 1327,
+    "switch_max_green": 12605,
+    "rest_in_green": 0,
+    "rest_capped": 0,
+    "rest_blocked": 0,
+    "rest_congested": 0,
+    "switch_starvation": 12,
+    "blended": 0,
+    "blended_no_history": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "truth"
+  },
+  {
+   "scenario": "amaravati_v2",
+   "lane_chains": true,
+   "controller": "ccacamp",
+   "demand_level": "light",
+   "seed": 103,
+   "steps": 3782,
+   "interlock_violations": 0,
+   "teleports": 1,
+   "longest_wait_excess_s": 5.0,
+   "waits_over_bound": 7,
+   "wait_overruns": [
+    {
+     "tls": "joinedS_5823218301_cluster_11944362606_7017737158_7017737159",
+     "who": "L27",
+     "t": 541.0,
+     "excess_s": 1.0,
+     "phases": [
+      [
+       415.0,
+       "P1"
+      ],
+      [
+       429.0,
+       "P2"
+      ],
+      [
+       443.0,
+       "P1"
+      ],
+      [
+       470.0,
+       "P2"
+      ],
+      [
+       486.0,
+       "P4"
+      ],
+      [
+       513.0,
+       "P5"
+      ],
+      [
+       527.0,
+       "P2"
+      ],
+      [
+       541.0,
+       "P3"
+      ]
+     ]
+    },
+    {
+     "tls": "cluster_2747626025_5823222905_7017737095",
+     "who": "L26",
+     "t": 843.0,
+     "excess_s": 4.0,
+     "phases": [
+      [
+       713.0,
+       "P3"
+      ],
+      [
+       733.0,
+       "P0"
+      ],
+      [
+       749.0,
+       "P2"
+      ],
+      [
+       763.0,
+       "P3"
+      ],
+      [
+       788.0,
+       "P2"
+      ],
+      [
+       802.0,
+       "P3"
+      ],
+      [
+       829.0,
+       "P0"
+      ],
+      [
+       843.0,
+       "P1"
+      ]
+     ]
+    },
+    {
+     "tls": "cluster_3302353029_7905475494",
+     "who": "L17",
+     "t": 1392.0,
+     "excess_s": 4.0,
+     "phases": [
+      [
+       1282.0,
+       "P2"
+      ],
+      [
+       1303.0,
+       "P0"
+      ],
+      [
+       1317.0,
+       "P2"
+      ],
+      [
+       1331.0,
+       "P0"
+      ],
+      [
+       1345.0,
+       "P3"
+      ],
+      [
+       1359.0,
+       "P2"
+      ],
+      [
+       1378.0,
+       "P3"
+      ],
+      [
+       1392.0,
+       "P1"
+      ]
+     ]
+    },
+    {
+     "tls": "cluster_3302353029_7905475494",
+     "who": "L18",
+     "t": 1505.0,
+     "excess_s": 5.0,
+     "phases": [
+      [
+       1392.0,
+       "P1"
+      ],
+      [
+       1406.0,
+       "P2"
+      ],
+      [
+       1433.0,
+       "P3"
+      ],
+      [
+       1447.0,
+       "P2"
+      ],
+      [
+       1462.0,
+       "P1"
+      ],
+      [
+       1477.0,
+       "P2"
+      ],
+      [
+       1491.0,
+       "P1"
+      ],
+      [
+       1505.0,
+       "P0"
+      ]
+     ]
+    },
+    {
+     "tls": "cluster_11806412110_11944362608_6449290286",
+     "who": "L13",
+     "t": 1559.0,
+     "excess_s": 4.0,
+     "phases": [
+      [
+       1422.0,
+       "P0"
+      ],
+      [
+       1449.0,
+       "P1"
+      ],
+      [
+       1476.0,
+       "P2"
+      ],
+      [
+       1490.0,
+       "P0"
+      ],
+      [
+       1517.0,
+       "P1"
+      ],
+      [
+       1531.0,
+       "P3"
+      ],
+      [
+       1545.0,
+       "P0"
+      ],
+      [
+       1559.0,
+       "P4"
+      ]
+     ]
+    }
+   ],
+   "unfinished_at_cap": 0,
+   "person_delay_s": 265810.40599999996,
+   "entry_delay_s": 1345.823,
+   "person_throughput_per_hour": 2804.287959761085,
+   "stops_per_vehicle": 3.5071090047393363,
+   "wait_time_s": {
+    "mean_s": 40.99526066350711,
+    "p95_s": 117.0,
+    "max_s": 362.0
+   },
+   "wall_s": 494.0,
+   "decision_stats": {
+    "ticks": 349283,
+    "switch_cycle_supervisor": 6,
+    "switch_gap_out": 2986,
+    "cycles_completed": 217552,
+    "extend": 331762,
+    "extend_allocation_protected": 81,
+    "switch_pressure": 1406,
+    "switch_max_green": 13026,
+    "rest_in_green": 0,
+    "rest_capped": 0,
+    "rest_blocked": 0,
+    "rest_congested": 0,
+    "switch_starvation": 16,
+    "blended": 0,
+    "blended_no_history": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "truth"
+  },
+  {
+   "scenario": "amaravati_v2",
+   "lane_chains": true,
+   "controller": "ccacamp",
+   "demand_level": "light",
+   "seed": 101,
+   "steps": 3609,
+   "interlock_violations": 0,
+   "teleports": 0,
+   "longest_wait_excess_s": 0.0,
+   "waits_over_bound": 0,
+   "wait_overruns": [],
+   "unfinished_at_cap": 0,
+   "person_delay_s": 209935.3219999999,
+   "entry_delay_s": 1388.9230000000002,
+   "person_throughput_per_hour": 2965.571808510641,
+   "stops_per_vehicle": 3.20695102685624,
+   "wait_time_s": {
+    "mean_s": 33.58767772511848,
+    "p95_s": 88.0,
+    "max_s": 188.0
+   },
+   "wall_s": 469.7,
+   "decision_stats": {
+    "ticks": 333373,
+    "switch_cycle_supervisor": 5,
+    "switch_gap_out": 2949,
+    "cycles_completed": 206873,
+    "extend": 316739,
+    "extend_allocation_protected": 0,
+    "switch_pressure": 1356,
+    "switch_max_green": 12309,
+    "rest_in_green": 0,
+    "rest_capped": 0,
+    "rest_blocked": 0,
+    "rest_congested": 0,
+    "switch_starvation": 15,
+    "blended": 0,
+    "blended_no_history": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "truth:ovl3"
+  },
+  {
+   "scenario": "amaravati_v2",
+   "lane_chains": true,
+   "controller": "ccacamp",
+   "demand_level": "light",
+   "seed": 102,
+   "steps": 3716,
+   "interlock_violations": 0,
+   "teleports": 0,
+   "longest_wait_excess_s": 5.0,
+   "waits_over_bound": 2,
+   "wait_overruns": [
+    {
+     "tls": "cluster_3302353029_7905475494",
+     "who": "L18",
+     "t": 2564.0,
+     "excess_s": 5.0,
+     "phases": [
+      [
+       2432.0,
+       "P2"
+      ],
+      [
+       2449.0,
+       "P1"
+      ],
+      [
+       2463.0,
+       "P3"
+      ],
+      [
+       2490.0,
+       "P1"
+      ],
+      [
+       2516.0,
+       "P2"
+      ],
+      [
+       2530.0,
+       "P1"
+      ],
+      [
+       2550.0,
+       "P2"
+      ],
+      [
+       2564.0,
+       "P0"
+      ]
+     ]
+    },
+    {
+     "tls": "joinedS_5823218301_cluster_11944362606_7017737158_7017737159",
+     "who": "L27",
+     "t": 2786.0,
+     "excess_s": 5.0,
+     "phases": [
+      [
+       2623.0,
+       "P4"
+      ],
+      [
+       2650.0,
+       "P5"
+      ],
+      [
+       2677.0,
+       "P0"
+      ],
+      [
+       2704.0,
+       "P1"
+      ],
+      [
+       2718.0,
+       "P4"
+      ],
+      [
+       2745.0,
+       "P5"
+      ],
+      [
+       2772.0,
+       "P0"
+      ],
+      [
+       2786.0,
+       "P3"
+      ]
+     ]
+    }
+   ],
+   "unfinished_at_cap": 0,
+   "person_delay_s": 241538.81100000022,
+   "entry_delay_s": 1436.023,
+   "person_throughput_per_hour": 2863.704654895671,
+   "stops_per_vehicle": 3.424960505529226,
+   "wait_time_s": {
+    "mean_s": 35.28909952606635,
+    "p95_s": 99.0,
+    "max_s": 167.0
+   },
+   "wall_s": 489.7,
+   "decision_stats": {
+    "ticks": 343195,
+    "switch_cycle_supervisor": 2,
+    "switch_gap_out": 2977,
+    "cycles_completed": 213821,
+    "extend": 326040,
+    "extend_allocation_protected": 17,
+    "switch_pressure": 1379,
+    "switch_max_green": 12758,
+    "rest_in_green": 0,
+    "rest_capped": 0,
+    "rest_blocked": 0,
+    "rest_congested": 0,
+    "switch_starvation": 22,
+    "blended": 0,
+    "blended_no_history": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "truth:ovl3"
+  },
+  {
+   "scenario": "amaravati_v2",
+   "lane_chains": true,
+   "controller": "ccacamp",
+   "demand_level": "light",
+   "seed": 103,
+   "steps": 3720,
+   "interlock_violations": 0,
+   "teleports": 0,
+   "longest_wait_excess_s": 4.0,
+   "waits_over_bound": 2,
+   "wait_overruns": [
+    {
+     "tls": "joinedS_5823218301_cluster_11944362606_7017737158_7017737159",
+     "who": "L27",
+     "t": 541.0,
+     "excess_s": 1.0,
+     "phases": [
+      [
+       415.0,
+       "P1"
+      ],
+      [
+       429.0,
+       "P2"
+      ],
+      [
+       443.0,
+       "P1"
+      ],
+      [
+       470.0,
+       "P2"
+      ],
+      [
+       486.0,
+       "P4"
+      ],
+      [
+       513.0,
+       "P5"
+      ],
+      [
+       527.0,
+       "P2"
+      ],
+      [
+       541.0,
+       "P3"
+      ]
+     ]
+    },
+    {
+     "tls": "cluster_3302353029_7905475494",
+     "who": "L17",
+     "t": 1393.0,
+     "excess_s": 4.0,
+     "phases": [
+      [
+       1254.0,
+       "P3"
+      ],
+      [
+       1281.0,
+       "P0"
+      ],
+      [
+       1299.0,
+       "P2"
+      ],
+      [
+       1326.0,
+       "P0"
+      ],
+      [
+       1340.0,
+       "P2"
+      ],
+      [
+       1364.0,
+       "P3"
+      ],
+      [
+       1379.0,
+       "P2"
+      ],
+      [
+       1393.0,
+       "P1"
+      ]
+     ]
+    }
+   ],
+   "unfinished_at_cap": 0,
+   "person_delay_s": 228408.92200000008,
+   "entry_delay_s": 1353.3230000000008,
+   "person_throughput_per_hour": 2860.0320615581945,
+   "stops_per_vehicle": 3.375987361769352,
+   "wait_time_s": {
+    "mean_s": 34.0173775671406,
+    "p95_s": 87.0,
+    "max_s": 179.0
+   },
+   "wall_s": 485.3,
+   "decision_stats": {
+    "ticks": 343752,
+    "switch_cycle_supervisor": 4,
+    "switch_gap_out": 2951,
+    "cycles_completed": 214452,
+    "extend": 326623,
+    "extend_allocation_protected": 0,
+    "switch_pressure": 1316,
+    "switch_max_green": 12841,
+    "rest_in_green": 0,
+    "rest_capped": 0,
+    "rest_blocked": 0,
+    "rest_congested": 0,
+    "switch_starvation": 17,
+    "blended": 0,
+    "blended_no_history": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "truth:ovl3"
+  },
+  {
+   "scenario": "amaravati_v2",
+   "lane_chains": true,
+   "controller": "ccacamp",
+   "demand_level": "light",
+   "seed": 101,
+   "steps": 3615,
+   "interlock_violations": 0,
+   "teleports": 1,
+   "longest_wait_excess_s": 5.0,
+   "waits_over_bound": 3,
+   "wait_overruns": [
+    {
+     "tls": "cluster_3302353029_7905475494",
+     "who": "L17",
+     "t": 892.0,
+     "excess_s": 1.0,
+     "phases": [
+      [
+       774.0,
+       "P2"
+      ],
+      [
+       792.0,
+       "P0"
+      ],
+      [
+       806.0,
+       "P2"
+      ],
+      [
+       820.0,
+       "P0"
+      ],
+      [
+       837.0,
+       "P3"
+      ],
+      [
+       864.0,
+       "P0"
+      ],
+      [
+       878.0,
+       "P2"
+      ],
+      [
+       892.0,
+       "P1"
+      ]
+     ]
+    },
+    {
+     "tls": "cluster_3302353029_7905475494",
+     "who": "L18",
+     "t": 1470.0,
+     "excess_s": 1.0,
+     "phases": [
+      [
+       1353.0,
+       "P3"
+      ],
+      [
+       1373.0,
+       "P2"
+      ],
+      [
+       1400.0,
+       "P3"
+      ],
+      [
+       1414.0,
+       "P2"
+      ],
+      [
+       1428.0,
+       "P1"
+      ],
+      [
+       1442.0,
+       "P2"
+      ],
+      [
+       1456.0,
+       "P3"
+      ],
+      [
+       1470.0,
+       "P0"
+      ]
+     ]
+    }
+   ],
+   "unfinished_at_cap": 0,
+   "person_delay_s": 263321.2800000001,
+   "entry_delay_s": 1351.323,
+   "person_throughput_per_hour": 2959.668214996685,
+   "stops_per_vehicle": 3.387045813586098,
+   "wait_time_s": {
+    "mean_s": 41.60189573459716,
+    "p95_s": 118.0,
+    "max_s": 412.0
+   },
+   "wall_s": 471.0,
+   "decision_stats": {
+    "ticks": 333705,
+    "switch_cycle_supervisor": 7,
+    "switch_gap_out": 2970,
+    "cycles_completed": 206857,
+    "extend": 316911,
+    "extend_allocation_protected": 94,
+    "switch_pressure": 1348,
+    "switch_max_green": 12362,
+    "rest_in_green": 0,
+    "rest_capped": 0,
+    "rest_blocked": 0,
+    "rest_congested": 0,
+    "switch_starvation": 13,
+    "blended": 0,
+    "blended_no_history": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "truth:ovl4"
+  },
+  {
+   "scenario": "amaravati_v2",
+   "lane_chains": true,
+   "controller": "ccacamp",
+   "demand_level": "light",
+   "seed": 102,
+   "steps": 3641,
+   "interlock_violations": 0,
+   "teleports": 3,
+   "longest_wait_excess_s": 5.5,
+   "waits_over_bound": 2,
+   "wait_overruns": [
+    {
+     "tls": "cluster_2747626025_5823222905_7017737095",
+     "who": "L26",
+     "t": 912.0,
+     "excess_s": 2.0,
+     "phases": [
+      [
+       762.0,
+       "P0"
+      ],
+      [
+       776.0,
+       "P3"
+      ],
+      [
+       803.0,
+       "P2"
+      ],
+      [
+       830.0,
+       "P3"
+      ],
+      [
+       857.0,
+       "P0"
+      ],
+      [
+       871.0,
+       "P3"
+      ],
+      [
+       898.0,
+       "P0"
+      ],
+      [
+       912.0,
+       "P1"
+      ]
+     ]
+    },
+    {
+     "tls": "cluster_5823218308_8431116145",
+     "who": "L1",
+     "t": 1492.0,
+     "excess_s": 5.5,
+     "phases": [
+      [
+       1350.0,
+       "P0"
+      ],
+      [
+       1371.0,
+       "P1"
+      ],
+      [
+       1385.0,
+       "P0"
+      ],
+      [
+       1412.0,
+       "P1"
+      ],
+      [
+       1431.0,
+       "P0"
+      ],
+      [
+       1458.0,
+       "P1"
+      ],
+      [
+       1478.0,
+       "P0"
+      ],
+      [
+       1492.0,
+       "P2"
+      ]
+     ]
+    }
+   ],
+   "unfinished_at_cap": 0,
+   "person_delay_s": 271000.2300000001,
+   "entry_delay_s": 1415.6229999999998,
+   "person_throughput_per_hour": 2934.355263157901,
+   "stops_per_vehicle": 3.4233807266982623,
+   "wait_time_s": {
+    "mean_s": 46.1216429699842,
+    "p95_s": 158.0,
+    "max_s": 386.0
+   },
+   "wall_s": 479.3,
+   "decision_stats": {
+    "ticks": 336364,
+    "switch_cycle_supervisor": 4,
+    "switch_gap_out": 2978,
+    "cycles_completed": 209445,
+    "extend": 319256,
+    "extend_allocation_protected": 331,
+    "switch_pressure": 1289,
+    "switch_max_green": 12486,
+    "rest_in_green": 0,
+    "rest_capped": 0,
+    "rest_blocked": 0,
+    "rest_congested": 0,
+    "switch_starvation": 20,
+    "blended": 0,
+    "blended_no_history": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "truth:ovl4"
+  },
+  {
+   "scenario": "amaravati_v2",
+   "lane_chains": true,
+   "controller": "ccacamp",
+   "demand_level": "light",
+   "seed": 103,
+   "steps": 3711,
+   "interlock_violations": 0,
+   "teleports": 1,
+   "longest_wait_excess_s": 5.0,
+   "waits_over_bound": 6,
+   "wait_overruns": [
+    {
+     "tls": "joinedS_5823218301_cluster_11944362606_7017737158_7017737159",
+     "who": "L27",
+     "t": 541.0,
+     "excess_s": 1.0,
+     "phases": [
+      [
+       415.0,
+       "P1"
+      ],
+      [
+       429.0,
+       "P2"
+      ],
+      [
+       443.0,
+       "P1"
+      ],
+      [
+       470.0,
+       "P2"
+      ],
+      [
+       486.0,
+       "P4"
+      ],
+      [
+       513.0,
+       "P5"
+      ],
+      [
+       527.0,
+       "P2"
+      ],
+      [
+       541.0,
+       "P3"
+      ]
+     ]
+    },
+    {
+     "tls": "cluster_2747626025_5823222905_7017737095",
+     "who": "L26",
+     "t": 1086.0,
+     "excess_s": 1.0,
+     "phases": [
+      [
+       977.0,
+       "P3"
+      ],
+      [
+       991.0,
+       "P0"
+      ],
+      [
+       1005.0,
+       "P2"
+      ],
+      [
+       1019.0,
+       "P0"
+      ],
+      [
+       1037.0,
+       "P2"
+      ],
+      [
+       1058.0,
+       "P3"
+      ],
+      [
+       1072.0,
+       "P0"
+      ],
+      [
+       1086.0,
+       "P1"
+      ]
+     ]
+    },
+    {
+     "tls": "joinedS_5823218301_cluster_11944362606_7017737158_7017737159",
+     "who": "L27",
+     "t": 1525.0,
+     "excess_s": 1.0,
+     "phases": [
+      [
+       1372.0,
+       "P0"
+      ],
+      [
+       1399.0,
+       "P1"
+      ],
+      [
+       1426.0,
+       "P2"
+      ],
+      [
+       1443.0,
+       "P4"
+      ],
+      [
+       1457.0,
+       "P5"
+      ],
+      [
+       1484.0,
+       "P0"
+      ],
+      [
+       1511.0,
+       "P2"
+      ],
+      [
+       1525.0,
+       "P3"
+      ]
+     ]
+    },
+    {
+     "tls": "cluster_11806412110_11944362608_6449290286",
+     "who": "L14",
+     "t": 1571.0,
+     "excess_s": 5.0,
+     "phases": [
+      [
+       1460.0,
+       "P1"
+      ],
+      [
+       1474.0,
+       "P0"
+      ],
+      [
+       1488.0,
+       "P2"
+      ],
+      [
+       1502.0,
+       "P1"
+      ],
+      [
+       1529.0,
+       "P3"
+      ],
+      [
+       1543.0,
+       "P2"
+      ],
+      [
+       1557.0,
+       "P0"
+      ],
+      [
+       1571.0,
+       "P4"
+      ]
+     ]
+    },
+    {
+     "tls": "cluster_3302353029_7905475494",
+     "who": "L18",
+     "t": 1868.0,
+     "excess_s": 1.0,
+     "phases": [
+      [
+       1744.0,
+       "P3"
+      ],
+      [
+       1758.0,
+       "P1"
+      ],
+      [
+       1772.0,
+       "P2"
+      ],
+      [
+       1799.0,
+       "P3"
+      ],
+      [
+       1813.0,
+       "P2"
+      ],
+      [
+       1840.0,
+       "P3"
+      ],
+      [
+       1854.0,
+       "P2"
+      ],
+      [
+       1868.0,
+       "P0"
+      ]
+     ]
+    },
+    {
+     "tls": "5285641690",
+     "who": "L3",
+     "t": 1950.0,
+     "excess_s": 3.5,
+     "phases": [
+      [
+       1831.0,
+       "P2"
+      ],
+      [
+       1848.0,
+       "P0"
+      ],
+      [
+       1866.0,
+       "P2"
+      ],
+      [
+       1880.0,
+       "P0"
+      ],
+      [
+       1901.0,
+       "P2"
+      ],
+      [
+       1915.0,
+       "P0"
+      ],
+      [
+       1936.0,
+       "P2"
+      ],
+      [
+       1950.0,
+       "P1"
+      ]
+     ]
+    }
+   ],
+   "unfinished_at_cap": 0,
+   "person_delay_s": 265997.48600000003,
+   "entry_delay_s": 1341.7230000000006,
+   "person_throughput_per_hour": 2868.308681672029,
+   "stops_per_vehicle": 3.360189573459716,
+   "wait_time_s": {
+    "mean_s": 39.38546603475513,
+    "p95_s": 105.0,
+    "max_s": 380.0
+   },
+   "wall_s": 1081.8,
+   "decision_stats": {
+    "ticks": 342901,
+    "switch_cycle_supervisor": 4,
+    "switch_gap_out": 2965,
+    "cycles_completed": 213934,
+    "extend": 325747,
+    "extend_allocation_protected": 72,
+    "switch_pressure": 1305,
+    "switch_max_green": 12791,
+    "rest_in_green": 0,
+    "rest_capped": 0,
+    "rest_blocked": 0,
+    "rest_congested": 0,
+    "switch_starvation": 17,
+    "blended": 0,
+    "blended_no_history": 0,
+    "fallback_fixed_time": 0,
+    "corridor_anticipating": 0,
+    "corridor_repaying": 0
+   },
+   "arm": "truth:ovl4"
+  }
+ ]
+}
