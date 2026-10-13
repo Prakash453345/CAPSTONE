@@ -11,6 +11,8 @@ interface ImportMetaEnv {
   readonly VITE_MAP_API_KEY?: string;
   /** Map start centre, `"lat,lon"`. Defaults to the Vijayawada corridor. */
   readonly VITE_MAP_CENTER?: string;
+  /** Legacy basemap tile key retained from local edits. Never commit key values. */
+  readonly VITE_MAP_API_KEY?: string;
   /** Which SUMO network the console is built against (see network.config.ts). */
   readonly VITE_ITMS_NETWORK?: "corridor" | "district";
 }
