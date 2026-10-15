@@ -114,7 +114,7 @@ def _job(args) -> dict:
         mods = arm.split(":")[1:]
         unknown = [t for t in mods
                    if t not in ("rest", "restf", "nov", "via", "vian", "via2",
-                                "ovl", "ovl2", "ovl3", "ovl4", "noovl", "restq", "restd",
+                                "ovl", "ovl2", "ovl3", "ovl4", "noovl", "restq", "restd", "restx",
                                 "pair", "pairt", "nopair", "minph")
                    and t[:1] not in ("c", "f") and not t.startswith(("restm", "restc", "s.", "hz"))]
         if unknown:
@@ -159,6 +159,7 @@ def _job(args) -> dict:
                 rest_in_green=True, rest_max_s=rest_max,
                 rest_needs_flow="restf" in mods, rest_needs_no_call="restq" in mods,
                 rest_needs_own_demand="restd" in mods,
+                rest_needs_free_exit="restx" in mods,
                 rest_max_congestion=next((float(t[5:]) for t in mods if t.startswith("restc")),
                                          None))
         if overrides:

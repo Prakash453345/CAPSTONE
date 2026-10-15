@@ -17,6 +17,9 @@ export default defineConfig({
     },
   },
   build: {
+    // ES2022 for top-level await: src/data/network.ts fetches Amaravati's roads
+    // before the map modules use them.
+    target: "es2022",
     // Read by scripts/check-bundle-budget.mjs to measure each page's first download.
     manifest: true,
     rollupOptions: {

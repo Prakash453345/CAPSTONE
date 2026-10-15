@@ -190,6 +190,10 @@ class JunctionContext:
     confidence: Mapping[str, float] = field(default_factory=dict)
     receiving_queue_pcu: Mapping[str, float] = field(default_factory=dict)
     approaching_pcu: Mapping[str, float] = field(default_factory=dict)
+    yield_waiting_pcu: Mapping[str, float] = field(default_factory=dict)
+    """`{movement: PCU halted on the lanes that give way to the movement's exit
+    road}` (`signal_controller/yield_lanes.py`). Empty when nothing measures it.
+    Only `AcampConfig.rest_needs_free_exit` reads it."""
     blocked_by: Mapping[str, str] = field(default_factory=dict)
     """Head-of-line blocking: `{movement: the movement of the vehicle blocking
     its lane}`. A movement appears here when the vehicle at the front of its

@@ -14,6 +14,13 @@ Writes two files with the same content:
     JSON is the actual fix, not a stylistic choice.
 
 Usage: python export_geojson.py [path/to/vijayawada_corridor.net.xml]
+
+Any other georeferenced network (a city for the web app's `VITE_CITY`):
+    python export_geojson.py path/to/city.net.xml path/to/city.geojson
+writes only that GeoJSON, compact and rounded to 6 decimals (~0.1 m), since
+the web app bundles it. A junction whose own coordinates are off its roads
+(netconvert left four joined Amaravati junctions at y = 0) is placed at the
+mean of its roads' ends there instead.
 """
 
 from __future__ import annotations
@@ -28,6 +35,28 @@ _HERE = Path(__file__).resolve().parent
 _DEFAULT_NET = _HERE / "vijayawada_corridor.net.xml"
 _GEOJSON_OUT = _HERE / "vijayawada_corridor.geojson"
 _JS_OUT = _HERE.parents[2] / "web" / "network_data.js"
+
+
+def _junction_xy(node, tolerance_m: float = 200.0) -> tuple[float, float]:
+    """The node's coordinates, or the mean of its roads' ends at it when the
+    node lies more than `tolerance_m` from all of them."""
+    x, y = node.getCoord()
+    ends = [e.getShape()[-1] for e in node.getIncoming() if not e.isSpecial()]
+    ends += [e.getShape()[0] for e in node.getOutgoing() if not e.isSpecial()]
+    if ends and min(((ex - x) ** 2 + (ey - y) ** 2) ** 0.5 for ex, ey in ends) > tolerance_m:
+        return (sum(ex for ex, _ in ends) / len(ends), sum(ey for _, ey in ends) / len(ends))
+    return x, y
+
+
+def _rounded(obj, ndigits: int = 6):
+    """Every float in a JSON-like structure rounded to `ndigits`."""
+    if isinstance(obj, float):
+        return round(obj, ndigits)
+    if isinstance(obj, list):
+        return [_rounded(x, ndigits) for x in obj]
+    if isinstance(obj, dict):
+        return {k: _rounded(v, ndigits) for k, v in obj.items()}
+    return obj
 
 
 def build_feature_collection(net_path: str) -> dict:
@@ -48,12 +77,13 @@ def build_feature_collection(net_path: str) -> dict:
                     "name": edge.getName() or None,
                     "num_lanes": edge.getLaneNumber(),
                     "speed_limit_mps": edge.getSpeed(),
+                    "road_type": edge.getType() or None,
                 },
             }
         )
 
     for node in net.getNodes():
-        x, y = node.getCoord()
+        x, y = _junction_xy(node)
         lon, lat = net.convertXY2LonLat(x, y)
         features.append(
             {
@@ -74,6 +104,11 @@ def build_feature_collection(net_path: str) -> dict:
 def main() -> None:
     net_path = sys.argv[1] if len(sys.argv) > 1 else str(_DEFAULT_NET)
     fc = build_feature_collection(net_path)
+    if len(sys.argv) > 2:  # another city: just its GeoJSON, compact
+        out = Path(sys.argv[2])
+        out.write_text(json.dumps(_rounded(fc), separators=(",", ":")) + "\n")
+        print(f"wrote {out} ({len(fc['features'])} features)")
+        return
 
     _GEOJSON_OUT.write_text(json.dumps(fc, indent=2))
     print(f"wrote {_GEOJSON_OUT} ({len(fc['features'])} features)")

@@ -390,6 +390,7 @@ def run_controlled_scenario(
     detector_upstream: bool = True,
     arrival_horizon_s: float | None = None,
     internal_links: Mapping[str, Mapping[str, str]] | None = None,
+    yield_lanes: Mapping[str, Mapping[str, tuple[str, ...]]] | None = None,
 ) -> dict:
     """Run one full scenario with `strategy` governing every junction in
     `configs`. Returns run stats: step count, how many times the arbiter
@@ -650,6 +651,7 @@ def run_controlled_scenario(
                     downstream=lane_chains[1] if lane_chains else None,
                     internal_links=internal_links.get(tls_id) if internal_links else None,
                     vias=lane_vias,
+                    yield_lanes=yield_lanes.get(tls_id) if yield_lanes else None,
                     **({"arrival_horizon_s": arrival_horizon_s}
                        if arrival_horizon_s is not None else {}),
                 )
@@ -793,6 +795,7 @@ def run_controlled_scenario(
                     receiving_queue_pcu: Mapping[str, float] = {}
                     approaching_pcu: Mapping[str, float] = {}
                     blocked_by: Mapping[str, str] = {}
+                    yield_waiting_pcu: Mapping[str, float] = {}
                     if js.queue_sampler is not None:
                         if time_aware:
                             # Strictly more TraCI work per tick -- only paid
@@ -805,6 +808,7 @@ def run_controlled_scenario(
                             receiving_queue_pcu = sample.receiving_queue_pcu
                             approaching_pcu = sample.approaching_pcu
                             blocked_by = sample.blocked_by
+                            yield_waiting_pcu = sample.yield_waiting_pcu
                         else:
                             queue_pcu, receiving_occupancy = js.queue_sampler.sample()
                     js.ctx = JunctionContext(
@@ -818,6 +822,7 @@ def run_controlled_scenario(
                         receiving_queue_pcu=receiving_queue_pcu,
                         approaching_pcu=approaching_pcu,
                         blocked_by=blocked_by,
+                        yield_waiting_pcu=yield_waiting_pcu,
                         preempt_seconds_last_hour=js.ctx.preempt_seconds_last_hour,
                     )
                     if js.discharge is not None and calibration is not None:

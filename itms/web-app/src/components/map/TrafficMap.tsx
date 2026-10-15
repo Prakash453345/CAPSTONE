@@ -34,6 +34,7 @@ import { selectSelectedRequest, useEmergencyStore } from "@/store/emergencyStore
 import { networkBounds, nearestEdge } from "@/data/network";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/utils/cn";
+import { CITIES_LABEL } from "@/data/city";
 
 const FIT_BOUNDS: [number, number, number, number] = [
   networkBounds.minLng,
@@ -115,7 +116,7 @@ export function TrafficMap({
         console.warn("Map resource error:", e.error?.message ?? e);
         setTileError(true);
       });
-      instance.getCanvas().setAttribute("aria-label", "Vijayawada traffic map. Use arrow keys to pan, plus and minus to zoom.");
+      instance.getCanvas().setAttribute("aria-label", `${CITIES_LABEL} traffic map. Use arrow keys to pan, plus and minus to zoom.`);
       // Arriving via the globe cinematic: start a little further out and
       // finish the dive's zoom once the overlay lifts, so the two read as
       // one continuous move.

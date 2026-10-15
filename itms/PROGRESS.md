@@ -6107,3 +6107,27 @@ Not committed. `baselines/2026-10-13_rest_offpeak_v2/` (README, TARGETS, `summar
   (`results/compact/README.md`).
 
 Full suite: 914 passed, 6 skipped. ruff clean on changed files.
+
+## 2026-10-14 — Rest in green at medium demand: -3.0 % held-out, one target missed by 0.1 point; exit-gap guard did not help
+
+Not committed. `baselines/2026-10-14_rest_medium/` (README, TARGETS, `summarise.py`).
+
+- **Exit-gap guard** (`AcampConfig.rest_needs_free_exit`, gate modifier `restx`,
+  `signal_controller/yield_lanes.py`, `JunctionContext.yield_waiting_pcu`): off by default,
+  tested, no benefit. The Vijayawada "2 -> 5 teleports" with rest was noise: over ten training
+  seeds plain 17, rest 16, rest+guard 29; lane 850997565_0 teleports in the plain controller too.
+- **Held-out** (medium, seeds 279-283, eight networks, targets first): rest -3.0 % [-6.1, +0.1];
+  M1, M3, M4 pass (no violations, no network significantly worse, 0 teleports); M2 fails (interval
+  upper end +0.1). Only berlin_adlershof is significant (-6.8 %). Rest stays an off-peak switch.
+- Write-ups fact-checked by a separate agent; corrections applied.
+
+## 2026-10-14 — M7 under congestion: the corridor does not beat reactive preemption at heavy demand either
+
+Not committed. `baselines/2026-10-14_m7_heavy/` (README, TARGETS, `summarise.py`).
+
+- Training seeds 101-105 hinted at a heavy-demand gain (-38.8 s EV travel time vs reactive);
+  two variants (claim within 300 m as well; A/D terms off) were tried there and dropped.
+- **Held-out** (seeds 284-293, targets first, unchanged code, current controller inputs): heavy
+  EV travel time +3.6 s [-30.8, +38.0] (H1 failed), stops +1.5 (n.s.), person-delay -2.0 % (n.s.),
+  zero violations; medium +5.6 s [-1.6, +12.8].
+- M7 stands as safe preemption plus dispatch; no advantage over reactive preemption is claimed.

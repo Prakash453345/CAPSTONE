@@ -65,6 +65,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s api-service %(messag
 log = logging.getLogger("api-service")
 
 REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+_PROCESS_ID = secrets.token_hex(4)
 TOPICS = [
     "system.heartbeat",
     "traffic.vehicle-positions",
@@ -83,6 +84,7 @@ TOPICS = [
     "vision.camera-status",  # M8 camera health changes (vision-service)
 ]
 _INCIDENT_EVENT_TYPES = {"IncidentCandidate", "IncidentDetected", "IncidentUpdated"}
+_INCIDENT_TOPICS = frozenset({"incident.candidate", "incident.detected", "incident.updated"})
 CONSUMER_GROUP = "api-service"
 
 # A simple shared secret, not a user/session system -- see this module's
@@ -170,7 +172,14 @@ def _json_safe_envelope(envelope: dict) -> dict:
 
 
 async def _consume_topic(bus: RedisStreamsBus, topic: str, consumer: str) -> None:
-    """Relay one topic with its own cursor so busy traffic cannot starve alarms."""
+    """Relay one topic with its own cursor so busy traffic cannot starve alarms.
+
+    `incident.*` topics feed the in-memory `IncidentRegistry`, which is empty
+    after a restart, so they are read from the start of the stream through a
+    group private to this process (a shared group resumes at its old cursor and
+    never replays). Everything else is a live-edge UI fan-out."""
+    replay = topic in _INCIDENT_TOPICS
+    group = f"{CONSUMER_GROUP}-registry-{_PROCESS_ID}" if replay else CONSUMER_GROUP
     while True:
         try:
             async for msg in bus.subscribe(
@@ -178,7 +187,7 @@ async def _consume_topic(bus: RedisStreamsBus, topic: str, consumer: str) -> Non
                 # newly created API group begins at the live edge; replaying a
                 # retained stream can leave the command center showing
                 # hours-old congestion before current vehicle positions.
-                [topic], group=CONSUMER_GROUP, consumer=consumer, start_id="$"
+                [topic], group=group, consumer=consumer, start_id="0" if replay else "$"
             ):
                 try:
                     envelope = decode_envelope(msg.raw)
@@ -193,7 +202,7 @@ async def _consume_topic(bus: RedisStreamsBus, topic: str, consumer: str) -> Non
                 except Exception:
                     log.exception("failed to handle message %s on %s", msg.message_id, msg.topic)
                 else:
-                    await bus.ack(msg.topic, CONSUMER_GROUP, msg.message_id)
+                    await bus.ack(msg.topic, group, msg.message_id)
         except asyncio.CancelledError:
             raise
         except Exception:

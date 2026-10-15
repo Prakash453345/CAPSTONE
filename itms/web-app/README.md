@@ -42,6 +42,31 @@ Session analytics retains up to 30 minutes of actual received observations in
 memory, with selectable windows and CSV export. Changing data source resets the
 history. Missing speed stays missing rather than being displayed as zero.
 
+## Cities (Vijayawada and Amaravati)
+
+`npm run dev` shows both cities on one map: Vijayawada's MG Road corridor and
+the real Amaravati map (`scenarios/generated/amaravati_v2/`, 121 signals),
+about 15 km apart. To show only one, set `VITE_CITY` (`vijayawada` or
+`amaravati`), on the command line or in a git-ignored `.env.local`:
+
+```bash
+VITE_CITY=amaravati npm run dev
+```
+
+Vijayawada's network is bundled; Amaravati's (~400 KB) is a separate file the
+app fetches once at startup, so it stays out of every page's JavaScript
+(`scripts/check-bundle-budget.mjs`). That uses top-level await, hence
+`build.target: "es2022"`.
+
+The backend simulates one city at a time (Vijayawada unless
+`ITMS_SCENARIO=$PWD/scenarios/generated/amaravati_v2 make dev`), so in Live mode
+only that city has vehicles; Demo mode animates both. To add a city, export its
+georeferenced SUMO network with `python scenarios/networks/vijayawada/export_geojson.py
+<net.xml> <out.geojson>` and list it in `src/data/city.ts` and `src/data/network.ts`.
+The Amaravati export carries no street names (its OSM build kept none), so its
+roads are labelled by class ("Primary road"). Emergency depots, hospitals and
+camera sites are still Vijayawada's only.
+
 ## Layout
 
 ```

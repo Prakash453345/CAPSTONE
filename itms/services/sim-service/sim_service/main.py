@@ -130,6 +130,12 @@ def _run_sumo() -> None:
     _links, _heading, _lefthand = net_links(net_path)
     configs = {tls: paired_layout(cfg, _links.get(tls, {}), _heading, _lefthand)
                for tls, cfg in configs.items()}
+    flows = compute_link_flows(net_path, Path(route))
+    # Webster-referenced green ceilings (1.25x, floored at 20 s), worked out on the
+    # paired layout *before* overlaps are added -- as scripts/m8_harness.ccacamp_inputs
+    from sim_service.control.ceilings import with_webster_ceilings  # noqa: PLC0415
+
+    configs = with_webster_ceilings(configs, flows)
     # every phase also shows the movements that cross nothing it shows (a free
     # left turn, many U-turns), without owning them -- itms_domain.overlaps
     from itms_domain.overlaps import pedestrian_links, with_overlaps  # noqa: PLC0415
@@ -137,7 +143,6 @@ def _run_sumo() -> None:
     walks = pedestrian_links(net_path)
     configs = {tls: with_overlaps(cfg, walks.get(tls, frozenset()), owned=False)
                for tls, cfg in configs.items()}
-    flows = compute_link_flows(net_path, Path(route))
     vtype_pcu = load_vtype_pcu(Path(route))
     link_lanes = link_to_lane_map(net_path)
     receiving_lanes = link_to_receiving_lane_map(net_path)

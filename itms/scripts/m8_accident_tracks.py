@@ -6,6 +6,7 @@ import numpy as np, pandas as pd
 VEH = [1, 2, 3, 5, 7]            # COCO: bicycle, car, motorcycle, bus, truck
 DETECT_WITHIN_S = 10.0
 MERGE_S = 3.0
+MERGE_D = 0.15  # normalised-frame distance within which triggers merge
 MIN_SIZE_PX = 12.0
 GRID = {"v_hi": [0.5, 1.0, 1.5, 2.5], "v_lo": [0.1, 0.2, 0.4], "iou": [0.05, 0.1, 0.2]}
 
@@ -91,18 +92,19 @@ def triggers(rows, W, H, v_hi, v_lo, iou, kinds=("T1", "T2")):
                     continue
                 if _iou(trs[ka]["box"][ia], trs[kb]["box"][ib]) < iou:
                     continue
-                seen.add((ka, kb))
                 pre = np.concatenate([_win(trs[k]["t"], sp[k], ti - 1.5, ti) for k in (ka, kb)])
                 if not len(pre) or pre.max() < v_hi:
                     continue
                 posts = [_win(trs[k]["t"], sp[k], ti + 0.5, ti + 2.0) for k in (ka, kb)]
                 posts = [p for p in posts if len(p) >= 2]
                 if posts and all(p.mean() <= v_lo for p in posts):
+                    seen.add((ka, kb))  # blacklist only once the pair actually triggered
                     ev.append((float(ti), float((trs[ka]["cx"][ia] + trs[kb]["cx"][ib]) / 2 / W),
                                float((trs[ka]["cy"][ia] + trs[kb]["cy"][ib]) / 2 / H), "T2"))
     ev.sort(); out = []
     for e in ev:
-        if not out or e[0] - out[-1][0] >= MERGE_S:
+        # merge only triggers that are close in time AND in the frame
+        if not any(e[0] - o[0] < MERGE_S and math.hypot(e[1] - o[1], e[2] - o[2]) < MERGE_D for o in out):
             out.append(e)
     return out
 

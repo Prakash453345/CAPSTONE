@@ -648,6 +648,12 @@ class AcampConfig:
     running phase's own movements. Past the ceiling a halted vehicle on a
     green movement means its way out is blocked (a full junction box, a
     give-way just downstream), and holding the green only holds the jam."""
+    rest_needs_free_exit: bool = False
+    """With `rest_in_green`: rest only while no vehicle waits on a lane that
+    gives way to the running phase's exit roads (`JunctionContext.yield_waiting_pcu`).
+    A resting green is an unbroken stream, and the give-way beyond its exit
+    gets no gap (Vijayawada district, lane 850997565_0). With a vehicle waiting
+    the ceiling ends the green as it would without rest."""
     rest_needs_own_demand: bool = False
     """With `rest_in_green`: rest only while the running phase itself still has
     demand (a queue or a vehicle arriving). When every phase is empty there is
@@ -1220,6 +1226,7 @@ class AdaptiveCamp:
             "switch_pressure": 0,
             "switch_max_green": 0,
             "rest_in_green": 0,
+            "rest_exit_wanted": 0,
             "rest_capped": 0,
             "rest_blocked": 0,
             "rest_congested": 0,
@@ -1260,6 +1267,12 @@ class AdaptiveCamp:
             self._load_ewma, self.cfg.switch_scale_ref, self.cfg.switch_scale_exponent
         ) >= self.cfg.rest_max_congestion:
             self.stats["rest_congested"] += 1
+            return False
+        if self.cfg.rest_needs_free_exit and any(
+            ctx.yield_waiting_pcu.get(m, 0.0) > 0.0
+            for m in cfg_t0.phases[current].green_movements
+        ):
+            self.stats["rest_exit_wanted"] += 1
             return False
         if self.cfg.rest_needs_own_demand and not any(
             ctx.queue_pcu.get(m, 0.0) > 0.0 or ctx.approaching_pcu.get(m, 0.0) > 0.0

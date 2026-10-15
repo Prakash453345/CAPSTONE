@@ -82,6 +82,14 @@ def rig(box: bool = False) -> CameraRig:
 
 
 @cache
+def yield_lanes():
+    """Per signal, per link: the lanes that give way to the link's exit road."""
+    from sim_service.signal_controller.yield_lanes import yield_lanes_from_net  # noqa: PLC0415
+
+    return yield_lanes_from_net(H.NET_PATH)
+
+
+@cache
 def link_maps():
     return network().link_lane_maps()
 
@@ -399,6 +407,7 @@ def run_scenario(
     )
     if controller != "webster":
         kwargs["receiving_lanes"] = receiving
+        kwargs["yield_lanes"] = yield_lanes()
         kwargs["vtype_pcu"] = vtype_pcu
         if H.lane_chains() is not None:
             kwargs["lane_chains"] = H.lane_chains()

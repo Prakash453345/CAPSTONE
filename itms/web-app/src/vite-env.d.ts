@@ -7,7 +7,9 @@ interface ImportMetaEnv {
   readonly VITE_WS_URL?: string;
   /** Google Maps Platform key with the Map Tiles API enabled. */
   readonly VITE_GOOGLE_MAPS_API_KEY?: string;
-  /** Map start centre, `"lat,lon"`. Defaults to the Vijayawada corridor. */
+  /** Which cities the console shows. Unset: both. "vijayawada" or "amaravati" for one (src/data/city.ts). */
+  readonly VITE_CITY?: string;
+  /** Centre for the globe intro and weather, `"lat,lon"`. Defaults to the first shown city's. */
   readonly VITE_MAP_CENTER?: string;
   /** Legacy basemap tile key retained from local edits. Never commit key values. */
   readonly VITE_MAP_API_KEY?: string;

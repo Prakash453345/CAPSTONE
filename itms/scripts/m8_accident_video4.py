@@ -51,7 +51,7 @@ class Clip:
     def frame(s, i):
         if i not in s._fc: s._fc[i] = cv2.imdecode(s.blob[s.off[i]:s.off[i + 1]], cv2.IMREAD_COLOR)[:, :, ::-1]
         return s._fc[i]
-    def heat(s, e): return s.cs[e] - s.cs[e - NF + 1]
+    def heat(s, e): return s.cs[e] - (s.cs[e - NF] if e >= NF else 0)  # sum of the NF frames ending at e
 
 
 # ------------------------------------------------------------ proposals + views
