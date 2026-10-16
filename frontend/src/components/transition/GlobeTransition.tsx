@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { DEFAULT_CENTER } from "@/store/mapStore";
+import { CITIES_LABEL, HOME_CITY, SHOWN_CITIES, formatLatLng } from "@/data/city";
 import { useTransitionStore } from "@/store/transitionStore";
 import type { EarthCamera } from "./cinematicEarth";
 
@@ -93,7 +94,11 @@ type Caption = "orbit" | "region" | "city" | "live";
 const CAPTIONS: Record<Caption, { kicker: string; title: string; sub: string }> = {
   orbit: { kicker: "Orbital view", title: "Earth", sub: "Traffic intelligence network" },
   region: { kicker: "Regional approach", title: "South Asia", sub: "Andhra Pradesh · Krishna corridor" },
-  city: { kicker: "Target acquired", title: "Vijayawada", sub: "20 signalised junctions · pilot deployment" },
+  city: {
+    kicker: "Target acquired",
+    title: CITIES_LABEL,
+    sub: SHOWN_CITIES.length > 1 ? "Pilot deployment and capital region" : HOME_CITY.blurb,
+  },
   live: { kicker: "Handing over", title: "Live Command Center", sub: "Connecting to real-time traffic data" },
 };
 
@@ -344,8 +349,8 @@ function TransitionStage() {
         <div className="absolute -top-12 left-0 h-4 w-px bg-[#7fe6ff]/70" />
         <div className="absolute left-0 top-8 h-4 w-px bg-[#7fe6ff]/70" />
         <div className="absolute left-14 -top-3 whitespace-nowrap" style={{ fontFamily: "'Google Sans Code', ui-monospace, monospace" }}>
-          <div className="text-[10px] tracking-[0.28em] text-[#7fe6ff]">VIJAYAWADA</div>
-          <div className="mt-0.5 text-[10px] tracking-[0.12em] text-white/55">16.5062° N · 80.6335° E</div>
+          <div className="text-[10px] tracking-[0.28em] text-[#7fe6ff]">{HOME_CITY.name.toUpperCase()}</div>
+          <div className="mt-0.5 text-[10px] tracking-[0.12em] text-white/55">{formatLatLng(DEFAULT_CENTER)}</div>
         </div>
       </div>
 

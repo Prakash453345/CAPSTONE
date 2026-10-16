@@ -1,0 +1,114 @@
+{
+ "name": "random_lh",
+ "net": "random_lh.net.xml",
+ "mix": "india",
+ "levels": {
+  "light": {
+   "sumocfg": "random_lh_light.sumocfg",
+   "route": "random_lh_light.rou.xml",
+   "target_ds": 0.25,
+   "achieved_ds": 0.2499,
+   "busiest_tls": "6",
+   "period_s": 4.2575,
+   "iterations": [
+    [
+     4.0,
+     0.2722
+    ],
+    [
+     4.3549,
+     0.2444
+    ],
+    [
+     4.2575,
+     0.2499
+    ]
+   ]
+  },
+  "medium": {
+   "sumocfg": "random_lh_medium.sumocfg",
+   "route": "random_lh_medium.rou.xml",
+   "target_ds": 0.5,
+   "achieved_ds": 0.5012,
+   "busiest_tls": "99",
+   "period_s": 2.0828,
+   "iterations": [
+    [
+     4.0,
+     0.2722
+    ],
+    [
+     2.1775,
+     0.4783
+    ],
+    [
+     2.0828,
+     0.5012
+    ]
+   ]
+  },
+  "heavy": {
+   "sumocfg": "random_lh_heavy.sumocfg",
+   "route": "random_lh_heavy.rou.xml",
+   "target_ds": 1.0,
+   "achieved_ds": 0.9983,
+   "busiest_tls": "99",
+   "period_s": 0.9996,
+   "iterations": [
+    [
+     4.0,
+     0.2722
+    ],
+    [
+     1.0887,
+     0.9181
+    ],
+    [
+     0.9996,
+     0.9983
+    ]
+   ]
+  }
+ },
+ "demand": "randomTrips --fringe-factor 5, 0-1800 s, routed by duarouter",
+ "generated": {
+  "spec": "rand:40,200,2,3",
+  "lefthand": true,
+  "turn_lanes": 0,
+  "speed_mps": 13.89,
+  "tls_layout": "opposites",
+  "netgenerate": "netgenerate -o random_lh.net.xml --default-junction-type traffic_light --default.speed 13.89 --no-turnarounds true --tls.layout opposites --rand --rand.iterations 40 --rand.min-distance 200 --rand.max-distance 600.0 --default.lanenumber 2 --seed 3 --rand.min-angle 45 --rand.neighbor-dist1 0 --rand.neighbor-dist2 0 --lefthand"
+ },
+ "signalised_junctions": 28,
+ "map_center": null,
+ "phases_per_junction": [
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  3,
+  4,
+  4,
+  5,
+  5,
+  5
+ ]
+}

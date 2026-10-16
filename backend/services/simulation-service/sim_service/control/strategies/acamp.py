@@ -619,7 +619,14 @@ class AcampConfig:
     the green, and with nobody waiting the ring moves to an empty phase and
     pays a change interval for nothing. Off by default so recorded runs
     stay reproducible. Pedestrian phases are never skippable, so a junction
-    that has one keeps cycling as before."""
+    that has one keeps cycling as before.
+
+    Adopted as an **off-peak mode** (light-traffic hours only; the live
+    service switches it on with SIGNAL_OFFPEAK_REST=1): on fresh seeds at
+    light demand -9.0 % [-12.4, -5.7] over ten networks (lower on all ten),
+    -15.3 % on the real Amaravati map (baselines/2026-10-13_rest_offpeak_v2).
+    It lost on training seeds at medium and heavy demand (arterial_lh +5 %,
+    +3.5 %), so it is not for busy hours."""
 
     rest_max_s: float | None = None
     """With `rest_in_green`: the longest a green may rest past its ceiling
@@ -641,6 +648,24 @@ class AcampConfig:
     running phase's own movements. Past the ceiling a halted vehicle on a
     green movement means its way out is blocked (a full junction box, a
     give-way just downstream), and holding the green only holds the jam."""
+    rest_needs_free_exit: bool = False
+    """With `rest_in_green`: rest only while no vehicle waits on a lane that
+    gives way to the running phase's exit roads (`JunctionContext.yield_waiting_pcu`).
+    A resting green is an unbroken stream, and the give-way beyond its exit
+    gets no gap (Vijayawada district, lane 850997565_0). With a vehicle waiting
+    the ceiling ends the green as it would without rest."""
+    rest_needs_own_demand: bool = False
+    """With `rest_in_green`: rest only while the running phase itself still has
+    demand (a queue or a vehicle arriving). When every phase is empty there is
+    no one to rest for, and moving on puts the green where the next platoon
+    may arrive instead of holding it where none is coming."""
+    rest_needs_no_call: bool = False
+    """With `rest_in_green`: rest only while no movement outside the running
+    phase has a call (`JunctionContext.has_demand`: a vehicle anywhere on its
+    approach, not only within the arrival horizon). A side-road vehicle seen
+    as it enters its approach ends the rest early enough to change before it
+    reaches the line; seen only 8 s out, it meets the change interval and
+    stops (arterial_lh, medium demand, training seeds: rest +5 %)."""
 
     # -- cycle supervisor (CC-A-CAMP) --
     cycle_supervisor: bool = False
@@ -1201,9 +1226,12 @@ class AdaptiveCamp:
             "switch_pressure": 0,
             "switch_max_green": 0,
             "rest_in_green": 0,
+            "rest_exit_wanted": 0,
             "rest_capped": 0,
             "rest_blocked": 0,
             "rest_congested": 0,
+            "rest_called": 0,
+            "rest_idle": 0,
             "switch_starvation": 0,
             "blended": 0,
             "blended_no_history": 0,
@@ -1239,6 +1267,25 @@ class AdaptiveCamp:
             self._load_ewma, self.cfg.switch_scale_ref, self.cfg.switch_scale_exponent
         ) >= self.cfg.rest_max_congestion:
             self.stats["rest_congested"] += 1
+            return False
+        if self.cfg.rest_needs_free_exit and any(
+            ctx.yield_waiting_pcu.get(m, 0.0) > 0.0
+            for m in cfg_t0.phases[current].green_movements
+        ):
+            self.stats["rest_exit_wanted"] += 1
+            return False
+        if self.cfg.rest_needs_own_demand and not any(
+            ctx.queue_pcu.get(m, 0.0) > 0.0 or ctx.approaching_pcu.get(m, 0.0) > 0.0
+            for m in cfg_t0.phases[current].green_movements
+        ):
+            self.stats["rest_idle"] += 1
+            return False
+        if self.cfg.rest_needs_no_call and any(
+            ctx.has_demand.get(m, False)
+            for p, ph in cfg_t0.phases.items() if p != current
+            for m in ph.green_movements if m not in cfg_t0.phases[current].shown_movements
+        ):
+            self.stats["rest_called"] += 1
             return False
         if self.cfg.rest_needs_flow and sum(
             ctx.queue_pcu.get(m, 0.0) for m in cfg_t0.phases[current].green_movements

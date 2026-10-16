@@ -1,11 +1,10 @@
-// The network chosen at build time (VITE_ITMS_NETWORK, see network.config.ts).
-import rawNetwork from "@itms-network?raw";
-import type { FeatureCollection } from "geojson";
+// Vijayawada's network is chosen at build time (VITE_ITMS_NETWORK, see network.config.ts).
+import rawVijayawada from "@itms-network?raw";
+import amaravatiUrl from "../../../backend/data/scenarios/generated/amaravati_v2/amaravati_v2.geojson?url";
+import type { Feature, FeatureCollection } from "geojson";
+import { SHOWN_CITIES, type City, type CityId } from "@/data/city";
 import { cumulativeLengths, haversineMeters, type LngLat } from "@/utils/geo";
 import { ROAD_NAMES } from "@/data/roadNames";
-
-/** Geometry from the same checked-in network used by the SUMO exporter. */
-const network = JSON.parse(rawNetwork) as FeatureCollection;
 
 /** "corridor" (the MG Road arterial) or "district" (the grid around it). */
 export const networkKind: "corridor" | "district" =
@@ -13,8 +12,46 @@ export const networkKind: "corridor" | "district" =
 /** What operators call the area on screen. */
 export const networkName =
   networkKind === "district" ? "Central Vijayawada" : "MG Road corridor";
+
+/** A city's network as exported from the SUMO network the simulator runs
+ *  (backend/data/scenarios/networks/vijayawada/export_geojson.py). */
+export interface CityNetwork {
+  city: CityId;
+  raw: string;
+}
+
+/** Vijayawada's network is small and bundled. Amaravati's network (~400 KB)
+ *  is a separate file fetched once at startup, so it stays out of every
+ *  page's JavaScript (scripts/check-bundle-budget.mjs). If it cannot be
+ *  fetched the console still opens, without it. */
+async function load(city: City): Promise<CityNetwork | null> {
+  if (city.id === "vijayawada") return { city: city.id, raw: rawVijayawada };
+  try {
+    const res = await fetch(amaravatiUrl);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return { city: city.id, raw: await res.text() };
+  } catch (err) {
+    console.warn(`TRAFFIX: the ${city.name} road network did not load`, err);
+    return null;
+  }
+}
+
+/** The cities' features in one collection, each tagged with its `city`. */
+export function networkFor(parts: CityNetwork[]): FeatureCollection {
+  const features: Feature[] = parts.flatMap(({ city, raw }) =>
+    (JSON.parse(raw) as FeatureCollection).features.map((f) => ({
+      ...f,
+      properties: { ...f.properties, city },
+    })),
+  );
+  return { type: "FeatureCollection", features };
+}
+
+const loaded = (await Promise.all(SHOWN_CITIES.map(load))).filter((p): p is CityNetwork => p !== null);
+const network = networkFor(loaded.length ? loaded : [{ city: "vijayawada", raw: rawVijayawada }]);
 export interface RoadEdge {
   id: string;
+  city: CityId;
   name: string | null;
   numLanes: number;
   speedLimitMps: number;
@@ -22,6 +59,15 @@ export interface RoadEdge {
   cum: number[];
   lengthM: number;
 }
+/** "highway.primary" -> "Primary road": a label for a road with no street
+ *  name in the network (Amaravati's OSM export carries none). */
+export function roadClassName(roadType: string | null | undefined): string | null {
+  const m = /^highway\.(motorway|trunk|primary|secondary|tertiary)(_link)?$/.exec(roadType ?? "");
+  if (!m) return null;
+  const cls = m[1][0].toUpperCase() + m[1].slice(1);
+  return m[2] ? `${cls} road link` : `${cls} road`;
+}
+
 export const roadEdges: RoadEdge[] = network.features.flatMap((f) => {
   if (f.geometry.type !== "LineString" || f.properties?.kind !== "edge")
     return [];
@@ -30,7 +76,11 @@ export const roadEdges: RoadEdge[] = network.features.flatMap((f) => {
   return [
     {
       id: String(f.properties.edge_id),
-      name: (f.properties.name as string | null) ?? ROAD_NAMES[String(f.properties.edge_id)] ?? null,
+      city: f.properties.city as CityId,
+      name:
+        (f.properties.name as string | null) ??
+        ROAD_NAMES[String(f.properties.edge_id)] ??
+        roadClassName(f.properties.road_type as string | null | undefined),
       numLanes: Number(f.properties.num_lanes),
       speedLimitMps: Number(f.properties.speed_limit_mps),
       path,
@@ -45,6 +95,7 @@ export const junctions = network.features.flatMap((f) => {
   return [
     {
       id: String(f.properties.junction_id),
+      city: f.properties.city as CityId,
       lng: f.geometry.coordinates[0],
       lat: f.geometry.coordinates[1],
       isTrafficLight: Boolean(f.properties.is_traffic_light),

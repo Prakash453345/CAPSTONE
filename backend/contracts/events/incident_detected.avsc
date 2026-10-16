@@ -14,6 +14,7 @@
     { "name": "graph_score", "type": "double", "doc": "The fused-layer's graph_score at confirmation." },
     { "name": "vision_score", "type": ["null", "double"], "default": null, "doc": "Vision-rule score at confirmation, or null before M8." },
     { "name": "fused_probability", "type": "double", "doc": "Fused anomaly probability at confirmation, [0,1]." },
+    { "name": "detail", "type": "string", "default": "", "doc": "Operator's free-text note on the confirm. It is hashed into the audit chain, so it must travel on the event for a replaying consumer to reproduce chain_hash." },
     { "name": "chain_hash", "type": "string", "doc": "Head hash of this incident's audit chain at confirmation (itms_domain.incident's hash-linked transition log). A downstream store records this and can later prove its held history is the same tamper-evident sequence." }
   ]
 }

@@ -37,6 +37,7 @@ const tlsDots = new Map();     // tls_id -> circleMarker
 let routeLine = null;
 let evMarkers = new Map();
 let lastDraw = 0;
+let legendCollapsed = false;
 
 export function initMap() {
   if (map || !L_() || !S.boot) return;
@@ -47,10 +48,17 @@ export function initMap() {
     // the opposite corner rather than sitting on top of them.
     zoomControl: false,
     attributionControl: false,
+    // A trackpad two-finger slide fires the same wheel event as a mouse
+    // scroll, and Leaflet's default binds that straight to zoom -- so
+    // panning the corridor kept jumping the zoom level instead. Wheel/slide
+    // now pans (below); a pinch gesture is reported as wheel+ctrlKey by the
+    // browser, so that still zooms, as does the on-map zoom control.
+    scrollWheelZoom: false,
     center: net.center,
     zoom: 14,
   });
   L_().control.zoom({ position: 'bottomright' }).addTo(map);
+  bindWheelPan();
   ['roads', 'anomaly', 'facilities', 'junctions', 'route', 'corridor', 'vehicles', 'ev']
     .forEach((k) => { groups[k] = L_().layerGroup().addTo(map); });
 
@@ -61,6 +69,28 @@ export function initMap() {
   try { map.fitBounds(net.bounds, { padding: [40, 40] }); } catch { /* degenerate bounds */ }
   renderLegend();
   renderTools();
+}
+
+function bindWheelPan() {
+  const el = document.getElementById('leaf');
+  if (!el) return;
+  el.addEventListener('wheel', (ev) => {
+    ev.preventDefault();
+    // Pinch-to-zoom on a trackpad arrives as a wheel event with ctrlKey set
+    // (that's the browser's own convention, not something set here) -- let
+    // that zoom, same as the zoom control. Everything else pans.
+    if (ev.ctrlKey || ev.metaKey) {
+      // zoomIn/zoomOut (not setZoom(getZoom() +/- 0.5)) -- with the default
+      // zoomSnap of 1, Leaflet rounds any fractional target to the nearest
+      // whole level, and JS rounds x.5 up, so "-0.5" from an integer zoom
+      // was silently rounding right back to the level it started at. That
+      // made pinch/ctrl-wheel zoom-out a no-op while zoom-in worked.
+      if (ev.deltaY < 0) map.zoomIn(); else if (ev.deltaY > 0) map.zoomOut();
+      return;
+    }
+    const scale = ev.deltaMode === 1 ? 16 : ev.deltaMode === 2 ? el.clientHeight : 1;
+    map.panBy([ev.deltaX * scale, ev.deltaY * scale], { animate: false });
+  }, { passive: false });
 }
 
 /* ── static geometry ──────────────────────────────────────────── */
@@ -329,10 +359,10 @@ function onRoadClick(edgeId) {
   if (!S.pick) return;
   const el = document.getElementById(S.pick.target);
   if (el) { el.value = edgeId; el.dispatchEvent(new Event('change', { bubbles: true })); }
-  const label = S.pick.label;
+  const { label, from } = S.pick;
   S.pick = null;
   markDirty('pick');
-  window.dispatchEvent(new CustomEvent('itms-picked', { detail: { edgeId, label } }));
+  window.dispatchEvent(new CustomEvent('itms-picked', { detail: { edgeId, label, from } }));
 }
 
 /* ── chrome ───────────────────────────────────────────────────── */
@@ -385,7 +415,9 @@ function toggleTiles() {
     // CARTO's free tier requires crediting CARTO + OpenStreetMap on the map;
     // the app otherwise runs with no attribution control at all (see
     // initMap), so add a small one only while the basemap is actually shown.
-    if (!tileAttribution) tileAttribution = L_().control.attribution({ position: 'bottomleft', prefix: false });
+    // bottomright, alongside the zoom control -- bottomleft is the legend's
+    // corner, and the two used to sit directly on top of each other.
+    if (!tileAttribution) tileAttribution = L_().control.attribution({ position: 'bottomright', prefix: false });
     tileAttribution.addTo(map);
   } else if (tileLayer) {
     map.removeLayer(tileLayer);
@@ -396,21 +428,31 @@ function toggleTiles() {
 function renderLegend() {
   const host = document.getElementById('maplegend');
   if (!host) return;
+  host.classList.toggle('collapsed', legendCollapsed);
   host.innerHTML = `
-    <b>Road load</b>
-    <div><i style="background:#2E383C"></i>empty</div>
-    <div><i style="background:#3FE0FF"></i>flowing</div>
-    <div><i style="background:#E8B23A"></i>loaded</div>
-    <div><i style="background:#E05A6B"></i>jammed / anomaly</div>
-    <b style="margin-top:8px">Vehicles</b>
-    <div><i style="background:#7FD1FF"></i>car</div>
-    <div><i style="background:#57C97B"></i>motorcycle</div>
-    <div><i style="background:#E8B23A"></i>auto</div>
-    <div><i style="background:#E2703A"></i>bus</div>
-    <b style="margin-top:8px">Signals</b>
-    <div><i style="background:#0E3A45;box-shadow:0 0 0 1.5px #3FE0FF"></i>controller</div>
-    <div><i style="background:#153A31;box-shadow:0 0 0 2px #57C97B"></i>preemption</div>
-    <div><i style="background:#3A1212;box-shadow:0 0 0 1.5px #E05A6B"></i>faulted</div>`;
+    <button class="legend-toggle" id="legend-toggle" type="button"
+      title="${legendCollapsed ? 'Expand legend' : 'Collapse legend'}"
+      aria-label="${legendCollapsed ? 'Expand legend' : 'Collapse legend'}">${legendCollapsed ? '»' : '«'}</button>
+    <div class="legend-body">
+      <b>Road load</b>
+      <div><i style="background:#2E383C"></i>empty</div>
+      <div><i style="background:#3FE0FF"></i>flowing</div>
+      <div><i style="background:#E8B23A"></i>loaded</div>
+      <div><i style="background:#E05A6B"></i>jammed / anomaly</div>
+      <b>Vehicles</b>
+      <div><i style="background:#7FD1FF"></i>car</div>
+      <div><i style="background:#57C97B"></i>motorcycle</div>
+      <div><i style="background:#E8B23A"></i>auto</div>
+      <div><i style="background:#E2703A"></i>bus</div>
+      <b>Signals</b>
+      <div><i style="background:#0E3A45;box-shadow:0 0 0 1.5px #3FE0FF"></i>controller</div>
+      <div><i style="background:#153A31;box-shadow:0 0 0 2px #57C97B"></i>preemption</div>
+      <div><i style="background:#3A1212;box-shadow:0 0 0 1.5px #E05A6B"></i>faulted</div>
+    </div>`;
+  host.querySelector('#legend-toggle').onclick = () => {
+    legendCollapsed = !legendCollapsed;
+    renderLegend();
+  };
 }
 
 export function mapReady() { return !!map; }

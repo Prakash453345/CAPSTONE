@@ -40,6 +40,11 @@ backend/.run/
 
 # Regenerable raw OSM downloads (scenarios/networks/*/build.sh recreates them).
 backend/data/scenarios/networks/*/raw_osm.xml
+# Raw OSM downloads and first builds of generated scenarios (regenerable).
+backend/data/scenarios/generated/*/osm/
+backend/data/scenarios/generated/.*/
+# Scratch experiment output (the kept results are under experiments/baselines/).
+backend/results/
 
 # M6 detector artifacts: recorded features (*.npy), trained weights and logs.
 # Recreate with experiments/m6_record_features.py + m6_train_detector.py. The

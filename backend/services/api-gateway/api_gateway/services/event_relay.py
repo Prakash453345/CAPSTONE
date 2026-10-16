@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import datetime as dt
 import logging
+import secrets
 
 from itms_common import RedisStreamsBus, decode_envelope
 
@@ -25,6 +26,8 @@ from api_gateway.services.incident_registry import IncidentRegistry
 log = logging.getLogger("api-service.relay")
 
 INCIDENT_EVENT_TYPES = frozenset({"IncidentCandidate", "IncidentDetected", "IncidentUpdated"})
+INCIDENT_TOPICS = frozenset({"incident.candidate", "incident.detected", "incident.updated"})
+_PROCESS_ID = secrets.token_hex(4)
 
 
 def json_safe(value):
@@ -69,14 +72,21 @@ class EventRelay:
         await self.connections.broadcast(json_safe(envelope))
 
     async def _consume_topic(self, topic: str, consumer: str) -> None:
-        """Relay one topic with its own cursor so busy traffic cannot starve alarms."""
+        """Relay one topic with its own cursor so busy traffic cannot starve alarms.
+
+        `incident.*` topics feed the in-memory `IncidentRegistry`, which is empty
+        after a restart, so they are read from the start of the stream through a
+        group private to this process (a shared group resumes at its old cursor and
+        never replays). Everything else is a live-edge UI fan-out."""
+        replay = topic in INCIDENT_TOPICS
+        group = f"{CONSUMER_GROUP}-registry-{_PROCESS_ID}" if replay else CONSUMER_GROUP
         while True:
             try:
                 async for msg in self.bus.subscribe(
                     # A UI fan-out, not an archival processor: a new group
                     # starts at the live edge. Replaying a retained stream
                     # would show hours-old congestion before current positions.
-                    [topic], group=CONSUMER_GROUP, consumer=consumer, start_id="$"
+                    [topic], group=group, consumer=consumer, start_id="0" if replay else "$"
                 ):
                     try:
                         await self.handle(decode_envelope(msg.raw))
@@ -84,7 +94,7 @@ class EventRelay:
                         log.exception("failed to handle message %s on %s",
                                       msg.message_id, msg.topic)
                     else:
-                        await self.bus.ack(msg.topic, CONSUMER_GROUP, msg.message_id)
+                        await self.bus.ack(msg.topic, group, msg.message_id)
             except asyncio.CancelledError:
                 raise
             except Exception:

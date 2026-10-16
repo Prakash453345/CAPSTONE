@@ -7,6 +7,7 @@ import { PRESET_UNITS, useEmergencyStore } from "@/store/emergencyStore";
 import { useMapStore } from "@/store/mapStore";
 import type { AnomalyTarget } from "@/components/map/CreateAnomalyPanel";
 import { cn } from "@/utils/cn";
+import { cityById } from "@/data/city";
 
 /** Google Maps' traffic wording, on the same thresholds as the road list. */
 function trafficLevel(value: number | undefined) {
@@ -66,7 +67,7 @@ export function RoadPlaceCard({
       <div className="flex items-start gap-3 px-4 pb-3 pt-4">
         <div className="min-w-0 flex-1">
           <h2 className="truncate text-[17px] font-medium leading-6 text-foreground">{name}</h2>
-          <p className="text-xs text-muted-foreground">Road · Vijayawada</p>
+          <p className="text-xs text-muted-foreground">Road · {cityById.get(edge.city)?.name}</p>
         </div>
         <button
           type="button"

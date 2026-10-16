@@ -51,7 +51,7 @@ export function renderNavBadges() {
   const counts = {
     anomalies: [...S.anomalies.values()].filter(isAnomalyActive).length,
     emergency: [...S.requests.values()].filter(isEmergencyOpen).length,
-    incidents: S.incidents.filter((i) => (i.state || i.status) === 'CANDIDATE').length,
+    incidents: S.incidents.filter((i) => String(i.state || i.status).toUpperCase() === 'CANDIDATE').length,
     signals: S.faults.length,
   };
   document.querySelectorAll('#sidenav button[data-go]').forEach((btn) => {
@@ -161,14 +161,16 @@ export function renderDemandSeg() {
     ['heavy', 'Heavy', levels.heavy],
   ].map(([id, label, meta]) => `
     <button class="segopt ${S.form.demand === id ? 'on' : ''} ${meta.present ? '' : 'miss'}"
-            data-demand="${id}" ${meta.present ? '' : 'disabled title="demand file not built"'}>
+            data-demand="${id}" role="radio" aria-checked="${S.form.demand === id}"
+            ${meta.present ? '' : 'disabled title="demand file not built"'}>
       <b>${label} traffic</b>
       <em>≈${num(meta.approx_vehicles)} vehicles · one every ${meta.period_s}s
       ${meta.present ? '' : '<br>FILE MISSING'}</em>
     </button>`).join('');
 
   host.innerHTML = opts + `
-    <button class="segopt ${S.form.demand === 'custom' ? 'on' : ''}" data-demand="custom">
+    <button class="segopt ${S.form.demand === 'custom' ? 'on' : ''}" data-demand="custom"
+            role="radio" aria-checked="${S.form.demand === 'custom'}">
       <b>Custom O→D</b>
       <em>you choose the count, the start road and the destination</em>
     </button>`;
@@ -183,13 +185,15 @@ export function renderOptionRows() {
   if (!S.boot) return;
   if (cHost) {
     cHost.innerHTML = S.boot.controllers.map((c) => `
-      <button class="opt ${S.form.controller === c.id ? 'on' : ''}" data-controller="${esc(c.id)}">
+      <button class="opt ${S.form.controller === c.id ? 'on' : ''}" data-controller="${esc(c.id)}"
+              role="radio" aria-checked="${S.form.controller === c.id}">
         <b>${esc(c.label)}</b><span>${esc(c.note)}</span>
       </button>`).join('');
   }
   if (eHost) {
     eHost.innerHTML = S.boot.engines.map((e) => `
-      <button class="opt ${S.form.engine === e.id ? 'on' : ''}" data-engine="${esc(e.id)}">
+      <button class="opt ${S.form.engine === e.id ? 'on' : ''}" data-engine="${esc(e.id)}"
+              role="radio" aria-checked="${S.form.engine === e.id}">
         <b>${esc(e.label)}</b><span>${esc(e.note)}</span>
       </button>`).join('');
   }
@@ -206,6 +210,13 @@ export function renderWeights() {
   if (!toggle || !panel || !S.boot?.route_cost_weights) return;
   toggle.checked = !!S.form.weightsEnabled;
   panel.hidden = !S.form.weightsEnabled;
+  // This view redraws on every 1s status poll while it's on screen. Rebuilding
+  // these inputs' innerHTML every time would blow away focus and the cursor
+  // position mid-keystroke -- build them once and just flip `hidden` after
+  // that; the input listener in app.js already keeps S.form.weights (and the
+  // DOM values collectRunConfig reads at submit time) in sync from here on.
+  if (panel.dataset.built === '1') return;
+  panel.dataset.built = '1';
   panel.innerHTML = S.boot.route_cost_weights.map((f) => `
     <label class="fld">
       <span>${esc(f.label)}<em>${esc(f.note)}</em></span>

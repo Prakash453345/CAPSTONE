@@ -71,6 +71,7 @@ def detected_payload(inc: Incident, *, confirmed_at_ms: int | None = None) -> di
         "graph_score": float(inc.graph_score),
         "vision_score": None if inc.vision_score is None else float(inc.vision_score),
         "fused_probability": float(inc.fused_probability),
+        "detail": confirm.detail,
         "chain_hash": inc.chain_head,
     }
 

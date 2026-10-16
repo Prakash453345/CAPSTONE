@@ -6031,3 +6031,103 @@ Not committed. `baselines/2026-10-11_overlaps/` (README, TARGETS, `summarise.py`
 
 Full suite: 904 passed, 6 skipped. ruff clean on `packages`, `services`,
 `scripts`.
+
+
+## 2026-10-12 — Rest in green as an off-peak mode: -6.8 % at light, not adopted (teleports on one network)
+
+Not committed. `baselines/2026-10-12_rest_offpeak/` (README, TARGETS, `summarise.py`).
+
+- On top of the default (floor, sensing, shown overlaps), light demand only,
+  seeds 264-268: -6.8 % [-11.6, -1.9] over ten networks, better on 8,
+  significantly worse nowhere, no interlock violation. Failed the teleport
+  target on spider_lh (SUMO collision teleports on lane A1B4: 8 against 15).
+  `rest_in_green` stays off.
+- Guards tried on training seeds and dropped: `restm` (cap), `restc` (load
+  threshold), `restq` (no call on any other road), `restd` (only while the
+  running road has traffic). Gate arms `truth:rest:<guard>`.
+- Same seeds before and after this week's three adopted changes (seeds
+  261-263, `results/before_after/`): Amaravati plan grid light -43 %, medium
+  -36 %; arterial_lh light -29 %, medium -27 %; real Amaravati map light
+  -3.5 %. Webster against the controller of 2026-10-06: +36 % to +108 %.
+
+
+
+## 2026-10-13 — Check-up of the whole controller; next: phase layouts
+
+Not committed. `results/checkup/README.md` (findings), `scripts/m8_checkup.py`,
+`results/switch/` (switching-cost sweep). Gate: `truth:s.<field>=<value>`
+overrides any AcampConfig field.
+
+- Change intervals take 22-38 % of every signal's time on every network.
+  Making switching costlier makes delay worse (+3 % to +25 % on six
+  networks, training seeds), so the tuning is right for that lever.
+- On arterial_lh and the turn-lane grid every phase serves one approach:
+  four changes per cycle. Next: build phases from each junction's conflict map
+  (pair opposite approaches, crossing turns yield), then green waves for the
+  real Amaravati map.
+
+
+
+## 2026-10-13 — Facing approaches share a green: -23 % to -42 % on split-phased networks
+
+Not committed. `baselines/2026-10-13_paired_phases/` (README, TARGETS, `summarise.py`).
+
+- **Change.** `itms_domain.phase_layout.paired_layout` rebuilds a split-phased
+  junction (one phase per approach) from its geometry and conflict map: facing
+  approaches share a phase; the turn across the oncoming stream gives way.
+  Default in `scripts/m8_harness.py` (`PHASE_LAYOUT`) and `sim_service/main.py`;
+  `truth:nopair` is the controller before it. Only arterial_lh and
+  grid4_rh_turns are split-phased.
+- **Held-out** (seeds 269-273, targets P1-P3 all passed): arterial_lh -23.2 %,
+  -26.6 %, -30.0 % (light, medium, heavy); grid4_rh_turns -30.6 %, -41.6 %;
+  every seed better; no violation, collision or teleport.
+- **Fair comparison** (training seeds): Webster gains as much from the same
+  layout; on paired phases CC-A-CAMP still has 32-45 % less delay than Webster.
+
+Full suite: 909 passed, 6 skipped. ruff clean on `packages`, `services`, `scripts`.
+
+## 2026-10-13 — Rest in green adopted as an off-peak mode: -9 % light traffic, -15 % on the real map
+
+Not committed. `baselines/2026-10-13_rest_offpeak_v2/` (README, TARGETS, `summarise.py`).
+
+- **Why a second test.** The first (2026-10-12) failed only on spider_lh teleports.
+  Those are a network defect: the spider's centre junction A1 was generated
+  `unregulated` (nobody yields); all 113 collisions in the logs are on its exits.
+  `scenarios/generated/spider_lh_tl` signalises A1: zero collisions with rest on or off.
+- **Held-out** (light, seeds 274-278, targets L1-L4 all passed): -9.0 % [-12.4, -5.7]
+  over ten networks, lower on all ten (significantly on six); real Amaravati map
+  -15.3 % [-18.8, -11.8], stops 3.33 -> 2.29 per vehicle; no violation; teleports
+  unchanged except the original spider (7 -> 10, excluded from that target in advance).
+- **Use.** Off by default; `SIGNAL_OFFPEAK_REST=1` in the live service for
+  light-traffic hours. Not for medium/heavy (lost on arterial_lh training seeds).
+- **All day?** Not yet: at medium on the Vijayawada district rest cut delay 9.6 % but
+  starved a give-way lane past a signal (teleports 2 -> 5); a cap on resting did not fix it.
+- **Also tried today, not adopted:** fewest-phases layout (`truth:minph`,
+  `compact_layout`): no gain beyond noise, random_lh +37 % at medium
+  (`results/compact/README.md`).
+
+Full suite: 914 passed, 6 skipped. ruff clean on changed files.
+
+## 2026-10-14 — Rest in green at medium demand: -3.0 % held-out, one target missed by 0.1 point; exit-gap guard did not help
+
+Not committed. `baselines/2026-10-14_rest_medium/` (README, TARGETS, `summarise.py`).
+
+- **Exit-gap guard** (`AcampConfig.rest_needs_free_exit`, gate modifier `restx`,
+  `signal_controller/yield_lanes.py`, `JunctionContext.yield_waiting_pcu`): off by default,
+  tested, no benefit. The Vijayawada "2 -> 5 teleports" with rest was noise: over ten training
+  seeds plain 17, rest 16, rest+guard 29; lane 850997565_0 teleports in the plain controller too.
+- **Held-out** (medium, seeds 279-283, eight networks, targets first): rest -3.0 % [-6.1, +0.1];
+  M1, M3, M4 pass (no violations, no network significantly worse, 0 teleports); M2 fails (interval
+  upper end +0.1). Only berlin_adlershof is significant (-6.8 %). Rest stays an off-peak switch.
+- Write-ups fact-checked by a separate agent; corrections applied.
+
+## 2026-10-14 — M7 under congestion: the corridor does not beat reactive preemption at heavy demand either
+
+Not committed. `baselines/2026-10-14_m7_heavy/` (README, TARGETS, `summarise.py`).
+
+- Training seeds 101-105 hinted at a heavy-demand gain (-38.8 s EV travel time vs reactive);
+  two variants (claim within 300 m as well; A/D terms off) were tried there and dropped.
+- **Held-out** (seeds 284-293, targets first, unchanged code, current controller inputs): heavy
+  EV travel time +3.6 s [-30.8, +38.0] (H1 failed), stops +1.5 (n.s.), person-delay -2.0 % (n.s.),
+  zero violations; medium +5.6 s [-1.6, +12.8].
+- M7 stands as safe preemption plus dispatch; no advantage over reactive preemption is claimed.

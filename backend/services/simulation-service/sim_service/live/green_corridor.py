@@ -173,10 +173,11 @@ class GreenCorridorPlanner:
 @dataclass
 class _ActiveCorridor:
     corridor: GreenCorridorRequest
-    # route distance from EV start to each junction, for progress-based
-    # "the EV has cleared this one" detection
-    dist_by_tl: dict[str, float]
-    passed: set[str] = field(default_factory=set)
+    # route distance from EV start to each reservation (keyed by reservation
+    # `order`, not tl_id: a route can cross the same signal twice), for
+    # progress-based "the EV has cleared this one" detection
+    dist_by_order: dict[int, float]
+    passed: set[int] = field(default_factory=set)  # reservation orders cleared
 
 
 class CorridorController:
@@ -241,12 +242,14 @@ class CorridorController:
             log.info("no green corridor for %s -- route crosses no signal", request_id)
             return None
 
-        crossings = {c.tl_id: c.distance_m for c in self.planner.crossings(tuple(route_edges))}
+        # same filter `plan()` applies (progress 0), so index == reservation order
+        ahead = [c for c in self.planner.crossings(tuple(route_edges)) if c.distance_m > 1.0]
         active = _ActiveCorridor(
             corridor=proposed.with_status(CorridorStatus.ACTIVE),
-            dist_by_tl=crossings,
+            dist_by_order={i: c.distance_m for i, c in enumerate(ahead)},
         )
         self._active[request_id] = active
+        self._now_ms = max(self._now_ms, now_ms)
         for r in proposed.reservations:
             self._by_tl.setdefault(r.intersection_id, []).append(request_id)
         self._emit(active.corridor, event="proposed", step=step)
@@ -292,14 +295,15 @@ class CorridorController:
             progress_m = progress_by_request.get(request_id)
             if progress_m is None:
                 continue
-            for tl_id, dist_m in active.dist_by_tl.items():
-                if tl_id not in active.passed and progress_m > dist_m + 5.0:
-                    active.passed.add(tl_id)
+            tl_by_order = {r.order: r.intersection_id for r in active.corridor.reservations}
+            for order, dist_m in active.dist_by_order.items():
+                if order not in active.passed and progress_m > dist_m + 5.0:
+                    active.passed.add(order)
                     self._emit(
                         active.corridor, event="junction_passed",
-                        detail=tl_id, step=step,
+                        detail=tl_by_order.get(order, ""), step=step,
                     )
-            if active.passed >= {r.intersection_id for r in active.corridor.reservations}:
+            if active.passed >= set(tl_by_order):
                 self.deactivate(request_id, reason="all junctions cleared", step=step)
 
     # ---- the arbiter hook -------------------------------------
@@ -381,10 +385,10 @@ class CorridorController:
         best: CorridorReservation | None = None
         for request_id in self._by_tl.get(tl_id, []):
             active = self._active.get(request_id)
-            if active is None or tl_id in active.passed:
+            if active is None:
                 continue
             for r in active.corridor.reservations:
-                if r.intersection_id != tl_id:
+                if r.intersection_id != tl_id or r.order in active.passed:
                     continue
                 if r.open_at_ms <= self._now_ms <= r.close_at_ms:
                     if best is None or r.close_at_ms < best.close_at_ms:
@@ -458,7 +462,10 @@ class CorridorController:
         detail: str = "",
         step: int | None = None,
     ) -> None:
-        self._events.append(green_corridor_payload(corridor, event=event, detail=detail, step=step))
+        self._events.append(green_corridor_payload(
+            corridor, event=event, detail=detail, step=step,
+            updated_at_ms=self._now_ms or None,
+        ))
 
 
 # ---------------------------------------------------------------------------
@@ -472,6 +479,7 @@ def green_corridor_payload(
     event: str,
     detail: str = "",
     step: int | None = None,
+    updated_at_ms: int | None = None,
 ) -> dict:
     return {
         "corridor_id": corridor.corridor_id,
@@ -493,5 +501,5 @@ def green_corridor_payload(
         "peak_concurrency": corridor.peak_concurrency(),
         "detail": detail,
         "sim_tick": step,
-        "updated_at": corridor.created_at_ms,
+        "updated_at": updated_at_ms if updated_at_ms is not None else corridor.created_at_ms,
     }

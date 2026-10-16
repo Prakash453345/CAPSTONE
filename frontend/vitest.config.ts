@@ -16,5 +16,7 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["src/**/*.test.{ts,tsx}"],
+    // the network tests check the Vijayawada corridor's own fixtures
+    env: { VITE_CITY: "vijayawada" },
   },
 });
