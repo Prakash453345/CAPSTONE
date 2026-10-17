@@ -12,6 +12,9 @@ const LandingPage = lazy(() =>
 const LoginPage = lazy(() =>
   import("@/app/login/LoginPage").then((m) => ({ default: m.LoginPage })),
 );
+const DrivePage = lazy(() =>
+  import("@/app/drive/DrivePage").then((m) => ({ default: m.DrivePage })),
+);
 const DashboardPage = lazy(() =>
   import("@/app/dashboard/DashboardPage").then((m) => ({ default: m.DashboardPage })),
 );
@@ -40,7 +43,8 @@ const SettingsPage = lazy(() =>
  * page — lives under "/console" so the two are cleanly separated: launching
  * the app always lands you on the landing page first, never straight into
  * live traffic data. "/login" sits between them, and "/console" is gated by
- * RequireAuth, which sends signed-out visitors there. All three sit under
+ * RequireAuth, which sends signed-out visitors there. "/drive" is the same
+ * data for the crew driving an emergency vehicle, gated the same way. All sit under
  * RootLayout, which stays mounted across that navigation so the cinematic
  * globe transition it hosts isn't torn down mid-flight.
  */
@@ -64,6 +68,16 @@ export const router = createBrowserRouter(
             <Suspense fallback={null}>
               <LoginPage />
             </Suspense>
+          ),
+        },
+        {
+          path: "drive",
+          element: (
+            <RequireAuth>
+              <Suspense fallback={<ConsoleFallback />}>
+                <DrivePage />
+              </Suspense>
+            </RequireAuth>
           ),
         },
         {

@@ -1,6 +1,6 @@
 import { NavLink, useLocation } from "react-router-dom";
 import { useRef } from "react";
-import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { Navigation, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { NAV_GROUPS, NAV_ITEMS, navItemFor, type NavItem } from "@/app/nav";
 import { BrandMark } from "@/components/branding/BrandMark";
 import { Tooltip } from "@/components/ui/tooltip";
@@ -80,6 +80,21 @@ export function SideNav({ collapsed, onToggleCollapsed, onNavigate }: SideNavPro
     return <li key={it.id}>{collapsed ? <Tooltip label={it.label}>{link}</Tooltip> : link}</li>;
   };
 
+  // The driver's view of the same live data: a separate page, not a workspace.
+  const driveLink = (
+    <NavLink
+      to="/drive"
+      onClick={goTo}
+      className={cn(
+        "group relative z-[1] flex h-9 items-center gap-3 rounded-xl px-2.5 text-[13.5px] font-medium text-muted-foreground outline-none transition-colors duration-150 hover:bg-muted hover:text-foreground",
+        collapsed && "justify-center px-0",
+      )}
+    >
+      <Navigation className="size-[18px] shrink-0" strokeWidth={1.8} />
+      {!collapsed && <span className="truncate">Driver view</span>}
+    </NavLink>
+  );
+
   return (
     <nav
       ref={navRef}
@@ -116,7 +131,10 @@ export function SideNav({ collapsed, onToggleCollapsed, onNavigate }: SideNavPro
       </div>
 
       <div className="isolate shrink-0 px-3 pb-4">
-        <ul className="flex flex-col gap-0.5">{NAV_ITEMS.filter((i) => i.group === "footer").map(item)}</ul>
+        <ul className="flex flex-col gap-0.5">
+          <li>{collapsed ? <Tooltip label="Driver view">{driveLink}</Tooltip> : driveLink}</li>
+          {NAV_ITEMS.filter((i) => i.group === "footer").map(item)}
+        </ul>
         <button
           type="button"
           onClick={onToggleCollapsed}

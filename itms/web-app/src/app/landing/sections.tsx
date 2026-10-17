@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { Link } from "react-router-dom";
 import { useAccessLabel } from "./useAccess";
 import { AnimatePresence, animate, motion, useInView, useScroll } from "framer-motion";
 import { ArrowIcon, Lines, Reveal, ScrubWord } from "./motion";
@@ -376,6 +377,7 @@ export function Footer() {
           <div>
             <h5>Access</h5>
             <a href="/console">{access}</a>
+            <Link to="/drive">Driver view</Link>
             <span>Citizen app (coming soon)</span>
             <span>Field mobile app (coming soon)</span>
           </div>
