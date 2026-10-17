@@ -20,10 +20,10 @@ import { useSystemStore } from "@/store/systemStore";
 import { useEffectiveWeather, useWeatherStore } from "@/store/weatherStore";
 
 /**
- * Drive: the page an emergency-vehicle crew follows. It shows the route the
+ * Crew page: what an emergency-vehicle crew follows. It shows the route the
  * system chose, the next turn, which signals are being held green for them,
  * and what is on the road ahead. It reads the same live data as the operator
- * console, so what the dispatcher sees and what the driver sees agree.
+ * console, so what the dispatcher sees and what the crew sees agree.
  */
 export function DrivePage() {
   const unitId = useDriveStore((s) => s.unitId);
@@ -40,7 +40,7 @@ export function DrivePage() {
   const [dismissed, setDismissed] = useState<string | null>(null);
 
   useEffect(() => {
-    document.title = "Drive · TRAFFIX";
+    document.title = "Crew · TRAFFIX";
   }, []);
 
   // Weather changes how fast a crew can safely go, so keep it fresh.

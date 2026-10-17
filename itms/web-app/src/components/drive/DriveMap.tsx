@@ -168,7 +168,7 @@ function DriveCamera({ mission }: { mission: Mission | null }) {
   const setCamera = useDriveStore((s) => s.setCamera);
   const fitted = useRef<string>("");
 
-  // A drag, pinch or scroll by the driver hands the camera back to them.
+  // A drag, pinch or scroll by the crew hands the camera back to them.
   useEffect(() => {
     const release = (e: { originalEvent?: unknown }) => {
       if (e.originalEvent) setCamera("free");
@@ -277,7 +277,7 @@ function MapButtons({ mission }: { mission: Mission | null }) {
 
 /**
  * The Drive page's map: the console's basemap and live layers (congestion,
- * signals, incidents, emergency units) with the driver's own route on top, and
+ * signals, incidents, emergency units) with the crew's own route on top, and
  * a camera that follows the vehicle.
  */
 export function DriveMap({ mission, className }: { mission: Mission | null; className?: string }) {

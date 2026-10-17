@@ -377,7 +377,7 @@ export function Footer() {
           <div>
             <h5>Access</h5>
             <a href="/console">{access}</a>
-            <Link to="/drive">Driver view</Link>
+            <Link to="/drive">Crew view</Link>
             <span>Citizen app (coming soon)</span>
             <span>Field mobile app (coming soon)</span>
           </div>

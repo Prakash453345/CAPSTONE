@@ -5,6 +5,7 @@ import { ArrowLeft, Eye, EyeOff, TriangleAlert } from "lucide-react";
 import { BrandMark } from "@/components/branding/BrandMark";
 import { Button } from "@/components/ui/button";
 import { AuthError } from "@/services/auth/authApi";
+import { canOpen, homeFor } from "@/services/auth/roles";
 import { safeNext } from "@/services/auth/safeRedirect";
 import { useAuthStore } from "@/store/authStore";
 import { cn } from "@/utils/cn";
@@ -32,7 +33,8 @@ function messageFor(err: unknown): string {
 
 export function LoginPage() {
   const [params] = useSearchParams();
-  const next = safeNext(params.get("next"));
+  const wanted = params.get("next") ? safeNext(params.get("next")) : null;
+  const user = useAuthStore((s) => s.user);
 
   const status = useAuthStore((s) => s.status);
   const serviceDown = useAuthStore((s) => s.serviceDown);
@@ -83,7 +85,11 @@ export function LoginPage() {
   }, [check]);
 
   // Already signed in (or just now signed in): go where they were headed.
-  if (status === "authed" && !hold) return <Navigate to={next} replace />;
+  if (status === "authed" && !hold) {
+    // Back to the page they were after if their account may open it, else their own home.
+    const role = user?.role ?? "operator";
+    return <Navigate to={wanted && canOpen(role, wanted) ? wanted : homeFor(role)} replace />;
+  }
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -164,14 +170,14 @@ export function LoginPage() {
             <BrandMark size="lg" />
             <h1 className="mt-5 text-2xl font-semibold tracking-[-0.02em]">Sign in to TRAFFIX</h1>
             <p className="mt-1.5 text-sm text-muted-foreground">
-              Traffic operations for the ITMS platform.
+              Traffic operations and emergency response for the ITMS platform.
             </p>
           </div>
 
           <div className="rounded-2xl bg-surface p-6 shadow-elevation-3 sm:p-8">
             <div className="mb-5 flex items-center justify-between">
               <span className="text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">
-                Operator access
+                Secure access
               </span>
               <span className="flex items-center gap-2.5">
                 <span role="status" aria-live="polite" className="sr-only">

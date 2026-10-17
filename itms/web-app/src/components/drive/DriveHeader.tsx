@@ -35,12 +35,14 @@ export function DriveHeader({
       <div className="flex items-center gap-3">
         <BrandMark />
         <div className="min-w-0 flex-1">
-          <h1 className="text-[15px] font-semibold leading-tight tracking-[-0.01em]">TRAFFIX Drive</h1>
-          <p className="truncate text-[12px] text-muted-foreground">{user ? `Signed in as ${user.displayName}` : "Emergency vehicle guidance"}</p>
+          <h1 className="text-[15px] font-semibold leading-tight tracking-[-0.01em]">TRAFFIX Crew</h1>
+          <p className="truncate text-[12px] text-muted-foreground">{user ? `Signed in as ${user.displayName}` : "Route guidance for emergency vehicles"}</p>
         </div>
-        <Link to="/console" className={ICON_BTN} aria-label="Open the operator console" title="Operator console">
-          <LayoutDashboard />
-        </Link>
+        {user?.role !== "responder" && (
+          <Link to="/console" className={ICON_BTN} aria-label="Open the operator console" title="Operator console">
+            <LayoutDashboard />
+          </Link>
+        )}
         <button type="button" className={ICON_BTN} aria-label={theme === "dark" ? "Use the light theme" : "Use the dark theme"} onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
           {theme === "dark" ? <Sun /> : <Moon />}
         </button>

@@ -65,6 +65,12 @@ COOKIE_SECURE = os.environ.get("AUTH_COOKIE_SECURE", "true").strip().lower() not
     "off",
 }
 
+# What an account is for. Operators run the console; crews follow a dispatched
+# route on the crew page. Operators can open both (a supervisor checks what a
+# crew sees); a crew account cannot open the console.
+ROLES = ("operator", "responder")
+DEFAULT_ROLE = "operator"
+
 MAX_FAILED_ATTEMPTS = 5
 LOCKOUT = dt.timedelta(minutes=15)
 # Forgot-password: a 6-digit code, emailed, valid briefly and for a few guesses.
@@ -226,6 +232,7 @@ class UserRecord:
     reset_expires_at: dt.datetime | None = None
     reset_attempts: int = 0
     reset_sent_at: dt.datetime | None = None
+    role: str = DEFAULT_ROLE
 
 
 class StoreUnavailable(Exception):
@@ -334,6 +341,7 @@ CREATE TABLE IF NOT EXISTS app_user (
     reset_expires_at TIMESTAMPTZ,
     reset_attempts   INTEGER NOT NULL DEFAULT 0,
     reset_sent_at    TIMESTAMPTZ,
+    role             TEXT NOT NULL DEFAULT 'operator',
     CONSTRAINT app_user_username_lower CHECK (username = lower(username)),
     CONSTRAINT app_user_username_len CHECK (char_length(username) BETWEEN 1 AND 64)
 );
@@ -343,6 +351,7 @@ ALTER TABLE app_user ADD COLUMN IF NOT EXISTS reset_code_hash TEXT;
 ALTER TABLE app_user ADD COLUMN IF NOT EXISTS reset_expires_at TIMESTAMPTZ;
 ALTER TABLE app_user ADD COLUMN IF NOT EXISTS reset_attempts INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE app_user ADD COLUMN IF NOT EXISTS reset_sent_at TIMESTAMPTZ;
+ALTER TABLE app_user ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'operator';
 """
 
 
@@ -388,7 +397,7 @@ class PostgresUserStore:
             row = conn.execute(
                 "SELECT username, password_hash, display_name, is_active, failed_attempts,"
                 " locked_until, session_version, email, reset_code_hash, reset_expires_at,"
-                " reset_attempts, reset_sent_at FROM app_user WHERE username = %s",
+                " reset_attempts, reset_sent_at, role FROM app_user WHERE username = %s",
                 (username,),
             ).fetchone()
         return None if row is None else UserRecord(*row)
@@ -483,11 +492,14 @@ class LoginRequest(BaseModel):
 class SessionUser(BaseModel):
     username: str
     display_name: str
+    role: str
 
 
 def _user_out(record: UserRecord) -> SessionUser:
     return SessionUser(
-        username=record.username, display_name=record.display_name or record.username
+        username=record.username,
+        display_name=record.display_name or record.username,
+        role=record.role if record.role in ROLES else DEFAULT_ROLE,
     )
 
 

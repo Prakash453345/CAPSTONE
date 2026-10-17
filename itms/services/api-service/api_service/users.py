@@ -1,6 +1,8 @@
 """Manage console accounts from the command line.
 
     python -m api_service.users create <username> [--name "Display Name"] [--email you@example.org]
+                                         [--role operator|responder]
+    python -m api_service.users set-role <username> operator|responder
     python -m api_service.users passwd <username>
     python -m api_service.users set-email <username> <email>
     python -m api_service.users disable <username>
@@ -65,10 +67,19 @@ def main(argv: list[str] | None = None) -> None:
     create.add_argument("username")
     create.add_argument("--name", default="", help="display name shown in the console")
     create.add_argument("--email", default="", help="where password-reset codes are sent")
+    create.add_argument(
+        "--role",
+        choices=auth.ROLES,
+        default=auth.DEFAULT_ROLE,
+        help="operator = the console (and crew page); responder = the crew page only",
+    )
     create.add_argument("--stdin", action="store_true", help="read the password from stdin")
     passwd = sub.add_parser("passwd", help="change a password (signs the user out everywhere)")
     passwd.add_argument("username")
     passwd.add_argument("--stdin", action="store_true", help="read the password from stdin")
+    setrole = sub.add_parser("set-role", help="change what an account can open")
+    setrole.add_argument("username")
+    setrole.add_argument("role", choices=auth.ROLES)
     setmail = sub.add_parser("set-email", help="set where password-reset codes are sent")
     setmail.add_argument("username")
     setmail.add_argument("email")
@@ -87,15 +98,15 @@ def main(argv: list[str] | None = None) -> None:
             conn.execute(auth.SCHEMA_SQL)
             if args.cmd == "list":
                 rows = conn.execute(
-                    "SELECT username, display_name, is_active, locked_until, last_login_at, email"
-                    " FROM app_user ORDER BY username"
+                    "SELECT username, display_name, is_active, locked_until,"
+                    " last_login_at, email, role FROM app_user ORDER BY username"
                 ).fetchall()
-                for username, name, active, locked, last, email in rows:
+                for username, name, active, locked, last, email, role in rows:
                     flags = ("" if active else " [disabled]") + (
                         " [locked]" if locked and locked > auth.utcnow() else ""
                     )
                     print(
-                        f"{username}\t{name}\t{email or 'no email'}\t"
+                        f"{username}\t{role}\t{name}\t{email or 'no email'}\t"
                         f"last login: {last or 'never'}{flags}"
                     )
                 if not rows:
@@ -106,13 +117,14 @@ def main(argv: list[str] | None = None) -> None:
                 password = _read_password(args.stdin)
                 try:
                     conn.execute(
-                        "INSERT INTO app_user (username, display_name, password_hash, email)"
-                        " VALUES (%s, %s, %s, %s)",
+                        "INSERT INTO app_user (username, display_name, password_hash, email, role)"
+                        " VALUES (%s, %s, %s, %s, %s)",
                         (
                             username,
                             args.name.strip(),
                             auth.hash_password(password),
                             _email(args.email) if args.email else None,
+                            args.role,
                         ),
                     )
                 except psycopg.errors.UniqueViolation:
@@ -128,6 +140,12 @@ def main(argv: list[str] | None = None) -> None:
                 )
                 _require_one(cur, username)
                 print(f"password changed for {username}; their sessions are signed out")
+            elif args.cmd == "set-role":
+                cur = conn.execute(
+                    "UPDATE app_user SET role = %s WHERE username = %s", (args.role, username)
+                )
+                _require_one(cur, username)
+                print(f"{username} is now a {args.role}")
             elif args.cmd == "set-email":
                 cur = conn.execute(
                     "UPDATE app_user SET email = %s WHERE username = %s",

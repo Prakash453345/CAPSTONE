@@ -19,7 +19,7 @@ function Stat({ label, value, strong }: { label: string; value: string; strong?:
   );
 }
 
-/** Time, distance and speed at a glance, with the few controls a driver needs. */
+/** Time, distance and speed at a glance, with the few controls a crew needs. */
 export function TripBar({
   mission,
   unitName,

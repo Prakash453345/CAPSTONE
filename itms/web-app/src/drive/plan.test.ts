@@ -160,7 +160,7 @@ describe("wording", () => {
     expect(roadPhrase("MG Road")).toBe("MG Road");
   });
 
-  it("rounds distances the way a driver says them", () => {
+  it("rounds distances the way a crew says them", () => {
     expect(formatDistance(0)).toBe("0 m");
     expect(formatDistance(47)).toBe("50 m");
     expect(formatDistance(310)).toBe("310 m");

@@ -16,7 +16,7 @@ export function RerouteButton({ requestId, unitName, className }: { requestId: s
     try {
       await postCommand({
         event_type: "EmergencyCommand",
-        payload: { request_id: requestId, action: "RECALCULATE", reason: `Driver request (${unitName})`, requested_at: Date.now() },
+        payload: { request_id: requestId, action: "RECALCULATE", reason: `Crew request (${unitName})`, requested_at: Date.now() },
       });
       setState("sent");
       window.setTimeout(() => setState("idle"), 4000);

@@ -13,7 +13,7 @@ const ICONS: Record<HazardKind, typeof TriangleAlert> = {
   unit: Siren,
 };
 
-/** What is on the road ahead that a driver should know about, nearest first. */
+/** What is on the road ahead that a crew should know about, nearest first. */
 export function HazardsCard({ hazards, advice }: { hazards: Hazard[]; advice: string | null }) {
   return (
     <Panel aria-labelledby="hazards-title" className="pointer-events-auto">

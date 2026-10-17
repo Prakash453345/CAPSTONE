@@ -24,7 +24,7 @@ export function ManeuverIcon({ m, className }: { m: Maneuver; className?: string
 const IMMINENT_M = 150;
 
 /**
- * The one thing a driver needs most: what to do next and how far away it is.
+ * The one thing a crew needs most: what to do next and how far away it is.
  * Large type and a high-contrast tile, readable at a glance in a moving cab.
  */
 export function ManeuverBanner({

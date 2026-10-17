@@ -67,11 +67,11 @@ The Amaravati export carries no street names (its OSM build kept none), so its
 roads are labelled by class ("Primary road"). Emergency depots, hospitals and
 camera sites are still Vijayawada's only.
 
-## Drive (emergency-vehicle crews)
+## Crew page (emergency-vehicle crews)
 
 `/drive` is the page an ambulance, fire or police crew follows on the road. It
 sits behind the same sign-in as the console and reads the same live data, so
-what the dispatcher sees and what the driver sees agree. Choose your unit (it
+what the dispatcher sees and what the crew sees agree. Choose your unit (it
 picks the first one with a call if you have not) and it shows:
 
 - **Next instruction**: a large turn banner with the distance, built from the

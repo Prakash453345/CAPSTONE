@@ -39,6 +39,22 @@ def login(client, username="operator", password=PASSWORD):
     return client.post("/v1/auth/login", json={"username": username, "password": password})
 
 
+# ------------------------------------------------------------------ roles
+
+
+def test_accounts_default_to_operator_and_the_role_is_reported(client, store):
+    assert login(client).json()["role"] == "operator"
+    assert client.get("/v1/auth/me").json()["role"] == "operator"
+    store.add("crew1", PASSWORD, role="responder")
+    assert login(client, "crew1").json()["role"] == "responder"
+    assert client.get("/v1/auth/me").json()["role"] == "responder"
+
+
+def test_an_unknown_stored_role_is_reported_as_the_default_not_trusted(client, store):
+    store.add("odd", PASSWORD, role="superuser")
+    assert login(client, "odd").json()["role"] == "operator"
+
+
 # ------------------------------------------------------------- primitives
 
 
@@ -89,7 +105,7 @@ def test_username_and_password_rules():
 def test_login_sets_httponly_cookie_and_me_returns_user(client):
     res = login(client)
     assert res.status_code == 200
-    assert res.json() == {"username": "operator", "display_name": "Op Erator"}
+    assert res.json() == {"username": "operator", "display_name": "Op Erator", "role": "operator"}
     assert "password" not in res.text
     cookie = res.headers["set-cookie"].lower()
     assert "httponly" in cookie and "samesite=lax" in cookie and "path=/" in cookie

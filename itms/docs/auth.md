@@ -26,6 +26,44 @@ Other account commands: `passwd`, `disable`, `enable`, `unlock`, `list`
 (`python -m api_service.users --help`). Changing a password or disabling an
 account signs that user out everywhere. Passwords are at least 10 characters.
 
+## Roles: who sees what
+
+There is one sign-in form. The **account's role** decides where someone lands and
+what they can open, so nobody chooses a "login type" and a crew member cannot
+sign in as an operator by picking it.
+
+| Role | Lands on | Can open |
+|---|---|---|
+| `operator` (default) | `/console` | the console, and `/drive` (the crew page, to see what a crew sees) |
+| `responder` | `/drive` | the crew page only; the console redirects them back to it |
+
+```bash
+.venv/bin/python -m api_service.users create amb12 --role responder --name "Ambulance 12 crew"
+.venv/bin/python -m api_service.users set-role komal operator
+.venv/bin/python -m api_service.users list        # shows each account's role
+```
+
+Existing accounts keep working as operators. **Note:** the roles are enforced by the
+web pages. `POST /v1/commands` (the command channel) does not check the session
+yet, so a determined crew account could still call it directly; locking that
+endpoint to operators is the next step before this faces the public.
+
+## Troubleshooting: "We can't reach the sign-in service"
+
+The browser asks `/api/v1/auth/me`, and the dev server forwards `/api` to
+api-service on port 8000. This message means nothing answered there: only the
+web app (`npm run dev`) is running. Start the rest:
+
+```bash
+cd itms
+make setup && make infra-up      # Postgres, Redis, MinIO
+.venv/bin/python -m api_service.users create komal      # once, to make an account
+make dev                         # starts sim-service and api-service (:8000)
+```
+
+(If api-service is up but Postgres is not, the message is instead "Sign-in is
+unavailable right now".)
+
 ## Forgot password
 
 "Forgot your password?" on the sign-in card walks through three steps: username,

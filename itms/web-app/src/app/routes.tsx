@@ -73,7 +73,7 @@ export const router = createBrowserRouter(
         {
           path: "drive",
           element: (
-            <RequireAuth>
+            <RequireAuth roles={["operator", "responder"]}>
               <Suspense fallback={<ConsoleFallback />}>
                 <DrivePage />
               </Suspense>
@@ -83,7 +83,7 @@ export const router = createBrowserRouter(
         {
           path: "console",
           element: (
-            <RequireAuth>
+            <RequireAuth roles={["operator"]}>
               <AppShell />
             </RequireAuth>
           ),

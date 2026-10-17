@@ -80,7 +80,7 @@ export function SideNav({ collapsed, onToggleCollapsed, onNavigate }: SideNavPro
     return <li key={it.id}>{collapsed ? <Tooltip label={it.label}>{link}</Tooltip> : link}</li>;
   };
 
-  // The driver's view of the same live data: a separate page, not a workspace.
+  // What an emergency crew sees, from the same live data: a separate page, not a workspace.
   const driveLink = (
     <NavLink
       to="/drive"
@@ -91,7 +91,7 @@ export function SideNav({ collapsed, onToggleCollapsed, onNavigate }: SideNavPro
       )}
     >
       <Navigation className="size-[18px] shrink-0" strokeWidth={1.8} />
-      {!collapsed && <span className="truncate">Driver view</span>}
+      {!collapsed && <span className="truncate">Crew view</span>}
     </NavLink>
   );
 
@@ -132,7 +132,7 @@ export function SideNav({ collapsed, onToggleCollapsed, onNavigate }: SideNavPro
 
       <div className="isolate shrink-0 px-3 pb-4">
         <ul className="flex flex-col gap-0.5">
-          <li>{collapsed ? <Tooltip label="Driver view">{driveLink}</Tooltip> : driveLink}</li>
+          <li>{collapsed ? <Tooltip label="Crew view">{driveLink}</Tooltip> : driveLink}</li>
           {NAV_ITEMS.filter((i) => i.group === "footer").map(item)}
         </ul>
         <button

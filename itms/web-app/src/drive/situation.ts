@@ -4,7 +4,7 @@ import type { Tone } from "@/components/console/tone";
 import type { Anomaly, EmergencyRequest, GreenCorridorView, Intersection } from "@/types";
 import { projectOnPlan, type RoutePlan } from "@/drive/plan";
 
-/** What a driver should make of the next signals on the route. */
+/** What a crew should make of the next signals on the route. */
 export type SignalStatus = "held" | "arranged" | "green" | "amber" | "red" | "fault" | "unknown";
 
 export interface UpcomingSignal {
@@ -12,7 +12,7 @@ export interface UpcomingSignal {
   name: string;
   distM: number;
   status: SignalStatus;
-  /** One line a driver reads at a glance. */
+  /** One line a crew reads at a glance. */
   label: string;
   tone: Tone;
 }
@@ -28,7 +28,7 @@ const SIGNAL_WORDS: Record<SignalStatus, { label: string; tone: Tone }> = {
 };
 
 /**
- * The signal's status for this driver. A junction the green corridor holds
+ * The signal's status for this crew. A junction the green corridor holds
  * outranks its ordinary colour; a fault outranks everything, because a held
  * or green light is not safe to trust at a junction that has lost control.
  * The plain colours are the console's approximation, not a per-approach phase.

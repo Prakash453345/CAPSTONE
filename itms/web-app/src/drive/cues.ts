@@ -14,7 +14,7 @@ const lowerFirst = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
 /**
  * The warning to give now for a maneuver `distM` away, or null when it is too
  * far off or nothing worth saying (the start is never announced). Only the
- * nearest band that applies is returned, so a driver who jumps from 900 m to
+ * nearest band that applies is returned, so a crew who jumps from 900 m to
  * 150 m hears the 200 m warning, not the 500 m one they have already passed.
  * The wording always uses the real distance, never the band's.
  */

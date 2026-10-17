@@ -20,7 +20,7 @@ function say(text: string, urgent = false) {
 }
 
 /**
- * Speaks the guidance a driver should not have to look down for: each turn as
+ * Speaks the guidance a crew should not have to look down for: each turn as
  * it approaches (at 500 m, 200 m and 60 m), critical hazards, signals that are
  * held for them or are not safe to run, a changed route, and arrival. Each
  * warning is spoken once.
