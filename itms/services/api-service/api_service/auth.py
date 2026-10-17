@@ -582,7 +582,16 @@ def me(response: Response, record: Annotated[UserRecord, Depends(current_user)])
 
 # --------------------------------------------------------- forgot password
 
-FORGOT_REPLY = "If that account has an email on file, we've sent it a code."
+NO_ACCOUNT = "No account found with that username. Use your username, not your email."
+NO_EMAIL = "That account has no email on file. Ask an administrator to reset your password."
+
+
+def mask_email(email: str) -> str:
+    """k***@gmail.com -- enough to recognise your own address, not to learn anyone else's."""
+    local, _, domain = email.partition("@")
+    return f"{local[:1]}***@{domain}"
+
+
 BAD_CODE = "That code is incorrect or has expired."
 
 
@@ -627,19 +636,26 @@ def _code_ok(store: UserStore, username: str, code: str, now: dt.datetime) -> bo
 def forgot(
     body: ForgotRequest, response: Response, background: BackgroundTasks, store: StoreDep
 ) -> dict[str, str]:
-    """Email a one-time code. Always answers the same, so this can't be used to
-    find out which usernames exist or have an email."""
+    """Email a one-time code to the account's address.
+
+    Unlike sign-in this does say when the username is unknown or has no email:
+    accounts here are created by an administrator for a small set of operators,
+    and a person who mistyped (or typed their email instead of their username)
+    needs to be told. Put a per-IP limit on this path in the reverse proxy.
+    """
     _no_store(response)
     username = normalize_username(body.username)
     now = utcnow()
     try:
         record = store.get(username)
+        if record is None or not record.is_active:
+            raise HTTPException(status_code=404, detail=NO_ACCOUNT)
+        if not record.email:
+            raise HTTPException(status_code=409, detail=NO_EMAIL)
         cooling = (
-            record is not None
-            and record.reset_sent_at is not None
-            and now - record.reset_sent_at < RESET_RESEND_AFTER
+            record.reset_sent_at is not None and now - record.reset_sent_at < RESET_RESEND_AFTER
         )
-        if record is not None and record.is_active and record.email and not cooling:
+        if not cooling:
             code = f"{secrets.randbelow(10**6):06d}"
             store.set_reset(
                 username,
@@ -647,13 +663,12 @@ def forgot(
                 now + dt.timedelta(minutes=RESET_CODE_MINUTES),
                 now,
             )
-            # In the background so a slow mail server doesn't make "has an
-            # email" distinguishable by response time.
+            # In the background so a slow mail server doesn't hold up the page.
             background.add_task(mailer.send_reset_code, record.email, code, RESET_CODE_MINUTES)
     except StoreUnavailable as exc:
         log.error("forgot: user store unavailable: %s", exc)
         raise _store_down() from exc
-    return {"detail": FORGOT_REPLY}
+    return {"detail": "Code sent.", "email_hint": mask_email(record.email)}
 
 
 @router.post("/forgot/verify", status_code=204)

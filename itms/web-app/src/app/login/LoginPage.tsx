@@ -167,7 +167,7 @@ export function LoginPage() {
                 Operator access
               </span>
               <span className="flex items-center gap-2.5">
-                <span role="status" aria-live="polite" className="text-xs text-muted-foreground">
+                <span role="status" aria-live="polite" className="sr-only">
                   {LAMP_TEXT[forgot ? forgotLamp : lamp]}
                 </span>
                 <Signal state={forgot ? forgotLamp : lamp} />

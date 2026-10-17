@@ -235,8 +235,11 @@ for (const colorScheme of ["light", "dark"] as const) {
 async function resetApi(page: Page) {
   const calls: string[] = [];
   await page.route("**/api/v1/auth/forgot", (route) => {
-    calls.push("forgot");
-    return route.fulfill({ status: 202, json: { detail: "sent" } });
+    const { username } = route.request().postDataJSON();
+    calls.push(`forgot:${username}`);
+    return username === "komal"
+      ? route.fulfill({ status: 202, json: { detail: "Code sent.", email_hint: "k***@example.org" } })
+      : route.fulfill({ status: 404, json: { detail: "x" } });
   });
   await page.route("**/api/v1/auth/forgot/verify", (route) => {
     const { code } = route.request().postDataJSON();
@@ -258,8 +261,14 @@ test("forgot password: username -> emailed code -> new password -> back to sign 
   await page.goto("/login");
   await page.getByRole("button", { name: "Forgot your password?" }).click();
 
+  // an email (or any unknown name) is refused up front, with a hint
+  await page.getByLabel("Username").fill("someone@example.org");
+  await page.getByRole("button", { name: "Send code" }).click();
+  await expect(page.getByRole("alert")).toContainText("Use your username, not your email");
+
   await page.getByLabel("Username").fill("komal");
   await page.getByRole("button", { name: "Send code" }).click();
+  await expect(page.getByText("We sent a 6-digit code to k***@example.org")).toBeVisible();
 
   // a wrong code is refused and the form stays on the code step
   const code = page.getByLabel("6-digit code");
@@ -274,5 +283,5 @@ test("forgot password: username -> emailed code -> new password -> back to sign 
 
   await expect(page.getByRole("status").filter({ hasText: "Password changed" })).toBeVisible();
   await expect(username(page)).toHaveValue("komal");
-  expect(calls).toEqual(["forgot", "verify:000000", "verify:123456", "reset"]);
+  expect(calls).toEqual(["forgot:someone@example.org", "forgot:komal", "verify:000000", "verify:123456", "reset"]);
 });

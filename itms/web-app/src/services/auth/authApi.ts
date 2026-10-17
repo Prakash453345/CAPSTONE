@@ -17,8 +17,10 @@ export interface SessionUser {
  *  - network:     the request never got an answer (offline, timeout)
  *  - badcode:     the password-reset code is wrong, expired or used up
  *  - weak:        the new password was rejected; `detail` says why
+ *  - unknown:     no such username (forgot password)
+ *  - noemail:     the account has no email address to send a code to
  */
-export type AuthFailure = "invalid" | "locked" | "unavailable" | "network" | "badcode" | "weak";
+export type AuthFailure = "invalid" | "locked" | "unavailable" | "network" | "badcode" | "weak" | "unknown" | "noemail";
 
 export class AuthError extends Error {
   constructor(
@@ -101,11 +103,15 @@ export async function logout(): Promise<void> {
 
 const JSON_POST = { method: "POST", headers: { "Content-Type": "application/json" } } as const;
 
-/** Ask for a reset code by email. The server answers the same whether or not
- *  the account exists or has an email, so success here promises nothing. */
-export async function requestResetCode(username: string, signal?: AbortSignal): Promise<void> {
+/** Ask for a reset code by email. Resolves with a masked address ("k***@x.org")
+ *  so the operator can see where it went. */
+export async function requestResetCode(username: string, signal?: AbortSignal): Promise<string> {
   const res = await call("/v1/auth/forgot", { ...JSON_POST, body: JSON.stringify({ username }), signal });
+  if (res.status === 404) throw new AuthError("unknown");
+  if (res.status === 409) throw new AuthError("noemail");
   if (res.status !== 202) throw new AuthError("unavailable");
+  const body = (await res.json().catch(() => null)) as { email_hint?: unknown } | null;
+  return typeof body?.email_hint === "string" ? body.email_hint : "your email";
 }
 
 /** Check a code without using it. Throws "badcode" when it is wrong or expired. */

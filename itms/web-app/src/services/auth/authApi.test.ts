@@ -185,10 +185,14 @@ describe("authStore", () => {
 describe("forgot password", () => {
   const empty = (status: number) => new Response(null, { status });
 
-  it("requestResetCode needs the 202 the real service sends, so a static host reads as unavailable", async () => {
-    stub(async () => json(202, { detail: "sent" }));
-    await expect(requestResetCode("komal")).resolves.toBeUndefined();
-    stub(async () => html());
+  it("requestResetCode returns the masked address and maps unknown / no-email accounts", async () => {
+    stub(async () => json(202, { detail: "Code sent.", email_hint: "k***@x.org" }));
+    expect(await requestResetCode("komal")).toBe("k***@x.org");
+    stub(async () => json(404, { detail: "x" }));
+    expect(await kindOf(requestResetCode("nobody"))).toBe("unknown");
+    stub(async () => json(409, { detail: "x" }));
+    expect(await kindOf(requestResetCode("komal"))).toBe("noemail");
+    stub(async () => html()); // a static host with no api-service
     expect(await kindOf(requestResetCode("komal"))).toBe("unavailable");
   });
 

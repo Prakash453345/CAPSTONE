@@ -41,10 +41,13 @@ Codes go to the account's **email**, which is optional and set from the CLI:
 .venv/bin/python -m api_service.users set-email komal komal@example.org
 ```
 
-The endpoints (`POST /v1/auth/forgot`, `/forgot/verify`, `/forgot/reset`) answer
-the same whether or not the username exists or has an email, so they can't be
-used to discover accounts. An account without an email can't reset itself; an
-administrator uses `passwd` instead.
+The endpoints are `POST /v1/auth/forgot`, `/forgot/verify` and `/forgot/reset`.
+`forgot` tells the person when the username doesn't exist (404) or the account
+has no email (409), and otherwise shows a masked address ("k\*\*\*@x.org") so they
+can see where the code went. That does let someone probe which usernames exist,
+which is acceptable for a small operator console but is why `forgot*` should be
+rate-limited per IP in the proxy. An account without an email can't reset
+itself; an administrator uses `passwd` instead.
 
 Mail is sent over SMTP:
 

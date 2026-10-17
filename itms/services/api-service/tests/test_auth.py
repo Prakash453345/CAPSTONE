@@ -258,12 +258,16 @@ def test_forgot_emails_a_six_digit_code_and_reset_changes_the_password(client, m
     assert reset(client, code).status_code == 400  # one use only
 
 
-def test_forgot_answers_the_same_for_unknown_and_email_less_users(client, store, sent):
-    known = forgot(client)  # operator exists but has no email
-    unknown = forgot(client, "nobody")
-    assert known.status_code == unknown.status_code == 202
-    assert known.json() == unknown.json()
+def test_forgot_says_when_the_account_is_unknown_or_has_no_email(client, store, sent):
+    unknown = forgot(client, "k@example.org")  # an email typed where the username goes
+    assert unknown.status_code == 404 and "username" in unknown.json()["detail"]
+    no_email = forgot(client)  # operator exists but has no email
+    assert no_email.status_code == 409 and "no email" in no_email.json()["detail"]
     assert sent == []
+
+
+def test_forgot_reports_a_masked_address(client, mailable, sent):
+    assert forgot(client).json()["email_hint"] == "o***@example.org"
 
 
 def test_forgot_is_rate_limited_per_account(client, mailable, sent):
@@ -311,7 +315,7 @@ def test_reset_clears_a_lockout_and_ends_sessions(client, mailable, sent):
 
 def test_disabled_accounts_get_no_code(client, mailable, sent):
     mailable.users["operator"].is_active = False
-    forgot(client)
+    assert forgot(client).status_code == 404
     assert sent == []
 
 

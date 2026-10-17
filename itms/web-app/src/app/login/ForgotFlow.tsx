@@ -15,6 +15,10 @@ function messageFor(err: unknown): string {
   switch (err.kind) {
     case "badcode":
       return "That code is incorrect or has expired. Check it, or request a new one.";
+    case "unknown":
+      return "No account found with that username. Use your username, not your email.";
+    case "noemail":
+      return "That account has no email on file. Ask an administrator to reset your password.";
     case "weak":
       return err.detail ?? `Choose a password of at least ${MIN_PASSWORD} characters.`;
     case "network":
@@ -62,7 +66,7 @@ export function ForgotFlow({
   const [error, setError] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false); // typed since the last error
   const [cleared, setCleared] = useState(false); // green beat between steps
-  const [sentTo, setSentTo] = useState(false);
+  const [sentTo, setSentTo] = useState<string | null>(null);
   const [wait, setWait] = useState(0);
   const abortRef = useRef<AbortController | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -118,10 +122,13 @@ export function ForgotFlow({
     e?.preventDefault();
     const name = username.trim();
     if (!name) return setError("Enter your username.");
+    let hint = "";
     void run(
-      (signal) => requestResetCode(name, signal),
+      async (signal) => {
+        hint = await requestResetCode(name, signal);
+      },
       () => {
-        setSentTo(true);
+        setSentTo(hint);
         setWait(RESEND_SECONDS);
         setCode("");
         setStep("code");
@@ -175,7 +182,7 @@ export function ForgotFlow({
       {step === "user" && (
         <form onSubmit={sendCode} noValidate aria-busy={busy} className="mt-4 flex flex-col gap-4">
           <p className="text-[13px] text-muted-foreground">
-            Enter your username and we'll email a 6-digit code to the address on your account.
+            Enter your username (not your email) and we'll email a 6-digit code to the address on your account.
           </p>
           <Field label="Username" id={`${uid}-u`}>
             <input
@@ -203,7 +210,7 @@ export function ForgotFlow({
         <form onSubmit={checkCode} noValidate aria-busy={busy} className="mt-4 flex flex-col gap-4">
           <p className="text-[13px] text-muted-foreground" role="status">
             {sentTo
-              ? "If that account has an email on file, we've sent it a 6-digit code. It expires in 10 minutes."
+              ? `We sent a 6-digit code to ${sentTo}. It expires in 10 minutes.`
               : null}
           </p>
           <Field label="6-digit code" id={`${uid}-c`}>
