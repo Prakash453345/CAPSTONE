@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Lenis from "lenis";
 import "lenis/dist/lenis.css";
+import { useNavigate } from "react-router-dom";
+import { useAuthStore } from "@/store/authStore";
 import { useTransitionStore } from "@/store/transitionStore";
 import "./landing.css";
 import { FloatingDock, IntroGate, Nav, Rail } from "./chrome";
@@ -32,13 +34,15 @@ function shouldPlayIntro(reduced: boolean) {
  * closing signal that has to turn green before you can go in.
  *
  * Every link to "/console" hands off to the Globe-to-Console cinematic (see
- * GlobeTransition) instead of navigating directly.
+ * GlobeTransition) instead of navigating directly -- once signed in. Signed
+ * out, it goes to /login first.
  */
 export function LandingPage() {
   const rootRef = useRef<HTMLDivElement>(null);
   const lenisRef = useRef<Lenis | null>(null);
   const transitioning = useTransitionStore((s) => s.active);
   const startTransition = useTransitionStore((s) => s.start);
+  const navigate = useNavigate();
   const [reduced] = useState(prefersReducedMotion);
   const [intro, setIntro] = useState(() => shouldPlayIntro(reduced));
   const ready = !intro;
@@ -108,6 +112,13 @@ export function LandingPage() {
       const href = anchor.getAttribute("href") ?? "";
       if (href === "/console") {
         e.preventDefault();
+        // The cinematic ends inside the console, which needs a session. Signed
+        // out (or not yet known), go and sign in first rather than diving
+        // through the globe only to be turned back at the door.
+        if (useAuthStore.getState().status !== "authed") {
+          navigate("/login?next=%2Fconsole");
+          return;
+        }
         startTransition(); // no-ops if a transition is already running
         return;
       }
@@ -122,7 +133,7 @@ export function LandingPage() {
     };
     root.addEventListener("click", onClick);
     return () => root.removeEventListener("click", onClick);
-  }, [startTransition, reduced]);
+  }, [startTransition, navigate, reduced]);
 
   // Fade + lock the landing page the instant a transition starts, so the
   // globe overlay is never covering content that's still fully interactive.

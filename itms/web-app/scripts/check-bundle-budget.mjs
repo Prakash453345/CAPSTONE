@@ -24,6 +24,7 @@ const KiB = 1024;
 const BUDGETS = [
   { name: "App shell (every page)", entry: "index.html", limit: 170 * KiB },
   { name: "Landing", entry: "src/app/landing/LandingPage.tsx", limit: 200 * KiB },
+  { name: "Sign in", entry: "src/app/login/LoginPage.tsx", limit: 200 * KiB },
   { name: "Command centre", entry: "src/app/dashboard/DashboardPage.tsx", limit: 410 * KiB },
   { name: "Traffic", entry: "src/app/traffic/TrafficPage.tsx", limit: 410 * KiB },
   { name: "Full-screen map", entry: "src/app/map/MapPage.tsx", limit: 410 * KiB },

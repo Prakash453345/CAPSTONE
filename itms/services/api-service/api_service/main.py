@@ -54,6 +54,7 @@ from itms_common import RedisStreamsBus, decode_envelope, encode_envelope
 from itms_domain.incident import IllegalTransition, IncidentClass
 from pydantic import BaseModel, Field
 
+from api_service.auth import router as auth_router
 from api_service.incidents import (
     IncidentRegistry,
     incident_to_json,
@@ -252,6 +253,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(auth_router)
 
 
 @app.get("/health")

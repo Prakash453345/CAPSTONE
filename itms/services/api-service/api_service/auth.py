@@ -1,0 +1,495 @@
+"""Operator sign-in for the web console.
+
+Users live in PostgreSQL (`app_user`), the same instance the rest of the
+platform already uses. A successful sign-in sets a signed, HttpOnly session
+cookie; the browser never sees the password hash or the signing secret, and
+JavaScript can't read the cookie.
+
+Design choices, and what they're for:
+
+* Passwords are hashed with scrypt from the standard library -- a memory-hard
+  KDF, no extra dependency to build or patch on the deploy host. The cost
+  parameters are stored in each hash, so they can be raised later without
+  invalidating existing passwords.
+* Unknown usernames take the same time as wrong passwords (a dummy hash is
+  verified) and get the same message, so the form can't be used to discover
+  which accounts exist.
+* Five wrong passwords in a row lock the account for 15 minutes. That stops
+  online guessing; it does mean someone who knows a username can lock that
+  user out, which is the usual trade and is cleared by waiting or by
+  `python -m api_service.users unlock`. Put a per-IP limit on `/v1/auth/login`
+  in the reverse proxy as well (see docs/auth.md).
+* The session cookie is `base64url(json).base64url(hmac-sha256)`. It carries
+  the username, an expiry and the user's `session_version`; `/me` re-reads the
+  user, so disabling an account or changing its password (which bumps the
+  version) ends its sessions immediately instead of at expiry.
+* Nothing here defaults to a known password. There is no built-in account;
+  create the first one with `python -m api_service.users create <name>`.
+"""
+
+from __future__ import annotations
+
+import base64
+import binascii
+import contextlib
+import datetime as dt
+import hashlib
+import hmac
+import json
+import logging
+import os
+import re
+import secrets
+import threading
+from dataclasses import dataclass
+from typing import Annotated, Protocol
+
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from pydantic import BaseModel, Field
+
+log = logging.getLogger("api-service.auth")
+
+DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://itms:itms@localhost:5432/itms")
+
+COOKIE_NAME = "itms_session"
+SESSION_HOURS = float(os.environ.get("AUTH_SESSION_HOURS", "12"))
+# Secure cookies are only sent over HTTPS. Default on, so a deployment that
+# forgets to configure this fails safe; `scripts/dev.sh` turns it off for
+# plain-http local development.
+COOKIE_SECURE = os.environ.get("AUTH_COOKIE_SECURE", "true").strip().lower() not in {
+    "0",
+    "false",
+    "no",
+    "off",
+}
+
+MAX_FAILED_ATTEMPTS = 5
+LOCKOUT = dt.timedelta(minutes=15)
+MIN_PASSWORD_LENGTH = 10
+MAX_USERNAME_LENGTH = 64
+# Long enough for any passphrase, short enough that hashing one is not a DoS.
+MAX_PASSWORD_LENGTH = 256
+
+_USERNAME_RE = re.compile(r"^[a-z0-9][a-z0-9._@-]*$")
+
+_env_secret = os.environ.get("AUTH_SECRET")
+if _env_secret and len(_env_secret) < 32:
+    raise RuntimeError("AUTH_SECRET must be at least 32 characters (try: openssl rand -hex 32)")
+AUTH_SECRET: bytes = (_env_secret or secrets.token_urlsafe(48)).encode()
+if not _env_secret:
+    log.warning(
+        "AUTH_SECRET not set -- generated one for this process, so every restart signs "
+        "everyone out and multiple workers will reject each other's cookies. "
+        "Set AUTH_SECRET (openssl rand -hex 32) for anything beyond local dev."
+    )
+
+
+def utcnow() -> dt.datetime:
+    return dt.datetime.now(dt.UTC)
+
+
+def normalize_username(raw: str) -> str:
+    """Usernames are case-insensitive and stored lowercase."""
+    return raw.strip().lower()
+
+
+def validate_username(username: str) -> str | None:
+    """Why `username` (already normalized) can't be used for a new account, or None."""
+    if not username:
+        return "username is required"
+    if len(username) > MAX_USERNAME_LENGTH:
+        return f"username must be at most {MAX_USERNAME_LENGTH} characters"
+    if not _USERNAME_RE.fullmatch(username):
+        return (
+            "username may contain letters, digits and . _ @ - "
+            "and must start with a letter or digit"
+        )
+    return None
+
+
+def validate_password(password: str) -> str | None:
+    if len(password) < MIN_PASSWORD_LENGTH:
+        return f"password must be at least {MIN_PASSWORD_LENGTH} characters"
+    if len(password) > MAX_PASSWORD_LENGTH:
+        return f"password must be at most {MAX_PASSWORD_LENGTH} characters"
+    return None
+
+
+# -------------------------------------------------------------- passwords
+
+_SCRYPT_N, _SCRYPT_R, _SCRYPT_P = 2**15, 8, 1  # ~32 MiB, ~70 ms: OWASP-grade for scrypt
+_SCRYPT_MAXMEM = 128 * 1024 * 1024
+
+
+def hash_password(password: str) -> str:
+    salt = secrets.token_bytes(16)
+    digest = hashlib.scrypt(
+        password.encode(),
+        salt=salt,
+        n=_SCRYPT_N,
+        r=_SCRYPT_R,
+        p=_SCRYPT_P,
+        maxmem=_SCRYPT_MAXMEM,
+        dklen=32,
+    )
+    return (
+        f"scrypt${_SCRYPT_N}${_SCRYPT_R}${_SCRYPT_P}"
+        f"${base64.b64encode(salt).decode()}${base64.b64encode(digest).decode()}"
+    )
+
+
+def verify_password(password: str, stored: str) -> bool:
+    """Constant-time check of `password` against a `hash_password` string.
+    A malformed stored hash is a failed login, never an exception."""
+    try:
+        scheme, n, r, p, salt, expected = stored.split("$")
+        if scheme != "scrypt":
+            return False
+        expected_bytes = base64.b64decode(expected, validate=True)
+        digest = hashlib.scrypt(
+            password.encode(),
+            salt=base64.b64decode(salt, validate=True),
+            n=int(n),
+            r=int(r),
+            p=int(p),
+            maxmem=_SCRYPT_MAXMEM,
+            dklen=len(expected_bytes),
+        )
+    except (ValueError, TypeError, binascii.Error):
+        return False
+    return hmac.compare_digest(digest, expected_bytes)
+
+
+# Verified when the username doesn't exist, so "no such user" costs as much as
+# "wrong password". Computed once at import from a throwaway password.
+_DUMMY_HASH = hash_password(secrets.token_urlsafe(16))
+
+
+# --------------------------------------------------------------- sessions
+
+
+def _b64url(raw: bytes) -> str:
+    return base64.urlsafe_b64encode(raw).rstrip(b"=").decode()
+
+
+def _unb64url(text: str) -> bytes:
+    return base64.urlsafe_b64decode(text + "=" * (-len(text) % 4))
+
+
+def _sign(body: str) -> str:
+    return _b64url(hmac.new(AUTH_SECRET, body.encode(), hashlib.sha256).digest())
+
+
+def issue_token(username: str, session_version: int, now: dt.datetime | None = None) -> str:
+    now = now or utcnow()
+    exp = int((now + dt.timedelta(hours=SESSION_HOURS)).timestamp())
+    body = _b64url(json.dumps({"u": username, "v": session_version, "exp": exp}).encode())
+    return f"{body}.{_sign(body)}"
+
+
+def read_token(token: str, now: dt.datetime | None = None) -> tuple[str, int] | None:
+    """(username, session_version) from a valid, unexpired token; else None."""
+    try:
+        body, sig = token.split(".")
+        if not hmac.compare_digest(sig, _sign(body)):
+            return None
+        claims = json.loads(_unb64url(body))
+        username, version, exp = claims["u"], claims["v"], claims["exp"]
+        if not (isinstance(username, str) and isinstance(version, int) and isinstance(exp, int)):
+            return None
+    except (ValueError, KeyError, TypeError, binascii.Error):
+        return None
+    if exp <= int(((now or utcnow())).timestamp()):
+        return None
+    return username, version
+
+
+# ------------------------------------------------------------------ store
+
+
+@dataclass
+class UserRecord:
+    username: str
+    password_hash: str
+    display_name: str = ""
+    is_active: bool = True
+    failed_attempts: int = 0
+    locked_until: dt.datetime | None = None
+    session_version: int = 1
+
+
+class StoreUnavailable(Exception):
+    """The user database couldn't be reached or queried."""
+
+
+class UserStore(Protocol):
+    def get(self, username: str) -> UserRecord | None: ...
+    def record_failure(self, username: str, now: dt.datetime) -> None: ...
+    def record_success(self, username: str, now: dt.datetime) -> None: ...
+
+
+class MemoryUserStore:
+    """In-process store for tests and for running the API without Postgres."""
+
+    def __init__(self) -> None:
+        self.users: dict[str, UserRecord] = {}
+        self._lock = threading.Lock()
+
+    def add(self, username: str, password: str, display_name: str = "", **kw) -> UserRecord:
+        record = UserRecord(
+            username=normalize_username(username),
+            password_hash=hash_password(password),
+            display_name=display_name,
+            **kw,
+        )
+        self.users[record.username] = record
+        return record
+
+    def get(self, username: str) -> UserRecord | None:
+        with self._lock:
+            record = self.users.get(username)
+            return None if record is None else UserRecord(**record.__dict__)
+
+    def record_failure(self, username: str, now: dt.datetime) -> None:
+        with self._lock:
+            record = self.users.get(username)
+            if record is None:
+                return
+            _apply_failure(record, now)
+
+    def record_success(self, username: str, now: dt.datetime) -> None:
+        with self._lock:
+            record = self.users.get(username)
+            if record is not None:
+                record.failed_attempts, record.locked_until = 0, None
+
+
+def _apply_failure(record: UserRecord, now: dt.datetime) -> None:
+    """Mirror of the SQL in PostgresUserStore.record_failure."""
+    if record.locked_until is not None and record.locked_until <= now:
+        record.failed_attempts, record.locked_until = 0, None
+    record.failed_attempts += 1
+    if record.failed_attempts >= MAX_FAILED_ATTEMPTS:
+        record.locked_until = now + LOCKOUT
+
+
+SCHEMA_SQL = """
+CREATE TABLE IF NOT EXISTS app_user (
+    id               BIGSERIAL PRIMARY KEY,
+    username         TEXT NOT NULL,
+    display_name     TEXT NOT NULL DEFAULT '',
+    password_hash    TEXT NOT NULL,
+    is_active        BOOLEAN NOT NULL DEFAULT true,
+    failed_attempts  INTEGER NOT NULL DEFAULT 0,
+    locked_until     TIMESTAMPTZ,
+    session_version  INTEGER NOT NULL DEFAULT 1,
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+    last_login_at    TIMESTAMPTZ,
+    CONSTRAINT app_user_username_lower CHECK (username = lower(username)),
+    CONSTRAINT app_user_username_len CHECK (char_length(username) BETWEEN 1 AND 64)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS app_user_username_idx ON app_user (username);
+"""
+
+
+class PostgresUserStore:
+    """One short-lived connection per call. Sign-ins are rare and a login must
+    never hold a connection while it burns ~70 ms hashing, so a pool would buy
+    nothing here."""
+
+    def __init__(self, url: str = DATABASE_URL) -> None:
+        self.url = url
+        self._schema_ready = False
+        self._schema_lock = threading.Lock()
+
+    @contextlib.contextmanager
+    def _conn(self):
+        import psycopg  # imported lazily so tests with MemoryUserStore don't need it
+
+        try:
+            # client_encoding: a SQL_ASCII database (the default under a C locale)
+            # otherwise hands text back as bytes.
+            with psycopg.connect(self.url, connect_timeout=5, client_encoding="utf8") as conn:
+                self._ensure_schema(conn)
+                yield conn
+        except psycopg.Error as exc:
+            raise StoreUnavailable(str(exc)) from exc
+
+    def _ensure_schema(self, conn) -> None:
+        # Databases created before this feature never ran infra/postgres/init/
+        # 003_app_user.sql (it only runs on a fresh volume), so make it so.
+        if self._schema_ready:
+            return
+        with self._schema_lock:
+            if not self._schema_ready:
+                # The advisory lock keeps two workers booting together from
+                # racing CREATE INDEX.
+                conn.execute("SELECT pg_advisory_xact_lock(727401)")
+                conn.execute(SCHEMA_SQL)
+                conn.commit()
+                self._schema_ready = True
+
+    def get(self, username: str) -> UserRecord | None:
+        with self._conn() as conn:
+            row = conn.execute(
+                "SELECT username, password_hash, display_name, is_active, failed_attempts,"
+                " locked_until, session_version FROM app_user WHERE username = %s",
+                (username,),
+            ).fetchone()
+        return None if row is None else UserRecord(*row)
+
+    def record_failure(self, username: str, now: dt.datetime) -> None:
+        # One atomic UPDATE, so concurrent wrong guesses can't each read the
+        # same count and slip past the limit.
+        with self._conn() as conn:
+            conn.execute(
+                """
+                UPDATE app_user SET
+                    failed_attempts = CASE
+                        WHEN locked_until IS NOT NULL AND locked_until <= %(now)s THEN 1
+                        ELSE failed_attempts + 1 END,
+                    locked_until = CASE
+                        WHEN (CASE WHEN locked_until IS NOT NULL AND locked_until <= %(now)s
+                                   THEN 1 ELSE failed_attempts + 1 END) >= %(max)s
+                            THEN %(now)s + %(lockout)s
+                        WHEN locked_until IS NOT NULL AND locked_until <= %(now)s THEN NULL
+                        ELSE locked_until END
+                WHERE username = %(u)s
+                """,
+                {"now": now, "max": MAX_FAILED_ATTEMPTS, "lockout": LOCKOUT, "u": username},
+            )
+
+    def record_success(self, username: str, now: dt.datetime) -> None:
+        with self._conn() as conn:
+            conn.execute(
+                "UPDATE app_user SET failed_attempts = 0, locked_until = NULL,"
+                " last_login_at = %s WHERE username = %s",
+                (now, username),
+            )
+
+
+_store: UserStore | None = None
+_store_lock = threading.Lock()
+
+
+def get_user_store() -> UserStore:
+    """FastAPI dependency; tests override it with a MemoryUserStore."""
+    global _store
+    if _store is None:
+        with _store_lock:
+            if _store is None:
+                _store = PostgresUserStore()
+    return _store
+
+
+# ----------------------------------------------------------------- routes
+
+router = APIRouter(prefix="/v1/auth", tags=["auth"])
+
+StoreDep = Annotated[UserStore, Depends(get_user_store)]
+
+
+class LoginRequest(BaseModel):
+    # Bounded so an oversized body can't make us hash megabytes.
+    username: str = Field(min_length=1, max_length=MAX_USERNAME_LENGTH * 2)
+    password: str = Field(min_length=1, max_length=MAX_PASSWORD_LENGTH)
+
+
+class SessionUser(BaseModel):
+    username: str
+    display_name: str
+
+
+def _user_out(record: UserRecord) -> SessionUser:
+    return SessionUser(
+        username=record.username, display_name=record.display_name or record.username
+    )
+
+
+def _no_store(response: Response) -> None:
+    # Session state must never be served from a shared or browser cache.
+    response.headers["Cache-Control"] = "no-store"
+
+
+def _not_signed_in() -> HTTPException:
+    return HTTPException(
+        status_code=401, detail="Not signed in.", headers={"Cache-Control": "no-store"}
+    )
+
+
+def _store_down() -> HTTPException:
+    return HTTPException(status_code=503, detail="Sign-in is temporarily unavailable.")
+
+
+@router.post("/login", response_model=SessionUser)
+def login(body: LoginRequest, response: Response, store: StoreDep) -> SessionUser:
+    _no_store(response)
+    username = normalize_username(body.username)
+    now = utcnow()
+    try:
+        record = store.get(username)
+        if record is not None and record.locked_until and record.locked_until > now:
+            retry = int((record.locked_until - now).total_seconds()) + 1
+            raise HTTPException(
+                status_code=429,
+                detail="Too many failed attempts. Try again later.",
+                headers={"Retry-After": str(retry), "Cache-Control": "no-store"},
+            )
+        # Always run exactly one scrypt, whatever the username.
+        ok = verify_password(body.password, record.password_hash if record else _DUMMY_HASH)
+        if record is None or not record.is_active or not ok:
+            if record is not None and record.is_active:
+                store.record_failure(username, now)
+            raise HTTPException(
+                status_code=401,
+                detail="Incorrect username or password.",
+                headers={"Cache-Control": "no-store"},
+            )
+        store.record_success(username, now)
+    except StoreUnavailable as exc:
+        log.error("login: user store unavailable: %s", exc)
+        raise _store_down() from exc
+
+    response.set_cookie(
+        COOKIE_NAME,
+        issue_token(record.username, record.session_version, now),
+        max_age=int(SESSION_HOURS * 3600),
+        httponly=True,
+        secure=COOKIE_SECURE,
+        samesite="lax",
+        path="/",
+    )
+    return _user_out(record)
+
+
+@router.post("/logout", status_code=204)
+def logout(response: Response) -> Response:
+    # Idempotent: signing out when already signed out is not an error.
+    response.delete_cookie(
+        COOKIE_NAME, path="/", secure=COOKIE_SECURE, httponly=True, samesite="lax"
+    )
+    response.headers["Cache-Control"] = "no-store"
+    response.status_code = 204
+    return response
+
+
+def current_user(request: Request, store: StoreDep) -> UserRecord:
+    """Dependency for any endpoint that needs a signed-in operator."""
+    claims = read_token(request.cookies.get(COOKIE_NAME, ""))
+    if claims is None:
+        raise _not_signed_in()
+    username, version = claims
+    try:
+        record = store.get(username)
+    except StoreUnavailable as exc:
+        log.error("session check: user store unavailable: %s", exc)
+        raise _store_down() from exc
+    if record is None or not record.is_active or record.session_version != version:
+        raise _not_signed_in()
+    return record
+
+
+@router.get("/me", response_model=SessionUser)
+def me(response: Response, record: Annotated[UserRecord, Depends(current_user)]) -> SessionUser:
+    _no_store(response)
+    return _user_out(record)

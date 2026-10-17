@@ -161,3 +161,14 @@ button:disabled {
     scroll-behavior: auto !important;
   }
 }
+
+/* Sign-in page: a faint city grid fading out from a soft wash of the accent,
+   so the page reads as the same world as the map without competing with the form. */
+.login-backdrop {
+  background:
+    radial-gradient(60% 45% at 50% 0%, hsl(var(--primary) / 0.12), transparent 70%),
+    linear-gradient(hsl(var(--border) / 0.6) 1px, transparent 1px) 0 0 / 56px 56px,
+    linear-gradient(90deg, hsl(var(--border) / 0.6) 1px, transparent 1px) 0 0 / 56px 56px;
+  -webkit-mask-image: radial-gradient(ellipse at 50% 40%, #000 25%, transparent 75%);
+  mask-image: radial-gradient(ellipse at 50% 40%, #000 25%, transparent 75%);
+}

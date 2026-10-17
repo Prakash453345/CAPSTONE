@@ -6,6 +6,10 @@ Capstone implementation, built milestone by milestone against `ITMS Build Guide`
 repo is the build. Where this README and the docs disagree, the docs win — fix the
 README.
 
+> **Console sign-in.** `/console` requires an account (PostgreSQL `app_user`
+> table). Create the first one with `python -m api_service.users create <name>`;
+> setup, env vars and the deployment checklist are in [`docs/auth.md`](docs/auth.md).
+
 ## Current milestone
 
 *Updated 24 September 2026. `PROGRESS.md` has every number, every negative

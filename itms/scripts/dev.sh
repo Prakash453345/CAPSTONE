@@ -7,6 +7,10 @@ set -euo pipefail
 
 VENV=".venv"
 export REDIS_URL="${REDIS_URL:-redis://localhost:6379/0}"
+# Local dev is plain http, where browsers drop "Secure" cookies (Safari even on
+# localhost), so sign-in would silently fail. Production must leave this on.
+export AUTH_COOKIE_SECURE="${AUTH_COOKIE_SECURE:-false}"
+export DATABASE_URL="${DATABASE_URL:-postgresql://itms:itms@localhost:5432/itms}"
 
 cleanup() {
   echo ""

@@ -1,8 +1,10 @@
-import { useLocation } from "react-router-dom";
+import { useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { Menu, Monitor, Moon, Search, Sun } from "lucide-react";
+import { LogOut, Menu, Monitor, Moon, Search, Sun } from "lucide-react";
 import { navItemFor } from "@/app/nav";
 import { useSystemStore } from "@/store/systemStore";
+import { useAuthStore } from "@/store/authStore";
 import { useThemeStore, type ThemeMode } from "@/store/themeStore";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { StatusMenu } from "@/components/layout/StatusMenu";
@@ -55,6 +57,7 @@ export function TopBar({ onOpenNav, onOpenSearch }: { onOpenNav: () => void; onO
         <StatusMenu />
         <NotificationBell />
         <ThemeButton />
+        <SignOutButton />
       </div>
     </header>
   );
@@ -73,4 +76,43 @@ function ThemeButton() {
   const setMode = useThemeStore((s) => s.setMode);
   const { icon, label } = THEME_META[mode];
   return <IconButton label={`${label}. Click to change.`} icon={icon} onClick={() => setMode(THEME_NEXT[mode])} />;
+}
+
+/** Ends the session on the server (the cookie is HttpOnly, so only the server
+ * can clear it) and returns to the sign-in page. If the server can't be
+ * reached the session is still live, so stay put and say so rather than
+ * pretending to have signed out on a shared computer. */
+function SignOutButton() {
+  const user = useAuthStore((s) => s.user);
+  const signOut = useAuthStore((s) => s.signOut);
+  const navigate = useNavigate();
+  const [state, setState] = useState<"idle" | "busy" | "failed">("idle");
+
+  const onClick = async () => {
+    if (state === "busy") return;
+    setState("busy");
+    try {
+      await signOut();
+      navigate("/login", { replace: true });
+    } catch {
+      setState("failed");
+      window.setTimeout(() => setState("idle"), 6000);
+    }
+  };
+
+  const label =
+    state === "failed"
+      ? "Couldn't sign out. Check your connection and try again."
+      : user
+        ? `Sign out ${user.displayName}`
+        : "Sign out";
+  return (
+    <IconButton
+      label={label}
+      icon={LogOut}
+      onClick={onClick}
+      aria-busy={state === "busy"}
+      className={state === "failed" ? "text-status-critical" : undefined}
+    />
+  );
 }

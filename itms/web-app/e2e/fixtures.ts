@@ -28,6 +28,11 @@ const SAMPLE_WEATHER = {
   },
 };
 
+/** The console sits behind sign-in. Every test starts as a signed-in operator
+ * so the workspace specs stay about the workspace; login.spec.ts registers its
+ * own routes (consulted first) to exercise the signed-out paths. */
+export const SIGNED_IN_USER = { username: "komal", display_name: "Komal S" };
+
 export const test = base.extend<{ hermeticTiles: void }>({
   hermeticTiles: [
     async ({ page }, use) => {
@@ -37,6 +42,9 @@ export const test = base.extend<{ hermeticTiles: void }>({
       // Fixed, dry weather: tests must not depend on the sky over Vijayawada.
       await page.route("https://api.open-meteo.com/**", (route) =>
         route.fulfill({ json: SAMPLE_WEATHER }),
+      );
+      await page.route("**/api/v1/auth/me", (route) =>
+        route.fulfill({ json: SIGNED_IN_USER }),
       );
       await use();
     },

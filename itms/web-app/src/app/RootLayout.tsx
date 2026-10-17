@@ -1,6 +1,7 @@
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import { GlobeTransition } from "@/components/transition/GlobeTransition";
+import { useAuthStore } from "@/store/authStore";
 import { useTransitionStore } from "@/store/transitionStore";
 
 /**
@@ -19,6 +20,7 @@ import { useTransitionStore } from "@/store/transitionStore";
  * reveal.
  */
 export function RootLayout() {
+  useSessionCheck();
   return (
     <div className="h-full">
       <Cover>
@@ -41,4 +43,19 @@ function Cover({ children }: { children: ReactNode }) {
       {children}
     </div>
   );
+}
+
+/** Asks the server who is signed in once at start, and again whenever the tab
+ * comes back to the foreground, so a session that expired (or was ended from
+ * another tab or by an administrator) while the page sat idle is noticed
+ * before the operator acts on stale data. A failed re-check never signs
+ * anyone out; only the server's "not signed in" does. */
+function useSessionCheck() {
+  useEffect(() => {
+    const check = () => void useAuthStore.getState().check();
+    const onVisible = () => document.visibilityState === "visible" && check();
+    check();
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, []);
 }
