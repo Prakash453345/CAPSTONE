@@ -24,7 +24,7 @@ function messageFor(err: unknown): string {
     case "network":
       return "Can't reach the server. Check your connection and try again.";
     default:
-      return "This isn't available right now. Please try again in a moment.";
+      return err.detail ?? "This isn't available right now. Please try again in a moment.";
   }
 }
 

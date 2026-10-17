@@ -53,7 +53,8 @@ Mail is sent over SMTP:
 
 | Variable | Default | Notes |
 |---|---|---|
-| `SMTP_HOST` | unset | **Unset = dev mode:** nothing is sent and the code is written to the api-service log. Set it in production. |
+| `SMTP_HOST` | unset | Required to send mail. If unset (or the server refuses), forgot-password answers 503 "We couldn't send the email" instead of pretending. |
+| `AUTH_DEV_LOG_CODES` | `false` | Local dev only: with no `SMTP_HOST`, log the code instead of failing. `scripts/dev.sh` turns it on. Never set it in production. |
 | `SMTP_PORT` | `587` | Port 465 uses implicit TLS. |
 | `SMTP_USER` / `SMTP_PASSWORD` | unset | Optional login. |
 | `SMTP_FROM` | `ITMS <no-reply@localhost>` | Sender address. |

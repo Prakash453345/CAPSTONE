@@ -109,6 +109,10 @@ export async function requestResetCode(username: string, signal?: AbortSignal): 
   const res = await call("/v1/auth/forgot", { ...JSON_POST, body: JSON.stringify({ username }), signal });
   if (res.status === 404) throw new AuthError("unknown");
   if (res.status === 409) throw new AuthError("noemail");
+  if (res.status === 503) {
+    const body = (await res.json().catch(() => null)) as { detail?: unknown } | null;
+    throw new AuthError("unavailable", undefined, typeof body?.detail === "string" ? body.detail : undefined);
+  }
   if (res.status !== 202) throw new AuthError("unavailable");
   const body = (await res.json().catch(() => null)) as { email_hint?: unknown } | null;
   return typeof body?.email_hint === "string" ? body.email_hint : "your email";

@@ -2,15 +2,16 @@
 
 Configure with environment variables (api-service):
 
-    SMTP_HOST       mail server; unset = dev mode (the message is logged instead)
+    SMTP_HOST       mail server. If unset, sending fails -- unless AUTH_DEV_LOG_CODES
+                    is on, which logs the code instead (local development only)
     SMTP_PORT       default 587
     SMTP_USER / SMTP_PASSWORD   optional login
     SMTP_FROM       sender address, default "ITMS <no-reply@localhost>"
     SMTP_STARTTLS   default true; set false for a server that speaks TLS from the
                     first byte (port 465 uses implicit TLS automatically)
 
-Sending never raises: a mail failure is logged and the caller carries on, so
-the forgot-password endpoint answers the same whether or not mail went out.
+Sending raises MailError when mail can't go out (not configured, or the server
+refused), so the caller can tell the person instead of claiming a code was sent.
 """
 
 from __future__ import annotations
@@ -22,6 +23,10 @@ import ssl
 from email.message import EmailMessage
 
 log = logging.getLogger("api-service.mailer")
+
+
+class MailError(Exception):
+    """The message could not be sent."""
 
 
 def _flag(name: str, default: bool) -> bool:
@@ -43,10 +48,13 @@ def send_reset_code(to: str, code: str, minutes: int) -> None:
         "your password has not changed.\n"
     )
     if not host:
-        # Dev mode only: with no mail server configured the code has to go
-        # somewhere a developer can read it.
-        log.warning("SMTP_HOST not set -- reset code for %s is %s (dev mode)", to, code)
-        return
+        if _flag("AUTH_DEV_LOG_CODES", False):
+            # Local development only: no mail server, so the code goes where a
+            # developer can read it. Never enable this in production.
+            log.warning("AUTH_DEV_LOG_CODES: reset code for %s is %s", to, code)
+            return
+        log.error("cannot send reset code: SMTP_HOST is not set")
+        raise MailError("email is not configured")
     port = int(os.environ.get("SMTP_PORT", "587"))
     user = os.environ.get("SMTP_USER")
     password = os.environ.get("SMTP_PASSWORD", "")
@@ -64,3 +72,4 @@ def send_reset_code(to: str, code: str, minutes: int) -> None:
             server.send_message(msg)
     except (OSError, smtplib.SMTPException) as exc:
         log.error("could not send reset code to %s: %s", to, exc)
+        raise MailError(str(exc)) from exc

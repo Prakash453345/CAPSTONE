@@ -44,7 +44,7 @@ import threading
 from dataclasses import dataclass
 from typing import Annotated, Protocol
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
 from api_service import mailer
@@ -586,6 +586,9 @@ NO_ACCOUNT = "No account found with that username. Use your username, not your e
 NO_EMAIL = "That account has no email on file. Ask an administrator to reset your password."
 
 
+MAIL_FAILED = "We couldn't send the email. Try again shortly, or ask an administrator."
+
+
 def mask_email(email: str) -> str:
     """k***@gmail.com -- enough to recognise your own address, not to learn anyone else's."""
     local, _, domain = email.partition("@")
@@ -633,9 +636,7 @@ def _code_ok(store: UserStore, username: str, code: str, now: dt.datetime) -> bo
 
 
 @router.post("/forgot", status_code=202)
-def forgot(
-    body: ForgotRequest, response: Response, background: BackgroundTasks, store: StoreDep
-) -> dict[str, str]:
+def forgot(body: ForgotRequest, response: Response, store: StoreDep) -> dict[str, str]:
     """Email a one-time code to the account's address.
 
     Unlike sign-in this does say when the username is unknown or has no email:
@@ -657,14 +658,18 @@ def forgot(
         )
         if not cooling:
             code = f"{secrets.randbelow(10**6):06d}"
+            # Send first and store only if it went out, so a failed send neither
+            # claims success nor starts the resend cooldown.
+            try:
+                mailer.send_reset_code(record.email, code, RESET_CODE_MINUTES)
+            except mailer.MailError as exc:
+                raise HTTPException(status_code=503, detail=MAIL_FAILED) from exc
             store.set_reset(
                 username,
                 _code_digest(username, code),
                 now + dt.timedelta(minutes=RESET_CODE_MINUTES),
                 now,
             )
-            # In the background so a slow mail server doesn't hold up the page.
-            background.add_task(mailer.send_reset_code, record.email, code, RESET_CODE_MINUTES)
     except StoreUnavailable as exc:
         log.error("forgot: user store unavailable: %s", exc)
         raise _store_down() from exc

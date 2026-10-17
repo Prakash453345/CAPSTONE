@@ -266,6 +266,29 @@ def test_forgot_says_when_the_account_is_unknown_or_has_no_email(client, store, 
     assert sent == []
 
 
+def test_forgot_does_not_claim_success_when_mail_cannot_be_sent(client, mailable, monkeypatch):
+    def boom(to, code, minutes):
+        raise auth.mailer.MailError("smtp down")
+
+    monkeypatch.setattr(auth.mailer, "send_reset_code", boom)
+    res = forgot(client)
+    assert res.status_code == 503 and "couldn't send" in res.json()["detail"]
+    assert mailable.users["operator"].reset_code_hash is None  # no code, no cooldown
+    assert mailable.users["operator"].reset_sent_at is None
+
+
+def test_mailer_refuses_when_unconfigured_unless_dev_flag(monkeypatch, caplog):
+    from api_service import mailer
+
+    monkeypatch.delenv("SMTP_HOST", raising=False)
+    monkeypatch.delenv("AUTH_DEV_LOG_CODES", raising=False)
+    with pytest.raises(mailer.MailError):
+        mailer.send_reset_code("a@b.org", "123456", 10)
+    monkeypatch.setenv("AUTH_DEV_LOG_CODES", "1")
+    mailer.send_reset_code("a@b.org", "123456", 10)  # logs instead of raising
+    assert "123456" in caplog.text
+
+
 def test_forgot_reports_a_masked_address(client, mailable, sent):
     assert forgot(client).json()["email_hint"] == "o***@example.org"
 
