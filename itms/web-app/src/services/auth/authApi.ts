@@ -15,13 +15,16 @@ export interface SessionUser {
  *  - unavailable: the service answered but can't sign anyone in right now
  *                 (database down, or no api-service behind /api at all)
  *  - network:     the request never got an answer (offline, timeout)
+ *  - badcode:     the password-reset code is wrong, expired or used up
+ *  - weak:        the new password was rejected; `detail` says why
  */
-export type AuthFailure = "invalid" | "locked" | "unavailable" | "network";
+export type AuthFailure = "invalid" | "locked" | "unavailable" | "network" | "badcode" | "weak";
 
 export class AuthError extends Error {
   constructor(
     readonly kind: AuthFailure,
     readonly retryAfterSec?: number,
+    readonly detail?: string,
   ) {
     super(kind);
     this.name = "AuthError";
@@ -92,4 +95,45 @@ export async function login(username: string, password: string, signal?: AbortSi
 export async function logout(): Promise<void> {
   const res = await call("/v1/auth/logout", { method: "POST" });
   if (!res.ok) throw new AuthError("unavailable");
+}
+
+// ------------------------------------------------------------ forgot password
+
+const JSON_POST = { method: "POST", headers: { "Content-Type": "application/json" } } as const;
+
+/** Ask for a reset code by email. The server answers the same whether or not
+ *  the account exists or has an email, so success here promises nothing. */
+export async function requestResetCode(username: string, signal?: AbortSignal): Promise<void> {
+  const res = await call("/v1/auth/forgot", { ...JSON_POST, body: JSON.stringify({ username }), signal });
+  if (res.status !== 202) throw new AuthError("unavailable");
+}
+
+/** Check a code without using it. Throws "badcode" when it is wrong or expired. */
+export async function verifyResetCode(username: string, code: string, signal?: AbortSignal): Promise<void> {
+  const res = await call("/v1/auth/forgot/verify", {
+    ...JSON_POST,
+    body: JSON.stringify({ username, code }),
+    signal,
+  });
+  if (res.status === 400) throw new AuthError("badcode");
+  if (res.status !== 204) throw new AuthError("unavailable");
+}
+
+export async function resetPassword(
+  username: string,
+  code: string,
+  newPassword: string,
+  signal?: AbortSignal,
+): Promise<void> {
+  const res = await call("/v1/auth/forgot/reset", {
+    ...JSON_POST,
+    body: JSON.stringify({ username, code, new_password: newPassword }),
+    signal,
+  });
+  if (res.status === 400) throw new AuthError("badcode");
+  if (res.status === 422) {
+    const body = (await res.json().catch(() => null)) as { detail?: unknown } | null;
+    throw new AuthError("weak", undefined, typeof body?.detail === "string" ? body.detail : undefined);
+  }
+  if (res.status !== 204) throw new AuthError("unavailable");
 }

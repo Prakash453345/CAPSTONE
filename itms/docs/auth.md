@@ -26,6 +26,38 @@ Other account commands: `passwd`, `disable`, `enable`, `unlock`, `list`
 (`python -m api_service.users --help`). Changing a password or disabling an
 account signs that user out everywhere. Passwords are at least 10 characters.
 
+## Forgot password
+
+"Forgot your password?" on the sign-in card walks through three steps: username,
+the 6-digit code we email, then a new password. The code is valid for 10 minutes,
+works once, and is burnt after 5 wrong guesses; a new one can be requested every
+60 seconds. Only a keyed digest of the code is stored. A successful reset signs
+the user out everywhere and clears any lockout.
+
+Codes go to the account's **email**, which is optional and set from the CLI:
+
+```bash
+.venv/bin/python -m api_service.users create komal --email komal@example.org
+.venv/bin/python -m api_service.users set-email komal komal@example.org
+```
+
+The endpoints (`POST /v1/auth/forgot`, `/forgot/verify`, `/forgot/reset`) answer
+the same whether or not the username exists or has an email, so they can't be
+used to discover accounts. An account without an email can't reset itself; an
+administrator uses `passwd` instead.
+
+Mail is sent over SMTP:
+
+| Variable | Default | Notes |
+|---|---|---|
+| `SMTP_HOST` | unset | **Unset = dev mode:** nothing is sent and the code is written to the api-service log. Set it in production. |
+| `SMTP_PORT` | `587` | Port 465 uses implicit TLS. |
+| `SMTP_USER` / `SMTP_PASSWORD` | unset | Optional login. |
+| `SMTP_FROM` | `ITMS <no-reply@localhost>` | Sender address. |
+| `SMTP_STARTTLS` | `true` | Turn off only for a trusted local relay. |
+
+Rate-limit `/api/v1/auth/forgot*` per IP in the reverse proxy, like login.
+
 ## Configuration (api-service environment)
 
 | Variable | Default | Notes |

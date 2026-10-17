@@ -207,6 +207,114 @@ def test_store_outage_is_a_503_not_a_500_or_a_false_401(client):
     assert client.get("/v1/auth/me").status_code == 503
 
 
+# --------------------------------------------------------- forgot password
+
+
+@pytest.fixture
+def sent(monkeypatch):
+    """Codes 'emailed' during the test, as (to, code) in send order."""
+    box: list[tuple[str, str]] = []
+    monkeypatch.setattr(
+        auth.mailer, "send_reset_code", lambda to, code, minutes: box.append((to, code))
+    )
+    return box
+
+
+@pytest.fixture
+def mailable(store):
+    store.users["operator"].email = "op@example.org"
+    return store
+
+
+def forgot(client, username="operator"):
+    return client.post("/v1/auth/forgot", json={"username": username})
+
+
+def verify(client, code, username="operator"):
+    return client.post("/v1/auth/forgot/verify", json={"username": username, "code": code})
+
+
+def reset(client, code, password="brand new password", username="operator"):
+    return client.post(
+        "/v1/auth/forgot/reset",
+        json={"username": username, "code": code, "new_password": password},
+    )
+
+
+def test_forgot_emails_a_six_digit_code_and_reset_changes_the_password(client, mailable, sent):
+    assert forgot(client).status_code == 202
+    ((to, code),) = sent
+    assert to == "op@example.org" and len(code) == 6 and code.isdigit()
+    assert "op@example.org" not in mailable.users["operator"].reset_code_hash  # only a digest
+
+    assert verify(client, code).status_code == 204
+    assert verify(client, code).status_code == 204  # checking doesn't use it up
+    old_version = mailable.users["operator"].session_version
+    assert reset(client, code).status_code == 204
+
+    assert login(client, password=PASSWORD).status_code == 401
+    assert login(client, password="brand new password").status_code == 200
+    assert mailable.users["operator"].session_version == old_version + 1
+    assert reset(client, code).status_code == 400  # one use only
+
+
+def test_forgot_answers_the_same_for_unknown_and_email_less_users(client, store, sent):
+    known = forgot(client)  # operator exists but has no email
+    unknown = forgot(client, "nobody")
+    assert known.status_code == unknown.status_code == 202
+    assert known.json() == unknown.json()
+    assert sent == []
+
+
+def test_forgot_is_rate_limited_per_account(client, mailable, sent):
+    forgot(client)
+    forgot(client)
+    assert len(sent) == 1
+    mailable.users["operator"].reset_sent_at -= auth.RESET_RESEND_AFTER
+    forgot(client)
+    assert len(sent) == 2
+
+
+def test_wrong_codes_burn_the_code_after_five_tries(client, mailable, sent):
+    forgot(client)
+    code = sent[0][1]
+    wrong = "000000" if code != "000000" else "111111"
+    for _ in range(auth.RESET_MAX_ATTEMPTS):
+        assert verify(client, wrong).status_code == 400
+    assert verify(client, code).status_code == 400  # right code, but it's burnt
+    assert reset(client, code).status_code == 400
+
+
+def test_expired_code_is_rejected(client, mailable, sent):
+    forgot(client)
+    mailable.users["operator"].reset_expires_at = auth.utcnow() - dt.timedelta(seconds=1)
+    assert verify(client, sent[0][1]).status_code == 400
+
+
+def test_weak_new_password_is_422_and_keeps_the_code(client, mailable, sent):
+    forgot(client)
+    code = sent[0][1]
+    assert reset(client, code, password="short").status_code == 422
+    assert reset(client, code).status_code == 204
+
+
+def test_reset_clears_a_lockout_and_ends_sessions(client, mailable, sent):
+    assert login(client).status_code == 200
+    for _ in range(auth.MAX_FAILED_ATTEMPTS):
+        login(client, password="wrong wrong wrong")
+    assert login(client).status_code == 429
+    forgot(client)
+    assert reset(client, sent[0][1]).status_code == 204
+    assert client.get("/v1/auth/me").status_code == 401  # old session ended
+    assert login(client, password="brand new password").status_code == 200
+
+
+def test_disabled_accounts_get_no_code(client, mailable, sent):
+    mailable.users["operator"].is_active = False
+    forgot(client)
+    assert sent == []
+
+
 # --------------------------------------------------------------- postgres
 
 
@@ -264,3 +372,32 @@ class TestPostgresStore:
     def test_schema_creation_is_idempotent_across_workers(self, pg):
         for _ in range(2):
             auth.PostgresUserStore(pg.url).get("operator")
+
+    def test_reset_sql_roundtrip(self, pg, monkeypatch):
+        import psycopg
+
+        with psycopg.connect(pg.url) as conn:
+            conn.execute("UPDATE app_user SET email = 'op@example.org' WHERE username='operator'")
+        sent: list[str] = []
+        monkeypatch.setattr(auth.mailer, "send_reset_code", lambda to, code, m: sent.append(code))
+        main.app.dependency_overrides[auth.get_user_store] = lambda: pg
+        try:
+            c = TestClient(main.app)
+            assert forgot(c).status_code == 202
+            code = sent[0]
+            wrong = "000000" if code != "000000" else "111111"
+            for _ in range(auth.RESET_MAX_ATTEMPTS - 1):
+                assert verify(c, wrong).status_code == 400
+            assert pg.get("operator").reset_attempts == auth.RESET_MAX_ATTEMPTS - 1
+            assert reset(c, code).status_code == 204
+            rec = pg.get("operator")
+            assert rec.reset_code_hash is None and rec.session_version == 2
+            assert auth.verify_password("brand new password", rec.password_hash)
+
+            # the fifth wrong guess burns a fresh code
+            pg.set_reset("operator", "x", auth.utcnow() + dt.timedelta(minutes=5), auth.utcnow())
+            for _ in range(auth.RESET_MAX_ATTEMPTS):
+                pg.record_reset_failure("operator")
+            assert pg.get("operator").reset_code_hash is None
+        finally:
+            main.app.dependency_overrides.clear()

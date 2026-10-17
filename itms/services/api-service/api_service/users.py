@@ -1,7 +1,8 @@
 """Manage console accounts from the command line.
 
-    python -m api_service.users create <username> [--name "Display Name"]
+    python -m api_service.users create <username> [--name "Display Name"] [--email you@example.org]
     python -m api_service.users passwd <username>
+    python -m api_service.users set-email <username> <email>
     python -m api_service.users disable <username>
     python -m api_service.users enable <username>
     python -m api_service.users unlock <username>
@@ -16,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import getpass
+import re
 import sys
 
 import psycopg
@@ -44,6 +46,13 @@ def _username(raw: str) -> str:
     return username
 
 
+def _email(raw: str) -> str:
+    email = raw.strip().lower()
+    if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email) or len(email) > 254:
+        raise SystemExit(f"error: not a valid email address: {raw}")
+    return email
+
+
 def _require_one(cur: psycopg.Cursor, username: str) -> None:
     if cur.rowcount != 1:
         raise SystemExit(f"error: no such user: {username}")
@@ -55,10 +64,14 @@ def main(argv: list[str] | None = None) -> None:
     create = sub.add_parser("create", help="add a user")
     create.add_argument("username")
     create.add_argument("--name", default="", help="display name shown in the console")
+    create.add_argument("--email", default="", help="where password-reset codes are sent")
     create.add_argument("--stdin", action="store_true", help="read the password from stdin")
     passwd = sub.add_parser("passwd", help="change a password (signs the user out everywhere)")
     passwd.add_argument("username")
     passwd.add_argument("--stdin", action="store_true", help="read the password from stdin")
+    setmail = sub.add_parser("set-email", help="set where password-reset codes are sent")
+    setmail.add_argument("username")
+    setmail.add_argument("email")
     for name, text in (
         ("disable", "block sign-in and end existing sessions"),
         ("enable", "allow sign-in again"),
@@ -74,14 +87,17 @@ def main(argv: list[str] | None = None) -> None:
             conn.execute(auth.SCHEMA_SQL)
             if args.cmd == "list":
                 rows = conn.execute(
-                    "SELECT username, display_name, is_active, locked_until, last_login_at"
+                    "SELECT username, display_name, is_active, locked_until, last_login_at, email"
                     " FROM app_user ORDER BY username"
                 ).fetchall()
-                for username, name, active, locked, last in rows:
+                for username, name, active, locked, last, email in rows:
                     flags = ("" if active else " [disabled]") + (
                         " [locked]" if locked and locked > auth.utcnow() else ""
                     )
-                    print(f"{username}\t{name}\tlast login: {last or 'never'}{flags}")
+                    print(
+                        f"{username}\t{name}\t{email or 'no email'}\t"
+                        f"last login: {last or 'never'}{flags}"
+                    )
                 if not rows:
                     print("no users yet -- create one: python -m api_service.users create <name>")
                 return
@@ -90,9 +106,14 @@ def main(argv: list[str] | None = None) -> None:
                 password = _read_password(args.stdin)
                 try:
                     conn.execute(
-                        "INSERT INTO app_user (username, display_name, password_hash)"
-                        " VALUES (%s, %s, %s)",
-                        (username, args.name.strip(), auth.hash_password(password)),
+                        "INSERT INTO app_user (username, display_name, password_hash, email)"
+                        " VALUES (%s, %s, %s, %s)",
+                        (
+                            username,
+                            args.name.strip(),
+                            auth.hash_password(password),
+                            _email(args.email) if args.email else None,
+                        ),
                     )
                 except psycopg.errors.UniqueViolation:
                     raise SystemExit(f"error: user already exists: {username}") from None
@@ -107,6 +128,13 @@ def main(argv: list[str] | None = None) -> None:
                 )
                 _require_one(cur, username)
                 print(f"password changed for {username}; their sessions are signed out")
+            elif args.cmd == "set-email":
+                cur = conn.execute(
+                    "UPDATE app_user SET email = %s WHERE username = %s",
+                    (_email(args.email), username),
+                )
+                _require_one(cur, username)
+                print(f"email set for {username}")
             elif args.cmd == "disable":
                 cur = conn.execute(
                     "UPDATE app_user SET is_active = false, session_version = session_version + 1"

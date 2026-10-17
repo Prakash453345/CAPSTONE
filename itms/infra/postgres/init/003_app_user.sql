@@ -17,7 +17,17 @@ CREATE TABLE IF NOT EXISTS app_user (
     session_version  INTEGER NOT NULL DEFAULT 1,
     created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
     last_login_at    TIMESTAMPTZ,
+    email            TEXT,
+    reset_code_hash  TEXT,
+    reset_expires_at TIMESTAMPTZ,
+    reset_attempts   INTEGER NOT NULL DEFAULT 0,
+    reset_sent_at    TIMESTAMPTZ,
     CONSTRAINT app_user_username_lower CHECK (username = lower(username)),
     CONSTRAINT app_user_username_len CHECK (char_length(username) BETWEEN 1 AND 64)
 );
 CREATE UNIQUE INDEX IF NOT EXISTS app_user_username_idx ON app_user (username);
+ALTER TABLE app_user ADD COLUMN IF NOT EXISTS email TEXT;
+ALTER TABLE app_user ADD COLUMN IF NOT EXISTS reset_code_hash TEXT;
+ALTER TABLE app_user ADD COLUMN IF NOT EXISTS reset_expires_at TIMESTAMPTZ;
+ALTER TABLE app_user ADD COLUMN IF NOT EXISTS reset_attempts INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE app_user ADD COLUMN IF NOT EXISTS reset_sent_at TIMESTAMPTZ;

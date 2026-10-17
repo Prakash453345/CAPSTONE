@@ -1,5 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { AuthError, fetchSession, login, logout } from "@/services/auth/authApi";
+import {
+  AuthError,
+  fetchSession,
+  login,
+  logout,
+  requestResetCode,
+  resetPassword,
+  verifyResetCode,
+} from "@/services/auth/authApi";
 import { useAuthStore } from "@/store/authStore";
 
 const json = (status: number, body: unknown, headers: Record<string, string> = {}) =>
@@ -171,5 +179,45 @@ describe("authStore", () => {
     stub(async () => new Response(null, { status: 204 }));
     await useAuthStore.getState().signOut();
     expect(useAuthStore.getState()).toMatchObject({ status: "anon", user: null });
+  });
+});
+
+describe("forgot password", () => {
+  const empty = (status: number) => new Response(null, { status });
+
+  it("requestResetCode needs the 202 the real service sends, so a static host reads as unavailable", async () => {
+    stub(async () => json(202, { detail: "sent" }));
+    await expect(requestResetCode("komal")).resolves.toBeUndefined();
+    stub(async () => html());
+    expect(await kindOf(requestResetCode("komal"))).toBe("unavailable");
+  });
+
+  it("verifyResetCode maps a refused code to badcode", async () => {
+    stub(async () => empty(204));
+    await expect(verifyResetCode("komal", "123456")).resolves.toBeUndefined();
+    stub(async () => json(400, { detail: "x" }));
+    expect(await kindOf(verifyResetCode("komal", "000000"))).toBe("badcode");
+    stub(async () => json(503, {}));
+    expect(await kindOf(verifyResetCode("komal", "123456"))).toBe("unavailable");
+  });
+
+  it("resetPassword sends the code and password, and surfaces why a password was refused", async () => {
+    stub(async () => empty(204));
+    await resetPassword("komal", "123456", "a long enough pass");
+    const [url, init] = vi.mocked(fetch).mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("/api/v1/auth/forgot/reset");
+    expect(JSON.parse(String(init.body))).toEqual({
+      username: "komal",
+      code: "123456",
+      new_password: "a long enough pass",
+    });
+
+    stub(async () => json(422, { detail: "Password must be at least 10 characters." }));
+    await expect(resetPassword("komal", "123456", "short")).rejects.toMatchObject({
+      kind: "weak",
+      detail: "Password must be at least 10 characters.",
+    });
+    stub(async () => json(400, {}));
+    expect(await kindOf(resetPassword("komal", "000000", "a long enough pass"))).toBe("badcode");
   });
 });

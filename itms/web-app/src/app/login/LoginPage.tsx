@@ -8,9 +8,9 @@ import { AuthError } from "@/services/auth/authApi";
 import { safeNext } from "@/services/auth/safeRedirect";
 import { useAuthStore } from "@/store/authStore";
 import { cn } from "@/utils/cn";
-
-const INPUT =
-  "h-11 w-full rounded-xl border bg-surface px-3.5 text-[15px] text-foreground outline-none transition-[border-color,box-shadow] duration-150 placeholder:text-muted-foreground/70 focus-visible:rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring read-only:opacity-70";
+import { ForgotFlow } from "@/app/login/ForgotFlow";
+import { Signal } from "@/app/login/loginUi";
+import { INPUT, LAMP_TEXT, type Lamp } from "@/app/login/loginConsts";
 
 /** What the operator should read for each way a sign-in can fail. */
 function messageFor(err: unknown): string {
@@ -24,45 +24,10 @@ function messageFor(err: unknown): string {
     }
     case "network":
       return "Can't reach the server. Check your connection and try again.";
-    case "unavailable":
+    default:
       return "Sign-in is unavailable right now. Please try again in a moment.";
   }
 }
-
-type Lamp = "idle" | "typing" | "busy" | "granted" | "error";
-
-/** A signal head that mirrors the form: amber while you type (steady) or
- *  while we check (pulsing), green once you're cleared, red when you're turned
- *  away. Decorative, so hidden from assistive tech; the text status below it
- *  is what screen readers get. */
-function Signal({ state }: { state: Lamp }) {
-  const lamps = [
-    { id: "r", on: state === "error", color: "bg-status-critical shadow-[0_0_14px_3px_hsl(var(--status-critical))]" },
-    { id: "a", on: state === "typing" || state === "busy", color: "bg-status-warn shadow-[0_0_14px_3px_hsl(var(--status-warn))]" },
-    { id: "g", on: state === "granted", color: "bg-status-ok shadow-[0_0_14px_3px_hsl(var(--status-ok))]" },
-  ];
-  return (
-    <span aria-hidden className="flex items-center gap-2 rounded-full bg-muted px-3 py-2">
-      {lamps.map((l) => (
-        <i
-          key={l.id}
-          className={cn(
-            "block size-3.5 rounded-full transition-[background-color,box-shadow,transform] duration-300",
-            l.on ? cn(l.color, "scale-110", l.id === "a" && state === "busy" && "animate-pulse") : "bg-foreground/15",
-          )}
-        />
-      ))}
-    </span>
-  );
-}
-
-const LAMP_TEXT: Record<Lamp, string> = {
-  idle: "Ready",
-  typing: "Typing…",
-  busy: "Checking…",
-  granted: "Access granted",
-  error: "Access denied",
-};
 
 export function LoginPage() {
   const [params] = useSearchParams();
@@ -85,6 +50,9 @@ export function LoginPage() {
   const [dirty, setDirty] = useState(false);
   const [granted, setGranted] = useState(false);
   const [hold, setHold] = useState(false);
+  const [forgot, setForgot] = useState(false);
+  const [forgotLamp, setForgotLamp] = useState<Lamp>("idle");
+  const [notice, setNotice] = useState<string | null>(null);
 
   const usernameRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
@@ -200,9 +168,9 @@ export function LoginPage() {
               </span>
               <span className="flex items-center gap-2.5">
                 <span role="status" aria-live="polite" className="text-xs text-muted-foreground">
-                  {LAMP_TEXT[lamp]}
+                  {LAMP_TEXT[forgot ? forgotLamp : lamp]}
                 </span>
-                <Signal state={lamp} />
+                <Signal state={forgot ? forgotLamp : lamp} />
               </span>
             </div>
 
@@ -226,6 +194,29 @@ export function LoginPage() {
               </div>
             )}
 
+            {forgot ? (
+              <ForgotFlow
+                initialUsername={username}
+                onLamp={setForgotLamp}
+                onBack={() => setForgot(false)}
+                onDone={(name) => {
+                  setUsername(name);
+                  setPassword("");
+                  setError(null);
+                  setNotice("Password changed. Sign in with your new password.");
+                  setForgot(false);
+                }}
+              />
+            ) : (
+              <>
+            {notice && (
+              <div
+                role="status"
+                className="mb-4 rounded-xl bg-status-ok-muted px-3.5 py-3 text-[13px] text-status-ok"
+              >
+                {notice}
+              </div>
+            )}
             <form onSubmit={onSubmit} noValidate aria-busy={busy} className="flex flex-col gap-4">
               <div>
                 <label htmlFor={usernameId} className="mb-1.5 block text-[13px] font-medium">
@@ -336,9 +327,22 @@ export function LoginPage() {
               </Button>
             </form>
 
-            <p className="mt-5 text-center text-[13px] text-muted-foreground">
-              Forgot your password? Ask your system administrator to reset it.
-            </p>
+                <p className="mt-5 text-center text-[13px]">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNotice(null);
+                      setForgot(true);
+                    }}
+                    className="font-medium text-foreground/80 underline underline-offset-2 hover:text-foreground"
+                  >
+                    Forgot your password?
+                  </button>
+                </p>
+              </>
+            )}
+
+
           </div>
 
           <p className="mt-6 text-center text-[13px] text-muted-foreground">

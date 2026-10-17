@@ -44,8 +44,10 @@ import threading
 from dataclasses import dataclass
 from typing import Annotated, Protocol
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
+
+from api_service import mailer
 
 log = logging.getLogger("api-service.auth")
 
@@ -65,6 +67,10 @@ COOKIE_SECURE = os.environ.get("AUTH_COOKIE_SECURE", "true").strip().lower() not
 
 MAX_FAILED_ATTEMPTS = 5
 LOCKOUT = dt.timedelta(minutes=15)
+# Forgot-password: a 6-digit code, emailed, valid briefly and for a few guesses.
+RESET_CODE_MINUTES = 10
+RESET_MAX_ATTEMPTS = 5
+RESET_RESEND_AFTER = dt.timedelta(seconds=60)
 MIN_PASSWORD_LENGTH = 10
 MAX_USERNAME_LENGTH = 64
 # Long enough for any passphrase, short enough that hashing one is not a DoS.
@@ -101,8 +107,7 @@ def validate_username(username: str) -> str | None:
         return f"username must be at most {MAX_USERNAME_LENGTH} characters"
     if not _USERNAME_RE.fullmatch(username):
         return (
-            "username may contain letters, digits and . _ @ - "
-            "and must start with a letter or digit"
+            "username may contain letters, digits and . _ @ - and must start with a letter or digit"
         )
     return None
 
@@ -199,7 +204,7 @@ def read_token(token: str, now: dt.datetime | None = None) -> tuple[str, int] | 
             return None
     except (ValueError, KeyError, TypeError, binascii.Error):
         return None
-    if exp <= int(((now or utcnow())).timestamp()):
+    if exp <= int((now or utcnow()).timestamp()):
         return None
     return username, version
 
@@ -216,6 +221,11 @@ class UserRecord:
     failed_attempts: int = 0
     locked_until: dt.datetime | None = None
     session_version: int = 1
+    email: str | None = None
+    reset_code_hash: str | None = None
+    reset_expires_at: dt.datetime | None = None
+    reset_attempts: int = 0
+    reset_sent_at: dt.datetime | None = None
 
 
 class StoreUnavailable(Exception):
@@ -226,6 +236,11 @@ class UserStore(Protocol):
     def get(self, username: str) -> UserRecord | None: ...
     def record_failure(self, username: str, now: dt.datetime) -> None: ...
     def record_success(self, username: str, now: dt.datetime) -> None: ...
+    def set_reset(
+        self, username: str, code_hash: str, expires: dt.datetime, sent_at: dt.datetime
+    ) -> None: ...
+    def record_reset_failure(self, username: str) -> None: ...
+    def complete_reset(self, username: str, password_hash: str) -> None: ...
 
 
 class MemoryUserStore:
@@ -263,6 +278,35 @@ class MemoryUserStore:
             if record is not None:
                 record.failed_attempts, record.locked_until = 0, None
 
+    def set_reset(
+        self, username: str, code_hash: str, expires: dt.datetime, sent_at: dt.datetime
+    ) -> None:
+        with self._lock:
+            record = self.users.get(username)
+            if record is not None:
+                record.reset_code_hash, record.reset_expires_at = code_hash, expires
+                record.reset_attempts, record.reset_sent_at = 0, sent_at
+
+    def record_reset_failure(self, username: str) -> None:
+        with self._lock:
+            record = self.users.get(username)
+            if record is None or record.reset_code_hash is None:
+                return
+            record.reset_attempts += 1
+            if record.reset_attempts >= RESET_MAX_ATTEMPTS:
+                record.reset_code_hash = None  # burnt: they must ask for a new code
+
+    def complete_reset(self, username: str, password_hash: str) -> None:
+        with self._lock:
+            record = self.users.get(username)
+            if record is None:
+                return
+            record.password_hash = password_hash
+            record.session_version += 1
+            record.failed_attempts, record.locked_until = 0, None
+            record.reset_code_hash = record.reset_expires_at = None
+            record.reset_attempts = 0
+
 
 def _apply_failure(record: UserRecord, now: dt.datetime) -> None:
     """Mirror of the SQL in PostgresUserStore.record_failure."""
@@ -285,10 +329,20 @@ CREATE TABLE IF NOT EXISTS app_user (
     session_version  INTEGER NOT NULL DEFAULT 1,
     created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
     last_login_at    TIMESTAMPTZ,
+    email            TEXT,
+    reset_code_hash  TEXT,
+    reset_expires_at TIMESTAMPTZ,
+    reset_attempts   INTEGER NOT NULL DEFAULT 0,
+    reset_sent_at    TIMESTAMPTZ,
     CONSTRAINT app_user_username_lower CHECK (username = lower(username)),
     CONSTRAINT app_user_username_len CHECK (char_length(username) BETWEEN 1 AND 64)
 );
 CREATE UNIQUE INDEX IF NOT EXISTS app_user_username_idx ON app_user (username);
+ALTER TABLE app_user ADD COLUMN IF NOT EXISTS email TEXT;
+ALTER TABLE app_user ADD COLUMN IF NOT EXISTS reset_code_hash TEXT;
+ALTER TABLE app_user ADD COLUMN IF NOT EXISTS reset_expires_at TIMESTAMPTZ;
+ALTER TABLE app_user ADD COLUMN IF NOT EXISTS reset_attempts INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE app_user ADD COLUMN IF NOT EXISTS reset_sent_at TIMESTAMPTZ;
 """
 
 
@@ -333,7 +387,8 @@ class PostgresUserStore:
         with self._conn() as conn:
             row = conn.execute(
                 "SELECT username, password_hash, display_name, is_active, failed_attempts,"
-                " locked_until, session_version FROM app_user WHERE username = %s",
+                " locked_until, session_version, email, reset_code_hash, reset_expires_at,"
+                " reset_attempts, reset_sent_at FROM app_user WHERE username = %s",
                 (username,),
             ).fetchone()
         return None if row is None else UserRecord(*row)
@@ -365,6 +420,36 @@ class PostgresUserStore:
                 "UPDATE app_user SET failed_attempts = 0, locked_until = NULL,"
                 " last_login_at = %s WHERE username = %s",
                 (now, username),
+            )
+
+    def set_reset(
+        self, username: str, code_hash: str, expires: dt.datetime, sent_at: dt.datetime
+    ) -> None:
+        with self._conn() as conn:
+            conn.execute(
+                "UPDATE app_user SET reset_code_hash = %s, reset_expires_at = %s,"
+                " reset_attempts = 0, reset_sent_at = %s WHERE username = %s",
+                (code_hash, expires, sent_at, username),
+            )
+
+    def record_reset_failure(self, username: str) -> None:
+        # Atomic, like record_failure: parallel guesses can't share one count.
+        with self._conn() as conn:
+            conn.execute(
+                "UPDATE app_user SET reset_attempts = reset_attempts + 1,"
+                " reset_code_hash = CASE WHEN reset_attempts + 1 >= %s"
+                " THEN NULL ELSE reset_code_hash END"
+                " WHERE username = %s AND reset_code_hash IS NOT NULL",
+                (RESET_MAX_ATTEMPTS, username),
+            )
+
+    def complete_reset(self, username: str, password_hash: str) -> None:
+        with self._conn() as conn:
+            conn.execute(
+                "UPDATE app_user SET password_hash = %s, session_version = session_version + 1,"
+                " failed_attempts = 0, locked_until = NULL, reset_code_hash = NULL,"
+                " reset_expires_at = NULL, reset_attempts = 0 WHERE username = %s",
+                (password_hash, username),
             )
 
 
@@ -493,3 +578,114 @@ def current_user(request: Request, store: StoreDep) -> UserRecord:
 def me(response: Response, record: Annotated[UserRecord, Depends(current_user)]) -> SessionUser:
     _no_store(response)
     return _user_out(record)
+
+
+# --------------------------------------------------------- forgot password
+
+FORGOT_REPLY = "If that account has an email on file, we've sent it a code."
+BAD_CODE = "That code is incorrect or has expired."
+
+
+class ForgotRequest(BaseModel):
+    username: str = Field(min_length=1, max_length=MAX_USERNAME_LENGTH * 2)
+
+
+class CodeRequest(ForgotRequest):
+    code: str = Field(min_length=1, max_length=16)
+
+
+class ResetRequest(CodeRequest):
+    new_password: str = Field(min_length=1, max_length=MAX_PASSWORD_LENGTH)
+
+
+def _code_digest(username: str, code: str) -> str:
+    # Keyed, so a leaked database row can't be brute-forced offline without the secret.
+    return hmac.new(AUTH_SECRET, f"reset:{username}:{code}".encode(), hashlib.sha256).hexdigest()
+
+
+def _code_ok(store: UserStore, username: str, code: str, now: dt.datetime) -> bool:
+    """True if `code` is the live reset code for `username`. A wrong guess
+    counts against the code's attempts; the fifth burns it."""
+    record = store.get(username)
+    live = (
+        record is not None
+        and record.is_active
+        and record.reset_code_hash is not None
+        and record.reset_expires_at is not None
+        and record.reset_expires_at > now
+        and record.reset_attempts < RESET_MAX_ATTEMPTS
+    )
+    if not live:
+        return False
+    if hmac.compare_digest(record.reset_code_hash, _code_digest(username, code.strip())):
+        return True
+    store.record_reset_failure(username)
+    return False
+
+
+@router.post("/forgot", status_code=202)
+def forgot(
+    body: ForgotRequest, response: Response, background: BackgroundTasks, store: StoreDep
+) -> dict[str, str]:
+    """Email a one-time code. Always answers the same, so this can't be used to
+    find out which usernames exist or have an email."""
+    _no_store(response)
+    username = normalize_username(body.username)
+    now = utcnow()
+    try:
+        record = store.get(username)
+        cooling = (
+            record is not None
+            and record.reset_sent_at is not None
+            and now - record.reset_sent_at < RESET_RESEND_AFTER
+        )
+        if record is not None and record.is_active and record.email and not cooling:
+            code = f"{secrets.randbelow(10**6):06d}"
+            store.set_reset(
+                username,
+                _code_digest(username, code),
+                now + dt.timedelta(minutes=RESET_CODE_MINUTES),
+                now,
+            )
+            # In the background so a slow mail server doesn't make "has an
+            # email" distinguishable by response time.
+            background.add_task(mailer.send_reset_code, record.email, code, RESET_CODE_MINUTES)
+    except StoreUnavailable as exc:
+        log.error("forgot: user store unavailable: %s", exc)
+        raise _store_down() from exc
+    return {"detail": FORGOT_REPLY}
+
+
+@router.post("/forgot/verify", status_code=204)
+def forgot_verify(body: CodeRequest, response: Response, store: StoreDep) -> Response:
+    """Check a code without using it, so the form can reject a wrong one before
+    asking for a new password."""
+    try:
+        ok = _code_ok(store, normalize_username(body.username), body.code, utcnow())
+    except StoreUnavailable as exc:
+        raise _store_down() from exc
+    if not ok:
+        raise HTTPException(status_code=400, detail=BAD_CODE, headers={"Cache-Control": "no-store"})
+    response.headers["Cache-Control"] = "no-store"
+    response.status_code = 204
+    return response
+
+
+@router.post("/forgot/reset", status_code=204)
+def forgot_reset(body: ResetRequest, response: Response, store: StoreDep) -> Response:
+    """Set a new password with a valid code. Signs the user out everywhere."""
+    username = normalize_username(body.username)
+    problem = validate_password(body.new_password)
+    if problem:
+        raise HTTPException(status_code=422, detail=problem.capitalize() + ".")
+    try:
+        if not _code_ok(store, username, body.code, utcnow()):
+            raise HTTPException(
+                status_code=400, detail=BAD_CODE, headers={"Cache-Control": "no-store"}
+            )
+        store.complete_reset(username, hash_password(body.new_password))
+    except StoreUnavailable as exc:
+        raise _store_down() from exc
+    response.headers["Cache-Control"] = "no-store"
+    response.status_code = 204
+    return response

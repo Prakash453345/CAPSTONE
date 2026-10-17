@@ -228,3 +228,51 @@ for (const colorScheme of ["light", "dark"] as const) {
     });
   });
 }
+
+// ---------------------------------------------------------------- forgot password
+
+/** Stubs the three reset endpoints. The right code is 123456. */
+async function resetApi(page: Page) {
+  const calls: string[] = [];
+  await page.route("**/api/v1/auth/forgot", (route) => {
+    calls.push("forgot");
+    return route.fulfill({ status: 202, json: { detail: "sent" } });
+  });
+  await page.route("**/api/v1/auth/forgot/verify", (route) => {
+    const { code } = route.request().postDataJSON();
+    calls.push(`verify:${code}`);
+    return code === "123456"
+      ? route.fulfill({ status: 204, body: "" })
+      : route.fulfill({ status: 400, json: { detail: "bad" } });
+  });
+  await page.route("**/api/v1/auth/forgot/reset", (route) => {
+    calls.push("reset");
+    return route.fulfill({ status: 204, body: "" });
+  });
+  return calls;
+}
+
+test("forgot password: username -> emailed code -> new password -> back to sign in", async ({ page }) => {
+  await signedOutApi(page);
+  const calls = await resetApi(page);
+  await page.goto("/login");
+  await page.getByRole("button", { name: "Forgot your password?" }).click();
+
+  await page.getByLabel("Username").fill("komal");
+  await page.getByRole("button", { name: "Send code" }).click();
+
+  // a wrong code is refused and the form stays on the code step
+  const code = page.getByLabel("6-digit code");
+  await code.fill("000000");
+  await page.getByRole("button", { name: "Verify code" }).click();
+  await expect(page.getByRole("alert")).toContainText("incorrect or has expired");
+
+  await code.fill("123456");
+  await page.getByRole("button", { name: "Verify code" }).click();
+  await page.getByLabel("New password").fill("a brand new password");
+  await page.getByRole("button", { name: "Change password" }).click();
+
+  await expect(page.getByRole("status").filter({ hasText: "Password changed" })).toBeVisible();
+  await expect(username(page)).toHaveValue("komal");
+  expect(calls).toEqual(["forgot", "verify:000000", "verify:123456", "reset"]);
+});
