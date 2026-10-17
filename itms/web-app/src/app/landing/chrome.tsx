@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
+import { useAccessLabel } from "./useAccess";
 import { AnimatePresence, motion, useMotionValueEvent, useScroll } from "framer-motion";
 
 const cssVar = (name: string, value: string) => ({ [name]: value }) as CSSProperties;
@@ -89,6 +90,7 @@ export function IntroGate({ show, onDone }: { show: boolean; onDone: () => void 
 // ------------------------------------------------------------ nav
 
 export function Nav({ ready }: { ready: boolean }) {
+  const access = useAccessLabel();
   const { scrollYProgress, scrollY } = useScroll();
   const [lamp, setLamp] = useState(0);
   const [solid, setSolid] = useState(false);
@@ -116,7 +118,7 @@ export function Nav({ ready }: { ready: boolean }) {
         <a href="#faq">FAQ</a>
       </div>
       <Link className="go" to="/login">
-        Log in
+        {access}
       </Link>
     </motion.nav>
   );
@@ -178,6 +180,7 @@ function inPinned(id: string) {
  * back on the way up, and steps aside where the page already offers the same
  * button or a pinned scene needs the whole screen. */
 export function FloatingDock() {
+  const access = useAccessLabel();
   const { scrollY } = useScroll();
   const [show, setShow] = useState(false);
   const last = useRef({ y: 0, up: false });
@@ -204,7 +207,7 @@ export function FloatingDock() {
         >
           <span>See it working for yourself</span>
           <a className="go" href="/console">
-            Try the live demo
+            {access}
             <svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden="true">
               <path d="M2 7h10M8 3l4 4-4 4" stroke="#04120b" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
             </svg>

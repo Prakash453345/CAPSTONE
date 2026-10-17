@@ -92,8 +92,8 @@ export function LoginPage() {
       password: password ? undefined : "Enter your password.",
     };
     setFieldErrors(errors);
-    setError(null);
     if (errors.username || errors.password) {
+      setError(null);
       (errors.username ? usernameRef : passwordRef).current?.focus();
       return;
     }
@@ -101,6 +101,7 @@ export function LoginPage() {
     const controller = new AbortController();
     abortRef.current = controller;
     setBusy(true);
+    // The previous error stays until the answer arrives (no jump on retry).
     setDirty(false);
     // Hold the redirect so the green lamp is seen before the console opens.
     setHold(true);

@@ -145,7 +145,8 @@ export function ForgotFlow({
     const controller = new AbortController();
     abortRef.current = controller;
     setBusy(true);
-    setError(null);
+    // The previous error stays on screen until the answer arrives: removing it
+    // now and re-adding it on a second failure made the form jump up and down.
     setDirty(false);
     try {
       await call(controller.signal);
@@ -160,6 +161,7 @@ export function ForgotFlow({
     await new Promise((r) => setTimeout(r, 700));
     if (controller.signal.aborted) return;
     setCleared(false);
+    setError(null);
     next();
   };
 

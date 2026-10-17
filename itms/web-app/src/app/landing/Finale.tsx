@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { useAccessLabel } from "./useAccess";
 import { motion, type MotionValue, useMotionValueEvent, useScroll, useTransform } from "framer-motion";
 import { ArrowIcon } from "./motion";
 
@@ -7,6 +8,7 @@ import { ArrowIcon } from "./motion";
  * green as you scroll, and only on green does the way into the demo open.
  */
 export function Finale() {
+  const access = useAccessLabel();
   const ref = useRef<HTMLElement>(null);
   const { scrollYProgress: p } = useScroll({ target: ref, offset: ["start start", "end end"] });
   const red = useTransform(p, [0, 0.34, 0.44], [1, 1, 0]);
@@ -64,7 +66,7 @@ export function Finale() {
                   <span className="lamp">
                     <ArrowIcon />
                   </span>
-                  Try the live demo
+                  {access}
                 </a>
                 <a className="btn ghost" href="#flow" tabIndex={go ? 0 : -1}>
                   See how it works

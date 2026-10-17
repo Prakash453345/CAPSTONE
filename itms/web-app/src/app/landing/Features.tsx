@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
+import { useAccessLabel } from "./useAccess";
 import { AnimatePresence, motion, useInView } from "framer-motion";
 import { Lines, Reveal } from "./motion";
 import type { JunctionState, Scene3D } from "./city3d/scenes";
@@ -280,6 +281,7 @@ const FEATURES = [
 const DWELL = 7; // seconds per feature while auto-playing
 
 export function Features({ reduced }: { reduced: boolean }) {
+  const access = useAccessLabel();
   const [active, setActive] = useState(0);
   const [hold, setHold] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -363,7 +365,7 @@ export function Features({ reduced }: { reduced: boolean }) {
                 </button>
               ))}
               <a className="ft-cta" href="/console">
-                See all four working together in the live demo
+                {access === "Log in" ? "Log in to see all four working together" : "See all four working together in the console"}
                 <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
                   <path d="M2 7h10M8 3l4 4-4 4" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>

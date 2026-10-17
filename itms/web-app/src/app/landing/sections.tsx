@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useAccessLabel } from "./useAccess";
 import { AnimatePresence, animate, motion, useInView, useScroll } from "framer-motion";
 import { ArrowIcon, Lines, Reveal, ScrubWord } from "./motion";
 
@@ -265,6 +266,7 @@ const FAQ: [string, string][] = [
 ];
 
 export function Faq() {
+  const access = useAccessLabel();
   const [open, setOpen] = useState(0);
   return (
     <section className="block" id="faq" style={{ paddingTop: 0 }}>
@@ -322,7 +324,7 @@ export function Faq() {
                 <span className="lamp">
                   <ArrowIcon />
                 </span>
-                Try the live demo
+                {access}
               </a>
             </aside>
           </Reveal>
@@ -335,6 +337,7 @@ export function Faq() {
 // ------------------------------------------------------------ footer
 
 export function Footer() {
+  const access = useAccessLabel();
   return (
     <footer>
       <div className="wrap">
@@ -372,7 +375,7 @@ export function Footer() {
           </div>
           <div>
             <h5>Access</h5>
-            <a href="/console">Live demo</a>
+            <a href="/console">{access}</a>
             <span>Citizen app (coming soon)</span>
             <span>Field mobile app (coming soon)</span>
           </div>

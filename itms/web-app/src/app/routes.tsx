@@ -35,7 +35,7 @@ const SettingsPage = lazy(() =>
 );
 
 /**
- * "/" is the landing page (branding, product pitch, "Try the live demo");
+ * "/" is the landing page (branding, product pitch, "Log in");
  * the actual operator workspace — sidebar/topbar shell + every workspace
  * page — lives under "/console" so the two are cleanly separated: launching
  * the app always lands you on the landing page first, never straight into

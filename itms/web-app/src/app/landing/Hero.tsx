@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useAccessLabel } from "./useAccess";
 import { motion, useMotionValueEvent, useScroll, useTransform } from "framer-motion";
 import type { HeroScene } from "./heroScene";
 import { ArrowIcon, Lines } from "./motion";
@@ -12,6 +13,7 @@ const cssVar = (name: string, value: string) => ({ [name]: value }) as CSSProper
  * ambulance should never meet a red light") to the answer.
  */
 export function Hero({ ready, paused, reduced }: { ready: boolean; paused: boolean; reduced: boolean }) {
+  const access = useAccessLabel();
   const sectionRef = useRef<HTMLElement>(null);
   const hostRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<HeroScene | null>(null);
@@ -126,7 +128,7 @@ export function Hero({ ready, paused, reduced }: { ready: boolean; paused: boole
                   <span className="lamp">
                     <ArrowIcon />
                   </span>
-                  Try the live demo
+                  {access}
                 </a>
                 <a className="btn ghost" href="#flow">
                   See how it works
