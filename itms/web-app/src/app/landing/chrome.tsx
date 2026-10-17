@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { Link } from "react-router-dom";
 import { AnimatePresence, motion, useMotionValueEvent, useScroll } from "framer-motion";
 
 const cssVar = (name: string, value: string) => ({ [name]: value }) as CSSProperties;
@@ -114,9 +115,9 @@ export function Nav({ ready }: { ready: boolean }) {
         <a href="#modules">Features</a>
         <a href="#faq">FAQ</a>
       </div>
-      <a className="go" href="/console">
-        Try the demo
-      </a>
+      <Link className="go" to="/login">
+        Log in
+      </Link>
     </motion.nav>
   );
 }

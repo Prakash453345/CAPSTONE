@@ -29,30 +29,40 @@ function messageFor(err: unknown): string {
   }
 }
 
-type Lamp = "idle" | "busy" | "error";
+type Lamp = "idle" | "typing" | "busy" | "granted" | "error";
 
-/** Three lamps echoing the landing page's signal: amber while we check, red
- *  when we turn you away. Purely decorative, so hidden from assistive tech. */
+/** A signal head that mirrors the form: amber while you type (steady) or
+ *  while we check (pulsing), green once you're cleared, red when you're turned
+ *  away. Decorative, so hidden from assistive tech; the text status below it
+ *  is what screen readers get. */
 function Signal({ state }: { state: Lamp }) {
   const lamps = [
-    { id: "r", on: state === "error", color: "bg-status-critical ring-status-critical/25" },
-    { id: "a", on: state === "busy", color: "bg-status-warn ring-status-warn/25" },
-    { id: "g", on: false, color: "bg-status-ok ring-status-ok/25" },
+    { id: "r", on: state === "error", color: "bg-status-critical shadow-[0_0_14px_3px_hsl(var(--status-critical))]" },
+    { id: "a", on: state === "typing" || state === "busy", color: "bg-status-warn shadow-[0_0_14px_3px_hsl(var(--status-warn))]" },
+    { id: "g", on: state === "granted", color: "bg-status-ok shadow-[0_0_14px_3px_hsl(var(--status-ok))]" },
   ];
   return (
-    <span aria-hidden className="flex items-center gap-1.5 rounded-full bg-muted px-2 py-1.5">
+    <span aria-hidden className="flex items-center gap-2 rounded-full bg-muted px-3 py-2">
       {lamps.map((l) => (
         <i
           key={l.id}
           className={cn(
-            "block size-2 rounded-full transition-[background-color,box-shadow] duration-200",
-            l.on ? cn(l.color, "ring-4") : "bg-foreground/15",
+            "block size-3.5 rounded-full transition-[background-color,box-shadow,transform] duration-300",
+            l.on ? cn(l.color, "scale-110", l.id === "a" && state === "busy" && "animate-pulse") : "bg-foreground/15",
           )}
         />
       ))}
     </span>
   );
 }
+
+const LAMP_TEXT: Record<Lamp, string> = {
+  idle: "Ready",
+  typing: "Typing…",
+  busy: "Checking…",
+  granted: "Access granted",
+  error: "Access denied",
+};
 
 export function LoginPage() {
   const [params] = useSearchParams();
@@ -71,6 +81,10 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<{ username?: string; password?: string }>({});
   const [rechecking, setRechecking] = useState(false);
+  // Typed since the last failed attempt, and the brief green "granted" beat.
+  const [dirty, setDirty] = useState(false);
+  const [granted, setGranted] = useState(false);
+  const [hold, setHold] = useState(false);
 
   const usernameRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
@@ -98,7 +112,7 @@ export function LoginPage() {
   }, [check]);
 
   // Already signed in (or just now signed in): go where they were headed.
-  if (status === "authed") return <Navigate to={next} replace />;
+  if (status === "authed" && !hold) return <Navigate to={next} replace />;
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -119,11 +133,18 @@ export function LoginPage() {
     const controller = new AbortController();
     abortRef.current = controller;
     setBusy(true);
+    setDirty(false);
+    // Hold the redirect so the green lamp is seen before the console opens.
+    setHold(true);
     try {
       await signIn(name, password, controller.signal);
-      // The store flips to "authed" and this page redirects itself.
+      setGranted(true);
+      await new Promise((r) => setTimeout(r, 900));
+      if (controller.signal.aborted) return;
+      // Releasing the hold lets this page redirect itself (store is "authed").
     } catch (err) {
       if (controller.signal.aborted) return; // the page was left mid-request
+      setHold(false);
       setError(messageFor(err));
       if (err instanceof AuthError && err.kind === "invalid") {
         setPassword("");
@@ -133,12 +154,21 @@ export function LoginPage() {
       if (abortRef.current === controller) abortRef.current = null;
       setBusy(false);
     }
+    setHold(false);
   };
 
   const trackCaps = (e: KeyboardEvent<HTMLInputElement>) =>
     setCapsLock(e.getModifierState?.("CapsLock") ?? false);
 
-  const lamp: Lamp = busy ? "busy" : error ? "error" : "idle";
+  const lamp: Lamp = granted
+    ? "granted"
+    : busy
+      ? "busy"
+      : error && !dirty
+        ? "error"
+        : username || password
+          ? "typing"
+          : "idle";
   const describedBy = (field: "username" | "password") =>
     [fieldErrors[field] ? (field === "username" ? usernameErrId : passwordErrId) : null, error ? formErrId : null]
       .filter(Boolean)
@@ -168,7 +198,12 @@ export function LoginPage() {
               <span className="text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">
                 Operator access
               </span>
-              <Signal state={lamp} />
+              <span className="flex items-center gap-2.5">
+                <span role="status" aria-live="polite" className="text-xs text-muted-foreground">
+                  {LAMP_TEXT[lamp]}
+                </span>
+                <Signal state={lamp} />
+              </span>
             </div>
 
             {serviceDown && status !== "checking" && (
@@ -204,6 +239,7 @@ export function LoginPage() {
                   value={username}
                   onChange={(e) => {
                     setUsername(e.target.value);
+                    setDirty(true);
                     if (fieldErrors.username) setFieldErrors((f) => ({ ...f, username: undefined }));
                   }}
                   autoComplete="username"
@@ -236,6 +272,7 @@ export function LoginPage() {
                     value={password}
                     onChange={(e) => {
                       setPassword(e.target.value);
+                      setDirty(true);
                       if (fieldErrors.password) setFieldErrors((f) => ({ ...f, password: undefined }));
                     }}
                     onKeyDown={trackCaps}
