@@ -239,7 +239,10 @@ async function resetApi(page: Page) {
     calls.push(`forgot:${username}`);
     return username === "komal"
       ? route.fulfill({ status: 202, json: { detail: "Code sent.", email_hint: "k***@example.org" } })
-      : route.fulfill({ status: 404, json: { detail: "x" } });
+      : route.fulfill({
+          status: 404,
+          json: { detail: username.includes("@") ? "That looks like an email address. Enter your username instead." : "No such user. Check your username." },
+        });
   });
   await page.route("**/api/v1/auth/forgot/verify", (route) => {
     const { code } = route.request().postDataJSON();
@@ -261,10 +264,13 @@ test("forgot password: username -> emailed code -> new password -> back to sign 
   await page.goto("/login");
   await page.getByRole("button", { name: "Forgot your password?" }).click();
 
-  // an email (or any unknown name) is refused up front, with a hint
+  await page.getByLabel("Username").fill("nobody");
+  await page.getByRole("button", { name: "Send code" }).click();
+  await expect(page.getByRole("alert")).toContainText("No such user");
+
   await page.getByLabel("Username").fill("someone@example.org");
   await page.getByRole("button", { name: "Send code" }).click();
-  await expect(page.getByRole("alert")).toContainText("Use your username, not your email");
+  await expect(page.getByRole("alert")).toContainText("looks like an email");
 
   await page.getByLabel("Username").fill("komal");
   await page.getByRole("button", { name: "Send code" }).click();
@@ -283,5 +289,5 @@ test("forgot password: username -> emailed code -> new password -> back to sign 
 
   await expect(page.getByRole("status").filter({ hasText: "Password changed" })).toBeVisible();
   await expect(username(page)).toHaveValue("komal");
-  expect(calls).toEqual(["forgot:someone@example.org", "forgot:komal", "verify:000000", "verify:123456", "reset"]);
+  expect(calls).toEqual(["forgot:nobody", "forgot:someone@example.org", "forgot:komal", "verify:000000", "verify:123456", "reset"]);
 });

@@ -582,7 +582,9 @@ def me(response: Response, record: Annotated[UserRecord, Depends(current_user)])
 
 # --------------------------------------------------------- forgot password
 
-NO_ACCOUNT = "No account found with that username. Use your username, not your email."
+NO_ACCOUNT = "No such user. Check your username."
+EMAIL_NOT_USERNAME = "That looks like an email address. Enter your username instead."
+_EMAIL_LIKE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 NO_EMAIL = "That account has no email on file. Ask an administrator to reset your password."
 
 
@@ -650,7 +652,8 @@ def forgot(body: ForgotRequest, response: Response, store: StoreDep) -> dict[str
     try:
         record = store.get(username)
         if record is None or not record.is_active:
-            raise HTTPException(status_code=404, detail=NO_ACCOUNT)
+            detail = EMAIL_NOT_USERNAME if _EMAIL_LIKE.fullmatch(username) else NO_ACCOUNT
+            raise HTTPException(status_code=404, detail=detail)
         if not record.email:
             raise HTTPException(status_code=409, detail=NO_EMAIL)
         cooling = (

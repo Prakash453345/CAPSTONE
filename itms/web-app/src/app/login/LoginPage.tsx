@@ -146,7 +146,9 @@ export function LoginPage() {
     <div className="relative isolate h-full overflow-y-auto bg-background text-foreground">
       <div aria-hidden className="login-backdrop pointer-events-none absolute inset-0 -z-10" />
 
-      <div className="grid min-h-full place-items-center px-4 py-10 sm:py-14">
+      {/* Anchored from the top, not centred: a centred card slides up and down
+          whenever a message or step changes its height. */}
+      <div className="grid min-h-full content-start justify-items-center px-4 pb-10 pt-[clamp(2rem,9vh,5rem)]">
         <motion.main
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}

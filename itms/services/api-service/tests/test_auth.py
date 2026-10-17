@@ -259,8 +259,10 @@ def test_forgot_emails_a_six_digit_code_and_reset_changes_the_password(client, m
 
 
 def test_forgot_says_when_the_account_is_unknown_or_has_no_email(client, store, sent):
-    unknown = forgot(client, "k@example.org")  # an email typed where the username goes
-    assert unknown.status_code == 404 and "username" in unknown.json()["detail"]
+    as_email = forgot(client, "k@example.org")  # an email typed where the username goes
+    assert as_email.status_code == 404 and "email address" in as_email.json()["detail"]
+    unknown = forgot(client, "nobody")
+    assert unknown.status_code == 404 and unknown.json()["detail"].startswith("No such user")
     no_email = forgot(client)  # operator exists but has no email
     assert no_email.status_code == 409 and "no email" in no_email.json()["detail"]
     assert sent == []
