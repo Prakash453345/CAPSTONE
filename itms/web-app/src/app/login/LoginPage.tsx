@@ -9,7 +9,8 @@ import { safeNext } from "@/services/auth/safeRedirect";
 import { useAuthStore } from "@/store/authStore";
 import { cn } from "@/utils/cn";
 import { ForgotFlow } from "@/app/login/ForgotFlow";
-import { Signal } from "@/app/login/loginUi";
+import { Collapse, Signal } from "@/app/login/loginUi";
+import { useLastValue } from "@/app/login/useLastValue";
 import { INPUT, LAMP_TEXT, type Lamp } from "@/app/login/loginConsts";
 
 /** What the operator should read for each way a sign-in can fail. */
@@ -53,6 +54,8 @@ export function LoginPage() {
   const [forgot, setForgot] = useState(false);
   const [forgotLamp, setForgotLamp] = useState<Lamp>("idle");
   const [notice, setNotice] = useState<string | null>(null);
+  const lastError = useLastValue(error);
+  const lastNotice = useLastValue(notice);
 
   const usernameRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
@@ -107,6 +110,7 @@ export function LoginPage() {
     setHold(true);
     try {
       await signIn(name, password, controller.signal);
+      setError(null);
       setGranted(true);
       await new Promise((r) => setTimeout(r, 900));
       if (controller.signal.aborted) return;
@@ -212,14 +216,14 @@ export function LoginPage() {
               />
             ) : (
               <>
-            {notice && (
+            <Collapse show={!!notice} kind="below">
               <div
                 role="status"
-                className="mb-4 rounded-xl bg-status-ok-muted px-3.5 py-3 text-[13px] text-status-ok"
+                className="rounded-xl bg-status-ok-muted px-3.5 py-3 text-[13px] text-status-ok"
               >
-                {notice}
+                {lastNotice}
               </div>
-            )}
+            </Collapse>
             <form onSubmit={onSubmit} noValidate aria-busy={busy} className="flex flex-col gap-4">
               <div>
                 <label htmlFor={usernameId} className="mb-1.5 block text-[13px] font-medium">
@@ -302,16 +306,16 @@ export function LoginPage() {
                 )}
               </div>
 
-              {error && (
+              <Collapse show={!!error}>
                 <div
                   id={formErrId}
                   role="alert"
                   className="flex items-start gap-2 rounded-xl bg-status-critical-muted px-3.5 py-3 text-[13px] text-status-critical"
                 >
                   <TriangleAlert className="mt-px size-4 shrink-0" aria-hidden />
-                  <span>{error}</span>
+                  <span>{lastError}</span>
                 </div>
-              )}
+              </Collapse>
 
               <Button
                 type="submit"

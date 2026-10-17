@@ -6,7 +6,6 @@ import {
   type FormEvent,
   type ReactNode,
 } from "react";
-import { motion } from "framer-motion";
 import { ArrowLeft, Eye, EyeOff, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,6 +15,8 @@ import {
   verifyResetCode,
 } from "@/services/auth/authApi";
 import { INPUT, type Lamp } from "@/app/login/loginConsts";
+import { Collapse } from "@/app/login/loginUi";
+import { useLastValue } from "@/app/login/useLastValue";
 import { cn } from "@/utils/cn";
 
 const RESEND_SECONDS = 60;
@@ -46,20 +47,6 @@ function messageFor(err: unknown): string {
         "This isn't available right now. Please try again in a moment."
       );
   }
-}
-
-/** Fades a step in so swapping forms reads as one change, not a snap. */
-function Step({ k, children }: { k: string; children: ReactNode }) {
-  return (
-    <motion.div
-      key={k}
-      initial={{ opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.25 }}
-    >
-      {children}
-    </motion.div>
-  );
 }
 
 function Field({
@@ -157,11 +144,11 @@ export function ForgotFlow({
       return;
     }
     setBusy(false);
+    setError(null);
     setCleared(true);
     await new Promise((r) => setTimeout(r, 700));
     if (controller.signal.aborted) return;
     setCleared(false);
-    setError(null);
     next();
   };
 
@@ -202,14 +189,17 @@ export function ForgotFlow({
     );
   };
 
-  const errorBox = error && (
-    <div
-      role="alert"
-      className="flex items-start gap-2 rounded-xl bg-status-critical-muted px-3.5 py-3 text-[13px] text-status-critical"
-    >
-      <TriangleAlert className="mt-px size-4 shrink-0" aria-hidden />
-      <span>{error}</span>
-    </div>
+  const lastError = useLastValue(error);
+  const errorBox = (
+    <Collapse show={!!error}>
+      <div
+        role="alert"
+        className="flex items-start gap-2 rounded-xl bg-status-critical-muted px-3.5 py-3 text-[13px] text-status-critical"
+      >
+        <TriangleAlert className="mt-px size-4 shrink-0" aria-hidden />
+        <span>{lastError}</span>
+      </div>
+    </Collapse>
   );
   const submit = (label: string, busyLabel: string) => (
     <Button
@@ -234,7 +224,6 @@ export function ForgotFlow({
       </h2>
 
       {step === "user" && (
-        <Step k="user">
           <form
             onSubmit={sendCode}
             noValidate
@@ -265,11 +254,9 @@ export function ForgotFlow({
             {errorBox}
             {submit("Send code", "Sending…")}
           </form>
-        </Step>
       )}
 
       {step === "code" && (
-        <Step k="code">
           <form
             onSubmit={checkCode}
             noValidate
@@ -313,11 +300,9 @@ export function ForgotFlow({
               {wait > 0 ? `Send a new code in ${wait}s` : "Send a new code"}
             </button>
           </form>
-        </Step>
       )}
 
       {step === "password" && (
-        <Step k="password">
           <form
             onSubmit={savePassword}
             noValidate
@@ -362,7 +347,6 @@ export function ForgotFlow({
             {errorBox}
             {submit("Change password", "Saving…")}
           </form>
-        </Step>
       )}
 
       <button
