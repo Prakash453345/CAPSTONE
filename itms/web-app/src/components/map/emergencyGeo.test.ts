@@ -196,7 +196,7 @@ describe("buildPointFeatures", () => {
 
   it("includes the operator's in-progress draft, always at full prominence", () => {
     const draft = {
-      unit: { id: "EV-001", callSign: "Ambulance 12", kind: "ambulance" as const },
+      unit: { kind: "ambulance" as const, label: "Ambulance" },
       source: { edgeId: EDGE_A, edgeName: null, at: [80.6, 16.5] as [number, number] },
       destination: null,
     };

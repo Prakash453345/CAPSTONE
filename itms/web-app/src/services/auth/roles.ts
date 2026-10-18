@@ -1,3 +1,5 @@
+import type { EmergencyVehicleKind } from "@/types";
+
 /**
  * What an account is for. The server decides (the `role` on the account) and
  * reports it with the session; the pages only follow it, so nobody picks a
@@ -9,6 +11,12 @@
 export type Role = "operator" | "responder";
 
 export const parseRole = (raw: unknown): Role => (raw === "responder" ? "responder" : "operator");
+
+const UNIT_KINDS: readonly EmergencyVehicleKind[] = ["ambulance", "police", "fire_truck"];
+
+/** What a crew account drives, as the server reports it; null when it says nothing usable. */
+export const parseUnitKind = (raw: unknown): EmergencyVehicleKind | null =>
+  UNIT_KINDS.find((k) => k === raw) ?? null;
 
 /** Where an account lands after signing in. */
 export const homeFor = (role: Role): string => (role === "responder" ? "/crew" : "/console");

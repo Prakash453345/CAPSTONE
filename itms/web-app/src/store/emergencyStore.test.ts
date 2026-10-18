@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
-  PRESET_UNITS,
+  CREW_TYPES,
   corridorHoldSeconds,
   draftLatLng,
   isTerminalRequest,
@@ -88,9 +88,9 @@ describe("emergencyStore", () => {
   beforeEach(reset);
 
   it("startDraft seeds a draft with the chosen unit and no points", () => {
-    useEmergencyStore.getState().startDraft(PRESET_UNITS[2]);
+    useEmergencyStore.getState().startDraft(CREW_TYPES[2]!);
     const d = useEmergencyStore.getState().draft;
-    expect(d?.unit.id).toBe(PRESET_UNITS[2].id);
+    expect(d?.unit.kind).toBe("fire_truck");
     expect(d?.source).toBeNull();
     expect(d?.destination).toBeNull();
   });
@@ -99,7 +99,7 @@ describe("emergencyStore", () => {
     useEmergencyStore.getState().setDraftPoint("source", { edgeId: "A", edgeName: "A", at: [1, 2] });
     expect(useEmergencyStore.getState().draft).toBeNull();
 
-    useEmergencyStore.getState().startDraft(PRESET_UNITS[0]);
+    useEmergencyStore.getState().startDraft(CREW_TYPES[0]!);
     useEmergencyStore
       .getState()
       .setDraftPoint("destination", { edgeId: "B", edgeName: null, at: [3, 4] });
@@ -108,7 +108,7 @@ describe("emergencyStore", () => {
   });
 
   it("clearDraft removes the draft", () => {
-    useEmergencyStore.getState().startDraft(PRESET_UNITS[0]);
+    useEmergencyStore.getState().startDraft(CREW_TYPES[0]!);
     useEmergencyStore.getState().clearDraft();
     expect(useEmergencyStore.getState().draft).toBeNull();
   });

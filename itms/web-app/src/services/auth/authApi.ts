@@ -1,4 +1,5 @@
-import { parseRole, type Role } from "@/services/auth/roles";
+import { parseRole, parseUnitKind, type Role } from "@/services/auth/roles";
+import type { EmergencyVehicleKind } from "@/types";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "/api";
 
@@ -11,6 +12,8 @@ export interface SessionUser {
   role: Role;
   /** The vehicle a crew account drives (as dispatch knows it); null for operators. */
   unitId: string | null;
+  /** What the crew drives (ambulance, police, fire truck); null for operators. */
+  unitKind: EmergencyVehicleKind | null;
 }
 
 /**
@@ -66,7 +69,7 @@ async function readUser(res: Response): Promise<SessionUser> {
     throw new AuthError("unavailable");
   }
   const body: unknown = await res.json().catch(() => null);
-  const b = body as { username?: unknown; display_name?: unknown; role?: unknown; unit_id?: unknown } | null;
+  const b = body as { username?: unknown; display_name?: unknown; role?: unknown; unit_id?: unknown; unit_kind?: unknown } | null;
   if (!b || typeof b.username !== "string" || !b.username) throw new AuthError("unavailable");
   return {
     username: b.username,
@@ -74,6 +77,7 @@ async function readUser(res: Response): Promise<SessionUser> {
     // An older api-service reports no role; those accounts were all operators.
     role: parseRole(b.role),
     unitId: typeof b.unit_id === "string" && b.unit_id ? b.unit_id : null,
+    unitKind: parseUnitKind(b.unit_kind),
   };
 }
 

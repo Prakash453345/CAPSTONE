@@ -16,10 +16,16 @@ const req = (over: Partial<EmergencyRequest>): EmergencyRequest => ({
 });
 
 describe("unitOptions", () => {
-  it("always offers the preset units, by call sign", () => {
-    const names = unitOptions([]).map((u) => u.name);
-    expect(names).toContain("Ambulance 12");
-    expect(names).toContain("Fire 4");
+  it("lists only units that have had a call, named by what they are", () => {
+    expect(unitOptions([])).toEqual([]);
+    const options = unitOptions([
+      req({ id: "a", vehicleId: "unit-police-3", vehicleKind: "police" }),
+      req({ id: "b", vehicleId: "unit-ambulance-0", vehicleKind: "ambulance" }),
+    ]);
+    expect(options.map((u) => [u.name, u.kind])).toEqual([
+      ["Ambulance 0", "ambulance"],
+      ["Police 3", "police"],
+    ]);
   });
 
   it("marks a unit with a live call as active and lists it first", () => {

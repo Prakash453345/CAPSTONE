@@ -16,19 +16,26 @@ import type {
  * incident/anomaly views.
  */
 
-export interface PresetUnit {
-  id: string;
-  callSign: string;
+/**
+ * What an operator asks for when dispatching: a kind of crew, not a named
+ * vehicle. Dispatch finds the nearest free crew of that kind to the location
+ * (the same lookup an anomaly triggers), the way a ride-hailing app picks the
+ * driver, so there is no fixed list of vehicles to choose from here.
+ */
+export interface CrewType {
   kind: EmergencyVehicleKind;
+  label: string;
 }
 
-/** A couple of always-available simulated responders for the prototype. */
-export const PRESET_UNITS: PresetUnit[] = [
-  { id: "EV-001", callSign: "Ambulance 12", kind: "ambulance" },
-  { id: "EV-002", callSign: "Ambulance 27", kind: "ambulance" },
-  { id: "EV-101", callSign: "Fire 4", kind: "fire_truck" },
-  { id: "EV-201", callSign: "Police 9", kind: "police" },
+export const CREW_TYPES: CrewType[] = [
+  { kind: "ambulance", label: "Ambulance" },
+  { kind: "police", label: "Police" },
+  { kind: "fire_truck", label: "Fire truck" },
 ];
+
+export function crewTypeFor(kind: EmergencyVehicleKind): CrewType {
+  return CREW_TYPES.find((t) => t.kind === kind) ?? CREW_TYPES[0]!;
+}
 
 /** One end of the dispatch being drafted — a map click resolved to an edge. */
 export interface RoutePoint {
@@ -38,7 +45,7 @@ export interface RoutePoint {
 }
 
 export interface DispatchDraft {
-  unit: PresetUnit;
+  unit: CrewType;
   source: RoutePoint | null;
   destination: RoutePoint | null;
 }
@@ -62,8 +69,8 @@ interface EmergencyState {
   setPreviewRank: (rank: number) => void;
   archiveRequest: (id: string) => void;
 
-  startDraft: (unit: PresetUnit) => void;
-  setDraftUnit: (unit: PresetUnit) => void;
+  startDraft: (unit: CrewType) => void;
+  setDraftUnit: (unit: CrewType) => void;
   setDraftPoint: (which: "source" | "destination", point: RoutePoint) => void;
   clearDraft: () => void;
 }

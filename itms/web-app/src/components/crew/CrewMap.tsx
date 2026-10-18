@@ -601,7 +601,7 @@ export function CrewMap({
           <CrewAlternatives mission={mission} preview={preview} onPreview={onPreview ?? noop} />
           <SignalLayer visible />
           <AnomalyLayer visible />
-          <EmergencyVehicleLayer visible />
+          <EmergencyVehicleLayer visible onlyRequestId={mission?.request.id ?? null} />
           <CrewCamera mission={mission} />
           <MapButtons mission={mission} />
         </MapContext.Provider>

@@ -37,14 +37,14 @@ test("all directions opens over the cards and closes again", async ({ page }) =>
   await expect(page.getByRole("heading", { name: "Signals ahead" })).toBeVisible();
 });
 
-test("a unit with no call is told it is standing by, and can switch back", async ({ page }) => {
+test("the vehicle picker lists only units that dispatch has used, grouped by kind", async ({ page }) => {
   await page.goto("/crew");
   await expect(next(page)).toBeVisible({ timeout: 15_000 });
-  await page.getByLabel("Vehicle", { exact: true }).selectOption({ label: "Ambulance 12" });
-  await expect(page.getByText("Ambulance 12 is standing by")).toBeVisible();
-  await expect(next(page)).toBeHidden();
-  await page.getByLabel("Vehicle", { exact: true }).selectOption({ label: "Ambulance 1 · on a mission" });
-  await expect(next(page)).toBeVisible();
+  const picker = page.getByLabel("Vehicle", { exact: true });
+  // The demo's one ambulance is on a mission; there is no fixed roster of other units.
+  await expect(picker.locator("optgroup")).toHaveCount(1);
+  await expect(picker.locator("optgroup").first()).toHaveAttribute("label", "Ambulance");
+  await expect(picker.locator("option")).toHaveText(["Ambulance 1 · on a mission"]);
 });
 
 test("voice guidance can be switched off and on", async ({ page }) => {
@@ -90,7 +90,7 @@ for (const colorScheme of ["light", "dark"] as const) {
 // ------------------------------------------------------------------ roles
 
 // In the browser demo the simulated ambulance is "amb-01".
-const CREW = { username: "crew1", display_name: "Crew One", role: "responder", unit_id: "amb-01" };
+const CREW = { username: "crew1", display_name: "Crew One", role: "responder", unit_id: "amb-01", unit_kind: "ambulance" };
 
 test("a crew account that opens the console is sent to the crew page", async ({ page }) => {
   await page.route("**/api/v1/auth/me", (route) => route.fulfill({ json: CREW }));
@@ -136,7 +136,8 @@ test("a crew account sees only its own vehicle: no picker, and it follows its ow
   await expect(next(page)).toBeVisible({ timeout: 15_000 });
   await expect(page.getByRole("combobox")).toHaveCount(0);
   await expect(page.getByText("Vehicle:")).toBeAttached();
-  await expect(page.getByText("Ambulance 1", { exact: true })).toBeVisible();
+  // ...and is shown what kind of crew it is
+  await expect(page.getByText("Ambulance crew · Ambulance 1", { exact: true })).toBeVisible();
 });
 
 test("a crew account with no vehicle linked is told to ask dispatch, and sees no one else's", async ({ page }) => {

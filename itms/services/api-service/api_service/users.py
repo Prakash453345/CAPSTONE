@@ -1,9 +1,11 @@
 """Manage console accounts from the command line.
 
     python -m api_service.users create <username> [--name "Display Name"] [--email you@example.org]
-                                         [--role operator|responder] [--unit EV-001]
+                                         [--role operator|responder] [--unit unit-police-0]
+                                         [--kind ambulance|police|fire_truck]
     python -m api_service.users set-role <username> operator|responder
-    python -m api_service.users set-unit <username> <vehicle-id>   # a crew account's vehicle
+    python -m api_service.users set-unit <username> <vehicle-id> [--kind <kind>]
+    python -m api_service.users set-kind <username> ambulance|police|fire_truck
     python -m api_service.users passwd <username>
     python -m api_service.users set-email <username> <email>
     python -m api_service.users disable <username>
@@ -64,6 +66,21 @@ def _unit(raw: str) -> str:
     return unit
 
 
+def _kind(raw: str) -> str:
+    kind = raw.strip().lower()
+    problem = auth.validate_unit_kind(kind)
+    if problem:
+        raise SystemExit(f"error: {problem}")
+    return kind
+
+
+def _resolve_kind(kind: str, unit: str | None) -> str | None:
+    """The kind to store: the one given, else one inferred from the vehicle id."""
+    if kind:
+        return _kind(kind)
+    return auth.infer_unit_kind(unit)
+
+
 def _require_one(cur: psycopg.Cursor, username: str) -> None:
     if cur.rowcount != 1:
         raise SystemExit(f"error: no such user: {username}")
@@ -85,7 +102,13 @@ def main(argv: list[str] | None = None) -> None:
     create.add_argument(
         "--unit",
         default="",
-        help="the vehicle id a crew account drives (as dispatch knows it, e.g. EV-001)",
+        help="the vehicle id a crew account drives (as dispatch knows it, e.g. unit-police-0)",
+    )
+    create.add_argument(
+        "--kind",
+        default="",
+        help="what the crew drives: ambulance | police | fire_truck "
+        "(worked out from the vehicle id when it names one)",
     )
     create.add_argument("--stdin", action="store_true", help="read the password from stdin")
     passwd = sub.add_parser("passwd", help="change a password (signs the user out everywhere)")
@@ -94,6 +117,10 @@ def main(argv: list[str] | None = None) -> None:
     setunit = sub.add_parser("set-unit", help="set the vehicle a crew account drives")
     setunit.add_argument("username")
     setunit.add_argument("unit")
+    setunit.add_argument("--kind", default="", help="ambulance | police | fire_truck")
+    setkind = sub.add_parser("set-kind", help="set what a crew account drives")
+    setkind.add_argument("username")
+    setkind.add_argument("kind")
     setrole = sub.add_parser("set-role", help="change what an account can open")
     setrole.add_argument("username")
     setrole.add_argument("role", choices=auth.ROLES)
@@ -116,14 +143,16 @@ def main(argv: list[str] | None = None) -> None:
             if args.cmd == "list":
                 rows = conn.execute(
                     "SELECT username, display_name, is_active, locked_until,"
-                    " last_login_at, email, role, unit_id FROM app_user ORDER BY username"
+                    " last_login_at, email, role, unit_id, unit_kind"
+                    " FROM app_user ORDER BY username"
                 ).fetchall()
-                for username, name, active, locked, last, email, role, unit in rows:
+                for username, name, active, locked, last, email, role, unit, kind in rows:
                     flags = ("" if active else " [disabled]") + (
                         " [locked]" if locked and locked > auth.utcnow() else ""
                     )
                     print(
-                        f"{username}\t{role}{' / ' + unit if unit else ''}\t{name}\t"
+                        f"{username}\t{role}{' / ' + unit if unit else ''}"
+                        f"{' (' + kind + ')' if kind else ''}\t{name}\t"
                         f"{email or 'no email'}\tlast login: {last or 'never'}{flags}"
                     )
                 if not rows:
@@ -132,14 +161,21 @@ def main(argv: list[str] | None = None) -> None:
             username = _username(args.username)
             if args.cmd == "create":
                 unit = _unit(args.unit) if args.unit else None
-                if unit and args.role != "responder":
-                    raise SystemExit("error: --unit is for crew accounts (use --role responder)")
+                if (unit or args.kind) and args.role != "responder":
+                    raise SystemExit(
+                        "error: --unit/--kind are for crew accounts (use --role responder)"
+                    )
+                kind = _resolve_kind(args.kind, unit)
+                if args.role == "responder" and kind is None:
+                    raise SystemExit(
+                        "error: say what this crew drives: --kind ambulance|police|fire_truck"
+                    )
                 password = _read_password(args.stdin)
                 try:
                     conn.execute(
                         "INSERT INTO app_user"
-                        " (username, display_name, password_hash, email, role, unit_id)"
-                        " VALUES (%s, %s, %s, %s, %s, %s)",
+                        " (username, display_name, password_hash, email, role, unit_id, unit_kind)"
+                        " VALUES (%s, %s, %s, %s, %s, %s, %s)",
                         (
                             username,
                             args.name.strip(),
@@ -147,6 +183,7 @@ def main(argv: list[str] | None = None) -> None:
                             _email(args.email) if args.email else None,
                             args.role,
                             unit,
+                            kind,
                         ),
                     )
                 except psycopg.errors.UniqueViolation:
@@ -163,13 +200,24 @@ def main(argv: list[str] | None = None) -> None:
                 _require_one(cur, username)
                 print(f"password changed for {username}; their sessions are signed out")
             elif args.cmd == "set-unit":
+                unit = _unit(args.unit)
+                kind = _resolve_kind(args.kind, unit)
                 cur = conn.execute(
-                    "UPDATE app_user SET unit_id = %s WHERE username = %s AND role = 'responder'",
-                    (_unit(args.unit), username),
+                    "UPDATE app_user SET unit_id = %s, unit_kind = COALESCE(%s, unit_kind)"
+                    " WHERE username = %s AND role = 'responder'",
+                    (unit, kind, username),
                 )
                 if cur.rowcount != 1:
                     raise SystemExit(f"error: {username} is not a crew account (role responder)")
-                print(f"{username} now drives {args.unit.strip()}")
+                print(f"{username} now drives {unit}" + (f" ({kind})" if kind else ""))
+            elif args.cmd == "set-kind":
+                cur = conn.execute(
+                    "UPDATE app_user SET unit_kind = %s WHERE username = %s AND role = 'responder'",
+                    (_kind(args.kind), username),
+                )
+                if cur.rowcount != 1:
+                    raise SystemExit(f"error: {username} is not a crew account (role responder)")
+                print(f"{username} is now a {args.kind.strip().lower()} crew")
             elif args.cmd == "set-role":
                 cur = conn.execute(
                     "UPDATE app_user SET role = %s WHERE username = %s", (args.role, username)

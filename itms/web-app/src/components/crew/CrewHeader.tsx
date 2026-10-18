@@ -3,6 +3,8 @@ import { Link } from "react-router-dom";
 import { BrandMark } from "@/components/branding/BrandMark";
 import { Pill } from "@/components/console/kit";
 import type { UnitOption } from "@/crew/useMission";
+import { CREW_TYPES, crewTypeFor } from "@/store/emergencyStore";
+import type { EmergencyVehicleKind } from "@/types";
 import { useAuthStore } from "@/store/authStore";
 import { useSystemStore } from "@/store/systemStore";
 import { useThemeStore } from "@/store/themeStore";
@@ -17,6 +19,7 @@ export function CrewHeader({
   unitId,
   onUnit,
   locked = false,
+  kind = null,
   className,
 }: {
   units: UnitOption[];
@@ -24,6 +27,8 @@ export function CrewHeader({
   onUnit: (id: string) => void;
   /** A crew account: its vehicle is fixed, so it is shown, not chosen. */
   locked?: boolean;
+  /** What this crew drives (a crew account knows; shown beside the vehicle). */
+  kind?: EmergencyVehicleKind | null;
   className?: string;
 }) {
   const mode = useSystemStore((s) => s.dataMode);
@@ -63,7 +68,7 @@ export function CrewHeader({
               {locked ? (
                 <>
                   <span className="sr-only">Vehicle: </span>
-                  <span>{vehicle}</span>
+                  <span>{kind ? `${crewTypeFor(kind).label} crew · ${vehicle}` : vehicle}</span>
                 </>
               ) : user ? (
                 `Signed in as ${user.displayName}`
@@ -99,13 +104,28 @@ export function CrewHeader({
             onChange={(e) => onUnit(e.target.value)}
             className="h-10 w-full rounded-xl border border-input bg-surface px-3 text-[14px] font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring"
           >
-            {!unitId && <option value="">Choose your vehicle…</option>}
-            {units.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.name}
-                {u.active ? " · on a mission" : ""}
-              </option>
-            ))}
+            {!unitId && <option value="">{units.length ? "Choose a vehicle…" : "No unit has had a call yet"}</option>}
+            {CREW_TYPES.map((t) => {
+              const group = units.filter((u) => u.kind === t.kind);
+              return group.length ? (
+                <optgroup key={t.kind} label={t.label}>
+                  {group.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.name}
+                      {u.active ? " · on a mission" : ""}
+                    </option>
+                  ))}
+                </optgroup>
+              ) : null;
+            })}
+            {units
+              .filter((u) => !u.kind)
+              .map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.name}
+                  {u.active ? " · on a mission" : ""}
+                </option>
+              ))}
           </select>
         </div>
       )}

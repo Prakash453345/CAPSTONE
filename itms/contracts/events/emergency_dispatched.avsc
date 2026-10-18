@@ -5,7 +5,7 @@
   "doc": "The alert raised the moment a sufficiently severe anomaly triggers an automatic emergency response: which anomaly, its type, its GPS location, and which authority units were dispatched (each as a fresh EmergencyRequest, one per responding EmergencyVehicleKind). This is the wire shape a dashboard subscribes to for 'notify the authorities' -- sim-service's IncidentResponseOrchestrator publishes it on `emergency.dispatched`; the per-unit routing/corridor detail follows on the existing emergency_request_updated / emergency_corridor_updated streams, keyed by each dispatch's own request_id.",
   "fields": [
     { "name": "anomaly_id", "type": "string" },
-    { "name": "anomaly_type", "type": "string", "doc": "Lower-case itms_domain.anomaly.AnomalyType value (accident, lane_blockage, ...)." },
+    { "name": "anomaly_type", "type": "string", "doc": "Lower-case itms_domain.anomaly.AnomalyType value (accident, lane_blockage, ...), or `operator_request` when an operator asked for the nearest crew of a kind and no anomaly is involved (then `anomaly_id` is the request id)." },
     { "name": "severity", "type": "string", "doc": "low | medium | high | blocked." },
     { "name": "edge_id", "type": "string" },
     { "name": "lat", "type": ["null", "double"], "default": null },
@@ -31,6 +31,27 @@
       "type": { "type": "array", "items": "string" },
       "default": [],
       "doc": "vehicle_kind values the response map called for but no depot vehicle was available/known for (e.g. fire_truck, until real fire-station data exists)."
+    },
+    {
+      "name": "notified",
+      "type": {
+        "type": "array",
+        "items": {
+          "type": "record",
+          "name": "NotifiedCrew",
+          "doc": "A crew that was considered for this call: the nearest free crews of each kind found through the H3 hex index (control/dispatch/crew_index.py), ranked by live road travel time. `selected` is the one actually sent.",
+          "fields": [
+            { "name": "vehicle_id", "type": "string" },
+            { "name": "vehicle_kind", "type": "string", "doc": "AMBULANCE | POLICE | FIRE_TRUCK." },
+            { "name": "distance_m", "type": "double", "doc": "Straight-line metres from the call." },
+            { "name": "road_time_s", "type": ["null", "double"], "default": null, "doc": "Live travel time; null when the router could not price the crew." },
+            { "name": "cell", "type": "string", "doc": "The H3 cell the crew was found in." },
+            { "name": "selected", "type": "boolean" }
+          ]
+        }
+      },
+      "default": [],
+      "doc": "Every crew weighed for the call, across kinds."
     },
     { "name": "at_ms", "type": { "type": "long", "logicalType": "timestamp-millis" } },
     { "name": "sim_tick", "type": ["null", "long"], "default": null }
