@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import type { GeoJSONSource } from "maplibre-gl";
 import type { FeatureCollection } from "geojson";
 import { useMapInstance } from "@/components/map/MapContext";
+import { useChangeGuard } from "@/components/map/useChangeGuard";
 import { useEmergencyStore } from "@/store/emergencyStore";
 import {
   buildCorridorFeatures,
@@ -43,6 +44,7 @@ const AVOID = "#46c46a";
  */
 export function EmergencyRouteLayer({ visible }: { visible: boolean }) {
   const map = useMapInstance();
+  const changed = useChangeGuard();
   const requests = useEmergencyStore((s) => s.requests);
   const selectedRequestId = useEmergencyStore((s) => s.selectedRequestId);
   const previewRank = useEmergencyStore((s) => s.previewRank);
@@ -221,22 +223,18 @@ export function EmergencyRouteLayer({ visible }: { visible: boolean }) {
     const segSrc = map.getSource(SEG_SRC) as GeoJSONSource | undefined;
     if (!routeSrc || !ptSrc || !corridorSrc || !segSrc) return;
 
-    routeSrc.setData({
-      type: "FeatureCollection",
-      features: buildRouteFeatures(requests, selectedRequestId, previewRank),
-    });
-    segSrc.setData({
-      type: "FeatureCollection",
-      features: buildSegmentFeatures(requests, selectedRequestId, previewRank),
-    });
-    ptSrc.setData({
-      type: "FeatureCollection",
-      features: buildPointFeatures(requests, selectedRequestId, draft),
-    });
-    corridorSrc.setData({
-      type: "FeatureCollection",
-      features: buildCorridorFeatures(requests, selectedRequestId),
-    });
+    const route = buildRouteFeatures(requests, selectedRequestId, previewRank);
+    const seg = buildSegmentFeatures(requests, selectedRequestId, previewRank);
+    const pt = buildPointFeatures(requests, selectedRequestId, draft);
+    const corridor = buildCorridorFeatures(requests, selectedRequestId);
+    // The feed re-sends every request each second; only redraw when the
+    // routes, points or corridor actually differ.
+    if (!changed(JSON.stringify([route, seg, pt, corridor]))) return;
+    routeSrc.setData({ type: "FeatureCollection", features: route });
+    segSrc.setData({ type: "FeatureCollection", features: seg });
+    ptSrc.setData({ type: "FeatureCollection", features: pt });
+    corridorSrc.setData({ type: "FeatureCollection", features: corridor });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `changed` is stable per mount
   }, [map, requests, selectedRequestId, previewRank, draft]);
 
   return null;

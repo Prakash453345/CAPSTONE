@@ -1,10 +1,12 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { prefersReducedMotion } from "@/utils/motion";
 import type { GeoJSONSource, MapMouseEvent } from "maplibre-gl";
 import type { FeatureCollection, Point } from "geojson";
 import { useMapInstance } from "@/components/map/MapContext";
 import { isMapAlive } from "@/components/map/mapSafe";
 import { useIncidentStore } from "@/store/incidentStore";
+import { useFrameLoop } from "@/components/map/useFrameLoop";
+import { useChangeGuard } from "@/components/map/useChangeGuard";
 import { CORRIDOR_ACCENT_COLOR, SIGNAL_COLOR } from "@/components/map/mapColors";
 
 const SRC = "signals";
@@ -41,7 +43,8 @@ export function SignalLayer({ visible }: { visible: boolean }) {
   const intersections = useIncidentStore((s) => s.intersections);
   const selectIntersection = useIncidentStore((s) => s.selectIntersection);
   const selectedId = useIncidentStore((s) => s.selectedIntersectionId);
-  const raf = useRef(0);
+  const startedAt = useRef(performance.now());
+  const changed = useChangeGuard();
 
   useEffect(() => {
     if (!map.getSource(SRC)) {
@@ -55,7 +58,8 @@ export function SignalLayer({ visible }: { visible: boolean }) {
         type: "circle",
         source: SRC,
         paint: {
-          "circle-radius": ["interpolate", ["linear"], ["zoom"], 12, 6, 17, 16],
+          // Quiet when zoomed out: a halo on every one of 120+ junctions is noise.
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 13.5, 0, 15, 8, 17, 16],
           "circle-color": ["get", "color"],
           "circle-opacity": 0.18,
         },
@@ -91,41 +95,26 @@ export function SignalLayer({ visible }: { visible: boolean }) {
         type: "circle",
         source: SRC,
         paint: {
-          "circle-radius": ["interpolate", ["linear"], ["zoom"], 12, 3.5, 17, 7],
+          // Small and soft when zoomed out, full size and outlined up close.
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 12, 2.2, 14, 3.2, 16, 5.5, 17.5, 7.5],
           "circle-color": ["get", "color"],
+          "circle-opacity": ["interpolate", ["linear"], ["zoom"], 12, 0.6, 15, 1],
           "circle-stroke-color": [
             "case",
             ["get", "faulted"], FAULT_COLOR,
             ["get", "preempted"], PREEMPT_COLOR,
             ["get", "selected"], "#ffffff",
-            "#0a0e14",
+            "rgba(10, 14, 20, 0.6)",
           ],
           "circle-stroke-width": [
             "case",
-            ["any", ["get", "faulted"], ["get", "preempted"], ["get", "selected"]], 2, 1,
+            ["any", ["get", "faulted"], ["get", "preempted"], ["get", "selected"]],
+            2,
+            ["interpolate", ["linear"], ["zoom"], 13, 0, 15, 1],
           ],
         },
       });
     }
-
-    const start = performance.now();
-    const pulse = () => {
-      if (!isMapAlive(map)) return;
-      if (map.getLayer(PREEMPT_RING)) {
-        const phase = prefersReducedMotion() ? 0 : ((performance.now() - start) % 1200) / 1200;
-        map.setPaintProperty(PREEMPT_RING, "circle-radius", 10 + phase * 16);
-        map.setPaintProperty(PREEMPT_RING, "circle-stroke-opacity", 0.9 * (1 - phase));
-      }
-      if (map.getLayer(FAULT_RING)) {
-        // A sharp on/off blink (not a smooth expand-fade like the corridor
-        // ring above) reads as "alert", not "calm coordination" -- faults are
-        // more urgent than a routine preemption.
-        const on = prefersReducedMotion() || Math.floor((performance.now() - start) / 350) % 2 === 0;
-        map.setPaintProperty(FAULT_RING, "circle-stroke-opacity", on ? 0.9 : 0.15);
-      }
-      raf.current = requestAnimationFrame(pulse);
-    };
-    raf.current = requestAnimationFrame(pulse);
 
     const onClick = (e: MapMouseEvent) => {
       const hits = map.queryRenderedFeatures(e.point, { layers: [DOT] });
@@ -139,7 +128,6 @@ export function SignalLayer({ visible }: { visible: boolean }) {
     map.on("mouseleave", DOT, onLeave);
 
     return () => {
-      cancelAnimationFrame(raf.current);
       if (!isMapAlive(map)) return;
       map.off("click", DOT, onClick);
       map.off("mouseenter", DOT, onEnter);
@@ -149,6 +137,24 @@ export function SignalLayer({ visible }: { visible: boolean }) {
       if (map.getSource(SRC)) map.removeSource(SRC);
     };
   }, [map, selectIntersection]);
+
+  // The rings only animate while a junction is held for an ambulance or has faulted.
+  const needsPulse = useMemo(() => intersections.some((i) => i.preempted || i.fault != null), [intersections]);
+  useFrameLoop(needsPulse, () => {
+    if (!isMapAlive(map)) return;
+    const elapsed = performance.now() - startedAt.current;
+    if (map.getLayer(PREEMPT_RING)) {
+      const phase = prefersReducedMotion() ? 0 : (elapsed % 1200) / 1200;
+      map.setPaintProperty(PREEMPT_RING, "circle-radius", 10 + phase * 16);
+      map.setPaintProperty(PREEMPT_RING, "circle-stroke-opacity", 0.9 * (1 - phase));
+    }
+    if (map.getLayer(FAULT_RING)) {
+      // A sharp on/off blink (not a smooth expand-fade like the corridor ring)
+      // reads as "alert", not "calm coordination": faults are more urgent.
+      const on = prefersReducedMotion() || Math.floor(elapsed / 350) % 2 === 0;
+      map.setPaintProperty(FAULT_RING, "circle-stroke-opacity", on ? 0.9 : 0.15);
+    }
+  });
 
   useEffect(() => {
     if (!isMapAlive(map)) return;
@@ -161,6 +167,10 @@ export function SignalLayer({ visible }: { visible: boolean }) {
     if (!isMapAlive(map)) return;
     const src = map.getSource(SRC) as GeoJSONSource | undefined;
     if (!src) return;
+    const signature =
+      `${selectedId}|` +
+      intersections.map((i) => `${i.id}${i.signalState[0]}${i.preempted ? 1 : 0}${i.fault ? 1 : 0}`).join(",");
+    if (!changed(signature)) return;
     const data: FeatureCollection<Point> = {
       type: "FeatureCollection",
       features: intersections.map((it) => ({
@@ -178,6 +188,7 @@ export function SignalLayer({ visible }: { visible: boolean }) {
       })),
     };
     src.setData(data);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `changed` is stable per mount
   }, [map, intersections, selectedId]);
 
   return null;

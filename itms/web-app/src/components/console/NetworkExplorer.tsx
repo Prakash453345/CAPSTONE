@@ -13,6 +13,9 @@ import { cn } from "@/utils/cn";
 
 type Tab = "roads" | "signals";
 
+/** How long the street list keeps its order before it may re-sort by congestion. */
+const RESORT_EVERY_MS = 4000;
+
 function focusEdge(edgeId: string) {
   const e = edgeById.get(edgeId);
   if (!e) return;
@@ -67,6 +70,7 @@ function Roads() {
   // hold the order still while the pointer is over the list, so rows never jump under it
   const hovering = useRef(false);
   const lastOrder = useRef<string[]>([]);
+  const lastSortAt = useRef(0);
 
   const streets = useMemo(() => {
     const map = new Map<string, Street>();
@@ -81,12 +85,16 @@ function Roads() {
     }
     let list = [...map.values()];
     for (const s of list) s.segments.sort((a, b) => (b.value ?? -1) - (a.value ?? -1));
-    if (hovering.current && lastOrder.current.length) {
+    // Values update live, but the order only changes every few seconds (and
+    // never under the pointer): re-sorting every tick made rows jump around.
+    const settled = Date.now() - lastSortAt.current < RESORT_EVERY_MS;
+    if ((hovering.current || settled) && lastOrder.current.length) {
       const rank = new Map(lastOrder.current.map((n, i) => [n, i]));
       list.sort((a, b) => (rank.get(a.name) ?? 99) - (rank.get(b.name) ?? 99));
     } else {
       list.sort((a, b) => (b.worst ?? -1) - (a.worst ?? -1));
       lastOrder.current = list.map((s) => s.name);
+      lastSortAt.current = Date.now();
     }
     const q = query.trim().toLowerCase();
     if (q) list = list.filter((s) => s.name.toLowerCase().includes(q) || s.segments.some((g) => g.id.includes(q)));
@@ -116,7 +124,7 @@ function Roads() {
             const tone = congestionTone(s.worst);
             const expanded = open === s.name;
             return (
-              <motion.li key={s.name}>
+              <motion.li key={s.name} layout="position" transition={{ duration: 0.35, ease: EASE_OUT }}>
                 <button
                   type="button"
                   aria-expanded={expanded}

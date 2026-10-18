@@ -1,8 +1,11 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useMemo } from "react";
 import { prefersReducedMotion } from "@/utils/motion";
 import type { GeoJSONSource, MapMouseEvent } from "maplibre-gl";
 import type { FeatureCollection, Point } from "geojson";
 import { useMapInstance } from "@/components/map/MapContext";
+import { useFrameLoop } from "@/components/map/useFrameLoop";
+import { useChangeGuard } from "@/components/map/useChangeGuard";
+import { isMapAlive } from "@/components/map/mapSafe";
 import { useIncidentStore } from "@/store/incidentStore";
 import { useMapStore } from "@/store/mapStore";
 import { SEVERITY_COLOR } from "@/components/map/mapColors";
@@ -18,7 +21,8 @@ export function IncidentLayer({ visible }: { visible: boolean }) {
   const selectedId = useIncidentStore((s) => s.selectedIncidentId);
   const selectIncident = useIncidentStore((s) => s.selectIncident);
   const focusOn = useMapStore((s) => s.focusOn);
-  const raf = useRef<number>(0);
+  const startedAt = useRef(performance.now());
+  const changed = useChangeGuard();
 
   useEffect(() => {
     if (!map.getSource(SRC)) {
@@ -97,21 +101,7 @@ export function IncidentLayer({ visible }: { visible: boolean }) {
     map.on("mouseenter", DOT, onEnter);
     map.on("mouseleave", DOT, onLeave);
 
-    // shared pulse
-    const start = performance.now();
-    const pulse = () => {
-      if (map.getLayer(PULSE)) {
-        const phase = prefersReducedMotion() ? 0 : ((performance.now() - start) % 1800) / 1800;
-        map.setPaintProperty(PULSE, "circle-radius", 10 + phase * 34);
-        map.setPaintProperty(PULSE, "circle-opacity", 0.28 * (1 - phase));
-        map.setPaintProperty(PULSE, "circle-stroke-opacity", 0.5 * (1 - phase));
-      }
-      raf.current = requestAnimationFrame(pulse);
-    };
-    raf.current = requestAnimationFrame(pulse);
-
     return () => {
-      cancelAnimationFrame(raf.current);
       map.off("click", DOT, onClick);
       map.off("mouseenter", DOT, onEnter);
       map.off("mouseleave", DOT, onLeave);
@@ -119,6 +109,15 @@ export function IncidentLayer({ visible }: { visible: boolean }) {
       if (map.getSource(SRC)) map.removeSource(SRC);
     };
   }, [map, selectIncident, focusOn]);
+
+  const needsPulse = useMemo(() => incidents.some((i) => i.status !== "resolved"), [incidents]);
+  useFrameLoop(needsPulse, () => {
+    if (!isMapAlive(map) || !map.getLayer(PULSE)) return;
+    const phase = prefersReducedMotion() ? 0 : ((performance.now() - startedAt.current) % 1800) / 1800;
+    map.setPaintProperty(PULSE, "circle-radius", 10 + phase * 34);
+    map.setPaintProperty(PULSE, "circle-opacity", 0.28 * (1 - phase));
+    map.setPaintProperty(PULSE, "circle-stroke-opacity", 0.5 * (1 - phase));
+  });
 
   useEffect(() => {
     const v = visible ? "visible" : "none";
@@ -129,6 +128,8 @@ export function IncidentLayer({ visible }: { visible: boolean }) {
   useEffect(() => {
     const src = map.getSource(SRC) as GeoJSONSource | undefined;
     if (!src) return;
+    const signature = `${selectedId}|` + incidents.map((i) => `${i.id}${i.status}${i.severity}${i.latitude}${i.longitude}`).join(",");
+    if (!changed(signature)) return;
     const data: FeatureCollection<Point> = {
       type: "FeatureCollection",
       features: incidents.map((inc) => ({
@@ -146,6 +147,7 @@ export function IncidentLayer({ visible }: { visible: boolean }) {
       })),
     };
     src.setData(data);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `changed` is stable per mount
   }, [map, incidents, selectedId]);
 
   return null;

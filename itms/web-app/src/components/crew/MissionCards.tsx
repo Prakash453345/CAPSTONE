@@ -25,24 +25,32 @@ export function StandbyCard({ unitName, weatherAdvice }: { unitName: string | nu
   const anomalies = useIncidentStore((s) => s.anomalies.filter((a) => a.status === "active").length);
   const mood = networkMood(congestion);
   return (
-    <Panel className="pointer-events-auto">
-      <EmptyState
-        icon={Siren}
-        title={unitName ? `${unitName} is standing by` : "Choose your vehicle"}
-        body={unitName ? "Your route and instructions appear here the moment dispatch sends a call." : "Pick the unit you are driving to follow its calls."}
-      />
-      {unitName && (
-        <div className="space-y-2 border-t border-border px-5 py-4 text-[13px]">
-          <p className="flex items-center gap-2">
-            <Radio className="size-4 text-muted-foreground" aria-hidden />
-            <span className={toneText(mood.tone)}>{mood.headline}</span>
+    <Panel className="pointer-events-auto" aria-labelledby="standby-title">
+      <div className="flex items-center gap-3.5 px-5 pb-4 pt-5">
+        <span aria-hidden className="grid size-11 shrink-0 place-items-center rounded-2xl bg-muted text-muted-foreground">
+          <Siren className="size-5" strokeWidth={1.8} />
+        </span>
+        <div className="min-w-0">
+          <h2 id="standby-title" className="truncate text-[16px] font-semibold tracking-[-0.01em]">
+            {unitName ? `${unitName} is standing by` : "Choose your vehicle"}
+          </h2>
+          <p className="mt-0.5 text-[13px] leading-snug text-muted-foreground">
+            {unitName ? "Your route appears here when dispatch sends a call." : "Pick the unit you are driving to follow its calls."}
           </p>
-          <p className="flex items-center gap-2 text-muted-foreground">
-            <TriangleAlert className="size-4" aria-hidden />
-            {anomalies ? `${anomalies} disruption${anomalies === 1 ? "" : "s"} on the road right now` : "No disruptions reported"}
-          </p>
-          {weatherAdvice && <p className="text-status-warn">{weatherAdvice}</p>}
         </div>
+      </div>
+      {unitName && (
+        <ul className="space-y-2.5 border-t border-border px-5 py-3.5 text-[13px]">
+          <li className="flex items-center gap-2.5">
+            <Radio className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+            <span className={toneText(mood.tone)}>{mood.headline}</span>
+          </li>
+          <li className="flex items-center gap-2.5 text-muted-foreground">
+            <TriangleAlert className="size-4 shrink-0" aria-hidden />
+            {anomalies ? `${anomalies} disruption${anomalies === 1 ? "" : "s"} on the road right now` : "No disruptions reported"}
+          </li>
+          {weatherAdvice && <li className="text-status-warn">{weatherAdvice}</li>}
+        </ul>
       )}
     </Panel>
   );

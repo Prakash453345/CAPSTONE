@@ -210,12 +210,28 @@ export function VehicleLayer({ visible }: { visible: boolean }) {
     target.current = nextTarget;
   }, [vehicles]);
 
-  // --- animation loop -------------------------------------------------
+  // --- animation loop -------------------------------------------
+  // Runs every frame only while there are vehicles to glide. With none, it
+  // clears the layer once and then just checks back a few times a second, so
+  // an empty map is not redrawn 60 times a second.
   useEffect(() => {
+    let timer = 0;
+    let showing = false;
     const tick = () => {
       if (!isMapAlive(map)) return;
       const src = map.getSource(SRC) as GeoJSONSource | undefined;
+      if (target.current.size === 0) {
+        if (showing) {
+          src?.setData({ type: "FeatureCollection", features: [] });
+          showing = false;
+        }
+        timer = window.setTimeout(() => {
+          raf.current = requestAnimationFrame(tick);
+        }, 250);
+        return;
+      }
       if (src) {
+        showing = true;
         const reduced = prefersReducedMotion();
         const f = reduced
           ? 1
@@ -241,7 +257,10 @@ export function VehicleLayer({ visible }: { visible: boolean }) {
       raf.current = requestAnimationFrame(tick);
     };
     raf.current = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf.current);
+    return () => {
+      cancelAnimationFrame(raf.current);
+      window.clearTimeout(timer);
+    };
   }, [map]);
 
   return null;

@@ -1,10 +1,13 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { prefersReducedMotion } from "@/utils/motion";
 import type { GeoJSONSource, MapMouseEvent } from "maplibre-gl";
 import type { Feature, FeatureCollection, LineString, Point } from "geojson";
 import { useMapInstance } from "@/components/map/MapContext";
+import { isMapAlive } from "@/components/map/mapSafe";
 import { useIncidentStore } from "@/store/incidentStore";
 import { useMapStore } from "@/store/mapStore";
+import { useFrameLoop } from "@/components/map/useFrameLoop";
+import { useChangeGuard } from "@/components/map/useChangeGuard";
 import { edgeById } from "@/data/network";
 import { ANOMALY_SEVERITY_COLOR } from "@/components/map/mapColors";
 import { pointAlongPath } from "@/utils/geo";
@@ -28,7 +31,8 @@ export function AnomalyLayer({ visible }: { visible: boolean }) {
   const selectedId = useIncidentStore((s) => s.selectedAnomalyId);
   const selectAnomaly = useIncidentStore((s) => s.selectAnomaly);
   const focusOn = useMapStore((s) => s.focusOn);
-  const raf = useRef<number>(0);
+  const startedAt = useRef(performance.now());
+  const changed = useChangeGuard();
 
   useEffect(() => {
     if (!map.getSource(EDGE_SRC)) {
@@ -101,19 +105,7 @@ export function AnomalyLayer({ visible }: { visible: boolean }) {
     map.on("mouseenter", MARK_DOT, onEnter);
     map.on("mouseleave", MARK_DOT, onLeave);
 
-    const start = performance.now();
-    const pulse = () => {
-      if (map.getLayer(MARK_RING)) {
-        const phase = prefersReducedMotion() ? 0 : ((performance.now() - start) % 1600) / 1600;
-        map.setPaintProperty(MARK_RING, "circle-radius", 10 + phase * 22);
-        map.setPaintProperty(MARK_RING, "circle-stroke-opacity", 0.6 * (1 - phase));
-      }
-      raf.current = requestAnimationFrame(pulse);
-    };
-    raf.current = requestAnimationFrame(pulse);
-
     return () => {
-      cancelAnimationFrame(raf.current);
       map.off("click", MARK_DOT, onClick);
       map.off("mouseenter", MARK_DOT, onEnter);
       map.off("mouseleave", MARK_DOT, onLeave);
@@ -122,6 +114,14 @@ export function AnomalyLayer({ visible }: { visible: boolean }) {
       for (const id of [EDGE_SRC, MARK_SRC]) if (map.getSource(id)) map.removeSource(id);
     };
   }, [map, selectAnomaly, focusOn]);
+
+  const needsPulse = useMemo(() => anomalies.some((a) => a.status === "active"), [anomalies]);
+  useFrameLoop(needsPulse, () => {
+    if (!isMapAlive(map) || !map.getLayer(MARK_RING)) return;
+    const phase = prefersReducedMotion() ? 0 : ((performance.now() - startedAt.current) % 1600) / 1600;
+    map.setPaintProperty(MARK_RING, "circle-radius", 10 + phase * 22);
+    map.setPaintProperty(MARK_RING, "circle-stroke-opacity", 0.6 * (1 - phase));
+  });
 
   useEffect(() => {
     const v = visible ? "visible" : "none";
@@ -133,6 +133,8 @@ export function AnomalyLayer({ visible }: { visible: boolean }) {
     const edgeSrc = map.getSource(EDGE_SRC) as GeoJSONSource | undefined;
     const markSrc = map.getSource(MARK_SRC) as GeoJSONSource | undefined;
     if (!edgeSrc || !markSrc) return;
+    const signature = `${selectedId}|` + anomalies.map((a) => `${a.id}${a.status}${a.severity}${a.edgeId}`).join(",");
+    if (!changed(signature)) return;
 
     const edgeFeatures: Feature<LineString>[] = [];
     const markFeatures: Feature<Point>[] = [];
@@ -167,6 +169,7 @@ export function AnomalyLayer({ visible }: { visible: boolean }) {
 
     edgeSrc.setData({ type: "FeatureCollection", features: edgeFeatures });
     markSrc.setData({ type: "FeatureCollection", features: markFeatures });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `changed` is stable per mount
   }, [map, anomalies, selectedId]);
 
   return null;
