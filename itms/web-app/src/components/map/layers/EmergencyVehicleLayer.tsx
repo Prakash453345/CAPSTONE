@@ -138,26 +138,10 @@ export function EmergencyVehicleLayer({ visible }: { visible: boolean }) {
     }
 
     const start = performance.now();
-    // Idle when no unit is on the road: clear once, then only check back a few
-    // times a second instead of redrawing the whole map every frame.
-    let timer = 0;
-    let showing = false;
-    let lastHaloPaint = 0;
     const loop = () => {
       if (!isMapAlive(map)) return;
       const src = map.getSource(SRC) as GeoJSONSource | undefined;
-      if (target.current.size === 0) {
-        if (showing) {
-          src?.setData({ type: "FeatureCollection", features: [] });
-          showing = false;
-        }
-        timer = window.setTimeout(() => {
-          raf.current = requestAnimationFrame(loop);
-        }, 250);
-        return;
-      }
       if (src) {
-        showing = true;
         const reduced = prefersReducedMotion();
         // A restrained red/blue alternation: once per 1.2 s, not a strobe.
         // Reduced-motion users receive the stable red phase.
@@ -197,11 +181,7 @@ export function EmergencyVehicleLayer({ visible }: { visible: boolean }) {
           });
         }
         src.setData({ type: "FeatureCollection", features });
-        // The halo's pulse and beacon colour change slowly; re-parsing their
-        // paint expressions every frame is wasted work, so ~15 times a second.
-        const nowMs = performance.now();
-        if (map.getLayer(HALO) && nowMs - lastHaloPaint >= 66) {
-          lastHaloPaint = nowMs;
+        if (map.getLayer(HALO)) {
           const phase = reduced ? 0.35 : ((performance.now() - start) % 1600) / 1600;
           map.setPaintProperty(HALO, "circle-radius", [
             "interpolate",
@@ -237,7 +217,6 @@ export function EmergencyVehicleLayer({ visible }: { visible: boolean }) {
 
     return () => {
       cancelAnimationFrame(raf.current);
-      window.clearTimeout(timer);
       if (!isMapAlive(map)) return;
       for (const id of [ICON, HALO]) if (map.getLayer(id)) map.removeLayer(id);
       if (map.getSource(SRC)) map.removeSource(SRC);

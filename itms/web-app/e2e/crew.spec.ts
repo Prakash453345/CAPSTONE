@@ -146,35 +146,3 @@ test("a crew account with no vehicle linked is told to ask dispatch, and sees no
   await expect(next(page)).toBeHidden();
   await expect(page.getByRole("combobox")).toHaveCount(0);
 });
-
-// ---------------------------------------------------------------- smoothness
-
-test("an idle map does not keep redrawing", async ({ page }) => {
-  // Count the frames MapLibre draws (it clears the canvas once per frame).
-  await page.addInitScript(() => {
-    (window as unknown as { __frames: number }).__frames = 0;
-    for (const C of [WebGLRenderingContext, WebGL2RenderingContext]) {
-      const clear = C.prototype.clear;
-      C.prototype.clear = function (...args: Parameters<typeof clear>) {
-        (window as unknown as { __frames: number }).__frames++;
-        return clear.apply(this, args);
-      };
-    }
-  });
-  // A backend that answers its health check puts the app in Live mode, where
-  // with no units on the road nothing is moving: the quietest realistic screen.
-  await page.route("**/api/health", (route) =>
-    route.fulfill({ json: { status: "ok" }, headers: { "content-type": "application/json" } }),
-  );
-  await page.route("**/api/v1/auth/me", (route) => route.fulfill({ json: { ...CREW, unit_id: "EV-001" } }));
-  await page.goto("/crew");
-  await expect(page.getByText("Ambulance 12 is standing by")).toBeVisible({ timeout: 15_000 });
-  // Out of the browser demo (whose simulated ambulance is always moving).
-  await expect(page.getByText("Demo", { exact: true })).toBeHidden({ timeout: 15_000 });
-  await page.waitForTimeout(3000); // let the map finish loading and settle
-  const before = await page.evaluate(() => (window as unknown as { __frames: number }).__frames);
-  await page.waitForTimeout(4000);
-  const after = await page.evaluate(() => (window as unknown as { __frames: number }).__frames);
-  // Unconditional animation loops used to redraw several times a second here.
-  expect((after - before) / 4).toBeLessThan(1);
-});

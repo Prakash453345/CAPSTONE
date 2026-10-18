@@ -1,5 +1,4 @@
 import { useEffect } from "react";
-import { useChangeGuard } from "@/components/map/useChangeGuard";
 import type { GeoJSONSource } from "maplibre-gl";
 import type { FeatureCollection, LineString } from "geojson";
 import { useMapInstance } from "@/components/map/MapContext";
@@ -29,7 +28,6 @@ function buildData(
 export function RoadLayer({ visible }: { visible: boolean }) {
   const map = useMapInstance();
   const congestion = useTrafficStore((s) => s.roadCongestion);
-  const changed = useChangeGuard();
 
   useEffect(() => {
     if (!map.getSource(SRC)) {
@@ -51,9 +49,7 @@ export function RoadLayer({ visible }: { visible: boolean }) {
         source: SRC,
         layout: { "line-cap": "round", "line-join": "round" },
         paint: {
-          "line-width": ["interpolate", ["linear"], ["zoom"], 12, 1.4, 14, 2.4, 17, 7],
-          // Free-flowing roads recede; congestion is what should catch the eye.
-          "line-opacity": ["interpolate", ["linear"], ["get", "congestion"], 0, 0.5, 0.35, 0.9, 0.6, 1],
+          "line-width": ["interpolate", ["linear"], ["zoom"], 12, 1.6, 17, 7],
         },
       });
     }
@@ -65,11 +61,7 @@ export function RoadLayer({ visible }: { visible: boolean }) {
 
   useEffect(() => {
     const src = map.getSource(SRC) as GeoJSONSource | undefined;
-    if (!src) return;
-    // Two decimals is finer than the colour ramp can show.
-    if (!changed(roadEdges.map((e) => (congestion[e.id] ?? 0).toFixed(2)).join(","))) return;
-    src.setData(buildData(congestion));
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `changed` is stable per mount
+    src?.setData(buildData(congestion));
   }, [map, congestion]);
 
   useEffect(() => {
