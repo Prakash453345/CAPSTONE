@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
-import { cueFor } from "@/drive/cues";
-import { formatDistance } from "@/drive/plan";
-import type { Mission } from "@/drive/useMission";
+import { cueFor } from "@/crew/cues";
+import { formatDistance } from "@/crew/plan";
+import type { Mission } from "@/crew/useMission";
 
 export const canSpeak = typeof window !== "undefined" && "speechSynthesis" in window && typeof SpeechSynthesisUtterance !== "undefined";
 

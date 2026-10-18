@@ -1,8 +1,8 @@
 import { CheckCircle2 } from "lucide-react";
 import { Panel, PanelHeader, Pill } from "@/components/console/kit";
 import { TONE_BG, TONE_DOT, TONE_TEXT } from "@/components/console/tone";
-import { formatDistance } from "@/drive/plan";
-import type { UpcomingSignal } from "@/drive/situation";
+import { formatDistance } from "@/crew/plan";
+import type { UpcomingSignal } from "@/crew/situation";
 import type { GreenCorridorView } from "@/types";
 import { cn } from "@/utils/cn";
 

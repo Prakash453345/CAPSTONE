@@ -31,7 +31,7 @@ const SAMPLE_WEATHER = {
 /** The console sits behind sign-in. Every test starts as a signed-in operator
  * so the workspace specs stay about the workspace; login.spec.ts registers its
  * own routes (consulted first) to exercise the signed-out paths. */
-export const SIGNED_IN_USER = { username: "komal", display_name: "Komal S", role: "operator" };
+export const SIGNED_IN_USER = { username: "komal", display_name: "Komal S", role: "operator", unit_id: null };
 
 export const test = base.extend<{ hermeticTiles: void }>({
   hermeticTiles: [

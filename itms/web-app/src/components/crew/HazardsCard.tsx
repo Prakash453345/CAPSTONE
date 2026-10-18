@@ -1,8 +1,8 @@
 import { CheckCircle2, Gauge, OctagonAlert, Siren, TriangleAlert, ZapOff } from "lucide-react";
 import { Panel, PanelHeader } from "@/components/console/kit";
 import { TONE_BG, TONE_TEXT } from "@/components/console/tone";
-import { formatDistance } from "@/drive/plan";
-import type { Hazard, HazardKind } from "@/drive/situation";
+import { formatDistance } from "@/crew/plan";
+import type { Hazard, HazardKind } from "@/crew/situation";
 import { cn } from "@/utils/cn";
 
 const ICONS: Record<HazardKind, typeof TriangleAlert> = {

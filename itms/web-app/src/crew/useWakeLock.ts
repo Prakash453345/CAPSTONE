@@ -2,7 +2,7 @@ import { useEffect } from "react";
 
 /**
  * Keeps the screen on while `active`: a phone or tablet that dims mid-run is
- * useless to a driver. Quietly does nothing where the browser has no wake lock.
+ * useless to a crew. Quietly does nothing where the browser has no wake lock.
  */
 export function useWakeLock(active: boolean) {
   useEffect(() => {

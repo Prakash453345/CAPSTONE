@@ -11,7 +11,7 @@ export type Role = "operator" | "responder";
 export const parseRole = (raw: unknown): Role => (raw === "responder" ? "responder" : "operator");
 
 /** Where an account lands after signing in. */
-export const homeFor = (role: Role): string => (role === "responder" ? "/drive" : "/console");
+export const homeFor = (role: Role): string => (role === "responder" ? "/crew" : "/console");
 
 const inArea = (path: string, area: string) => path === area || path.startsWith(`${area}/`);
 
@@ -19,6 +19,6 @@ const inArea = (path: string, area: string) => path === area || path.startsWith(
 export function canOpen(role: Role, path: string): boolean {
   const pathname = path.split(/[?#]/)[0] ?? path;
   if (inArea(pathname, "/console")) return role === "operator";
-  if (inArea(pathname, "/drive")) return true;
+  if (inArea(pathname, "/crew")) return true;
   return false;
 }

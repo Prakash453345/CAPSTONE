@@ -1,20 +1,21 @@
 import { useEffect, useState } from "react";
 import { WifiOff } from "lucide-react";
-import { DriveMap } from "@/components/drive/DriveMap";
-import { DriveHeader } from "@/components/drive/DriveHeader";
-import { ManeuverBanner } from "@/components/drive/ManeuverBanner";
-import { CorridorCard } from "@/components/drive/CorridorCard";
-import { HazardsCard } from "@/components/drive/HazardsCard";
-import { TripBar } from "@/components/drive/TripBar";
-import { ArrivalCard, BriefingCard, DirectionsCard, StandbyCard } from "@/components/drive/MissionCards";
+import { CrewMap } from "@/components/crew/CrewMap";
+import { CrewHeader } from "@/components/crew/CrewHeader";
+import { ManeuverBanner } from "@/components/crew/ManeuverBanner";
+import { CorridorCard } from "@/components/crew/CorridorCard";
+import { HazardsCard } from "@/components/crew/HazardsCard";
+import { TripBar } from "@/components/crew/TripBar";
+import { ArrivalCard, BriefingCard, DirectionsCard, NoVehicleCard, StandbyCard } from "@/components/crew/MissionCards";
 import { unitName } from "@/components/console/words";
 import { HOME_CITY } from "@/data/city";
-import { useGuidanceVoice } from "@/drive/useGuidanceVoice";
-import { useMission } from "@/drive/useMission";
-import { useWakeLock } from "@/drive/useWakeLock";
+import { useGuidanceVoice } from "@/crew/useGuidanceVoice";
+import { useMission } from "@/crew/useMission";
+import { useWakeLock } from "@/crew/useWakeLock";
 import { TrafficDataBridge } from "@/services/traffic/TrafficDataBridge";
 import { trafficAdvice } from "@/services/weather/weather";
-import { useDriveStore } from "@/store/driveStore";
+import { useAuthStore } from "@/store/authStore";
+import { useCrewStore } from "@/store/crewStore";
 import { useEmergencyStore } from "@/store/emergencyStore";
 import { useSystemStore } from "@/store/systemStore";
 import { useEffectiveWeather, useWeatherStore } from "@/store/weatherStore";
@@ -25,11 +26,16 @@ import { useEffectiveWeather, useWeatherStore } from "@/store/weatherStore";
  * and what is on the road ahead. It reads the same live data as the operator
  * console, so what the dispatcher sees and what the crew sees agree.
  */
-export function DrivePage() {
-  const unitId = useDriveStore((s) => s.unitId);
-  const setUnit = useDriveStore((s) => s.setUnit);
-  const voice = useDriveStore((s) => s.voice);
-  const setVoice = useDriveStore((s) => s.setVoice);
+export function CrewPage() {
+  const user = useAuthStore((s) => s.user);
+  // A crew account is tied to its own vehicle, so it cannot look at anyone
+  // else's. Operators choose any unit.
+  const locked = user?.role === "responder";
+  const chosenUnit = useCrewStore((s) => s.unitId);
+  const unitId = locked ? (user?.unitId ?? null) : chosenUnit;
+  const setUnit = useCrewStore((s) => s.setUnit);
+  const voice = useCrewStore((s) => s.voice);
+  const setVoice = useCrewStore((s) => s.setVoice);
   const { request, mission, units } = useMission(unitId);
   const selectRequest = useEmergencyStore((s) => s.selectRequest);
   const connection = useSystemStore((s) => s.connectionStatus);
@@ -53,11 +59,11 @@ export function DrivePage() {
 
   // Nobody has chosen a vehicle yet: follow the first one that has a call.
   useEffect(() => {
-    if (!unitId) {
+    if (!locked && !unitId) {
       const busy = units.find((u) => u.active);
       if (busy) setUnit(busy.id);
     }
-  }, [unitId, units, setUnit]);
+  }, [locked, unitId, units, setUnit]);
 
   // The map's emergency layer draws the selected request's vehicle larger.
   useEffect(() => {
@@ -75,7 +81,9 @@ export function DrivePage() {
   const stale = connection === "reconnecting" || connection === "offline";
 
   let body;
-  if (!mission || (finished && !showArrival)) {
+  if (locked && !unitId) {
+    body = <NoVehicleCard />;
+  } else if (!mission || (finished && !showArrival)) {
     body = <StandbyCard unitName={name} weatherAdvice={weather ? trafficAdvice(weather) : null} />;
   } else if (showArrival) {
     body = <ArrivalCard mission={mission} onDone={() => setDismissed(mission.request.id)} />;
@@ -95,7 +103,7 @@ export function DrivePage() {
   return (
     <div className="relative h-full overflow-hidden bg-background text-foreground">
       <TrafficDataBridge />
-      <DriveMap mission={mission} />
+      <CrewMap mission={mission} />
 
       {stale && (
         <div role="alert" className="pointer-events-none absolute inset-x-0 top-0 z-30 flex justify-center p-2">
@@ -108,7 +116,7 @@ export function DrivePage() {
       )}
 
       <div className="pointer-events-none absolute inset-0 z-10 flex flex-col gap-3 p-3 pb-[104px] lg:w-[420px] lg:p-4 lg:pb-4">
-        <DriveHeader units={withCurrent(units, unitId, name)} unitId={unitId} onUnit={setUnit} />
+        <CrewHeader units={withCurrent(units, unitId, name)} unitId={unitId} onUnit={setUnit} locked={locked} />
         {guiding && mission?.next && mission.plan && !showDirections && (
           <ManeuverBanner next={mission.next} distM={mission.nextDistM} then={mission.then} offRouteM={mission.offRouteM} />
         )}

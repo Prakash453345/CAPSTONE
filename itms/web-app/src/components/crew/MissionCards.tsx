@@ -2,10 +2,10 @@ import { CheckCircle2, MapPinned, Radio, Route as RouteIcon, Siren, TriangleAler
 import { Button, EmptyState, Panel, PanelHeader, Pill } from "@/components/console/kit";
 import { STATE_WORDS, mmss, networkMood } from "@/components/console/words";
 import { toneText } from "@/components/console/tone";
-import { ManeuverIcon } from "@/components/drive/ManeuverBanner";
+import { ManeuverIcon } from "@/components/crew/ManeuverBanner";
 import { roadLabel } from "@/data/network";
-import { formatDistance } from "@/drive/plan";
-import type { Mission } from "@/drive/useMission";
+import { formatDistance } from "@/crew/plan";
+import type { Mission } from "@/crew/useMission";
 import { rerouteCount } from "@/store/emergencyStore";
 import { useIncidentStore } from "@/store/incidentStore";
 import { useSystemStore } from "@/store/systemStore";
@@ -165,6 +165,19 @@ export function DirectionsCard({ mission, onClose }: { mission: Mission; onClose
           );
         })}
       </ol>
+    </Panel>
+  );
+}
+
+/** A crew account that has not been linked to a vehicle yet. */
+export function NoVehicleCard() {
+  return (
+    <Panel className="pointer-events-auto">
+      <EmptyState
+        icon={Siren}
+        title="No vehicle is linked to your account"
+        body="Ask dispatch to link this account to your vehicle. Your route appears here once they do."
+      />
     </Panel>
   );
 }

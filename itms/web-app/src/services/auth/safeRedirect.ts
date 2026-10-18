@@ -1,5 +1,5 @@
 const FALLBACK = "/console";
-const AREAS = ["/console", "/drive"];
+const AREAS = ["/console", "/crew"];
 
 /**
  * Where to go after signing in. `?next=` is attacker-controllable (anyone can

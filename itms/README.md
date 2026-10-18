@@ -199,7 +199,7 @@ make down        # stop the stack
 Then open the **Command Center** (`web-app/`):
 
 ```bash
-cd web-app && npm install && npm run dev   # http://localhost:5173 -- landing page at /, console at /console, driver view at /drive
+cd web-app && npm install && npm run dev   # http://localhost:5173 -- landing page at /, console at /console, crew page at /crew
 ```
 
 It opens on in-browser simulated data, probes `api-service`'s `/health` once,

@@ -69,16 +69,16 @@ camera sites are still Vijayawada's only.
 
 ## Crew page (emergency-vehicle crews)
 
-`/drive` is the page an ambulance, fire or police crew follows on the road. It
+`/crew` is the page an ambulance, fire or police crew follows on the road. It
 sits behind the same sign-in as the console and reads the same live data, so
 what the dispatcher sees and what the crew sees agree. Choose your unit (it
 picks the first one with a call if you have not) and it shows:
 
 - **Next instruction**: a large turn banner with the distance, built from the
-  edges of the route the system dispatched (`src/drive/plan.ts`).
+  edges of the route the system dispatched (`src/crew/plan.ts`).
 - **Signals ahead**: each signal still on the route and whether the green
   corridor is *holding* it for you, is *clearing* it as you approach, or it is
-  just red/amber/green or faulted (`src/drive/situation.ts`). A fault outranks
+  just red/amber/green or faulted (`src/crew/situation.ts`). A fault outranks
   everything, and a signal that is not held for you is flagged as approximate.
 - **On your route**: blocked or disrupted roads, heavy traffic, signal faults,
   other emergency units sharing the road, and a weather note.
@@ -93,16 +93,16 @@ picks the first one with a call if you have not) and it shows:
 
 In the browser Demo it follows the simulated ambulance (`amb-01`). The
 vehicle's position and route come from the data provider, not the device's
-GPS. Logic lives in `src/drive/` (pure, unit-tested); UI in
-`src/components/drive/` and `src/app/drive/`.
+GPS. Logic lives in `src/crew/` (pure, unit-tested); UI in
+`src/components/crew/` and `src/app/crew/`.
 
 ## Layout
 
 ```
 src/
   app/          route tree, per-workspace pages (Dashboard, Traffic, Anomalies,
-                Emergency, Analytics, Settings), nav config, login, drive
-  drive/        guidance engine for the Drive page (route plan, turns, signal
+                Emergency, Analytics, Settings), nav config, login, crew
+  crew/         guidance engine for the crew page (route plan, turns, signal
                 and hazard status, voice cues) and its hooks
   components/
     layout/     AppShell, SideNav, TopBar, ConnectionPill

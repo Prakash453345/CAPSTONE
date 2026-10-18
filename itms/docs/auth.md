@@ -32,18 +32,28 @@ There is one sign-in form. The **account's role** decides where someone lands an
 what they can open, so nobody chooses a "login type" and a crew member cannot
 sign in as an operator by picking it.
 
-| Role | Lands on | Can open |
-|---|---|---|
-| `operator` (default) | `/console` | the console, and `/drive` (the crew page, to see what a crew sees) |
-| `responder` | `/drive` | the crew page only; the console redirects them back to it |
+| Role | Lands on | Can open | Sees |
+|---|---|---|---|
+| `operator` (default) | `/console` | the console, and `/crew` (to see what a crew sees) | every vehicle (picks one on `/crew`) |
+| `responder` (crew) | `/crew` | the crew page only; the console redirects them back to it | only **their own vehicle**, no picker |
+
+A crew account is tied to one vehicle by **vehicle id**: the id dispatch uses for
+it (the preset units are `EV-001` Ambulance 12, `EV-002` Ambulance 27, `EV-101`
+Fire 4, `EV-201` Police 9; in the browser demo the simulated ambulance is `amb-01`).
+A crew account with no vehicle linked sees "ask dispatch to link your account".
 
 ```bash
-.venv/bin/python -m api_service.users create amb12 --role responder --name "Ambulance 12 crew"
+# operator (the "admin": console + everything)
+.venv/bin/python -m api_service.users create komal --name "Komal S" --email komal@example.org
+# crew account for Ambulance 12   (it asks for the password: type it twice)
+.venv/bin/python -m api_service.users create amb12 --role responder --unit EV-001 --name "Ambulance 12 crew"
+# later changes
+.venv/bin/python -m api_service.users set-unit amb12 EV-002      # give the crew another vehicle
 .venv/bin/python -m api_service.users set-role komal operator
-.venv/bin/python -m api_service.users list        # shows each account's role
+.venv/bin/python -m api_service.users list                       # role / vehicle for each account
 ```
 
-Existing accounts keep working as operators. **Note:** the roles are enforced by the
+**Note:** the roles are enforced by the
 web pages. `POST /v1/commands` (the command channel) does not check the session
 yet, so a determined crew account could still call it directly; locking that
 endpoint to operators is the next step before this faces the public.

@@ -34,6 +34,17 @@ const kindOf = async (p: Promise<unknown>) => {
   return "resolved";
 };
 
+describe("vehicle", () => {
+  it("is read for a crew account, and absent otherwise", async () => {
+    stub(async () => json(200, { username: "crew1", display_name: "C", role: "responder", unit_id: "EV-001" }));
+    expect((await fetchSession())?.unitId).toBe("EV-001");
+    stub(async () => json(200, { username: "komal", display_name: "K", role: "operator", unit_id: null }));
+    expect((await fetchSession())?.unitId).toBeNull();
+    stub(async () => json(200, { username: "old", display_name: "Old" }));
+    expect((await fetchSession())?.unitId).toBeNull();
+  });
+});
+
 describe("role", () => {
   it("is read from the session, and is operator when the server does not say", async () => {
     stub(async () => json(200, { username: "crew1", display_name: "Crew 1", role: "responder" }));
@@ -48,9 +59,9 @@ describe("role", () => {
 describe("fetchSession", () => {
   it("returns the user, falling back to the username for the display name", async () => {
     stub(async () => json(200, { username: "komal", display_name: "Komal S" }));
-    expect(await fetchSession()).toEqual({ username: "komal", displayName: "Komal S", role: "operator" });
+    expect(await fetchSession()).toEqual({ username: "komal", displayName: "Komal S", role: "operator", unitId: null });
     stub(async () => json(200, { username: "komal", display_name: "" }));
-    expect(await fetchSession()).toEqual({ username: "komal", displayName: "komal", role: "operator" });
+    expect(await fetchSession()).toEqual({ username: "komal", displayName: "komal", role: "operator", unitId: null });
   });
 
   it("is null on 401 and calls the proxied api path without caching", async () => {
@@ -84,7 +95,7 @@ describe("fetchSession", () => {
 describe("login", () => {
   it("posts credentials as JSON and returns the user", async () => {
     stub(async () => json(200, { username: "komal", display_name: "Komal" }));
-    expect(await login("komal", "pw")).toEqual({ username: "komal", displayName: "Komal", role: "operator" });
+    expect(await login("komal", "pw")).toEqual({ username: "komal", displayName: "Komal", role: "operator", unitId: null });
     const [url, init] = vi.mocked(fetch).mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe("/api/v1/auth/login");
     expect(init.method).toBe("POST");
@@ -149,7 +160,7 @@ describe("authStore", () => {
   });
 
   it("check(): a transient failure does not sign out a confirmed session", async () => {
-    useAuthStore.setState({ status: "authed", user: { username: "komal", displayName: "K", role: "operator" } });
+    useAuthStore.setState({ status: "authed", user: { username: "komal", displayName: "K", role: "operator", unitId: null } });
     stub(async () => Promise.reject(new TypeError("down")));
     await useAuthStore.getState().check();
     expect(useAuthStore.getState().status).toBe("authed");
@@ -182,7 +193,7 @@ describe("authStore", () => {
     await expect(useAuthStore.getState().signIn("a", "b")).rejects.toBeInstanceOf(AuthError);
     expect(useAuthStore.getState().status).toBe("checking");
 
-    useAuthStore.setState({ status: "authed", user: { username: "komal", displayName: "K", role: "operator" } });
+    useAuthStore.setState({ status: "authed", user: { username: "komal", displayName: "K", role: "operator", unitId: null } });
     stub(async () => json(500, {}));
     await expect(useAuthStore.getState().signOut()).rejects.toBeInstanceOf(AuthError);
     expect(useAuthStore.getState().status).toBe("authed");

@@ -9,7 +9,7 @@ import {
 } from "@/utils/geo";
 
 /**
- * A dispatched route turned into what a driver needs on the road: one
+ * A dispatched route turned into what a crew needs on the road: one
  * continuous line to follow, the turns along it, and the signals it crosses.
  *
  * The backend hands over a list of SUMO edge ids. They carry no direction, so
@@ -169,7 +169,7 @@ export function buildPlan(edgeIds: readonly string[], signalJunctionIds: readonl
   const parts = orientedPaths(edgeIds);
   if (!parts.length) return null;
 
-  // A gap between two edges still gets a straight connector, so the driver
+  // A gap between two edges still gets a straight connector, so the crew
   // keeps one continuous line instead of a route that vanishes mid-way.
   const coords: LngLat[] = [];
   const startIdx: number[] = [];
@@ -261,7 +261,7 @@ export function maneuverAfter(plan: RoutePlan, next: Maneuver): Maneuver | null 
   return i >= 0 && i + 1 < plan.maneuvers.length ? plan.maneuvers[i + 1]! : null;
 }
 
-/** "300 m", "1.2 km" — rounded the way a driver wants to hear it. */
+/** "300 m", "1.2 km" — rounded the way a crew wants to hear it. */
 export function formatDistance(m: number): string {
   if (!Number.isFinite(m)) return "–";
   if (m < 950) return `${Math.max(0, Math.round(m / 10) * 10)} m`;

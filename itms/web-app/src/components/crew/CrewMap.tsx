@@ -13,9 +13,9 @@ import { EmergencyVehicleLayer } from "@/components/map/layers/EmergencyVehicleL
 import { isMapAlive } from "@/components/map/mapSafe";
 import { EV_ROUTE_COLOR } from "@/components/map/mapColors";
 import { networkBounds } from "@/data/network";
-import { slicePlan } from "@/drive/plan";
-import type { Mission } from "@/drive/useMission";
-import { useDriveStore } from "@/store/driveStore";
+import { slicePlan } from "@/crew/plan";
+import type { Mission } from "@/crew/useMission";
+import { useCrewStore } from "@/store/crewStore";
 import { useThemeStore } from "@/store/themeStore";
 import { prefersReducedMotion } from "@/utils/motion";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -41,19 +41,19 @@ function followPadding(map: MapLibreMap) {
     : { top: 250, bottom: Math.round(h * 0.34 + 120), left: 0, right: 0 };
 }
 
-const SRC = "drive-route";
-const POINTS = "drive-points";
-const CASING = "drive-route-casing";
-const DONE = "drive-route-done";
-const AHEAD = "drive-route-ahead";
-const DEST_RING = "drive-dest-ring";
-const DEST_DOT = "drive-dest-dot";
-const TURN_DOT = "drive-turn-dot";
+const SRC = "crew-route";
+const POINTS = "crew-points";
+const CASING = "crew-route-casing";
+const DONE = "crew-route-done";
+const AHEAD = "crew-route-ahead";
+const DEST_RING = "crew-dest-ring";
+const DEST_DOT = "crew-dest-dot";
+const TURN_DOT = "crew-turn-dot";
 
 const empty: FeatureCollection = { type: "FeatureCollection", features: [] };
 
 /** The route being driven: grey behind you, green ahead, with the next turn and destination marked. */
-function DriveRouteLayer({ mission }: { mission: Mission | null }) {
+function CrewRouteLayer({ mission }: { mission: Mission | null }) {
   const map = useMapInstance();
 
   useEffect(() => {
@@ -162,10 +162,10 @@ function DriveRouteLayer({ mission }: { mission: Mission | null }) {
 }
 
 /** Keeps the vehicle centred while following; fits the whole route before the run starts. */
-function DriveCamera({ mission }: { mission: Mission | null }) {
+function CrewCamera({ mission }: { mission: Mission | null }) {
   const map = useMapInstance();
-  const camera = useDriveStore((s) => s.camera);
-  const setCamera = useDriveStore((s) => s.setCamera);
+  const camera = useCrewStore((s) => s.camera);
+  const setCamera = useCrewStore((s) => s.setCamera);
   const fitted = useRef<string>("");
 
   // A drag, pinch or scroll by the crew hands the camera back to them.
@@ -227,8 +227,8 @@ function DriveCamera({ mission }: { mission: Mission | null }) {
 
 function MapButtons({ mission }: { mission: Mission | null }) {
   const map = useMapInstance();
-  const camera = useDriveStore((s) => s.camera);
-  const setCamera = useDriveStore((s) => s.setCamera);
+  const camera = useCrewStore((s) => s.camera);
+  const setCamera = useCrewStore((s) => s.setCamera);
   const plan = mission?.plan;
   const btn =
     "grid size-11 place-items-center rounded-xl bg-surface-raised text-foreground shadow-elevation-2 transition-colors hover:bg-muted active:scale-95 [&_svg]:size-5";
@@ -276,11 +276,11 @@ function MapButtons({ mission }: { mission: Mission | null }) {
 }
 
 /**
- * The Drive page's map: the console's basemap and live layers (congestion,
+ * The crew page's map: the console's basemap and live layers (congestion,
  * signals, incidents, emergency units) with the crew's own route on top, and
  * a camera that follows the vehicle.
  */
-export function DriveMap({ mission, className }: { mission: Mission | null; className?: string }) {
+export function CrewMap({ mission, className }: { mission: Mission | null; className?: string }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [map, setMap] = useState<MapLibreMap | null>(null);
   const [ready, setReady] = useState(false);
@@ -360,11 +360,11 @@ export function DriveMap({ mission, className }: { mission: Mission | null; clas
         <MapContext.Provider value={map}>
           <Basemap />
           <RoadLayer visible />
-          <DriveRouteLayer mission={mission} />
+          <CrewRouteLayer mission={mission} />
           <SignalLayer visible />
           <AnomalyLayer visible />
           <EmergencyVehicleLayer visible />
-          <DriveCamera mission={mission} />
+          <CrewCamera mission={mission} />
           <MapButtons mission={mission} />
         </MapContext.Provider>
       )}

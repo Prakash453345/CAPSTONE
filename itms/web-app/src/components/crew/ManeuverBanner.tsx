@@ -1,5 +1,5 @@
 import { ArrowUp, ArrowUpLeft, ArrowUpRight, CornerUpLeft, CornerUpRight, Flag, Navigation, TriangleAlert, Undo2 } from "lucide-react";
-import { formatDistance, type Maneuver } from "@/drive/plan";
+import { formatDistance, type Maneuver } from "@/crew/plan";
 import { cn } from "@/utils/cn";
 
 export function ManeuverIcon({ m, className }: { m: Maneuver; className?: string }) {

@@ -1,10 +1,10 @@
 import { List, Volume2, VolumeX } from "lucide-react";
 import { Meter } from "@/components/console/kit";
 import { mmss } from "@/components/console/words";
-import { RerouteButton } from "@/components/drive/RerouteButton";
-import { canSpeak } from "@/drive/useGuidanceVoice";
-import { formatDistance } from "@/drive/plan";
-import type { Mission } from "@/drive/useMission";
+import { RerouteButton } from "@/components/crew/RerouteButton";
+import { canSpeak } from "@/crew/useGuidanceVoice";
+import { formatDistance } from "@/crew/plan";
+import type { Mission } from "@/crew/useMission";
 import { cn } from "@/utils/cn";
 
 const clock = (etaS: number | null) =>

@@ -9,16 +9,16 @@ describe("safeNext", () => {
   });
 
   it("keeps crew-page paths too, but not look-alikes", () => {
-    expect(safeNext("/drive")).toBe("/drive");
-    expect(safeNext("/drive?unit=EV-001")).toBe("/drive?unit=EV-001");
-    expect(safeNext("/driveway")).toBe("/console");
-    expect(safeNext("/drive-evil")).toBe("/console");
+    expect(safeNext("/crew")).toBe("/crew");
+    expect(safeNext("/crew?unit=EV-001")).toBe("/crew?unit=EV-001");
+    expect(safeNext("/crewway")).toBe("/console");
+    expect(safeNext("/crew-evil")).toBe("/console");
   });
 
   it("uses the fallback it is given when the target is not usable", () => {
-    expect(safeNext("https://evil.example", "/drive")).toBe("/drive");
-    expect(safeNext(null, "/drive")).toBe("/drive");
-    expect(safeNext("/console/map", "/drive")).toBe("/console/map");
+    expect(safeNext("https://evil.example", "/crew")).toBe("/crew");
+    expect(safeNext(null, "/crew")).toBe("/crew");
+    expect(safeNext("/console/map", "/crew")).toBe("/console/map");
   });
 
   it("falls back to the console when there is nothing usable", () => {

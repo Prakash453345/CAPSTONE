@@ -4,7 +4,7 @@ import { useAuthStore } from "@/store/authStore";
 import { homeFor, type Role } from "@/services/auth/roles";
 
 /**
- * Gate for the signed-in areas (/console, /drive). `roles` limits which accounts
+ * Gate for the signed-in areas (/console, /crew). `roles` limits which accounts
  * may open one; others are sent to their own home. Signed-out visitors are sent to /login
  * with the page they wanted in `?next=`, so signing in lands them back there.
  * While the first session check is still on the wire the gate shows a spinner

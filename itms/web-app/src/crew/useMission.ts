@@ -5,7 +5,7 @@ import { useTrafficStore } from "@/store/trafficStore";
 import { unitName } from "@/components/console/words";
 import { pointAlongPath, type LngLat } from "@/utils/geo";
 import type { EmergencyRequest, GreenCorridorView } from "@/types";
-import { buildPlan, maneuverAfter, nextManeuver, type Maneuver, type RoutePlan } from "@/drive/plan";
+import { buildPlan, maneuverAfter, nextManeuver, type Maneuver, type RoutePlan } from "@/crew/plan";
 import {
   alongFor,
   hasArrived,
@@ -14,7 +14,7 @@ import {
   upcomingSignals,
   type Hazard,
   type UpcomingSignal,
-} from "@/drive/situation";
+} from "@/crew/situation";
 
 export interface UnitOption {
   id: string;
@@ -69,9 +69,9 @@ export function requestForUnit(requests: readonly EmergencyRequest[], unitId: st
 }
 
 /**
- * Everything the Drive page shows about one unit's mission, derived from the
+ * Everything the crew page shows about one unit's mission, derived from the
  * app's live stores. Recomputed whenever a snapshot lands (about once a
- * second); all the real logic lives in the pure functions under `src/drive`.
+ * second); all the real logic lives in the pure functions under `src/crew`.
  */
 export function useMission(unitId: string | null): { request: EmergencyRequest | null; mission: Mission | null; units: UnitOption[] } {
   const requests = useEmergencyStore((s) => s.requests);

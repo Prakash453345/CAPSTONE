@@ -1,12 +1,12 @@
 import { create } from "zustand";
 
 /**
- * A responder's own settings for the Drive page: which unit they are driving,
+ * A responder's own settings for the crew page: which unit they are driving,
  * whether guidance is spoken, and whether the map follows them. The unit and
  * voice choice survive a reload (an ambulance crew should not have to set them
  * again mid-shift); the camera mode is per visit.
  */
-const KEY = "traffix.drive";
+const KEY = "traffix.crew";
 
 interface Saved {
   unitId: string | null;
@@ -32,14 +32,14 @@ function write(saved: Saved) {
 
 export type CameraMode = "follow" | "free";
 
-interface DriveState extends Saved {
+interface CrewState extends Saved {
   camera: CameraMode;
   setUnit: (unitId: string | null) => void;
   setVoice: (voice: boolean) => void;
   setCamera: (camera: CameraMode) => void;
 }
 
-export const useDriveStore = create<DriveState>((set, get) => ({
+export const useCrewStore = create<CrewState>((set, get) => ({
   ...read(),
   camera: "follow",
   setUnit: (unitId) => {

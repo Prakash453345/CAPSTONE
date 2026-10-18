@@ -1,4 +1,4 @@
-import { formatDistance, type Maneuver } from "@/drive/plan";
+import { formatDistance, type Maneuver } from "@/crew/plan";
 
 /** How far before a maneuver each spoken warning is given, farthest first. */
 export const CUE_BANDS_M = [500, 200, 60] as const;

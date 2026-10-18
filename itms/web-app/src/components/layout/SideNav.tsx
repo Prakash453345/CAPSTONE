@@ -81,9 +81,9 @@ export function SideNav({ collapsed, onToggleCollapsed, onNavigate }: SideNavPro
   };
 
   // What an emergency crew sees, from the same live data: a separate page, not a workspace.
-  const driveLink = (
+  const crewLink = (
     <NavLink
-      to="/drive"
+      to="/crew"
       onClick={goTo}
       className={cn(
         "group relative z-[1] flex h-9 items-center gap-3 rounded-xl px-2.5 text-[13.5px] font-medium text-muted-foreground outline-none transition-colors duration-150 hover:bg-muted hover:text-foreground",
@@ -132,7 +132,7 @@ export function SideNav({ collapsed, onToggleCollapsed, onNavigate }: SideNavPro
 
       <div className="isolate shrink-0 px-3 pb-4">
         <ul className="flex flex-col gap-0.5">
-          <li>{collapsed ? <Tooltip label="Crew view">{driveLink}</Tooltip> : driveLink}</li>
+          <li>{collapsed ? <Tooltip label="Crew view">{crewLink}</Tooltip> : crewLink}</li>
           {NAV_ITEMS.filter((i) => i.group === "footer").map(item)}
         </ul>
         <button

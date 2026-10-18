@@ -50,6 +50,23 @@ def test_accounts_default_to_operator_and_the_role_is_reported(client, store):
     assert client.get("/v1/auth/me").json()["role"] == "responder"
 
 
+def test_a_crew_account_reports_its_vehicle_and_an_operator_never_does(client, store):
+    store.add("crew2", PASSWORD, role="responder", unit_id="EV-001")
+    store.add("boss", PASSWORD, role="operator", unit_id="EV-999")  # ignored for operators
+    assert login(client, "crew2").json()["unit_id"] == "EV-001"
+    assert client.get("/v1/auth/me").json()["unit_id"] == "EV-001"
+    assert login(client, "boss").json()["unit_id"] is None
+    store.add("nounit", PASSWORD, role="responder")
+    assert login(client, "nounit").json()["unit_id"] is None
+
+
+def test_vehicle_ids_are_validated():
+    assert auth.validate_unit("EV-001") is None
+    assert auth.validate_unit("amb_07.a") is None
+    for bad in ["", " EV-1", "EV 1", "-x", "a" * 33, "é", "EV/1"]:
+        assert auth.validate_unit(bad) is not None
+
+
 def test_an_unknown_stored_role_is_reported_as_the_default_not_trusted(client, store):
     store.add("odd", PASSWORD, role="superuser")
     assert login(client, "odd").json()["role"] == "operator"
@@ -105,7 +122,12 @@ def test_username_and_password_rules():
 def test_login_sets_httponly_cookie_and_me_returns_user(client):
     res = login(client)
     assert res.status_code == 200
-    assert res.json() == {"username": "operator", "display_name": "Op Erator", "role": "operator"}
+    assert res.json() == {
+        "username": "operator",
+        "display_name": "Op Erator",
+        "role": "operator",
+        "unit_id": None,
+    }
     assert "password" not in res.text
     cookie = res.headers["set-cookie"].lower()
     assert "httponly" in cookie and "samesite=lax" in cookie and "path=/" in cookie

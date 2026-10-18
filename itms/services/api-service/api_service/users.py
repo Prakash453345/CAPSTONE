@@ -1,8 +1,9 @@
 """Manage console accounts from the command line.
 
     python -m api_service.users create <username> [--name "Display Name"] [--email you@example.org]
-                                         [--role operator|responder]
+                                         [--role operator|responder] [--unit EV-001]
     python -m api_service.users set-role <username> operator|responder
+    python -m api_service.users set-unit <username> <vehicle-id>   # a crew account's vehicle
     python -m api_service.users passwd <username>
     python -m api_service.users set-email <username> <email>
     python -m api_service.users disable <username>
@@ -55,6 +56,14 @@ def _email(raw: str) -> str:
     return email
 
 
+def _unit(raw: str) -> str:
+    unit = raw.strip()
+    problem = auth.validate_unit(unit)
+    if problem:
+        raise SystemExit(f"error: {problem}")
+    return unit
+
+
 def _require_one(cur: psycopg.Cursor, username: str) -> None:
     if cur.rowcount != 1:
         raise SystemExit(f"error: no such user: {username}")
@@ -73,10 +82,18 @@ def main(argv: list[str] | None = None) -> None:
         default=auth.DEFAULT_ROLE,
         help="operator = the console (and crew page); responder = the crew page only",
     )
+    create.add_argument(
+        "--unit",
+        default="",
+        help="the vehicle id a crew account drives (as dispatch knows it, e.g. EV-001)",
+    )
     create.add_argument("--stdin", action="store_true", help="read the password from stdin")
     passwd = sub.add_parser("passwd", help="change a password (signs the user out everywhere)")
     passwd.add_argument("username")
     passwd.add_argument("--stdin", action="store_true", help="read the password from stdin")
+    setunit = sub.add_parser("set-unit", help="set the vehicle a crew account drives")
+    setunit.add_argument("username")
+    setunit.add_argument("unit")
     setrole = sub.add_parser("set-role", help="change what an account can open")
     setrole.add_argument("username")
     setrole.add_argument("role", choices=auth.ROLES)
@@ -99,32 +116,37 @@ def main(argv: list[str] | None = None) -> None:
             if args.cmd == "list":
                 rows = conn.execute(
                     "SELECT username, display_name, is_active, locked_until,"
-                    " last_login_at, email, role FROM app_user ORDER BY username"
+                    " last_login_at, email, role, unit_id FROM app_user ORDER BY username"
                 ).fetchall()
-                for username, name, active, locked, last, email, role in rows:
+                for username, name, active, locked, last, email, role, unit in rows:
                     flags = ("" if active else " [disabled]") + (
                         " [locked]" if locked and locked > auth.utcnow() else ""
                     )
                     print(
-                        f"{username}\t{role}\t{name}\t{email or 'no email'}\t"
-                        f"last login: {last or 'never'}{flags}"
+                        f"{username}\t{role}{' / ' + unit if unit else ''}\t{name}\t"
+                        f"{email or 'no email'}\tlast login: {last or 'never'}{flags}"
                     )
                 if not rows:
                     print("no users yet -- create one: python -m api_service.users create <name>")
                 return
             username = _username(args.username)
             if args.cmd == "create":
+                unit = _unit(args.unit) if args.unit else None
+                if unit and args.role != "responder":
+                    raise SystemExit("error: --unit is for crew accounts (use --role responder)")
                 password = _read_password(args.stdin)
                 try:
                     conn.execute(
-                        "INSERT INTO app_user (username, display_name, password_hash, email, role)"
-                        " VALUES (%s, %s, %s, %s, %s)",
+                        "INSERT INTO app_user"
+                        " (username, display_name, password_hash, email, role, unit_id)"
+                        " VALUES (%s, %s, %s, %s, %s, %s)",
                         (
                             username,
                             args.name.strip(),
                             auth.hash_password(password),
                             _email(args.email) if args.email else None,
                             args.role,
+                            unit,
                         ),
                     )
                 except psycopg.errors.UniqueViolation:
@@ -140,6 +162,14 @@ def main(argv: list[str] | None = None) -> None:
                 )
                 _require_one(cur, username)
                 print(f"password changed for {username}; their sessions are signed out")
+            elif args.cmd == "set-unit":
+                cur = conn.execute(
+                    "UPDATE app_user SET unit_id = %s WHERE username = %s AND role = 'responder'",
+                    (_unit(args.unit), username),
+                )
+                if cur.rowcount != 1:
+                    raise SystemExit(f"error: {username} is not a crew account (role responder)")
+                print(f"{username} now drives {args.unit.strip()}")
             elif args.cmd == "set-role":
                 cur = conn.execute(
                     "UPDATE app_user SET role = %s WHERE username = %s", (args.role, username)

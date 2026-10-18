@@ -2,7 +2,7 @@ import { roadLabel } from "@/data/network";
 import { anomalyWord } from "@/components/console/words";
 import type { Tone } from "@/components/console/tone";
 import type { Anomaly, EmergencyRequest, GreenCorridorView, Intersection } from "@/types";
-import { projectOnPlan, type RoutePlan } from "@/drive/plan";
+import { projectOnPlan, type RoutePlan } from "@/crew/plan";
 
 /** What a crew should make of the next signals on the route. */
 export type SignalStatus = "held" | "arranged" | "green" | "amber" | "red" | "fault" | "unknown";
@@ -76,7 +76,7 @@ export interface Hazard {
 const HEAVY_CONGESTION = 0.6;
 
 /**
- * Everything on the remaining route worth a driver's attention, nearest first:
+ * Everything on the remaining route worth a crew's attention, nearest first:
  * blocked or disrupted roads, heavy congestion, signals that have faulted and
  * other emergency units sharing the road.
  */

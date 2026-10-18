@@ -10,7 +10,7 @@ const next = (page: import("@playwright/test").Page) => page.getByRole("region",
 test("a crew sees their next turn, the signals ahead, what is on the road, and trip progress", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  await page.goto("/drive");
+  await page.goto("/crew");
 
   await expect(page.getByRole("heading", { name: "TRAFFIX Crew" })).toBeVisible();
   // The unit with a call is chosen for them.
@@ -28,7 +28,7 @@ test("a crew sees their next turn, the signals ahead, what is on the road, and t
 });
 
 test("all directions opens over the cards and closes again", async ({ page }) => {
-  await page.goto("/drive");
+  await page.goto("/crew");
   await expect(next(page)).toBeVisible({ timeout: 15_000 });
   await page.getByRole("button", { name: "Show all directions" }).click();
   await expect(page.getByRole("heading", { name: "All directions" })).toBeVisible();
@@ -38,7 +38,7 @@ test("all directions opens over the cards and closes again", async ({ page }) =>
 });
 
 test("a unit with no call is told it is standing by, and can switch back", async ({ page }) => {
-  await page.goto("/drive");
+  await page.goto("/crew");
   await expect(next(page)).toBeVisible({ timeout: 15_000 });
   await page.getByLabel("Vehicle", { exact: true }).selectOption({ label: "Ambulance 12" });
   await expect(page.getByText("Ambulance 12 is standing by")).toBeVisible();
@@ -48,7 +48,7 @@ test("a unit with no call is told it is standing by, and can switch back", async
 });
 
 test("voice guidance can be switched off and on", async ({ page }) => {
-  await page.goto("/drive");
+  await page.goto("/crew");
   await expect(next(page)).toBeVisible({ timeout: 15_000 });
   const off = page.getByRole("button", { name: "Turn voice guidance off" });
   // Browsers without speech synthesis simply do not offer the control.
@@ -59,7 +59,7 @@ test("voice guidance can be switched off and on", async ({ page }) => {
 });
 
 test("the page fits the screen: nothing scrolls sideways and the trip bar is reachable", async ({ page }) => {
-  await page.goto("/drive");
+  await page.goto("/crew");
   await expect(next(page)).toBeVisible({ timeout: 15_000 });
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   expect(overflow).toBeLessThanOrEqual(0);
@@ -69,8 +69,8 @@ test("the page fits the screen: nothing scrolls sideways and the trip bar is rea
 
 test("signed-out visitors are sent to sign in and back to the crew page", async ({ page }) => {
   await page.route("**/api/v1/auth/me", (route) => route.fulfill({ status: 401, json: { detail: "Not signed in." } }));
-  await page.goto("/drive");
-  await expect(page).toHaveURL(/\/login\?next=%2Fdrive$/);
+  await page.goto("/crew");
+  await expect(page).toHaveURL(/\/login\?next=%2Fcrew$/);
 });
 
 for (const colorScheme of ["light", "dark"] as const) {
@@ -78,7 +78,7 @@ for (const colorScheme of ["light", "dark"] as const) {
     test.use({ colorScheme });
 
     test("the crew page has no WCAG 2.2 AA violations", async ({ page }) => {
-      await page.goto("/drive");
+      await page.goto("/crew");
       await expect(next(page)).toBeVisible({ timeout: 15_000 });
       await page.waitForTimeout(1000);
       const { violations } = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze();
@@ -89,26 +89,27 @@ for (const colorScheme of ["light", "dark"] as const) {
 
 // ------------------------------------------------------------------ roles
 
-const CREW = { username: "crew1", display_name: "Crew One", role: "responder" };
+// In the browser demo the simulated ambulance is "amb-01".
+const CREW = { username: "crew1", display_name: "Crew One", role: "responder", unit_id: "amb-01" };
 
 test("a crew account that opens the console is sent to the crew page", async ({ page }) => {
   await page.route("**/api/v1/auth/me", (route) => route.fulfill({ json: CREW }));
   await page.goto("/console/traffic");
-  await expect(page).toHaveURL(/\/drive$/);
+  await expect(page).toHaveURL(/\/crew$/);
   await expect(page.getByRole("heading", { name: "TRAFFIX Crew" })).toBeVisible();
   // and is not offered the operator console from there
   await expect(page.getByRole("link", { name: "Open the operator console" })).toHaveCount(0);
 });
 
 test("an operator can open the crew page and is offered the way back", async ({ page }) => {
-  await page.goto("/drive");
+  await page.goto("/crew");
   await expect(page.getByRole("heading", { name: "TRAFFIX Crew" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Open the operator console" })).toBeVisible();
 });
 
 test("signing in lands each account on its own page", async ({ page }) => {
   for (const [role, expected] of [
-    ["responder", /\/drive$/],
+    ["responder", /\/crew$/],
     ["operator", /\/console$/],
   ] as const) {
     let signedIn = false;
@@ -127,4 +128,21 @@ test("signing in lands each account on its own page", async ({ page }) => {
     await page.getByRole("button", { name: /^Sign in/ }).click();
     await expect(page).toHaveURL(expected, { timeout: 15_000 });
   }
+});
+
+test("a crew account sees only its own vehicle: no picker, and it follows its own call", async ({ page }) => {
+  await page.route("**/api/v1/auth/me", (route) => route.fulfill({ json: CREW }));
+  await page.goto("/crew");
+  await expect(next(page)).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole("combobox")).toHaveCount(0);
+  await expect(page.getByText("Vehicle:")).toBeAttached();
+  await expect(page.getByText("Ambulance 1", { exact: true })).toBeVisible();
+});
+
+test("a crew account with no vehicle linked is told to ask dispatch, and sees no one else's", async ({ page }) => {
+  await page.route("**/api/v1/auth/me", (route) => route.fulfill({ json: { ...CREW, unit_id: null } }));
+  await page.goto("/crew");
+  await expect(page.getByText("No vehicle is linked to your account")).toBeVisible();
+  await expect(next(page)).toBeHidden();
+  await expect(page.getByRole("combobox")).toHaveCount(0);
 });
