@@ -29,6 +29,7 @@ destination, or the vehicle's *own* current/destination edge itself blocked)
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import replace
 
 from itms_domain import EmergencyRoutingConfig, RouteCostBreakdown, RouteResult
 
@@ -52,22 +53,86 @@ class RoutePlanner:
         self,
         graph: RoadGraph,
         config: EmergencyRoutingConfig | None = None,
+        cost_model=None,
+        *,
+        static_prior: bool = False,
     ):
+        """`cost_model` defaults to the weighted `RouteCostModel`; pass an
+        `EtaCostModel` to cost routes in seconds (its A* heuristic is then
+        used too)."""
         self.graph = graph
         self.config = config or EmergencyRoutingConfig()
-        self.cost_model = RouteCostModel(self.config)
+        self.cost_model = cost_model or RouteCostModel(self.config)
+        # static_prior: the route that is best with no live traffic data
+        # (lanes, turns, signals, anomalies only) is kept unless the live best
+        # route beats it by the reroute margin. Live data about roads minutes
+        # ahead is a weak forecast; small predicted gains from it are noise.
+        self.static_prior = static_prior
 
     def plan(
         self,
         source_edge: str,
         dest_edge: str,
         conditions: Mapping[str, EdgeConditions] | None = None,
+        *,
+        allowed_edges: set[str] | None = None,
     ) -> list[RouteResult]:
+        """`allowed_edges` limits the search to a band of edges (hex band);
+        if no route exists inside it, the full graph is searched."""
         cond = dict(conditions or {})
         self._preflight(source_edge, dest_edge, cond)
+        res = None
+        if allowed_edges is not None:
+            band = set(allowed_edges) | {source_edge, dest_edge}
+            try:
+                res = self._plan_on(self.graph.subgraph(band), source_edge, dest_edge, cond)
+            except NoRouteError:
+                res = None
+        if not res:
+            res = self._plan_on(self.graph, source_edge, dest_edge, cond)
+        if self.static_prior and hasattr(self.cost_model, "config"):
+            res = self._apply_static_prior(res, source_edge, dest_edge, cond)
+        return res
+
+    def _apply_static_prior(self, res, source_edge, dest_edge, cond):
+        from sim_service.routing.eta_cost import should_reroute
+
+        static_cond = {
+            e: EdgeConditions(anomaly_severity=c.anomaly_severity, anomaly_impact=c.anomaly_impact)
+            for e, c in cond.items()
+            if c.has_active_anomaly
+        }
+        try:
+            prior_edges = self._plan_on(self.graph, source_edge, dest_edge, static_cond)[0].edges
+            prior = self.evaluate(prior_edges, cond)
+        except NoRouteError:
+            return res
+        if prior.edges == res[0].edges or prior.forced_through:
+            return res
+        if should_reroute(prior.score, res[0].score, self.cost_model.config):
+            return res
+        return [replace(prior, anomalous_segments_avoided=res[0].anomalous_segments_avoided)] + [
+            r for r in res if r.edges != prior.edges
+        ]
+
+    def _search(self, graph: RoadGraph, source_edge, dest_edge, cond, k):
+        h = None
+        if hasattr(self.cost_model, "heuristic"):
+            h = self.cost_model.heuristic(graph, dest_edge)
+        return GraphSearchEngine(graph).k_shortest(
+            source_edge, dest_edge, self._weight(graph, cond), k=k, heuristic=h
+        )
+
+    def _plan_on(
+        self,
+        full: RoadGraph,
+        source_edge: str,
+        dest_edge: str,
+        cond: dict,
+    ) -> list[RouteResult]:
 
         blocked = {e for e, c in cond.items() if c.is_blocked}
-        avoiding = self.graph.without_edges(blocked)
+        avoiding = full.without_edges(blocked)
         if source_edge not in avoiding.edges:
             raise NoRouteError("the emergency vehicle's current road is blocked")
         if dest_edge not in avoiding.edges:
@@ -75,9 +140,7 @@ class RoutePlanner:
 
         k = 1 + max(0, self.config.max_alternatives)
         graph = avoiding
-        candidates = GraphSearchEngine(graph).k_shortest(
-            source_edge, dest_edge, self._weight(graph, cond), k=k
-        )
+        candidates = self._search(graph, source_edge, dest_edge, cond, k)
         forced_through: frozenset[str] = frozenset()
 
         if not candidates and blocked:
@@ -88,10 +151,8 @@ class RoutePlanner:
             # anomaly_norm precisely for this pass), so the search still
             # prefers any real alternative and only lands here when there
             # truly is none.
-            graph = self.graph
-            candidates = GraphSearchEngine(graph).k_shortest(
-                source_edge, dest_edge, self._weight(graph, cond), k=k
-            )
+            graph = full
+            candidates = self._search(graph, source_edge, dest_edge, cond, k)
             if candidates:
                 forced_through = blocked & set(candidates[0].edges)
 
@@ -125,7 +186,9 @@ class RoutePlanner:
             ec = cond.get(ge.to_edge)
             if ge.signalised:
                 ec = _with_signal(ec)
-            return self.cost_model.edge_cost(graph.edges[ge.to_edge], ec).weighted_total
+            return self.cost_model.edge_cost(
+                graph.edges[ge.to_edge], ec, ge, graph.edges.get(from_edge), cond.get(from_edge)
+            ).weighted_total
 
         return weight
 
@@ -222,7 +285,9 @@ class RoutePlanner:
                 ec = _with_signal(ec)
                 if ge.junction_id not in signalised:
                     signalised.append(ge.junction_id)
-            parts = self.cost_model.edge_cost(info, ec)
+            parts = self.cost_model.edge_cost(
+                info, ec, ge, graph.edges.get(prev_edge), cond.get(prev_edge)
+            )
             total_distance += info.length_m
             travel_time_s += parts.travel_time_s
             congestion_cost += parts.congestion_cost
@@ -285,12 +350,4 @@ def _with_signal(ec: EdgeConditions | None) -> EdgeConditions:
         return EdgeConditions(entry_is_signalised=True)
     if ec.entry_is_signalised:
         return ec
-    return EdgeConditions(
-        congestion=ec.congestion,
-        mean_speed_frac=ec.mean_speed_frac,
-        congestion_variance=ec.congestion_variance,
-        anomaly_severity=ec.anomaly_severity,
-        anomaly_impact=ec.anomaly_impact,
-        entry_is_signalised=True,
-        entry_signal_phase=ec.entry_signal_phase,
-    )
+    return replace(ec, entry_is_signalised=True)

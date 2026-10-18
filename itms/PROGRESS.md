@@ -6131,3 +6131,12 @@ Not committed. `baselines/2026-10-14_m7_heavy/` (README, TARGETS, `summarise.py`
   EV travel time +3.6 s [-30.8, +38.0] (H1 failed), stops +1.5 (n.s.), person-delay -2.0 % (n.s.),
   zero violations; medium +5.6 s [-1.6, +12.8].
 - M7 stands as safe preemption plus dispatch; no advantage over reactive preemption is claimed.
+
+## M7 routing: time-based cost, rerouting rule, hex band (2026-10-17, not committed)
+`baselines/2026-10-17_m7_routing/` (TARGETS written first, held-out seeds 300-329, 720 runs on
+random_lh / amaravati_plan / vijayawada_district, medium). New `EtaCostModel` + rule vs current
+weighted router: -4.6 % [-7.9, -0.2] EV time with an incident (H1 target -5 %: FAIL, narrowly),
+-6.4 % [-8.9, -3.8] without. vs fixed shortest route: -19.0 % with incident, -2.1 % [-4.8, +1.1]
+without. Current router is +5.6 % worse than the shortest route when nothing happens. Hex band:
+same routes, 2.4x fewer edges sampled, plan 60 vs 93 ms on Vijayawada. Opt in:
+`ITMS_ROUTE_COST=eta`; default unchanged. Vijayawada ran without the bluelight device (SUMO crash).

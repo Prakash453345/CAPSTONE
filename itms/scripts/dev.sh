@@ -14,6 +14,14 @@ export AUTH_COOKIE_SECURE="${AUTH_COOKIE_SECURE:-false}"
 # instead of failing. Production must not set this (set SMTP_HOST instead).
 export AUTH_DEV_LOG_CODES="${AUTH_DEV_LOG_CODES:-true}"
 export DATABASE_URL="${DATABASE_URL:-postgresql://itms:itms@localhost:5432/itms}"
+# The console's interactive features -- operator anomalies, emergency dispatch,
+# green corridors -- are the live loop, which is the only mode that drains the
+# `commands.operator` stream. The default ("sumo") just streams M1 traffic, so
+# "Calculate route" posted a command nothing consumed and the request never
+# appeared (2026-10-18). Set SIM_MODE=sumo here to get the plain M1 loop back.
+export SIM_MODE="${SIM_MODE:-live}"
+export SIM_DEMAND="${SIM_DEMAND:-light}"
+export SIM_REALTIME_FACTOR="${SIM_REALTIME_FACTOR:-1.0}"
 
 cleanup() {
   echo ""

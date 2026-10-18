@@ -53,7 +53,14 @@ export function CrewPage() {
   const [dismissed, setDismissed] = useState<string | null>(null);
 
   useEffect(() => {
+    // Restore on unmount, like MapPage: without this the console kept showing
+    // "Crew - TRAFFIX" in the tab after a visit here, which reads as the crew
+    // page still being open when it isn't.
+    const previous = document.title;
     document.title = "Crew · TRAFFIX";
+    return () => {
+      document.title = previous;
+    };
   }, []);
 
   // Weather changes how fast a crew can safely go, so keep it fresh.

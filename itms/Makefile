@@ -1,4 +1,4 @@
-.PHONY: dev setup infra-up infra-down test test-fast test-anomaly test-all lint bench down clean \
+.PHONY: dev setup infra-up infra-up-all infra-down test test-fast test-anomaly test-all lint bench down clean \
 	vision-dev vision-model test-vision m8-cameras m8-perception m8-incidents m8-closed-loop \
 	m8-video m8-live
 
@@ -19,9 +19,19 @@ setup: $(VENV)/bin/activate
 	$(PIP) install -e packages/geo -q
 	$(PIP) install -e services/vision-service -q
 
+# Postgres (console accounts, road network) and Redis (the service bus) are all
+# `make dev` needs. MinIO only stores vision evidence clips, and only when
+# vision-service runs with MINIO_ENDPOINT/VISION_EVIDENCE set -- it used to be
+# started here too, so an unavailable MinIO image failed the whole stack and
+# left the console with no backend (2026-10-18). Use `infra-up-all` for it.
 infra-up:
+	docker compose up -d postgres redis
+	./scripts/wait-for-healthy.sh itms-postgres itms-redis
+
+# Everything, including MinIO: needed only for vision evidence storage.
+infra-up-all:
 	docker compose up -d postgres redis minio
-	./scripts/wait-for-healthy.sh
+	./scripts/wait-for-healthy.sh itms-postgres itms-redis itms-minio
 
 dev: setup infra-up
 	./scripts/dev.sh

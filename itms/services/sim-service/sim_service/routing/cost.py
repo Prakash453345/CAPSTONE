@@ -48,6 +48,7 @@ class EdgeConditions:
     anomaly_impact: float = 0.0       # 0..1 estimated_impact of the active anomaly
     entry_is_signalised: bool = False
     entry_signal_phase: str | None = None  # "green" | "yellow" | "red" | None (unknown)
+    halting: float = 0.0              # vehicles standing still on the edge (queue)
 
     @property
     def has_active_anomaly(self) -> bool:
@@ -77,7 +78,12 @@ class RouteCostModel:
     def __init__(self, config: EmergencyRoutingConfig | None = None):
         self.config = config or EmergencyRoutingConfig()
 
-    def edge_cost(self, edge: EdgeInfo, cond: EdgeConditions | None) -> EdgeCostParts:
+    def edge_cost(
+        self, edge: EdgeInfo, cond: EdgeConditions | None, ge=None, from_edge=None,
+        from_cond=None,
+    ) -> EdgeCostParts:
+        """`ge`, `from_edge` and `from_cond` are ignored here (the time-based
+        model `EtaCostModel` uses them)."""
         c = self.config
         cond = cond or EdgeConditions()
 

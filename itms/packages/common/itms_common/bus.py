@@ -11,12 +11,30 @@ Phase-1 stand-in rather than plain pub/sub (build guide §6.1).
 from __future__ import annotations
 
 import asyncio
+import os
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Any, Protocol, cast
 
 import redis as redis_sync
 import redis.asyncio as redis
+
+# Every stream is capped on publish. Redis keeps the newest ~STREAM_MAXLEN
+# entries per topic (approximate trimming: whole internal nodes are dropped,
+# so it costs nothing per write). Without a cap a stream grows forever: the
+# live simulation publishes ~250 vehicle positions a second, which reached
+# 2.2 million entries and 0.5 GB of Redis memory before Redis became too slow
+# to answer and the simulation crashed on a read timeout.
+#
+# 50,000 is ~3 minutes of vehicle positions -- every consumer of that topic
+# reads at the live edge -- and far more than the low-volume topics
+# (commands, incidents, clips) ever hold. ITMS_STREAM_MAXLEN=0 turns the cap
+# off (e.g. to record a run for later replay).
+STREAM_MAXLEN = int(os.environ.get("ITMS_STREAM_MAXLEN", "50000"))
+
+
+def _cap() -> dict[str, Any]:
+    return {"maxlen": STREAM_MAXLEN, "approximate": True} if STREAM_MAXLEN > 0 else {}
 
 
 @dataclass(frozen=True)
@@ -53,7 +71,7 @@ class RedisStreamsBus:
         self._redis = redis.from_url(url)
 
     async def publish(self, topic: str, raw: bytes) -> str:
-        message_id = await self._redis.xadd(topic, {"raw": raw})
+        message_id = await self._redis.xadd(topic, {"raw": raw}, **_cap())
         return message_id.decode() if isinstance(message_id, bytes) else message_id
 
     async def _ensure_group(self, topic: str, group: str, *, start_id: str = "0") -> None:
@@ -161,7 +179,7 @@ class RedisStreamsSyncBus:
         self._redis = redis_sync.from_url(url)
 
     def publish(self, topic: str, raw: bytes) -> str:
-        message_id = self._redis.xadd(topic, {"raw": raw})
+        message_id = self._redis.xadd(topic, {"raw": raw}, **_cap())
         return message_id.decode() if isinstance(message_id, bytes) else message_id
 
     def close(self) -> None:

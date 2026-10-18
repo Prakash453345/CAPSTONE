@@ -47,6 +47,9 @@ class GraphEdge:
     junction_id: str
     signalised: bool
     tl_id: str | None
+    # SUMO connection `dir` of the turn: s (straight), l/L, r/R, t (u-turn).
+    # "s" when unknown, so hand-built graphs keep their old meaning.
+    turn: str = "s"
 
 
 @dataclass(frozen=True)
@@ -61,6 +64,9 @@ class RoadGraph:
     link_movements: Mapping[str, Mapping[tuple[str, str], frozenset[str]]] = field(
         default_factory=dict
     )
+    # True when the network drives on the left (SUMO `lefthand="true"`, India).
+    # Decides which turn crosses the opposing stream.
+    lefthand: bool = False
 
     # ---- queries -----------------------------------------------------
 
@@ -98,7 +104,13 @@ class RoadGraph:
             adjacency=adjacency,
             signalised_junctions=self.signalised_junctions,
             link_movements=self.link_movements,
+            lefthand=self.lefthand,
         )
+
+    def subgraph(self, keep: Iterable[str]) -> RoadGraph:
+        """A copy holding only `keep` edges (used by the hex-band search)."""
+        keep_set = {e for e in keep if e in self.edges}
+        return self.without_edges(set(self.edges) - keep_set)
 
     # ---- construction --------------------------------------------
 
@@ -145,7 +157,7 @@ class RoadGraph:
 
         # connections -> adjacency, collapsing parallel connections between the
         # same edge pair (a through+right out of one edge is one graph edge)
-        raw: dict[tuple[str, str], tuple[str, bool, str | None]] = {}
+        raw: dict[tuple[str, str], tuple[str, bool, str | None, str]] = {}
         for c in root.findall("connection"):
             a, b = c.get("from"), c.get("to")
             if not a or not b or a not in edges or b not in edges:
@@ -156,12 +168,13 @@ class RoadGraph:
             prev = raw.get(key)
             # signalised wins if any connection between the pair carries a tl
             sig = bool(tl) or (prev[1] if prev else False)
-            raw[key] = (junction, sig, tl or (prev[2] if prev else None))
+            turn = prev[3] if prev else (c.get("dir") or "s")
+            raw[key] = (junction, sig, tl or (prev[2] if prev else None), turn)
 
         adjacency: dict[str, list[GraphEdge]] = {}
-        for (a, b), (junction, sig, tl) in raw.items():
+        for (a, b), (junction, sig, tl, turn) in raw.items():
             adjacency.setdefault(a, []).append(
-                GraphEdge(to_edge=b, junction_id=junction, signalised=sig, tl_id=tl)
+                GraphEdge(to_edge=b, junction_id=junction, signalised=sig, tl_id=tl, turn=turn)
             )
 
         # {tl_id: {(from_edge, to_edge): {"L{linkIndex}", ...}}} -- every
@@ -185,6 +198,7 @@ class RoadGraph:
                 tl: {pair: frozenset(links) for pair, links in pairs.items()}
                 for tl, pairs in link_movements.items()
             },
+            lefthand=root.get("lefthand", "false").lower() == "true",
         )
 
 
