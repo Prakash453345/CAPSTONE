@@ -1,10 +1,10 @@
 import { useMemo, useRef } from "react";
-import { PRESET_UNITS, isTerminalRequest, useEmergencyStore } from "@/store/emergencyStore";
+import { PRESET_UNITS, isTerminalRequest, requestRoutes, useEmergencyStore } from "@/store/emergencyStore";
 import { useIncidentStore } from "@/store/incidentStore";
 import { useTrafficStore } from "@/store/trafficStore";
 import { unitName } from "@/components/console/words";
 import { pointAlongPath, type LngLat } from "@/utils/geo";
-import type { EmergencyRequest, GreenCorridorView } from "@/types";
+import type { EmergencyRequest, EmergencyRouteView, GreenCorridorView } from "@/types";
 import { buildPlan, maneuverAfter, nextManeuver, type Maneuver, type RoutePlan } from "@/crew/plan";
 import {
   alongFor,
@@ -23,9 +23,17 @@ export interface UnitOption {
   active: boolean;
 }
 
+/** One route the system offers for a call, with its drawable plan. */
+export interface RouteChoice {
+  view: EmergencyRouteView;
+  plan: RoutePlan | null;
+}
+
 export interface Mission {
   request: EmergencyRequest;
   plan: RoutePlan | null;
+  /** The recommended route first, then any alternatives (preview only: dispatch uses the first). */
+  routes: RouteChoice[];
   corridor: GreenCorridorView | undefined;
   /** Where the vehicle is, [lng, lat], and which way it points. */
   position: LngLat | null;
@@ -97,12 +105,24 @@ export function useMission(unitId: string | null): { request: EmergencyRequest |
     [edgesKey, signalIds.join(",")],
   );
 
+  const altKey = request?.alternatives.map((a) => a.edges.join(",")).join("|") ?? "";
+  const routes = useMemo<RouteChoice[]>(
+    () =>
+      requestRoutes(request).map((view, i) => ({
+        view,
+        plan: i === 0 ? plan : buildPlan(view.edges, view.signalisedIntersections),
+      })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the recommended route and its alternatives stand for the edges
+    [plan, altKey, request?.route?.etaS],
+  );
+
   const mission = useMemo<Mission | null>(() => {
     if (!request) return null;
     const live = request.live;
     const base = {
       request,
       plan,
+      routes,
       corridor,
       position: live?.lat != null && live?.lon != null ? ([live.lon, live.lat] as LngLat) : null,
     };
@@ -151,7 +171,7 @@ export function useMission(unitId: string | null): { request: EmergencyRequest |
         unitNames: unitName,
       }),
     };
-  }, [request, plan, corridor, intersections, anomalies, congestion, requests]);
+  }, [request, plan, routes, corridor, intersections, anomalies, congestion, requests]);
 
   return { request, mission, units };
 }

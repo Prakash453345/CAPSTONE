@@ -9,6 +9,7 @@ import type { Mission } from "@/crew/useMission";
 import { rerouteCount } from "@/store/emergencyStore";
 import { useIncidentStore } from "@/store/incidentStore";
 import { useSystemStore } from "@/store/systemStore";
+import { cn } from "@/utils/cn";
 
 function Fact({ label, value }: { label: string; value: string }) {
   return (
@@ -25,32 +26,83 @@ export function StandbyCard({ unitName, weatherAdvice }: { unitName: string | nu
   const anomalies = useIncidentStore((s) => s.anomalies.filter((a) => a.status === "active").length);
   const mood = networkMood(congestion);
   return (
-    <Panel className="pointer-events-auto">
-      <EmptyState
-        icon={Siren}
-        title={unitName ? `${unitName} is standing by` : "Choose your vehicle"}
-        body={unitName ? "Your route and instructions appear here the moment dispatch sends a call." : "Pick the unit you are driving to follow its calls."}
-      />
-      {unitName && (
-        <div className="space-y-2 border-t border-border px-5 py-4 text-[13px]">
-          <p className="flex items-center gap-2">
-            <Radio className="size-4 text-muted-foreground" aria-hidden />
-            <span className={toneText(mood.tone)}>{mood.headline}</span>
+    <Panel className="pointer-events-auto" aria-labelledby="standby-title">
+      <div className="flex items-center gap-3.5 px-5 pb-4 pt-5">
+        <span aria-hidden className="grid size-11 shrink-0 place-items-center rounded-2xl bg-muted text-muted-foreground">
+          <Siren className="size-5" strokeWidth={1.8} />
+        </span>
+        <div className="min-w-0">
+          <h2 id="standby-title" className="truncate text-[16px] font-semibold tracking-[-0.01em]">
+            {unitName ? `${unitName} is standing by` : "Choose your vehicle"}
+          </h2>
+          <p className="mt-0.5 text-[13px] leading-snug text-muted-foreground">
+            {unitName ? "Your route appears here when dispatch sends a call." : "Pick the unit you are driving to follow its calls."}
           </p>
-          <p className="flex items-center gap-2 text-muted-foreground">
-            <TriangleAlert className="size-4" aria-hidden />
-            {anomalies ? `${anomalies} disruption${anomalies === 1 ? "" : "s"} on the road right now` : "No disruptions reported"}
-          </p>
-          {weatherAdvice && <p className="text-status-warn">{weatherAdvice}</p>}
         </div>
+      </div>
+      {unitName && (
+        <ul className="space-y-2.5 border-t border-border px-5 py-3.5 text-[13px]">
+          <li className="flex items-center gap-2.5">
+            <Radio className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+            <span className={toneText(mood.tone)}>{mood.headline}</span>
+          </li>
+          <li className="flex items-center gap-2.5 text-muted-foreground">
+            <TriangleAlert className="size-4 shrink-0" aria-hidden />
+            {anomalies ? `${anomalies} disruption${anomalies === 1 ? "" : "s"} on the road right now` : "No disruptions reported"}
+          </li>
+          {weatherAdvice && <li className="text-status-warn">{weatherAdvice}</li>}
+        </ul>
       )}
     </Panel>
   );
 }
 
+function RouteOption({
+  index,
+  view,
+  selected,
+  onSelect,
+}: {
+  index: number;
+  view: Mission["routes"][number]["view"];
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  const arrive = new Date(Date.now() + view.etaS * 1000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  return (
+    <button
+      type="button"
+      aria-pressed={selected}
+      onClick={onSelect}
+      className={cn(
+        "pointer-events-auto w-full rounded-[22px] p-4 text-left transition-colors duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
+        selected ? "bg-primary text-primary-foreground" : "bg-muted/60 text-foreground hover:bg-muted",
+      )}
+    >
+      <span className="tabular block text-[28px] font-semibold leading-none tracking-[-0.02em]">{mmss(view.etaS)}</span>
+      <span className={cn("mt-1.5 block text-[13.5px]", selected ? "text-primary-foreground/85" : "text-muted-foreground")}>
+        {arrive} · {formatDistance(view.totalDistanceM)} · {view.signalisedIntersections.length} signals
+      </span>
+      <span className={cn("mt-2 block text-[12.5px] font-medium", selected ? "text-primary-foreground" : "text-primary")}>
+        {index === 0 ? "Recommended · dispatched" : "Alternative · preview only"}
+      </span>
+    </button>
+  );
+}
+
 /** A call has been assigned but the vehicle is not moving yet. */
-export function BriefingCard({ mission, onDirections }: { mission: Mission; onDirections: () => void }) {
-  const { request, plan } = mission;
+export function BriefingCard({
+  mission,
+  preview,
+  onPreview,
+  onDirections,
+}: {
+  mission: Mission;
+  preview: number;
+  onPreview: (i: number) => void;
+  onDirections: () => void;
+}) {
+  const { request, plan, routes } = mission;
   const route = request.route;
   const state = STATE_WORDS[request.state];
   const from = roadLabel(request.sourceEdge);
@@ -61,12 +113,17 @@ export function BriefingCard({ mission, onDirections }: { mission: Mission; onDi
     <Panel className="pointer-events-auto" aria-labelledby="briefing-title">
       <PanelHeader id="briefing-title" title="Your next call" subtitle={`${from} to ${to}`} actions={<Pill tone={state.tone} dot>{state.label}</Pill>} />
       {route ? (
-        <div className="space-y-3 px-5 pb-4">
-          <div className="grid grid-cols-3 gap-2">
-            <Fact label="Estimated" value={mmss(route.etaS)} />
-            <Fact label="Distance" value={formatDistance(route.totalDistanceM)} />
-            <Fact label="Signals" value={String(route.signalisedIntersections.length)} />
+        <div className="space-y-3 px-4 pb-4">
+          <div className="space-y-2.5">
+            {routes.map((r, i) => (
+              <RouteOption key={i} index={i} view={r.view} selected={i === preview} onSelect={() => onPreview(i)} />
+            ))}
           </div>
+          {preview > 0 && (
+            <p className="px-1 text-[13px] text-muted-foreground">
+              Dispatch has set the recommended route and the signals on it. Follow that one.
+            </p>
+          )}
           {route.forcedThrough.length > 0 && (
             <p role="alert" className="flex items-start gap-2 rounded-xl bg-status-critical-muted px-3 py-2.5 text-[13px] text-status-critical">
               <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
@@ -74,13 +131,13 @@ export function BriefingCard({ mission, onDirections }: { mission: Mission; onDi
             </p>
           )}
           {route.anomalousSegmentsAvoided.length > 0 && (
-            <p className="flex items-center gap-2 text-[13px] text-status-ok">
+            <p className="flex items-center gap-2 px-1 text-[13px] text-status-ok">
               <CheckCircle2 className="size-4" aria-hidden />
               Avoids {route.anomalousSegmentsAvoided.length} disruption{route.anomalousSegmentsAvoided.length === 1 ? "" : "s"}.
             </p>
           )}
           {first.length > 0 && (
-            <ol className="space-y-1.5">
+            <ol className="space-y-1.5 px-1">
               {first.map((m) => (
                 <li key={m.id} className="flex items-center gap-3 text-[13.5px]">
                   <span className="size-5 shrink-0 text-primary">

@@ -13,8 +13,8 @@ const clock = (etaS: number | null) =>
 function Stat({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
   return (
     <div className="min-w-0">
-      <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground">{label}</p>
-      <p className={cn("tabular truncate leading-tight", strong ? "text-2xl font-semibold" : "text-lg font-medium")}>{value}</p>
+      <p className="text-[12px] font-medium text-muted-foreground">{label}</p>
+      <p className={cn("tabular truncate leading-tight", strong ? "text-[28px] font-semibold tracking-[-0.02em]" : "text-xl font-medium")}>{value}</p>
     </div>
   );
 }
@@ -39,10 +39,10 @@ export function TripBar({
   const progress = total > 0 ? 1 - mission.remainingM / total : 0;
   const speedKmh = Math.round((mission.request.live?.speedMps ?? 0) * 3.6);
   const ctl =
-    "grid size-11 place-items-center rounded-xl bg-surface-raised shadow-elevation-1 transition-colors hover:bg-muted active:scale-95 [&_svg]:size-[18px]";
+    "grid size-11 place-items-center rounded-full bg-muted/70 transition-colors duration-150 hover:bg-muted active:scale-95 [&_svg]:size-[18px]";
 
   return (
-    <section aria-label="Trip progress" className={cn("pointer-events-auto rounded-2xl bg-surface-raised p-4 shadow-elevation-3", className)}>
+    <section aria-label="Trip progress" className={cn("pointer-events-auto rounded-[22px] bg-surface-raised p-4 shadow-elevation-3", className)}>
       <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
         <Stat label="Arrive" value={clock(mission.etaS)} strong />
         <Stat label="Time left" value={mmss(mission.etaS)} />

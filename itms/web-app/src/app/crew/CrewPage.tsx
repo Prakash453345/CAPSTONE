@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { AnimatePresence, MotionConfig, motion } from "framer-motion";
 import { WifiOff } from "lucide-react";
 import { CrewMap } from "@/components/crew/CrewMap";
 import { CrewHeader } from "@/components/crew/CrewHeader";
@@ -44,6 +45,9 @@ export function CrewPage() {
 
   const [showDirections, setShowDirections] = useState(false);
   const [dismissed, setDismissed] = useState<string | null>(null);
+  // Which offered route is being looked at; a new call starts on the recommended one.
+  const [preview, setPreview] = useState(0);
+  useEffect(() => setPreview(0), [request?.id]);
 
   useEffect(() => {
     // Restore on unmount, like MapPage: without this the console kept showing
@@ -87,16 +91,24 @@ export function CrewPage() {
   const showArrival = finished && mission && dismissed !== mission.request.id;
   const stale = connection === "reconnecting" || connection === "offline";
 
+  // Which set of cards is showing: changing it cross-fades them (opacity only,
+  // so nothing slides) instead of swapping them in a single frame.
+  let view: string;
   let body;
   if (locked && !unitId) {
+    view = "novehicle";
     body = <NoVehicleCard />;
   } else if (!mission || (finished && !showArrival)) {
+    view = "standby";
     body = <StandbyCard unitName={name} weatherAdvice={weather ? trafficAdvice(weather) : null} />;
   } else if (showArrival) {
+    view = "arrival";
     body = <ArrivalCard mission={mission} onDone={() => setDismissed(mission.request.id)} />;
   } else if (showDirections && mission.plan) {
+    view = "directions";
     body = <DirectionsCard mission={mission} onClose={() => setShowDirections(false)} />;
   } else if (guiding) {
+    view = "guiding";
     body = (
       <>
         <CorridorCard signals={mission.signals} corridor={mission.corridor} />
@@ -104,52 +116,92 @@ export function CrewPage() {
       </>
     );
   } else {
-    body = <BriefingCard mission={mission} onDirections={() => setShowDirections(true)} />;
+    view = "briefing";
+    body = <BriefingCard mission={mission} preview={Math.min(preview, mission.routes.length - 1)} onPreview={setPreview} onDirections={() => setShowDirections(true)} />;
   }
+  const showBanner = Boolean(guiding && mission?.next && mission.plan && !showDirections);
+  const showTrip = Boolean(mission?.plan && !finished);
 
   return (
-    <div className="relative h-full overflow-hidden bg-background text-foreground">
-      <TrafficDataBridge />
-      <CrewMap mission={mission} />
+    <MotionConfig reducedMotion="user">
+      {/* On a wide screen: a solid panel column beside a framed map, like the
+          console. On a phone: the map fills the screen and the panels float over it. */}
+      <div className="relative h-full overflow-hidden bg-background text-foreground lg:grid lg:grid-cols-[432px_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)]">
+        <TrafficDataBridge />
 
-      {stale && (
-        <div role="alert" className="pointer-events-none absolute inset-x-0 top-0 z-30 flex justify-center p-2">
-          <p className="pointer-events-auto flex max-w-xl items-center gap-2 rounded-xl bg-status-critical px-4 py-2.5 text-[14px] font-medium text-white shadow-elevation-3">
-            <WifiOff className="size-4 shrink-0" aria-hidden />
-            Connection lost. Keep following the route on screen; positions and signals may be out of date
-            {lastUpdate ? ` (last update ${new Date(lastUpdate).toLocaleTimeString()})` : ""}.
-          </p>
+        <div className="absolute inset-0 lg:relative lg:col-start-2 lg:row-start-1 lg:m-4 lg:ml-0 lg:overflow-hidden lg:rounded-2xl lg:shadow-elevation-1">
+          <CrewMap mission={mission} preview={mission ? Math.min(preview, mission.routes.length - 1) : 0} onPreview={setPreview} />
+          <AnimatePresence initial={false}>
+            {showTrip && mission && (
+              <motion.div
+                key="trip"
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+                className="pointer-events-none absolute inset-x-3 bottom-3 z-10 lg:inset-x-4 lg:bottom-4"
+              >
+                <TripBar
+                  mission={mission}
+                  unitName={name ?? ""}
+                  voice={voice}
+                  onVoice={() => setVoice(!voice)}
+                  onDirections={() => setShowDirections((v) => !v)}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
-      )}
 
-      <div className="pointer-events-none absolute inset-0 z-10 flex flex-col gap-3 p-3 pb-[104px] lg:w-[420px] lg:p-4 lg:pb-4">
-        <CrewHeader units={withCurrent(units, unitId, name)} unitId={unitId} onUnit={setUnit} locked={locked} />
-        {guiding && mission?.next && mission.plan && !showDirections && (
-          <ManeuverBanner next={mission.next} distM={mission.nextDistM} then={mission.then} offRouteM={mission.offRouteM} />
+        {stale && (
+          <div role="alert" className="pointer-events-none absolute inset-x-0 top-0 z-30 flex justify-center p-2">
+            <p className="pointer-events-auto flex max-w-xl items-center gap-2 rounded-xl bg-status-critical px-4 py-2.5 text-[14px] font-medium text-white shadow-elevation-3">
+              <WifiOff className="size-4 shrink-0" aria-hidden />
+              Connection lost. Keep following the route on screen; positions and signals may be out of date
+              {lastUpdate ? ` (last update ${new Date(lastUpdate).toLocaleTimeString()})` : ""}.
+            </p>
+          </div>
         )}
-        {/* Mobile: leave the map visible and let the cards scroll in their own band. */}
-        <div className="min-h-0 flex-1 lg:hidden" />
-        <div
-          role="region"
-          aria-label="Route details"
-          tabIndex={0}
-          className="pointer-events-none flex max-h-[34vh] min-h-0 flex-col gap-3 overflow-y-auto overscroll-contain rounded-2xl lg:max-h-none lg:flex-1"
-        >
-          {body}
+
+        <div className="pointer-events-none absolute inset-0 z-10 flex flex-col gap-3 p-3 pb-[176px] lg:pointer-events-auto lg:static lg:col-start-1 lg:row-start-1 lg:min-h-0 lg:overflow-y-auto lg:p-4 lg:pr-3">
+          <CrewHeader units={withCurrent(units, unitId, name)} unitId={unitId} onUnit={setUnit} locked={locked} />
+          <AnimatePresence initial={false}>
+            {showBanner && mission?.next && (
+              <motion.div
+                key="banner"
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+              >
+                <ManeuverBanner next={mission.next} distM={mission.nextDistM} then={mission.then} offRouteM={mission.offRouteM} />
+              </motion.div>
+            )}
+          </AnimatePresence>
+          {/* Phone: leave the map visible and let the cards scroll in their own band. */}
+          <div className="min-h-0 flex-1 lg:hidden" />
+          <div
+            role="region"
+            aria-label="Route details"
+            tabIndex={0}
+            className="pointer-events-none flex max-h-[32vh] min-h-0 flex-col gap-3 overflow-y-auto overscroll-contain rounded-2xl lg:pointer-events-auto lg:max-h-none lg:flex-1"
+          >
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.div
+                key={view}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.16 }}
+                className="pointer-events-none flex flex-col gap-3"
+              >
+                {body}
+              </motion.div>
+            </AnimatePresence>
+          </div>
         </div>
       </div>
-
-      {mission?.plan && !finished && (
-        <TripBar
-          mission={mission}
-          unitName={name ?? ""}
-          voice={voice}
-          onVoice={() => setVoice(!voice)}
-          onDirections={() => setShowDirections((v) => !v)}
-          className="absolute inset-x-3 bottom-3 z-10 lg:bottom-4 lg:left-[452px] lg:right-[76px]"
-        />
-      )}
-    </div>
+    </MotionConfig>
   );
 }
 

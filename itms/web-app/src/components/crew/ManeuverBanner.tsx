@@ -56,7 +56,7 @@ export function ManeuverBanner({
 
   const imminent = distM <= IMMINENT_M && next.kind !== "depart";
   return (
-    <section aria-label="Next instruction" className={cn("pointer-events-auto overflow-hidden rounded-2xl bg-surface-raised shadow-elevation-3", className)}>
+    <section aria-label="Next instruction" className={cn("pointer-events-auto overflow-hidden rounded-2xl bg-surface-raised shadow-elevation-3 lg:bg-surface lg:shadow-elevation-1", className)}>
       <div className="flex items-center gap-4 p-4">
         <span
           aria-hidden

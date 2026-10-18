@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import maplibregl, { Map as MapLibreMap, type GeoJSONSource, type LngLatBoundsLike } from "maplibre-gl";
+import maplibregl, {
+  Map as MapLibreMap,
+  type GeoJSONSource,
+  type LngLatBoundsLike,
+} from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { Feature, FeatureCollection } from "geojson";
 import { Locate, Minus, Plus, Route as RouteIcon } from "lucide-react";
@@ -12,8 +16,9 @@ import { AnomalyLayer } from "@/components/map/layers/AnomalyLayer";
 import { EmergencyVehicleLayer } from "@/components/map/layers/EmergencyVehicleLayer";
 import { isMapAlive } from "@/components/map/mapSafe";
 import { EV_ROUTE_COLOR } from "@/components/map/mapColors";
+import { mmss } from "@/components/console/words";
 import { networkBounds } from "@/data/network";
-import { slicePlan } from "@/crew/plan";
+import { formatDistance, slicePlan } from "@/crew/plan";
 import type { Mission } from "@/crew/useMission";
 import { useCrewStore } from "@/store/crewStore";
 import { useThemeStore } from "@/store/themeStore";
@@ -30,15 +35,18 @@ const FOLLOW = { zoom: 16.8, pitch: 50 } as const;
 
 /**
  * Where the vehicle should sit: in the part of the map the panels leave free,
- * a little below its middle so the road ahead fills the view. On a wide
- * screen the panels are a column on the left; on a phone they are a banner on
- * top and a band of cards along the bottom.
+ * a little below its middle so the road ahead fills the view. On a wide screen
+ * the panels are a separate column beside the map, so the whole map is free; on
+ * a phone they are a banner on top and a band of cards along the bottom.
  */
 function followPadding(map: MapLibreMap) {
-  const { clientWidth: w, clientHeight: h } = map.getContainer();
-  return w >= 1024
-    ? { top: 160, bottom: 140, left: 440, right: 90 }
-    : { top: 250, bottom: Math.round(h * 0.34 + 120), left: 0, right: 0 };
+  const { clientHeight: h } = map.getContainer();
+  const wide =
+    typeof window !== "undefined" &&
+    window.matchMedia("(min-width: 1024px)").matches;
+  return wide
+    ? { top: 100, bottom: 150, left: 40, right: 80 }
+    : { top: 250, bottom: Math.round(h * 0.32 + 190), left: 0, right: 0 };
 }
 
 const SRC = "crew-route";
@@ -50,6 +58,7 @@ const DEST_RING = "crew-dest-ring";
 const DEST_DOT = "crew-dest-dot";
 const TURN_DOT = "crew-turn-dot";
 
+const noop = () => {};
 const empty: FeatureCollection = { type: "FeatureCollection", features: [] };
 
 /** The route being driven: grey behind you, green ahead, with the next turn and destination marked. */
@@ -103,27 +112,43 @@ function CrewRouteLayer({ mission }: { mission: Mission | null }) {
         type: "circle",
         source: POINTS,
         filter: ["==", ["get", "kind"], "destination"],
-        paint: { "circle-radius": 13, "circle-color": "#e5484d", "circle-opacity": 0.28 },
+        paint: {
+          "circle-radius": 13,
+          "circle-color": "#e5484d",
+          "circle-opacity": 0.28,
+        },
       });
       map.addLayer({
         id: DEST_DOT,
         type: "circle",
         source: POINTS,
         filter: ["==", ["get", "kind"], "destination"],
-        paint: { "circle-radius": 7, "circle-color": "#e5484d", "circle-stroke-width": 3, "circle-stroke-color": "#ffffff" },
+        paint: {
+          "circle-radius": 7,
+          "circle-color": "#e5484d",
+          "circle-stroke-width": 3,
+          "circle-stroke-color": "#ffffff",
+        },
       });
       map.addLayer({
         id: TURN_DOT,
         type: "circle",
         source: POINTS,
         filter: ["==", ["get", "kind"], "turn"],
-        paint: { "circle-radius": 7, "circle-color": "#ffffff", "circle-stroke-width": 3, "circle-stroke-color": EV_ROUTE_COLOR },
+        paint: {
+          "circle-radius": 7,
+          "circle-color": "#ffffff",
+          "circle-stroke-width": 3,
+          "circle-stroke-color": EV_ROUTE_COLOR,
+        },
       });
     }
     return () => {
       if (!isMapAlive(map)) return;
-      for (const id of [TURN_DOT, DEST_DOT, DEST_RING, AHEAD, DONE, CASING]) if (map.getLayer(id)) map.removeLayer(id);
-      for (const id of [POINTS, SRC]) if (map.getSource(id)) map.removeSource(id);
+      for (const id of [TURN_DOT, DEST_DOT, DEST_RING, AHEAD, DONE, CASING])
+        if (map.getLayer(id)) map.removeLayer(id);
+      for (const id of [POINTS, SRC])
+        if (map.getSource(id)) map.removeSource(id);
     };
   }, [map]);
 
@@ -140,23 +165,179 @@ function CrewRouteLayer({ mission }: { mission: Mission | null }) {
     }
     const along = mission.alongM;
     const lineFeatures: Feature[] = [
-      { type: "Feature", properties: { part: "ahead" }, geometry: { type: "LineString", coordinates: slicePlan(plan, along, plan.totalM) } },
+      {
+        type: "Feature",
+        properties: { part: "ahead" },
+        geometry: {
+          type: "LineString",
+          coordinates: slicePlan(plan, along, plan.totalM),
+        },
+      },
     ];
     // Before the vehicle has moved there is no "done" part, and a zero-length
     // line in the source stops the whole route from drawing.
     if (along > 1) {
-      lineFeatures.unshift({ type: "Feature", properties: { part: "done" }, geometry: { type: "LineString", coordinates: slicePlan(plan, 0, along) } });
+      lineFeatures.unshift({
+        type: "Feature",
+        properties: { part: "done" },
+        geometry: {
+          type: "LineString",
+          coordinates: slicePlan(plan, 0, along),
+        },
+      });
     }
     lines.setData({ type: "FeatureCollection", features: lineFeatures });
     const end = plan.coords[plan.coords.length - 1]!;
-    const pointFeatures: Feature[] = [{ type: "Feature", properties: { kind: "destination" }, geometry: { type: "Point", coordinates: end } }];
+    const pointFeatures: Feature[] = [
+      {
+        type: "Feature",
+        properties: { kind: "destination" },
+        geometry: { type: "Point", coordinates: end },
+      },
+    ];
     const next = mission.next;
     if (next && next.kind !== "arrive") {
       const at = slicePlan(plan, next.atM, next.atM)[0]!;
-      pointFeatures.push({ type: "Feature", properties: { kind: "turn" }, geometry: { type: "Point", coordinates: at } });
+      pointFeatures.push({
+        type: "Feature",
+        properties: { kind: "turn" },
+        geometry: { type: "Point", coordinates: at },
+      });
     }
     points.setData({ type: "FeatureCollection", features: pointFeatures });
   }, [map, mission]);
+
+  return null;
+}
+
+const ALTS = "crew-alts";
+const ALTS_CASING = "crew-alts-casing";
+const ALTS_LINE = "crew-alts-line";
+
+/**
+ * Before the run starts: every route the system offers, as in Apple Maps. The
+ * chosen one is drawn solid, the others faint, and each carries a bubble with
+ * its time that can be tapped to choose it. Dispatch still drives the first.
+ */
+function CrewAlternatives({
+  mission,
+  preview,
+  onPreview,
+}: {
+  mission: Mission | null;
+  preview: number;
+  onPreview: (i: number) => void;
+}) {
+  const map = useMapInstance();
+  const show = Boolean(mission && !mission.underway && !mission.arrived && mission.routes.length > 1);
+
+  useEffect(() => {
+    const dark = useThemeStore.getState().resolved === "dark";
+    if (!map.getSource(ALTS)) {
+      map.addSource(ALTS, { type: "geojson", data: empty });
+      const layout = { "line-cap": "round", "line-join": "round" } as const;
+      // Under the main route so the recommended line keeps its outline.
+      const before = map.getLayer(CASING) ? CASING : undefined;
+      map.addLayer(
+        {
+          id: ALTS_CASING,
+          type: "line",
+          source: ALTS,
+          layout,
+          paint: {
+            "line-color": dark ? "#04140c" : "#ffffff",
+            "line-opacity": 0.9,
+            "line-width": ["interpolate", ["linear"], ["zoom"], 12, 7, 17, 17],
+          },
+        },
+        before,
+      );
+      map.addLayer(
+        {
+          id: ALTS_LINE,
+          type: "line",
+          source: ALTS,
+          layout,
+          paint: {
+            "line-color": ["case", ["==", ["get", "sel"], 1], EV_ROUTE_COLOR, "#8794a8"],
+            "line-opacity": ["case", ["==", ["get", "sel"], 1], 1, 0.75],
+            "line-width": ["interpolate", ["linear"], ["zoom"], 12, 4, 17, 11],
+          },
+        },
+        before,
+      );
+    }
+    return () => {
+      if (!isMapAlive(map)) return;
+      for (const id of [ALTS_LINE, ALTS_CASING]) if (map.getLayer(id)) map.removeLayer(id);
+      if (map.getSource(ALTS)) map.removeSource(ALTS);
+    };
+  }, [map]);
+
+  // Drawing: the previewed alternative on top of the faint ones. The
+  // recommended route is the main layer, so it is only drawn here when it is
+  // not the one chosen (it then needs to look faint like the rest).
+  useEffect(() => {
+    if (!isMapAlive(map)) return;
+    const src = map.getSource(ALTS) as GeoJSONSource | undefined;
+    if (!src) return;
+    if (!show || !mission) {
+      src.setData(empty);
+      return;
+    }
+    const features: Feature[] = [];
+    mission.routes.forEach((r, i) => {
+      if (!r.plan) return;
+      if (i === 0 && preview === 0) return;
+      features.push({
+        type: "Feature",
+        properties: { sel: i === preview ? 1 : 0 },
+        geometry: { type: "LineString", coordinates: r.plan.coords },
+      });
+    });
+    // Selected last so it paints over the others where they overlap.
+    features.sort((a, b) => Number(a.properties?.sel) - Number(b.properties?.sel));
+    src.setData({ type: "FeatureCollection", features });
+    if (map.getLayer(AHEAD))
+      map.setPaintProperty(AHEAD, "line-opacity", preview === 0 ? 1 : 0.35);
+    if (map.getLayer(CASING))
+      map.setPaintProperty(CASING, "line-opacity", preview === 0 ? 0.92 : 0.3);
+  }, [map, mission, preview, show]);
+
+  useEffect(
+    () => () => {
+      if (!isMapAlive(map)) return;
+      if (map.getLayer(AHEAD)) map.setPaintProperty(AHEAD, "line-opacity", 1);
+      if (map.getLayer(CASING)) map.setPaintProperty(CASING, "line-opacity", 0.92);
+    },
+    [map],
+  );
+
+  // Time bubbles, one per route, halfway along it (staggered so they do not stack).
+  useEffect(() => {
+    if (!show || !mission) return;
+    const markers: maplibregl.Marker[] = [];
+    mission.routes.forEach((r, i) => {
+      if (!r.plan) return;
+      const frac = [0.5, 0.33, 0.67][i] ?? 0.5;
+      const at = slicePlan(r.plan, r.plan.totalM * frac, r.plan.totalM * frac)[0];
+      if (!at) return;
+      const el = document.createElement("button");
+      el.type = "button";
+      el.className = cn(
+        "rounded-full px-2.5 py-1 text-[13px] font-semibold shadow-elevation-2 transition-colors duration-150",
+        i === preview ? "bg-primary text-primary-foreground" : "bg-surface-raised text-foreground",
+      );
+      el.textContent = mmss(r.view.etaS);
+      el.setAttribute("aria-label", `Route ${i + 1}, ${mmss(r.view.etaS)}, ${formatDistance(r.view.totalDistanceM)}`);
+      el.addEventListener("click", (e) => {
+        e.stopPropagation();
+        onPreview(i);
+      });
+      markers.push(new maplibregl.Marker({ element: el }).setLngLat(at).addTo(map));
+    });
+    return () => markers.forEach((m) => m.remove());
+  }, [map, mission, preview, show, onPreview]);
 
   return null;
 }
@@ -185,23 +366,31 @@ function CrewCamera({ mission }: { mission: Mission | null }) {
   }, [map, setCamera]);
 
   const plan = mission?.plan;
-  const routeKey = plan ? `${mission?.request.id}:${plan.edgeIds.join(",")}` : "";
+  const routeKey = plan
+    ? `${mission?.request.id}:${plan.edgeIds.join(",")}:${mission?.routes.length ?? 0}`
+    : "";
   const underway = Boolean(mission?.underway && !mission.arrived);
 
   // Before the vehicle is moving (or when the route changes), show the whole route.
   useEffect(() => {
     if (!plan || underway || fitted.current === routeKey) return;
     fitted.current = routeKey;
-    const lngs = plan.coords.map((c) => c[0]);
-    const lats = plan.coords.map((c) => c[1]);
+    const all = (mission?.routes ?? []).flatMap((r) => r.plan?.coords ?? plan.coords);
+    const pts = all.length ? all : plan.coords;
+    const lngs = pts.map((c) => c[0]);
+    const lats = pts.map((c) => c[1]);
     map.fitBounds(
       [
         [Math.min(...lngs), Math.min(...lats)],
         [Math.max(...lngs), Math.max(...lats)],
       ],
-      { padding: followPadding(map), duration: prefersReducedMotion() ? 0 : 900, maxZoom: 17 },
+      {
+        padding: followPadding(map),
+        duration: prefersReducedMotion() ? 0 : 900,
+        maxZoom: 17,
+      },
     );
-  }, [map, plan, routeKey, underway]);
+  }, [map, plan, routeKey, underway]); // eslint-disable-line react-hooks/exhaustive-deps -- mission.routes is covered by routeKey
 
   // Numbers, not the position array: a new array every update would restart the
   // easing each time even though the vehicle has not moved.
@@ -231,12 +420,23 @@ function MapButtons({ mission }: { mission: Mission | null }) {
   const setCamera = useCrewStore((s) => s.setCamera);
   const plan = mission?.plan;
   const btn =
-    "grid size-11 place-items-center rounded-xl bg-surface-raised text-foreground shadow-elevation-2 transition-colors hover:bg-muted active:scale-95 [&_svg]:size-5";
+    "grid size-11 place-items-center rounded-xl bg-surface-raised text-foreground shadow-elevation-2 transition-[background-color,transform] duration-150 hover:bg-muted active:scale-95 [&_svg]:size-5";
 
+  // Phone: tucked under the turn banner, clear of the cards band and trip bar.
+  // Wide screen: bottom right, above the trip bar.
   return (
-    <div className="pointer-events-auto absolute bottom-28 right-3 z-10 flex flex-col gap-2 sm:bottom-24">
+    <div className="pointer-events-auto absolute right-3 top-[215px] z-10 flex flex-col gap-2 lg:bottom-36 lg:right-4 lg:top-auto">
       {mission?.underway && camera === "free" && (
-        <button type="button" aria-label="Follow my vehicle" title="Follow my vehicle" className={cn(btn, "bg-primary text-primary-foreground hover:bg-primary/90")} onClick={() => setCamera("follow")}>
+        <button
+          type="button"
+          aria-label="Follow my vehicle"
+          title="Follow my vehicle"
+          className={cn(
+            btn,
+            "bg-primary text-primary-foreground hover:bg-primary/90",
+          )}
+          onClick={() => setCamera("follow")}
+        >
           <Locate />
         </button>
       )}
@@ -255,19 +455,35 @@ function MapButtons({ mission }: { mission: Mission | null }) {
                 [Math.min(...lngs), Math.min(...lats)],
                 [Math.max(...lngs), Math.max(...lats)],
               ],
-              { padding: followPadding(map), pitch: 0, bearing: 0, duration: prefersReducedMotion() ? 0 : 800, maxZoom: 17 },
+              {
+                padding: followPadding(map),
+                pitch: 0,
+                bearing: 0,
+                duration: prefersReducedMotion() ? 0 : 800,
+                maxZoom: 17,
+              },
             );
           }}
         >
           <RouteIcon />
         </button>
       )}
-      <div className="flex flex-col overflow-hidden rounded-xl bg-surface-raised shadow-elevation-2">
-        <button type="button" aria-label="Zoom in" className="grid size-11 place-items-center hover:bg-muted [&_svg]:size-5" onClick={() => map.zoomIn()}>
+      <div className="flex flex-col overflow-hidden rounded-full bg-surface-raised shadow-elevation-2">
+        <button
+          type="button"
+          aria-label="Zoom in"
+          className="grid size-11 place-items-center transition-colors duration-150 hover:bg-muted [&_svg]:size-5"
+          onClick={() => map.zoomIn()}
+        >
           <Plus />
         </button>
         <span className="h-px bg-border" />
-        <button type="button" aria-label="Zoom out" className="grid size-11 place-items-center hover:bg-muted [&_svg]:size-5" onClick={() => map.zoomOut()}>
+        <button
+          type="button"
+          aria-label="Zoom out"
+          className="grid size-11 place-items-center transition-colors duration-150 hover:bg-muted [&_svg]:size-5"
+          onClick={() => map.zoomOut()}
+        >
           <Minus />
         </button>
       </div>
@@ -280,7 +496,18 @@ function MapButtons({ mission }: { mission: Mission | null }) {
  * signals, incidents, emergency units) with the crew's own route on top, and
  * a camera that follows the vehicle.
  */
-export function CrewMap({ mission, className }: { mission: Mission | null; className?: string }) {
+export function CrewMap({
+  mission,
+  preview = 0,
+  onPreview,
+  className,
+}: {
+  mission: Mission | null;
+  /** Which of the offered routes is being looked at (0 is the recommended one). */
+  preview?: number;
+  onPreview?: (i: number) => void;
+  className?: string;
+}) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [map, setMap] = useState<MapLibreMap | null>(null);
   const [ready, setReady] = useState(false);
@@ -308,10 +535,17 @@ export function CrewMap({ mission, className }: { mission: Mission | null; class
         });
       } catch {
         disposed = true;
-        setMapError("The map could not start. Turn on hardware acceleration (WebGL) and reload. Your route and instructions still work without it.");
+        setMapError(
+          "The map could not start. Turn on hardware acceleration (WebGL) and reload. Your route and instructions still work without it.",
+        );
         return;
       }
-      instance.getCanvas().setAttribute("aria-label", "Route map. Drag to look around; the follow button brings it back to your vehicle.");
+      instance
+        .getCanvas()
+        .setAttribute(
+          "aria-label",
+          "Route map. Drag to look around; the follow button brings it back to your vehicle.",
+        );
       const created = instance;
       const markReady = () => !disposed && setReady(true);
       if (created.isStyleLoaded()) markReady();
@@ -346,7 +580,10 @@ export function CrewMap({ mission, className }: { mission: Mission | null; class
       <div ref={containerRef} style={{ position: "absolute", inset: 0 }} />
       {mapError && (
         <div className="absolute inset-0 z-20 grid place-items-center bg-background p-8">
-          <p role="alert" className="max-w-sm text-center text-sm leading-relaxed text-muted-foreground">
+          <p
+            role="alert"
+            className="max-w-sm text-center text-sm leading-relaxed text-muted-foreground"
+          >
             {mapError}
           </p>
         </div>
@@ -361,6 +598,7 @@ export function CrewMap({ mission, className }: { mission: Mission | null; class
           <Basemap />
           <RoadLayer visible />
           <CrewRouteLayer mission={mission} />
+          <CrewAlternatives mission={mission} preview={preview} onPreview={onPreview ?? noop} />
           <SignalLayer visible />
           <AnomalyLayer visible />
           <EmergencyVehicleLayer visible />
