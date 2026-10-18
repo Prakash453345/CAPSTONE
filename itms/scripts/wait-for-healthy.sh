@@ -1,10 +1,18 @@
 #!/usr/bin/env bash
-# Polls `docker compose ps` until postgres, redis, and minio all report
-# healthy, or bails after ~2 minutes. Used by `make infra-up` so `make dev`
-# doesn't race the stack coming up.
+# Polls `docker inspect` until every named container reports healthy, or bails
+# after ~2 minutes. Used by `make infra-up` so `make dev` doesn't race the
+# stack coming up. Takes the container names as arguments; with none it waits
+# for the two services the console actually needs (MinIO is optional -- see
+# `make infra-up-all`).
 set -euo pipefail
 
-SERVICES=(itms-postgres itms-redis itms-minio)
+# `$#` rather than ${#SERVICES[@]}: an empty array under `set -u` is an error
+# in bash 3.2, which is what macOS ships as /bin/bash.
+if [ "$#" -eq 0 ]; then
+  SERVICES=(itms-postgres itms-redis)
+else
+  SERVICES=("$@")
+fi
 MAX_WAIT_S=120
 INTERVAL_S=3
 elapsed=0

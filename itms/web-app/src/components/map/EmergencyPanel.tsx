@@ -156,7 +156,11 @@ function DispatchDraftPanel() {
         </button>
       </div>
 
-      <div className="space-y-3 p-3">
+      {/* Scrolls like RoutePreview below: the draft body is tall enough (unit
+          grid + two point rows with their road pickers) that on a laptop-height
+          window the "Calculate route" button fell off the bottom of the map
+          with no way to reach it, which reads as the panel doing nothing. */}
+      <div className="max-h-[calc(100vh-9rem)] space-y-3 overflow-y-auto p-3">
         <SimModeNotice />
 
         <div>

@@ -37,7 +37,11 @@ services:
       retries: 10
 
   minio:
-    image: quay.io/minio/minio:latest
+    # Docker Hub, not quay.io: quay answers anonymous HEAD requests for this
+    # manifest with 401 UNAUTHORIZED, which failed `make infra-up` outright
+    # (2026-10-17). Same image, mirrored. Worth pinning to a dated RELEASE
+    # tag from hub.docker.com/r/minio/minio/tags once one is picked.
+    image: minio/minio:latest
     container_name: itms-minio
     restart: unless-stopped
     command: server /data --console-address ":9001"

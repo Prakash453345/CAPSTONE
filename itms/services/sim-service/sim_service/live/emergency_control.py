@@ -23,6 +23,7 @@ oscillates or recomputes every tick.
 from __future__ import annotations
 
 import logging
+import os
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
 
@@ -44,6 +45,7 @@ from sim_service.live.anomaly_control import OperatorAnomalyController
 from sim_service.live.green_corridor import CorridorController
 from sim_service.live.timeparse import epoch_ms
 from sim_service.routing import EdgeConditions, NoRouteError, RoadGraph, RoutePlanner
+from sim_service.routing.eta_cost import EtaCostModel, should_reroute
 
 log = logging.getLogger("sim-service.live.emergency")
 
@@ -88,7 +90,11 @@ class EmergencyController:
     ):
         self.graph = graph
         self.config = config or EmergencyRoutingConfig()
-        self.planner = RoutePlanner(graph, self.config)
+        # ITMS_ROUTE_COST=eta opts in to the time-based cost (seconds)
+        cost_model = None
+        if os.environ.get("ITMS_ROUTE_COST", "").lower() == "eta":
+            cost_model = EtaCostModel(lefthand=graph.lefthand)
+        self.planner = RoutePlanner(graph, self.config, cost_model=cost_model)
         self.anomalies = anomaly_controller
         self.corridor = corridor_controller
         # Optional `(request, vehicle, step, sim_time_s) -> None`, called at the
@@ -653,6 +659,12 @@ class EmergencyController:
         best = candidates[0]
         if tuple(best.edges) == tuple(remaining):
             return None
+        if isinstance(self.planner.cost_model, EtaCostModel):
+            if should_reroute(current_eval.score, best.score, self.planner.cost_model.config):
+                return (
+                    f"faster path available ({current_eval.score:.0f} s vs {best.score:.0f} s)"
+                )
+            return None
         if current_eval.score > best.score * (1.0 + self.config.reroute_cost_increase_frac):
             return f"faster path available (score {current_eval.score:.1f} vs {best.score:.1f})"
         return None
@@ -674,6 +686,12 @@ class EmergencyController:
                 mean_speed = traci.edge.getLastStepMeanSpeed(edge_id)
             except traci.TraCIException:
                 occ, mean_speed = 0.0, -1.0
+            halting = 0.0
+            if isinstance(self.planner.cost_model, EtaCostModel):
+                try:  # only the time-based cost uses the queue length
+                    halting = float(traci.edge.getLastStepHaltingNumber(edge_id))
+                except traci.TraCIException:
+                    halting = 0.0
             speed_frac = (
                 1.0
                 if mean_speed < 0
@@ -685,6 +703,7 @@ class EmergencyController:
                 mean_speed_frac=speed_frac,
                 anomaly_severity=sev_impact[0] if sev_impact else None,
                 anomaly_impact=sev_impact[1] if sev_impact else 0.0,
+                halting=halting,
             )
         return out
 

@@ -17,7 +17,7 @@ No account exists until you create one. There is no default password.
 ```bash
 cd itms
 make setup                                   # installs api-service (+ psycopg)
-make infra-up                                # Postgres, Redis, MinIO
+make infra-up                                # Postgres + Redis (MinIO: infra-up-all)
 .venv/bin/python -m api_service.users create komal --name "Komal S"
 make dev                                     # then open http://localhost:5173
 ```
@@ -66,7 +66,7 @@ web app (`npm run dev`) is running. Start the rest:
 
 ```bash
 cd itms
-make setup && make infra-up      # Postgres, Redis, MinIO
+make setup && make infra-up      # Postgres + Redis (MinIO: infra-up-all)
 .venv/bin/python -m api_service.users create komal      # once, to make an account
 make dev                         # starts sim-service and api-service (:8000)
 ```
