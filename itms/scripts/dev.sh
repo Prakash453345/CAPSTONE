@@ -6,6 +6,14 @@
 set -euo pipefail
 
 VENV=".venv"
+# Your own settings (SMTP_* for password-reset email, etc.) live in .env.local,
+# which git ignores. Load it so they apply on every run without retyping.
+if [ -f ".env.local" ]; then
+  set -a
+  # shellcheck disable=SC1091
+  . ./.env.local
+  set +a
+fi
 export REDIS_URL="${REDIS_URL:-redis://localhost:6379/0}"
 # Local dev is plain http, where browsers drop "Secure" cookies (Safari even on
 # localhost), so sign-in would silently fail. Production must leave this on.

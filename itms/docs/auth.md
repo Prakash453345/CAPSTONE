@@ -97,6 +97,8 @@ which is acceptable for a small operator console but is why `forgot*` should be
 rate-limited per IP in the proxy. An account without an email can't reset
 itself; an administrator uses `passwd` instead.
 
+Mail is sent over SMTP. For local runs, copy `.env.local.example` to `.env.local` and fill it in; `scripts/dev.sh` loads it every time (git ignores it).
+
 Mail is sent over SMTP:
 
 | Variable | Default | Notes |
