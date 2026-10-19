@@ -74,6 +74,33 @@ DEFAULT_ROLE = "operator"
 _UNIT_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$")
 
 
+# What a crew drives. Dispatch sends a call to the nearest free crew *of the
+# right kind*, so every crew account has to say which it is. Same names as the
+# wire's EmergencyVehicleKind, lower-cased.
+UNIT_KINDS = ("ambulance", "police", "fire_truck")
+
+
+def validate_unit_kind(kind: str) -> str | None:
+    """Why `kind` isn't a crew kind, or None."""
+    if kind not in UNIT_KINDS:
+        return f"crew kind must be one of: {', '.join(UNIT_KINDS)}"
+    return None
+
+
+def infer_unit_kind(unit: str | None) -> str | None:
+    """Best guess at a crew's kind from its vehicle id (`unit-police-3`,
+    `amb-01`, `fire-2`), for accounts made before kinds were recorded. None
+    when the id says nothing, in which case the kind must be set explicitly."""
+    lowered = (unit or "").lower()
+    if "police" in lowered:
+        return "police"
+    if "fire" in lowered:
+        return "fire_truck"
+    if "amb" in lowered:
+        return "ambulance"
+    return None
+
+
 def validate_unit(unit: str) -> str | None:
     """Why `unit` can't be a vehicle id, or None."""
     if not _UNIT_RE.fullmatch(unit):
@@ -244,6 +271,7 @@ class UserRecord:
     reset_sent_at: dt.datetime | None = None
     role: str = DEFAULT_ROLE
     unit_id: str | None = None
+    unit_kind: str | None = None
 
 
 class StoreUnavailable(Exception):
@@ -354,6 +382,7 @@ CREATE TABLE IF NOT EXISTS app_user (
     reset_sent_at    TIMESTAMPTZ,
     role             TEXT NOT NULL DEFAULT 'operator',
     unit_id          TEXT,
+    unit_kind        TEXT,
     CONSTRAINT app_user_username_lower CHECK (username = lower(username)),
     CONSTRAINT app_user_username_len CHECK (char_length(username) BETWEEN 1 AND 64)
 );
@@ -365,6 +394,7 @@ ALTER TABLE app_user ADD COLUMN IF NOT EXISTS reset_attempts INTEGER NOT NULL DE
 ALTER TABLE app_user ADD COLUMN IF NOT EXISTS reset_sent_at TIMESTAMPTZ;
 ALTER TABLE app_user ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'operator';
 ALTER TABLE app_user ADD COLUMN IF NOT EXISTS unit_id TEXT;
+ALTER TABLE app_user ADD COLUMN IF NOT EXISTS unit_kind TEXT;
 """
 
 
@@ -410,7 +440,8 @@ class PostgresUserStore:
             row = conn.execute(
                 "SELECT username, password_hash, display_name, is_active, failed_attempts,"
                 " locked_until, session_version, email, reset_code_hash, reset_expires_at,"
-                " reset_attempts, reset_sent_at, role, unit_id FROM app_user WHERE username = %s",
+                " reset_attempts, reset_sent_at, role, unit_id, unit_kind"
+                " FROM app_user WHERE username = %s",
                 (username,),
             ).fetchone()
         return None if row is None else UserRecord(*row)
@@ -508,6 +539,14 @@ class SessionUser(BaseModel):
     role: str
     # The vehicle a crew account drives; null for operators (who see every unit).
     unit_id: str | None = None
+    # What the crew drives: ambulance | police | fire_truck. Null for operators.
+    unit_kind: str | None = None
+
+
+def _crew_kind(record: UserRecord) -> str | None:
+    if record.unit_kind in UNIT_KINDS:
+        return record.unit_kind
+    return infer_unit_kind(record.unit_id)
 
 
 def _user_out(record: UserRecord) -> SessionUser:
@@ -516,6 +555,7 @@ def _user_out(record: UserRecord) -> SessionUser:
         display_name=record.display_name or record.username,
         role=record.role if record.role in ROLES else DEFAULT_ROLE,
         unit_id=record.unit_id if record.role == "responder" else None,
+        unit_kind=_crew_kind(record) if record.role == "responder" else None,
     )
 
 

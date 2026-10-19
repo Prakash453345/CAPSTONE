@@ -3,7 +3,7 @@ import { AlertTriangle, Ambulance, Gauge, Layers, Ruler, X } from "lucide-react"
 import { edgeById } from "@/data/network";
 import { useMapChromeStore } from "@/store/mapChromeStore";
 import { useTrafficStore } from "@/store/trafficStore";
-import { PRESET_UNITS, useEmergencyStore } from "@/store/emergencyStore";
+import { CREW_TYPES, useEmergencyStore } from "@/store/emergencyStore";
 import { useMapStore } from "@/store/mapStore";
 import type { AnomalyTarget } from "@/components/map/CreateAnomalyPanel";
 import { cn } from "@/utils/cn";
@@ -112,7 +112,7 @@ export function RoadPlaceCard({
           type="button"
           onClick={() => {
             selectRoad(null);
-            startDraft(PRESET_UNITS[0]);
+            startDraft(CREW_TYPES[0]);
             setDraftPoint("destination", target);
           }}
           className="flex h-9 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-full border border-input px-2.5 text-[13px] font-medium text-primary transition-colors hover:bg-primary-muted [&_svg]:size-4"

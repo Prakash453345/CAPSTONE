@@ -267,3 +267,96 @@ def test_police_arrival_releases_with_no_chained_corridor(wired):
 
     assert emergency.get_request("resp-an-1-police-hospital") is None
     assert orch._unit_by_vehicle_id["unit-police-0"].busy is False
+
+
+# ---- nearest crew via the hex index --------------------------------------
+
+
+def _two_police_orch(monkeypatch, wired_parts):
+    """Same fixture world, but with a far police depot listed first so
+    "first free" and "nearest" give different answers."""
+    _, emergency, anomalies, _ = wired_parts
+    far = _Depot(depot_id="police-far", name="Far PS", edge="S", lat=16.54, lon=80.67)
+    near = _Depot(depot_id="police-near", name="Near PS", edge="S", lat=16.499, lon=80.631)
+    return IncidentResponseOrchestrator(
+        anomalies, emergency, facility_index=FacilityIndex([_hospital()]),
+        police_depots=[far, near],
+    )
+
+
+def test_nearest_police_depot_is_sent_not_the_first_listed(wired, monkeypatch):
+    _, emergency, anomalies, _ = wired
+    orch = _two_police_orch(monkeypatch, wired)
+    anomalies.items = [_accident()]
+    orch.tick(step=1, sim_time_s=1.0)
+
+    (alert,) = orch.drain_events()
+    police = [d for d in alert["dispatched"] if d["vehicle_kind"] == "POLICE"]
+    assert police[0]["vehicle_id"] == "unit-police-1"  # the Near PS, listed second
+    notified = [n for n in alert["notified"] if n["vehicle_kind"] == "POLICE"]
+    assert {n["vehicle_id"] for n in notified} == {"unit-police-0", "unit-police-1"}
+    assert [n["vehicle_id"] for n in notified if n["selected"]] == ["unit-police-1"]
+    assert all(n["cell"] for n in notified)
+
+
+def test_alert_event_validates_against_the_wire_schema(wired):
+    from itms_common import encode_envelope
+
+    orch, _, anomalies, _ = wired
+    anomalies.items = [_accident()]
+    orch.tick(step=1, sim_time_s=1.0)
+    (alert,) = orch.drain_events()
+    assert alert["notified"], "the shortlist should be on the event"
+    encode_envelope(event_type="EmergencyDispatched", source="test", payload=alert)
+
+
+def test_cancelled_request_frees_the_crew(wired):
+    orch, emergency, anomalies, _ = wired
+    anomalies.items = [_accident()]
+    orch.tick(step=1, sim_time_s=1.0)
+    request = next(r for r in emergency.active_requests() if r.vehicle_id == "unit-police-0")
+    emergency.handle_command(
+        {"request_id": request.request_id, "action": "CANCEL"}, step=2, sim_time_s=2.0
+    )
+    assert orch._unit_by_vehicle_id["unit-police-0"].busy is True
+    orch.tick(step=3, sim_time_s=3.0)
+    assert orch._unit_by_vehicle_id["unit-police-0"].busy is False
+
+
+def test_operator_request_for_nearest_crew(wired):
+    orch, emergency, _, veh = wired
+    orch.handle_nearest_request(
+        {"request_id": "op-1", "vehicle_id": "", "vehicle_kind": "POLICE",
+         "source_edge": "", "destination_edge": "T"},
+        step=1, sim_time_s=1.0, create=emergency.handle_create,
+    )
+    request = emergency.get_request("op-1")
+    assert request is not None and request.vehicle_id == "unit-police-0"
+    assert request.source_edge == "S"  # the crew's base, not what the operator sent
+    assert orch._unit_by_vehicle_id["unit-police-0"].busy is True
+    (alert,) = orch.drain_events()
+    assert alert["anomaly_type"] == "operator_request"
+    assert alert["dispatched"][0]["request_id"] == "op-1"
+
+
+def test_operator_request_with_no_free_crew_raises_an_alert(wired):
+    orch, emergency, _, _ = wired
+    orch.handle_nearest_request(
+        {"request_id": "op-2", "vehicle_id": "", "vehicle_kind": "FIRE_TRUCK",
+         "source_edge": "", "destination_edge": "T"},
+        step=1, sim_time_s=1.0, create=emergency.handle_create,
+    )
+    assert emergency.get_request("op-2") is None
+    (alert,) = orch.drain_events()
+    assert alert["undispatched_kinds"] == ["fire_truck"]
+
+
+def test_a_registered_crew_can_be_dispatched(wired):
+    orch, emergency, anomalies, _ = wired
+    orch.register_crew("fire-1", EmergencyKind.FIRE_TRUCK, lat=16.50, lon=80.63, edge="H",
+                       name="Fire Station 1")
+    anomalies.items = [_accident()]
+    orch.tick(step=1, sim_time_s=1.0)
+    (alert,) = orch.drain_events()
+    assert "fire_truck" not in alert["undispatched_kinds"]
+    assert {d["vehicle_id"] for d in alert["dispatched"]} >= {"fire-1"}

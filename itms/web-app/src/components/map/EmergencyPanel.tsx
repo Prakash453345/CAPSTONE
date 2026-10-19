@@ -5,7 +5,6 @@ import {
   ChevronRight,
   X,
   Loader2,
-  MapPin,
   Flag,
   RefreshCw,
   Route as RouteIcon,
@@ -16,7 +15,7 @@ import { cn } from "@/utils/cn";
 import { MAP_CHIP, MAP_CHIP_ACTIVE } from "@/components/map/mapChrome";
 import { CommandError, postCommand } from "@/services/traffic/commands";
 import {
-  PRESET_UNITS,
+  CREW_TYPES,
   corridorHoldSeconds,
   isTerminalRequest,
   nextCorridorReservation,
@@ -25,7 +24,7 @@ import {
   rerouteCount,
   useEmergencyStore,
   selectSelectedRequest,
-  type PresetUnit,
+  type CrewType,
 } from "@/store/emergencyStore";
 import { useMapStore, type MapInteractionMode } from "@/store/mapStore";
 import { edgeById, roadEdges, shortJunctionName } from "@/data/network";
@@ -45,7 +44,7 @@ const WEIGHT_LABEL: Record<string, string> = {
   reliability_weight: "reliability",
 };
 
-const KIND_EVENT: Record<PresetUnit["kind"], string> = {
+const KIND_EVENT: Record<CrewType["kind"], string> = {
   ambulance: "AMBULANCE",
   fire_truck: "FIRE_TRUCK",
   police: "POLICE",
@@ -75,7 +74,7 @@ export function EmergencyPanel({ part }: { part: "chip" | "panel" }) {
   return (
     <button
       type="button"
-      onClick={() => startDraft(PRESET_UNITS[0])}
+      onClick={() => startDraft(CREW_TYPES[0]!)}
       aria-pressed={busy}
       className={cn(MAP_CHIP, busy && MAP_CHIP_ACTIVE)}
     >
@@ -96,7 +95,7 @@ function DispatchDraftPanel() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const ready = draft.source && draft.destination;
+  const ready = Boolean(draft.destination);
 
   const pick = (which: MapInteractionMode) =>
     setInteractionMode(interactionMode === which ? "idle" : which);
@@ -107,7 +106,7 @@ function DispatchDraftPanel() {
   };
 
   const calculate = async () => {
-    if (!draft.source || !draft.destination) return;
+    if (!draft.destination) return;
     setBusy(true);
     setError(null);
     const requestId = crypto.randomUUID();
@@ -116,9 +115,11 @@ function DispatchDraftPanel() {
         event_type: "EmergencyRequestCreated",
         payload: {
           request_id: requestId,
-          vehicle_id: draft.unit.id,
+          // No vehicle named: dispatch sends the nearest free crew of this kind
+          // and starts it from its own base (see EmergencyRequestCreated).
+          vehicle_id: "",
           vehicle_kind: KIND_EVENT[draft.unit.kind],
-          source_edge: draft.source.edgeId,
+          source_edge: "",
           destination_edge: draft.destination.edgeId,
           priority: 1,
           requested_at: Date.now(),
@@ -164,37 +165,31 @@ function DispatchDraftPanel() {
         <SimModeNotice />
 
         <div>
-          <Label>Unit</Label>
-          <div className="grid grid-cols-2 gap-1">
-            {PRESET_UNITS.map((u) => (
+          <Label>Send</Label>
+          <div className="grid grid-cols-3 gap-1" role="radiogroup" aria-label="Kind of unit">
+            {CREW_TYPES.map((t) => (
               <button
-                key={u.id}
+                key={t.kind}
                 type="button"
-                onClick={() => setDraftUnit(u)}
+                role="radio"
+                aria-checked={draft.unit.kind === t.kind}
+                onClick={() => setDraftUnit(t)}
                 className={cn(
-                  "rounded-md border px-2 py-1.5 text-left text-xs transition-colors",
-                  draft.unit.id === u.id
+                  "rounded-md border px-2 py-2 text-center text-xs font-medium transition-colors",
+                  draft.unit.kind === t.kind
                     ? "border-primary/70 bg-primary/15 text-foreground"
                     : "border-border bg-surface text-muted-foreground hover:text-foreground",
                 )}
               >
-                <span className="block font-medium">{u.callSign}</span>
-                <span className="block text-[10px] uppercase tracking-wide opacity-70">
-                  {u.kind.replace("_", " ")}
-                </span>
+                {t.label}
               </button>
             ))}
           </div>
+          <p className="mt-1.5 text-[11px] leading-snug text-muted-foreground">
+            The nearest free {draft.unit.label.toLowerCase()} crew is sent from its base.
+          </p>
         </div>
 
-        <PointRow
-          icon={<MapPin className="size-3.5" />}
-          label="Source"
-          which="source"
-          point={draft.source}
-          picking={interactionMode === "pick-source"}
-          onPick={() => pick("pick-source")}
-        />
         <PointRow
           icon={<Flag className="size-3.5" />}
           label="Destination"

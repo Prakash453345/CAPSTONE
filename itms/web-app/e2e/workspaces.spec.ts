@@ -66,9 +66,6 @@ test("map, operational routes, analytics and CSV stay integrated", async ({
   ).toBeVisible();
   await page.getByRole("button", { name: "Dispatch", exact: true }).click();
   await page
-    .getByLabel("Source road", { exact: true })
-    .selectOption("-177626285");
-  await page
     .getByLabel("Destination road", { exact: true })
     .selectOption("-343269496");
   await page

@@ -85,7 +85,7 @@ def run_live(
     corridor = CorridorController(graph)
     emergency = EmergencyController(graph, anomalies, corridor_controller=corridor)
     incident_response = IncidentResponseOrchestrator(anomalies, emergency)
-    handler = command_handler or _build_dispatch(anomalies, emergency)
+    handler = command_handler or _build_dispatch(anomalies, emergency, incident_response)
 
     drained = 0
 
@@ -180,7 +180,9 @@ def run_live(
 
 
 def _build_dispatch(
-    anomalies: OperatorAnomalyController, emergency: EmergencyController
+    anomalies: OperatorAnomalyController,
+    emergency: EmergencyController,
+    incident_response: IncidentResponseOrchestrator | None = None,
 ) -> CommandHandler:
     """The built-in command handler. `EmergencyCommand`'s ACTIVATE_CORRIDOR is
     routed to `EmergencyController.handle_command`, which arms the corridor and
@@ -194,7 +196,13 @@ def _build_dispatch(
         elif etype == "AnomalyClearRequested":
             anomalies.handle_clear(payload, step=step, sim_time_s=sim_time)
         elif etype == "EmergencyRequestCreated":
-            emergency.handle_create(payload, step=step, sim_time_s=sim_time)
+            if incident_response is not None and not payload.get("vehicle_id"):
+                # no unit named: dispatch finds the nearest free crew of the kind
+                incident_response.handle_nearest_request(
+                    payload, step=step, sim_time_s=sim_time, create=emergency.handle_create
+                )
+            else:
+                emergency.handle_create(payload, step=step, sim_time_s=sim_time)
         elif etype == "EmergencyCommand":
             emergency.handle_command(payload, step=step, sim_time_s=sim_time)
         else:

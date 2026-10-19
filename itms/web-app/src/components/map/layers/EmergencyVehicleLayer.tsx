@@ -31,7 +31,16 @@ const SELECTED_BOOST: ExpressionSpecification = ["case", [">", ["to-number", ["g
  * vehicle keeps its mission's colour (shared with `EmergencyRouteLayer`) and a
  * bigger, brighter halo while its request is the selected one.
  */
-export function EmergencyVehicleLayer({ visible }: { visible: boolean }) {
+export function EmergencyVehicleLayer({
+  visible,
+  onlyRequestId,
+}: {
+  visible: boolean;
+  /** Draw just this request's vehicle (`null`: none). Left out, every active vehicle
+   *  is drawn, which is what the operator console wants. A crew must see only
+   *  its own vehicle; other crews' missions are not its business. */
+  onlyRequestId?: string | null;
+}) {
   const map = useMapInstance();
   const requests = useEmergencyStore((s) => s.requests);
   const selectedRequestId = useEmergencyStore((s) => s.selectedRequestId);
@@ -235,8 +244,10 @@ export function EmergencyVehicleLayer({ visible }: { visible: boolean }) {
     interval.current = Math.min(2500, Math.max(250, now - updatedAt.current));
     updatedAt.current = now;
     prev.current = new Map(target.current);
-    target.current = buildVehicleFrames(requests, selectedRequestId);
-  }, [requests, selectedRequestId]);
+    const shown =
+      onlyRequestId === undefined ? requests : requests.filter((r) => r.id === onlyRequestId);
+    target.current = buildVehicleFrames(shown, selectedRequestId);
+  }, [requests, selectedRequestId, onlyRequestId]);
 
   return null;
 }

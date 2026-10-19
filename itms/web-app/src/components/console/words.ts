@@ -1,4 +1,3 @@
-import { PRESET_UNITS } from "@/store/emergencyStore";
 import type { AnomalyKind, EmergencyRequest, IncidentType } from "@/types";
 import type { Tone } from "@/components/console/tone";
 
@@ -62,12 +61,18 @@ export const STATE_WORDS: Record<EmergencyRequest["state"], { label: string; ton
   cancelled: { label: "Stood down", tone: "neutral" },
 };
 
-/** "Ambulance 12" for a preset unit, otherwise its id tidied up. */
+const UNIT_WORDS: Record<string, string> = {
+  amb: "Ambulance",
+  ambulance: "Ambulance",
+  police: "Police",
+  fire: "Fire truck",
+  fire_truck: "Fire truck",
+};
+
+/** "Police 3" for `unit-police-3`, "Ambulance 1" for `amb-01`; any other id as it is. */
 export function unitName(vehicleId: string): string {
-  const preset = PRESET_UNITS.find((u) => u.id === vehicleId);
-  if (preset) return preset.callSign;
-  const m = /^amb[-_]?0*(\d+)$/i.exec(vehicleId);
-  if (m) return `Ambulance ${m[1]}`;
+  const m = /^(?:unit[-_])?(amb|ambulance|police|fire_truck|fire)[-_]?0*(\d+)$/i.exec(vehicleId);
+  if (m) return `${UNIT_WORDS[m[1]!.toLowerCase()]} ${m[2]}`;
   return vehicleId;
 }
 

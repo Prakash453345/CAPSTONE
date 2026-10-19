@@ -5,7 +5,7 @@ import type { Mission } from "@/crew/useMission";
 
 export const canSpeak = typeof window !== "undefined" && "speechSynthesis" in window && typeof SpeechSynthesisUtterance !== "undefined";
 
-function say(text: string, urgent = false) {
+export function say(text: string, urgent = false) {
   if (!canSpeak) return;
   try {
     // An urgent warning must not wait behind a queue of older instructions.
