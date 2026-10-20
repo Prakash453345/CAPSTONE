@@ -2,7 +2,7 @@
   "type": "record",
   "name": "CrewRosterUpdated",
   "namespace": "itms.contracts",
-  "doc": "The fleet: one entry per crew account that drives a vehicle. api-service publishes the accounts on `crew.roster` (username, display_name, crew_kind, unit_id, on_duty); sim-service republishes its live view of the same units on `crew.offer` (kind, call_sign, edge_id, crew, busy, lat, lon) so the console and crew pages can show where each unit is. Every field has a default, so each producer fills only what it knows.",
+  "doc": "The fleet: one entry per crew account that drives a vehicle. api-service publishes the accounts on `crew.roster` (username, display_name, unit_kind, unit_id, on_duty); sim-service republishes its live view of the same units on `crew.offer` (kind, call_sign, edge_id, crew, busy, lat, lon) so the console and crew pages can show where each unit is. Every field has a default, so each producer fills only what it knows.",
   "fields": [
     {
       "name": "units",
@@ -15,7 +15,7 @@
             { "name": "unit_id", "type": "string" },
             { "name": "username", "type": "string", "default": "" },
             { "name": "display_name", "type": "string", "default": "" },
-            { "name": "crew_kind", "type": "string", "default": "", "doc": "ambulance | police | fire_truck (account form)." },
+            { "name": "unit_kind", "type": "string", "default": "", "doc": "ambulance | police | fire_truck (account form)." },
             { "name": "kind", "type": "string", "default": "", "doc": "Same, as sim-service's EmergencyKind value." },
             { "name": "call_sign", "type": "string", "default": "" },
             { "name": "crew", "type": ["null", "string"], "default": null, "doc": "Username of the crew signed in to this unit." },
