@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { AlertTriangle, X, Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { AlertTriangle, Loader2 } from "lucide-react";
 import { SimModeNotice } from "@/components/map/SimModeNotice";
-import { cn } from "@/utils/cn";
 import { CommandError, postCommand } from "@/services/traffic/commands";
+import { edgeById, roadLabel } from "@/data/network";
+import { InlineError, Pill, PrimaryButton, SectionLabel, Sheet } from "@/components/map/sheet";
 import type { AnomalyKind, AnomalySeverity } from "@/types";
 
 /** What the map click resolved to. */
@@ -14,19 +14,29 @@ export interface AnomalyTarget {
   at: [number, number];
 }
 
-const TYPES: { id: AnomalyKind; label: string; event: string }[] = [
-  { id: "accident", label: "Accident", event: "ACCIDENT" },
-  { id: "vehicle_breakdown", label: "Breakdown", event: "VEHICLE_BREAKDOWN" },
-  { id: "lane_blockage", label: "Lane blockage", event: "LANE_BLOCKAGE" },
-  { id: "road_obstruction", label: "Obstruction", event: "ROAD_OBSTRUCTION" },
-  { id: "heavy_congestion", label: "Heavy congestion", event: "HEAVY_CONGESTION" },
+/** What each type brings out, so the operator knows before pressing create
+ *  (sim-service `incident_response._RESPONSE_MAP`). */
+const TYPES: { id: AnomalyKind; label: string; event: string; sends: string }[] = [
+  { id: "accident", label: "Accident", event: "ACCIDENT", sends: "Police, ambulance and fire" },
+  { id: "fire", label: "Fire", event: "FIRE", sends: "Fire and police" },
+  { id: "vehicle_breakdown", label: "Breakdown", event: "VEHICLE_BREAKDOWN", sends: "Police" },
+  { id: "lane_blockage", label: "Lane blocked", event: "LANE_BLOCKAGE", sends: "Police" },
+  { id: "road_obstruction", label: "Obstruction", event: "ROAD_OBSTRUCTION", sends: "Police" },
+  { id: "heavy_congestion", label: "Congestion", event: "HEAVY_CONGESTION", sends: "No responders" },
 ];
 
 const SEVERITIES: { id: AnomalySeverity; label: string; event: string; hint: string }[] = [
-  { id: "low", label: "Low", event: "LOW", hint: "minor slow-down" },
-  { id: "medium", label: "Medium", event: "MEDIUM", hint: "significant delay" },
-  { id: "high", label: "High", event: "HIGH", hint: "severe restriction" },
-  { id: "blocked", label: "Blocked", event: "BLOCKED", hint: "road impassable" },
+  { id: "low", label: "Low", event: "LOW", hint: "Minor slow-down" },
+  { id: "medium", label: "Medium", event: "MEDIUM", hint: "Significant delay" },
+  { id: "high", label: "High", event: "HIGH", hint: "Severe restriction" },
+  { id: "blocked", label: "Blocked", event: "BLOCKED", hint: "Road closed; traffic is routed around it" },
+];
+
+const DURATIONS: { label: string; min: number | null }[] = [
+  { label: "Until cleared", min: null },
+  { label: "15 min", min: 15 },
+  { label: "30 min", min: 30 },
+  { label: "1 h", min: 60 },
 ];
 
 export function CreateAnomalyPanel({
@@ -38,17 +48,18 @@ export function CreateAnomalyPanel({
   onClose: () => void;
   onCreated: (anomalyId: string) => void;
 }) {
-  const [type, setType] = useState<AnomalyKind>("lane_blockage");
+  const [type, setType] = useState<AnomalyKind>("accident");
   const [severity, setSeverity] = useState<AnomalySeverity>("high");
-  const [durationMin, setDurationMin] = useState<string>("");
+  const [durationMin, setDurationMin] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const edge = edgeById.get(target.edgeId);
+  const chosenType = TYPES.find((t) => t.id === type)!;
 
   const submit = async () => {
     setBusy(true);
     setError(null);
     const anomalyId = crypto.randomUUID();
-    const durationS = durationMin.trim() ? Math.max(1, Number(durationMin) * 60) : null;
     try {
       await postCommand({
         event_type: "AnomalyCreateRequested",
@@ -56,9 +67,9 @@ export function CreateAnomalyPanel({
           anomaly_id: anomalyId,
           edge_id: target.edgeId,
           lane_id: null,
-          anomaly_type: TYPES.find((t) => t.id === type)!.event,
+          anomaly_type: chosenType.event,
           severity: SEVERITIES.find((s) => s.id === severity)!.event,
-          duration_s: durationS,
+          duration_s: durationMin == null ? null : durationMin * 60,
           position_m: null,
           requested_at: Date.now(),
         },
@@ -68,132 +79,68 @@ export function CreateAnomalyPanel({
       setError(
         err instanceof CommandError
           ? err.status === 0
-            ? "Backend unreachable — is the live simulation running?"
+            ? "Can't reach the server. Is the live simulation running?"
             : err.detail
-          : "Could not create the anomaly.",
+          : "Could not report it.",
       );
       setBusy(false);
     }
   };
 
   return (
-    <div className="pointer-events-auto w-[300px] max-w-full origin-top-left animate-sheet-in overflow-hidden rounded-xl bg-surface-raised shadow-elevation-3">
-      <div className="flex items-center justify-between border-b border-border px-3 py-2.5">
-        <div className="flex items-center gap-2">
-          <AlertTriangle className="size-4 text-[color:var(--severity-high,#e5622a)]" />
-          <span className="text-sm font-semibold">Create anomaly</span>
-        </div>
-        <button
-          type="button"
-          aria-label="Cancel"
-          onClick={onClose}
-          className="grid size-6 place-items-center rounded text-muted-foreground hover:bg-muted hover:text-foreground [&_svg]:size-3.5"
-        >
-          <X />
-        </button>
-      </div>
-
-      <div className="space-y-3 p-3">
-        <SimModeNotice />
-
-        <div>
-          <FieldLabel>Location</FieldLabel>
-          <div className="rounded-md border border-border bg-surface px-2.5 py-1.5 font-mono text-xs text-foreground">
-            {target.edgeName ?? "Edge"} <span className="text-muted-foreground">·</span>{" "}
-            {target.edgeId}
-          </div>
-        </div>
-
-        <div>
-          <FieldLabel>Type</FieldLabel>
-          <div className="grid grid-cols-2 gap-1">
-            {TYPES.map((t) => (
-              <Chip key={t.id} active={type === t.id} onClick={() => setType(t.id)}>
-                {t.label}
-              </Chip>
-            ))}
-          </div>
-        </div>
-
-        <div>
-          <FieldLabel>Severity</FieldLabel>
-          <div className="grid grid-cols-4 gap-1">
-            {SEVERITIES.map((s) => (
-              <Chip
-                key={s.id}
-                active={severity === s.id}
-                onClick={() => setSeverity(s.id)}
-                title={s.hint}
-              >
-                {s.label}
-              </Chip>
-            ))}
-          </div>
-          <p className="mt-1 text-[11px] text-muted-foreground">
-            {SEVERITIES.find((s) => s.id === severity)!.hint}
-          </p>
-        </div>
-
-        <div>
-          <FieldLabel>Duration (minutes, optional)</FieldLabel>
-          <input
-            type="number"
-            min={1}
-            inputMode="numeric"
-            placeholder="until cleared"
-            value={durationMin}
-            onChange={(e) => setDurationMin(e.target.value)}
-            className="w-full rounded-md border border-border bg-surface px-2.5 py-1.5 text-sm text-foreground outline-none focus:border-primary/60"
-          />
-        </div>
-
-        {error && (
-          <p className="rounded-md bg-[color-mix(in_srgb,#e5484d_14%,transparent)] px-2.5 py-1.5 text-[11px] text-[#f0a6a6]">
-            {error}
-          </p>
-        )}
-
-        <Button className="w-full" onClick={submit} disabled={busy}>
-          {busy ? <Loader2 className="size-4 animate-spin" /> : null}
-          {busy ? "Creating…" : "Create anomaly"}
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-function FieldLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="mb-1 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-      {children}
-    </div>
-  );
-}
-
-function Chip({
-  active,
-  onClick,
-  title,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  title?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      title={title}
-      onClick={onClick}
-      className={cn(
-        "rounded-md border px-2 py-1.5 text-xs transition-colors",
-        active
-          ? "border-primary/70 bg-primary/15 text-foreground"
-          : "border-border bg-surface text-muted-foreground hover:text-foreground",
-      )}
+    <Sheet
+      title="Report a disruption"
+      subtitle={`${roadLabel(target.edgeId)}${edge ? ` · ${edge.numLanes} lane${edge.numLanes === 1 ? "" : "s"}` : ""}`}
+      icon={<AlertTriangle />}
+      onClose={onClose}
+      closeLabel="Cancel"
+      footer={
+        <PrimaryButton onClick={submit} disabled={busy}>
+          {busy && <Loader2 className="animate-spin" />}
+          {busy ? "Reporting…" : `Report ${chosenType.label.toLowerCase()}`}
+        </PrimaryButton>
+      }
     >
-      {children}
-    </button>
+      <SimModeNotice />
+
+      <div>
+        <SectionLabel>What happened</SectionLabel>
+        <div className="flex flex-wrap gap-1.5">
+          {TYPES.map((t) => (
+            <Pill key={t.id} active={type === t.id} onClick={() => setType(t.id)}>
+              {t.label}
+            </Pill>
+          ))}
+        </div>
+        <p className="mt-2 px-1 text-[12px] text-muted-foreground">
+          Sends: <span className="font-medium text-foreground">{chosenType.sends}</span>
+        </p>
+      </div>
+
+      <div>
+        <SectionLabel>How bad</SectionLabel>
+        <div className="flex flex-wrap gap-1.5">
+          {SEVERITIES.map((s) => (
+            <Pill key={s.id} active={severity === s.id} onClick={() => setSeverity(s.id)} title={s.hint}>
+              {s.label}
+            </Pill>
+          ))}
+        </div>
+        <p className="mt-2 px-1 text-[12px] text-muted-foreground">{SEVERITIES.find((s) => s.id === severity)!.hint}</p>
+      </div>
+
+      <div>
+        <SectionLabel>For how long</SectionLabel>
+        <div className="flex flex-wrap gap-1.5">
+          {DURATIONS.map((d) => (
+            <Pill key={d.label} active={durationMin === d.min} onClick={() => setDurationMin(d.min)}>
+              {d.label}
+            </Pill>
+          ))}
+        </div>
+      </div>
+
+      {error && <InlineError>{error}</InlineError>}
+    </Sheet>
   );
 }

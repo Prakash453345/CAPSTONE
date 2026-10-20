@@ -19,7 +19,8 @@ import type {
   NotificationEvent,
   NotificationTone,
 } from "@/types";
-import { shortJunctionName } from "@/data/network";
+import { roadLabel, shortJunctionName } from "@/data/network";
+import { unitName } from "@/components/console/words";
 
 const VEHICLE_LABEL: Record<EmergencyVehicleKind, string> = {
   ambulance: "Ambulance",
@@ -28,6 +29,10 @@ const VEHICLE_LABEL: Record<EmergencyVehicleKind, string> = {
 };
 
 function vehicleLabel(kind: EmergencyVehicleKind | undefined, vehicleId: string): string {
+  // Crew units already read as names ("POL-2" -> "Police 2"); say that, not
+  // "Police unit POL-2".
+  const named = unitName(vehicleId);
+  if (named !== vehicleId) return named;
   return kind ? `${VEHICLE_LABEL[kind]} ${vehicleId}` : vehicleId;
 }
 
@@ -54,7 +59,7 @@ export function classifyAnomalyEvent(
       kind: "anomaly-created",
       tone: ANOMALY_CREATED_TONE[anomaly.severity],
       title: "Anomaly reported",
-      message: `${anomaly.severity} ${anomaly.kind.replace(/_/g, " ")} on ${anomaly.edgeId}`,
+      message: `${anomaly.severity} ${anomaly.kind.replace(/_/g, " ")} on ${roadLabel(anomaly.edgeId)}`,
       atMs,
       anomalyId: anomaly.id,
     };
@@ -65,7 +70,7 @@ export function classifyAnomalyEvent(
       kind: "anomaly-cleared",
       tone: "ok",
       title: "Anomaly cleared",
-      message: `${anomaly.kind.replace(/_/g, " ")} on ${anomaly.edgeId} is ${anomaly.status}`,
+      message: `${anomaly.kind.replace(/_/g, " ")} on ${roadLabel(anomaly.edgeId)} is ${anomaly.status}`,
       atMs,
       anomalyId: anomaly.id,
     };
@@ -224,7 +229,7 @@ export function classifyCorridorEvent(p: CorridorEventPayload, atMs: number): No
       kind: "corridor-activated",
       tone: "info",
       title: "Green corridor activated",
-      message: `Corridor ${p.corridorId} is now holding signals ahead of the vehicle`,
+      message: "Signals ahead of the vehicle are now being held green",
       atMs,
       requestId: p.requestId,
     };

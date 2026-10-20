@@ -25,12 +25,14 @@ export const CITIES: City[] = [
   {
     id: "amaravati",
     name: "Amaravati",
-    center: { latitude: 16.514, longitude: 80.4945 },
-    blurb: "121 signalised junctions · capital region",
+    center: { latitude: 16.5408, longitude: 80.4763 },
+    blurb: "7 signalised junctions · capital complex",
   },
 ];
 
 export const cityById = new Map(CITIES.map((c) => [c.id, c]));
+
+
 
 /** The cities a `VITE_CITY` value selects: unset, empty, "all", "both" or
  *  nothing recognisable means every city. */
@@ -52,4 +54,17 @@ export function formatLatLng({ latitude, longitude }: LatLng): string {
   const ns = latitude >= 0 ? "N" : "S";
   const ew = longitude >= 0 ? "E" : "W";
   return `${Math.abs(latitude).toFixed(4)}° ${ns} · ${Math.abs(longitude).toFixed(4)}° ${ew}`;
+}
+
+/** The city the live simulation runs (sim-service's scenario). Anomalies and
+ *  dispatches can only be placed on its roads; another city is shown for its
+ *  map and signal plans. `VITE_LIVE_CITY` sets it; when the console shows one
+ *  city (`VITE_CITY=amaravati` with `make dev-amaravati`) it is that one. */
+export const LIVE_CITY: CityId = liveCity(import.meta.env.VITE_LIVE_CITY as string | undefined, SHOWN_CITIES);
+
+export function liveCity(setting: string | undefined, shown: City[]): CityId {
+  const wanted = (setting ?? "").trim().toLowerCase();
+  const named = CITIES.find((c) => c.id === wanted);
+  if (named) return named.id;
+  return shown.length === 1 ? shown[0]!.id : "vijayawada";
 }

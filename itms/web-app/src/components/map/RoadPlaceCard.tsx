@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { AlertTriangle, Ambulance, Gauge, Layers, Ruler, X } from "lucide-react";
+import { AlertTriangle, Ambulance, Gauge, Layers, Ruler, Video, X } from "lucide-react";
 import { edgeById } from "@/data/network";
 import { useMapChromeStore } from "@/store/mapChromeStore";
 import { useTrafficStore } from "@/store/trafficStore";
@@ -7,7 +7,7 @@ import { PRESET_UNITS, useEmergencyStore } from "@/store/emergencyStore";
 import { useMapStore } from "@/store/mapStore";
 import type { AnomalyTarget } from "@/components/map/CreateAnomalyPanel";
 import { cn } from "@/utils/cn";
-import { cityById } from "@/data/city";
+import { LIVE_CITY, cityById } from "@/data/city";
 
 /** Google Maps' traffic wording, on the same thresholds as the road list. */
 function trafficLevel(value: number | undefined) {
@@ -19,13 +19,16 @@ function trafficLevel(value: number | undefined) {
 
 /**
  * The place card for a road picked on the map or in search: live condition,
- * road facts and the two operator actions that start from a road. Rendered
+ * road facts and the operator actions that start from a road -- report an
+ * anomaly, send a unit, or upload a video of the road for automatic checks. Rendered
  * in the map's left column, so it follows the one-panel-at-a-time rule.
  */
 export function RoadPlaceCard({
   onCreateAnomaly,
+  onUploadClip,
 }: {
   onCreateAnomaly: (target: AnomalyTarget) => void;
+  onUploadClip: (target: AnomalyTarget) => void;
 }) {
   const selected = useMapChromeStore((s) => s.selectedRoad);
   const selectRoad = useMapChromeStore((s) => s.selectRoad);
@@ -49,6 +52,7 @@ export function RoadPlaceCard({
   const name = edge.name || `Road ${edge.id}`;
   const level = trafficLevel(value);
   const target: AnomalyTarget = { edgeId: edge.id, edgeName: edge.name, at: selected.at };
+  const live = edge.city === LIVE_CITY;
 
   const facts = [
     { icon: Layers, label: `${edge.numLanes} ${edge.numLanes === 1 ? "lane" : "lanes"}` },
@@ -59,18 +63,18 @@ export function RoadPlaceCard({
   return (
     <section
       aria-label={`${name} details`}
-      className="pointer-events-auto w-[320px] max-w-full origin-top-left animate-sheet-in overflow-hidden rounded-xl bg-surface-raised shadow-elevation-3"
+      className="pointer-events-auto w-[344px] max-w-full origin-top-left animate-sheet-in overflow-hidden rounded-[20px] bg-surface-raised shadow-elevation-3"
     >
       <div className="flex items-start gap-3 px-4 pb-3 pt-4">
         <div className="min-w-0 flex-1">
-          <h2 className="truncate text-[17px] font-medium leading-6 text-foreground">{name}</h2>
+          <h2 className="truncate text-[17px] font-semibold leading-6 tracking-[-0.01em] text-foreground">{name}</h2>
           <p className="text-xs text-muted-foreground">Road · {cityById.get(edge.city)?.name}</p>
         </div>
         <button
           type="button"
           aria-label="Close road details"
           onClick={() => selectRoad(null)}
-          className="-mr-1.5 -mt-1 grid size-8 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground [&_svg]:size-4"
+          className="grid size-8 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground transition-colors hover:text-foreground [&_svg]:size-4"
         >
           <X />
         </button>
@@ -86,7 +90,7 @@ export function RoadPlaceCard({
         )}
       </div>
 
-      <ul className="flex flex-wrap gap-x-4 gap-y-1.5 border-t border-border px-4 py-3 text-xs text-muted-foreground">
+      <ul className="mx-4 mb-3 flex flex-wrap gap-x-4 gap-y-1.5 rounded-xl bg-surface-fill px-3 py-2.5 text-xs text-muted-foreground">
         {facts.map(({ icon: Icon, label }) => (
           <li key={label} className="flex items-center gap-1.5">
             <Icon className="size-3.5" aria-hidden />
@@ -95,32 +99,71 @@ export function RoadPlaceCard({
         ))}
       </ul>
 
-      <div className="flex gap-2 border-t border-border px-4 py-3">
-        <button
-          type="button"
-          onClick={() => {
-            selectRoad(null);
-            setInteractionMode("create-anomaly");
-            onCreateAnomaly(target);
-          }}
-          className="flex h-9 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-full bg-primary-muted px-2.5 text-[13px] font-medium text-primary transition-colors hover:bg-primary hover:text-primary-foreground [&_svg]:size-4"
-        >
-          <AlertTriangle />
-          Create anomaly
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            selectRoad(null);
-            startDraft(PRESET_UNITS[0]);
-            setDraftPoint("destination", target);
-          }}
-          className="flex h-9 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-full border border-input px-2.5 text-[13px] font-medium text-primary transition-colors hover:bg-primary-muted [&_svg]:size-4"
-        >
-          <Ambulance />
-          Send unit here
-        </button>
-      </div>
+      {live ? (
+        <div className="grid grid-cols-3 gap-2 px-4 pb-4 pt-1">
+          <ActionButton
+            icon={<AlertTriangle />}
+            label="Report"
+            onClick={() => {
+              selectRoad(null);
+              setInteractionMode("create-anomaly");
+              onCreateAnomaly(target);
+            }}
+          />
+          <ActionButton
+            icon={<Ambulance />}
+            label="Send help"
+            primary
+            onClick={() => {
+              selectRoad(null);
+              startDraft(PRESET_UNITS[0]);
+              setDraftPoint("destination", target);
+            }}
+          />
+          <ActionButton
+            icon={<Video />}
+            label="Check video"
+            onClick={() => {
+              selectRoad(null);
+              onUploadClip(target);
+            }}
+          />
+        </div>
+      ) : (
+        <p className="mx-4 mb-4 rounded-xl bg-surface-fill px-3 py-2 text-[12px] text-muted-foreground">
+          {cityById.get(edge.city)?.name} is shown for its roads and signal plans. Incidents and dispatch run on
+          the live {cityById.get(LIVE_CITY)?.name} simulation.
+        </p>
+      )}
     </section>
+  );
+}
+
+/** Apple Maps' row of round action buttons under a place's name. */
+function ActionButton({
+  icon,
+  label,
+  onClick,
+  primary,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  onClick: () => void;
+  primary?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "flex h-[58px] flex-col items-center justify-center gap-1 rounded-[14px] text-[12px] font-medium transition-[filter,background-color] duration-150 [&_svg]:size-[18px]",
+        primary
+          ? "bg-primary text-primary-foreground hover:brightness-105"
+          : "bg-surface-fill text-primary hover:bg-muted",
+      )}
+    >
+      {icon}
+      {label}
+    </button>
   );
 }

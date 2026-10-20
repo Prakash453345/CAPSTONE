@@ -1,7 +1,7 @@
 import { List, Volume2, VolumeX } from "lucide-react";
-import { Meter } from "@/components/console/kit";
 import { mmss } from "@/components/console/words";
 import { RerouteButton } from "@/components/crew/RerouteButton";
+import { TrafficStrip } from "@/components/crew/TrafficStrip";
 import { canSpeak } from "@/crew/useGuidanceVoice";
 import { formatDistance } from "@/crew/plan";
 import type { Mission } from "@/crew/useMission";
@@ -35,8 +35,6 @@ export function TripBar({
   onDirections: () => void;
   className?: string;
 }) {
-  const total = mission.plan?.totalM ?? mission.request.route?.totalDistanceM ?? 0;
-  const progress = total > 0 ? 1 - mission.remainingM / total : 0;
   const speedKmh = Math.round((mission.request.live?.speedMps ?? 0) * 3.6);
   const ctl =
     "grid size-11 place-items-center rounded-full bg-muted/70 transition-colors duration-150 hover:bg-muted active:scale-95 [&_svg]:size-[18px]";
@@ -60,7 +58,7 @@ export function TripBar({
           <RerouteButton requestId={mission.request.id} unitName={unitName} />
         </div>
       </div>
-      <Meter value={progress} tone="ok" className="mt-3" />
+      <TrafficStrip mission={mission} className="mt-3" />
     </section>
   );
 }

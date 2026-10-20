@@ -6,12 +6,41 @@
 set -euo pipefail
 
 VENV=".venv"
+
+# Settings live in itms/.env (copy .env.example; it is git-ignored, so the SMTP
+# password never lands in the repo). Values already exported in the shell win.
+if [ -f .env ]; then
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in ''|'#'*) continue ;; esac
+    key="${line%%=*}"; val="${line#*=}"
+    key="${key#export }"; key="${key// /}"
+    case "$val" in \"*\") val="${val:1:${#val}-2}" ;; \'*\') val="${val:1:${#val}-2}" ;; esac
+    printenv "$key" >/dev/null || export "$key=$val"
+  done < .env
+  echo "loaded settings from .env"
+fi
+# A fixed session key, so a restart does not sign everyone out: .env's
+# AUTH_SECRET, else the one kept in .local/auth_secret.env.
+if [ -z "${AUTH_SECRET:-}" ] && [ -f .local/auth_secret.env ]; then
+  AUTH_SECRET="$(tr -d '[:space:]' < .local/auth_secret.env)"
+  export AUTH_SECRET="${AUTH_SECRET#AUTH_SECRET=}"
+fi
+
+# An api-service left over from an earlier run holds the port, and the new one
+# dies with "[Errno 48] Address already in use" in the middle of the log.
+if command -v lsof >/dev/null 2>&1 && lsof -ti :8000 >/dev/null 2>&1; then
+  echo "port 8000 is already in use (PID $(lsof -ti :8000 | tr '\n' ' '))."
+  echo "That is usually an api-service from an earlier run. Stop it with:"
+  echo "    lsof -ti :8000 | xargs kill"
+  exit 1
+fi
+
 export REDIS_URL="${REDIS_URL:-redis://localhost:6379/0}"
 # Local dev is plain http, where browsers drop "Secure" cookies (Safari even on
 # localhost), so sign-in would silently fail. Production must leave this on.
 export AUTH_COOKIE_SECURE="${AUTH_COOKIE_SECURE:-false}"
 # No mail server locally: print password-reset codes in the api-service log
-# instead of failing. Production must not set this (set SMTP_HOST instead).
+# instead of failing. With SMTP_HOST set (in .env) the codes are emailed.
 export AUTH_DEV_LOG_CODES="${AUTH_DEV_LOG_CODES:-true}"
 export DATABASE_URL="${DATABASE_URL:-postgresql://itms:itms@localhost:5432/itms}"
 # The console's interactive features -- operator anomalies, emergency dispatch,

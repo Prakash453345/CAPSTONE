@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Anomaly, EmergencyRequest, GreenCorridorView, Intersection } from "@/types";
 import type { RoutePlan } from "./plan";
-import { alongFor, hasArrived, hazardsAhead, remainingSeconds, signalStatus, upcomingSignals } from "./situation";
+import { alongFor, hasArrived, hazardsAhead, remainingSeconds, signalStatus, trafficAhead, trafficAlong, upcomingSignals } from "./situation";
 
 // A straight 1 km route heading east, 0.001 degrees of longitude ~ 107 m at this latitude.
 const LAT = 16.5;
@@ -211,5 +211,31 @@ describe("remainingSeconds and hasArrived", () => {
     expect(hasArrived(req({ live: { speedMps: 0, routeProgress: 1, status: "arrived" } }), 900)).toBe(true);
     expect(hasArrived(req(), 10)).toBe(true);
     expect(hasArrived(req(), 300)).toBe(false);
+  });
+});
+
+describe("traffic along the route", () => {
+  const plan = {
+    spans: [
+      { edgeId: "e1", startM: 0, endM: 400, name: "" },
+      { edgeId: "e2", startM: 400, endM: 900, name: "" },
+      { edgeId: "e3", startM: 900, endM: 1500, name: "" },
+      { edgeId: "e4", startM: 1500, endM: 2000, name: "" },
+    ],
+  } as unknown as RoutePlan;
+
+  it("merges neighbouring stretches of the same traffic", () => {
+    const s = trafficAlong(plan, { e3: 0.5, e4: 0.45 });
+    expect(s).toEqual([
+      { startM: 0, endM: 900, level: "free" },
+      { startM: 900, endM: 2000, level: "slow" },
+    ]);
+  });
+
+  it("says where the first slow stretch ahead starts and how long it is", () => {
+    const s = trafficAlong(plan, { e2: 0.9 });
+    expect(trafficAhead(s, 0)).toBe("Heavy traffic in 400 m, for 500 m");
+    expect(trafficAhead(s, 600)).toBe("Heavy traffic now, for 300 m");
+    expect(trafficAhead(s, 950)).toBe("Traffic is clear to the destination");
   });
 });

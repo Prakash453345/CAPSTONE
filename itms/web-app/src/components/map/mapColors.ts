@@ -38,6 +38,9 @@ export const CONGESTION_STOPS: Array<[number, string]> = [
   [1, "#811f1f"],
 ];
 
+/** A route's stretches by live traffic (crew page), on Google's ramp above. */
+export const TRAFFIC_COLOR = { free: "#34b853", slow: "#ff974d", heavy: "#f23c32" } as const;
+
 /** The recommended route for every emergency mission — one constant "this is
  *  the path" colour (a classic radium/neon green), not the per-mission hash
  *  used for vehicle markers. A route needs to read as "the optimal route"

@@ -79,7 +79,8 @@ export function EmergencyPage() {
       <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-4">
         {draft && (
           <div className="mx-2 mb-3 rounded-xl bg-primary-muted px-3.5 py-3 text-[13px] leading-relaxed text-primary">
-            Dispatching {draft.unit.callSign}. Pick where it starts and where it is going on the map.
+            Requesting {draft.unit.callSign.toLowerCase()}. Say where help is needed; the nearest free crew is
+            asked and drives from wherever it is.
           </div>
         )}
 
@@ -87,7 +88,7 @@ export function EmergencyPage() {
           <EmptyState
             icon={Ambulance}
             title="No units on the road"
-            body="Dispatch a unit and the console plans the fastest route, then turns the lights ahead of it green."
+            body="Send help to a road: the nearest free crew takes the call, the console plans the fastest route and turns the lights ahead of it green."
             action={
               <Button variant="primary" icon={Plus} onClick={() => startDraft(PRESET_UNITS[0]!)}>
                 Dispatch a unit

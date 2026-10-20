@@ -1,0 +1,102 @@
+# TRAFFIX on one machine: your Mac now, any Linux server later, same file.
+#     cd itms/deploy && cp .env.example .env    # then fill it in
+#     docker compose --profile tunnel up -d --build
+# See README.md.
+name: traffix
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: itms
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/.env}
+      POSTGRES_DB: itms
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U itms -d itms"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # Live state only; nothing to keep across restarts.
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # The site, the API and the live stream, all on one port.
+  api:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        VITE_CITY: ${VITE_CITY:-}
+        VITE_LIVE_CITY: ${VITE_LIVE_CITY:-}
+    image: traffix-backend
+    command: ["api"]
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://itms:${POSTGRES_PASSWORD}@postgres:5432/itms
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      # Only this machine can reach it directly; others come in through the
+      # tunnel (or Caddy). Set HTTP_BIND=0.0.0.0 to open it on your network.
+      - "${HTTP_BIND:-127.0.0.1}:${HTTP_PORT:-8080}:8000"
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  sim:
+    image: traffix-backend
+    command: ["sim"]
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      SIM_MODE: live
+    depends_on:
+      redis: { condition: service_healthy }
+      api: { condition: service_started }
+
+  # Free HTTPS address with no account and no domain: a Cloudflare "quick
+  # tunnel". The address (https://<words>.trycloudflare.com) is printed in
+  # `docker compose logs tunnel` and changes when the tunnel restarts.
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    profiles: ["tunnel"]
+    restart: unless-stopped
+    command: ["tunnel", "--no-autoupdate", "--url", "http://api:8000"]
+    depends_on:
+      api: { condition: service_healthy }
+
+  # On a server with your own (sub)domain pointing at it: automatic HTTPS
+  # from Let's Encrypt. Set SITE_DOMAIN in .env, open ports 80 and 443.
+  caddy:
+    image: caddy:2-alpine
+    profiles: ["https"]
+    restart: unless-stopped
+    command: ["caddy", "reverse-proxy", "--from", "${SITE_DOMAIN:-localhost}", "--to", "api:8000"]
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - caddy-data:/data
+    depends_on:
+      api: { condition: service_healthy }
+
+volumes:
+  pgdata:
+  caddy-data:

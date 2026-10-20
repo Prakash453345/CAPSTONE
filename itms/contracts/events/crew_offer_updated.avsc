@@ -1,0 +1,18 @@
+{
+  "type": "record",
+  "name": "CrewOfferUpdated",
+  "namespace": "itms.contracts",
+  "doc": "A call offered to a crew and what became of it, on `crew.offer` (sim-service `live/crew_dispatch.py`). state: offered | accepted | declined | expired | withdrawn | exhausted. `exhausted` means every available crew of the kind was asked and none took it; it carries no offer_id or unit_id and lists who was asked.",
+  "fields": [
+    { "name": "offer_id", "type": "string", "default": "" },
+    { "name": "incident_id", "type": "string" },
+    { "name": "kind", "type": "string" },
+    { "name": "edge_id", "type": "string", "doc": "Where the incident is." },
+    { "name": "unit_id", "type": "string", "default": "" },
+    { "name": "crew", "type": ["null", "string"], "default": null },
+    { "name": "eta_s", "type": "double", "default": 0.0 },
+    { "name": "expires_at_s", "type": "double", "default": 0.0 },
+    { "name": "state", "type": "string" },
+    { "name": "asked", "type": { "type": "array", "items": "string" }, "default": [] }
+  ]
+}

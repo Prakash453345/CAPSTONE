@@ -15,10 +15,13 @@ import { SignalLayer } from "@/components/map/layers/SignalLayer";
 import { AnomalyLayer } from "@/components/map/layers/AnomalyLayer";
 import { EmergencyVehicleLayer } from "@/components/map/layers/EmergencyVehicleLayer";
 import { isMapAlive } from "@/components/map/mapSafe";
-import { EV_ROUTE_COLOR } from "@/components/map/mapColors";
+import { EV_ROUTE_COLOR, TRAFFIC_COLOR } from "@/components/map/mapColors";
 import { mmss } from "@/components/console/words";
-import { networkBounds } from "@/data/network";
+import { cityBounds, networkBounds } from "@/data/network";
+import { LIVE_CITY } from "@/data/city";
 import { formatDistance, slicePlan } from "@/crew/plan";
+import { trafficAlong } from "@/crew/situation";
+import { useTrafficStore } from "@/store/trafficStore";
 import type { Mission } from "@/crew/useMission";
 import { useCrewStore } from "@/store/crewStore";
 import { useThemeStore } from "@/store/themeStore";
@@ -26,9 +29,12 @@ import { prefersReducedMotion } from "@/utils/motion";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/utils/cn";
 
+// Crews drive in the live city; framing every loaded city left its roads a
+// smudge in one corner.
+const LIVE_BOUNDS = cityBounds.get(LIVE_CITY) ?? networkBounds;
 const FIT_NETWORK: LngLatBoundsLike = [
-  [networkBounds.minLng, networkBounds.minLat],
-  [networkBounds.maxLng, networkBounds.maxLat],
+  [LIVE_BOUNDS.minLng, LIVE_BOUNDS.minLat],
+  [LIVE_BOUNDS.maxLng, LIVE_BOUNDS.maxLat],
 ];
 
 const FOLLOW = { zoom: 16.8, pitch: 50 } as const;
@@ -64,6 +70,7 @@ const empty: FeatureCollection = { type: "FeatureCollection", features: [] };
 /** The route being driven: grey behind you, green ahead, with the next turn and destination marked. */
 function CrewRouteLayer({ mission }: { mission: Mission | null }) {
   const map = useMapInstance();
+  const congestion = useTrafficStore((s) => s.roadCongestion);
 
   useEffect(() => {
     const dark = useThemeStore.getState().resolved === "dark";
@@ -103,7 +110,17 @@ function CrewRouteLayer({ mission }: { mission: Mission | null }) {
         filter: ["==", ["get", "part"], "ahead"],
         layout,
         paint: {
-          "line-color": EV_ROUTE_COLOR,
+          // The route colour where traffic is moving; Google's orange and red
+          // over the stretches that are slow or jammed.
+          "line-color": [
+            "match",
+            ["get", "traffic"],
+            "slow",
+            TRAFFIC_COLOR.slow,
+            "heavy",
+            TRAFFIC_COLOR.heavy,
+            EV_ROUTE_COLOR,
+          ],
           "line-width": ["interpolate", ["linear"], ["zoom"], 12, 5, 17, 14],
         },
       });
@@ -164,16 +181,18 @@ function CrewRouteLayer({ mission }: { mission: Mission | null }) {
       return;
     }
     const along = mission.alongM;
-    const lineFeatures: Feature[] = [
-      {
-        type: "Feature",
-        properties: { part: "ahead" },
+    // The road ahead in stretches of equal traffic, so each can take its colour.
+    const lineFeatures: Feature[] = trafficAlong(plan, congestion)
+      .filter((s) => s.endM > along + 0.5)
+      .map((s) => ({
+        type: "Feature" as const,
+        properties: { part: "ahead", traffic: s.level },
         geometry: {
-          type: "LineString",
-          coordinates: slicePlan(plan, along, plan.totalM),
+          type: "LineString" as const,
+          coordinates: slicePlan(plan, Math.max(s.startM, along), s.endM),
         },
-      },
-    ];
+      }))
+      .filter((f) => f.geometry.coordinates.length >= 2);
     // Before the vehicle has moved there is no "done" part, and a zero-length
     // line in the source stops the whole route from drawing.
     if (along > 1) {
@@ -205,7 +224,7 @@ function CrewRouteLayer({ mission }: { mission: Mission | null }) {
       });
     }
     points.setData({ type: "FeatureCollection", features: pointFeatures });
-  }, [map, mission]);
+  }, [map, mission, congestion]);
 
   return null;
 }
@@ -496,12 +515,89 @@ function MapButtons({ mission }: { mission: Mission | null }) {
  * signals, incidents, emergency units) with the crew's own route on top, and
  * a camera that follows the vehicle.
  */
+const SELF_SRC = "crew-self";
+const SELF_HALO = "crew-self-halo";
+const SELF_DOT = "crew-self-dot";
+const KIND_COLOR: Record<string, string> = { ambulance: "#ff3b4f", police: "#4f8cff", fire_truck: "#ff8a4c" };
+
+/**
+ * Where this crew's own vehicle is while it is not driving a call: parked at
+ * its depot, or where its last call ended. In the simulation that is the
+ * fleet roster's position (the stand-in for the phone's GPS). Once it is
+ * driving, the moving vehicle on the route shows it instead.
+ */
+function CrewSelfLayer({ unitId, mission }: { unitId: string | null; mission: Mission | null }) {
+  const map = useMapInstance();
+  const me = useCrewStore((s) => (unitId ? s.fleet.find((u) => u.unitId === unitId) : undefined));
+  const driving = Boolean(mission && mission.position && !mission.arrived);
+  const at = !driving && me?.at ? me.at : null;
+  const lng = at?.[0];
+  const lat = at?.[1];
+  const color = KIND_COLOR[me?.kind ?? "ambulance"] ?? KIND_COLOR.ambulance;
+
+  useEffect(() => {
+    if (!map.getSource(SELF_SRC)) {
+      map.addSource(SELF_SRC, { type: "geojson", data: empty });
+      map.addLayer({
+        id: SELF_HALO,
+        type: "circle",
+        source: SELF_SRC,
+        paint: { "circle-radius": 18, "circle-color": ["get", "color"], "circle-opacity": 0.18 },
+      });
+      map.addLayer({
+        id: SELF_DOT,
+        type: "circle",
+        source: SELF_SRC,
+        paint: {
+          "circle-radius": 8,
+          "circle-color": ["get", "color"],
+          "circle-stroke-width": 3,
+          "circle-stroke-color": "#ffffff",
+        },
+      });
+    }
+    return () => {
+      if (!isMapAlive(map)) return;
+      for (const id of [SELF_DOT, SELF_HALO]) if (map.getLayer(id)) map.removeLayer(id);
+      if (map.getSource(SELF_SRC)) map.removeSource(SELF_SRC);
+    };
+  }, [map]);
+
+  useEffect(() => {
+    const src = map.getSource(SELF_SRC) as GeoJSONSource | undefined;
+    if (!src) return;
+    src.setData(
+      lng == null || lat == null
+        ? empty
+        : {
+            type: "FeatureCollection",
+            features: [{ type: "Feature", properties: { color }, geometry: { type: "Point", coordinates: [lng, lat] } }],
+          },
+    );
+  }, [map, lng, lat, color]);
+
+  // Standing by: show the crew where they are, once per position.
+  const shown = useRef("");
+  useEffect(() => {
+    if (mission || lng == null || lat == null) return;
+    const key = `${lng.toFixed(5)},${lat.toFixed(5)}`;
+    if (shown.current === key) return;
+    shown.current = key;
+    map.easeTo({ center: [lng, lat], zoom: 15, pitch: 0, bearing: 0, duration: prefersReducedMotion() ? 0 : 900 });
+  }, [map, mission, lng, lat]);
+
+  return null;
+}
+
 export function CrewMap({
   mission,
+  unitId,
   preview = 0,
   onPreview,
   className,
 }: {
+  /** The crew's own unit, to show where it is parked while it has no call. */
+  unitId?: string | null;
   mission: Mission | null;
   /** Which of the offered routes is being looked at (0 is the recommended one). */
   preview?: number;
@@ -601,7 +697,8 @@ export function CrewMap({
           <CrewAlternatives mission={mission} preview={preview} onPreview={onPreview ?? noop} />
           <SignalLayer visible />
           <AnomalyLayer visible />
-          <EmergencyVehicleLayer visible />
+          <EmergencyVehicleLayer visible onlyRequestId={mission?.request.id ?? null} />
+          <CrewSelfLayer unitId={unitId ?? null} mission={mission} />
           <CrewCamera mission={mission} />
           <MapButtons mission={mission} />
         </MapContext.Provider>

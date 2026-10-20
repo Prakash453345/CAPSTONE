@@ -66,8 +66,12 @@ export const STATE_WORDS: Record<EmergencyRequest["state"], { label: string; ton
 export function unitName(vehicleId: string): string {
   const preset = PRESET_UNITS.find((u) => u.id === vehicleId);
   if (preset) return preset.callSign;
-  const m = /^amb[-_]?0*(\d+)$/i.exec(vehicleId);
-  if (m) return `Ambulance ${m[1]}`;
+  // Crew units (AMB-1, POL-2, FIRE-1) and the old ambulance ids (amb_12).
+  const m = /^(amb|pol|fire)[-_]?0*(\d+)$/i.exec(vehicleId);
+  if (m) return `${{ amb: "Ambulance", pol: "Police", fire: "Fire" }[m[1]!.toLowerCase() as "amb" | "pol" | "fire"]} ${m[2]}`;
+  // Depot units the system sends when no crew is signed in.
+  const d = /^unit-(police|ambulance|fire_truck)-(\d+)$/.exec(vehicleId);
+  if (d) return `${{ police: "Police", ambulance: "Ambulance", fire_truck: "Fire" }[d[1] as "police"]} unit ${Number(d[2]) + 1}`;
   return vehicleId;
 }
 

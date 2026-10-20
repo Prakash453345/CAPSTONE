@@ -1,5 +1,6 @@
 import { useMemo, useRef } from "react";
-import { PRESET_UNITS, isTerminalRequest, requestRoutes, useEmergencyStore } from "@/store/emergencyStore";
+import { isTerminalRequest, requestRoutes, useEmergencyStore } from "@/store/emergencyStore";
+import { useCrewStore } from "@/store/crewStore";
 import { useIncidentStore } from "@/store/incidentStore";
 import { useTrafficStore } from "@/store/trafficStore";
 import { unitName } from "@/components/console/words";
@@ -53,10 +54,13 @@ export interface Mission {
   hazards: Hazard[];
 }
 
-/** Everyone a responder might be: the preset units plus any unit with a request. */
-export function unitOptions(requests: readonly EmergencyRequest[]): UnitOption[] {
+/** Everyone a responder might be: the fleet (crew accounts) plus any unit with a request. */
+export function unitOptions(
+  requests: readonly EmergencyRequest[],
+  fleet: readonly { unitId: string; callSign: string }[] = [],
+): UnitOption[] {
   const byId = new Map<string, UnitOption>();
-  for (const u of PRESET_UNITS) byId.set(u.id, { id: u.id, name: u.callSign, active: false });
+  for (const u of fleet) byId.set(u.unitId, { id: u.unitId, name: u.callSign || unitName(u.unitId), active: false });
   for (const r of requests) {
     const known = byId.get(r.vehicleId);
     const active = !isTerminalRequest(r);
@@ -88,7 +92,8 @@ export function useMission(unitId: string | null): { request: EmergencyRequest |
   const congestion = useTrafficStore((s) => s.roadCongestion);
   const lastAlong = useRef(0);
 
-  const units = useMemo(() => unitOptions(requests), [requests]);
+  const fleet = useCrewStore((s) => s.fleet);
+  const units = useMemo(() => unitOptions(requests, fleet), [requests, fleet]);
   const request = useMemo(() => requestForUnit(requests, unitId), [requests, unitId]);
 
   const edgesKey = request?.route?.edges.join(",") ?? "";

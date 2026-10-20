@@ -144,9 +144,16 @@ class IncidentResponseOrchestrator:
         *,
         facility_index: FacilityIndex | None = None,
         police_depots: list[_Depot] | None = None,
+        crew_dispatcher=None,
     ):
         self.anomalies = anomalies
         self.emergency = emergency
+        # When a real crew of the needed kind exists (a signed-in account with
+        # a vehicle), the call is *offered* to the nearest one and only becomes
+        # a dispatch when they accept -- `crew_dispatch.CrewDispatcher`. The
+        # depot units below stay as the fallback for kinds nobody crews, so a
+        # scenario with no crew accounts behaves exactly as it did before.
+        self.crew_dispatcher = crew_dispatcher
         if facility_index is None:
             if FACILITIES_PATH.exists():
                 facility_index = FacilityIndex.from_json(FACILITIES_PATH)
@@ -207,7 +214,11 @@ class IncidentResponseOrchestrator:
 
         dispatched: list[dict] = []
         undispatched: list[str] = []
+        offered: list[str] = []
         for kind in kinds:
+            if self._offer_to_crew(anomaly, kind, sim_time_s=sim_time_s):
+                offered.append(kind.value)
+                continue
             unit = self._nearest_available(kind, lat, lon)
             if unit is None:
                 undispatched.append(kind.value)
@@ -241,6 +252,9 @@ class IncidentResponseOrchestrator:
             "lat": lat,
             "lon": lon,
             "dispatched": dispatched,
+            # Offered to a real crew and waiting on their answer: not yet a
+            # dispatch, and not a failure to find anyone either.
+            "offered_kinds": offered,
             "undispatched_kinds": undispatched,
             "at_ms": int(sim_time_s * 1000),
             "sim_tick": step,
@@ -250,6 +264,24 @@ class IncidentResponseOrchestrator:
             anomaly.anomaly_id, anomaly.anomaly_type.value, anomaly.severity.value,
             [d["vehicle_kind"] for d in dispatched], undispatched,
         )
+
+    def _offer_to_crew(self, anomaly: Anomaly, kind: EmergencyKind, *, sim_time_s: float) -> bool:
+        """Offer this call to the nearest real crew of `kind`. True if an offer
+        went out -- the dispatch then happens on their accept, not here."""
+        if self.crew_dispatcher is None:
+            return False
+        offer = self.crew_dispatcher.request(
+            f"resp-{anomaly.anomaly_id}-{kind.value}",
+            kind,
+            anomaly.edge_id,
+            now_s=sim_time_s,
+        )
+        if offer is None:
+            return False
+        log.info(
+            "offered anomaly %s (%s) to %s", anomaly.anomaly_id, kind.value, offer.unit_id
+        )
+        return True
 
     def _nearest_available(
         self, kind: EmergencyKind, lat: float | None, lon: float | None

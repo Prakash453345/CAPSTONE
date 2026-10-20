@@ -2,6 +2,8 @@ import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { CheckCircle2, Columns2, Loader2, MapPin, Plus, TrafficCone, TriangleAlert } from "lucide-react";
 import { IncidentInbox } from "@/components/panels/IncidentInbox";
+import { ClipReview } from "@/components/panels/ClipReview";
+import { needsReview, useClipStore } from "@/store/clipStore";
 import { TrafficMap } from "@/components/map/TrafficMap";
 import { WorkspaceLayout } from "@/components/console/WorkspaceLayout";
 import { Button, EmptyState, Meter, Pill, Segmented } from "@/components/console/kit";
@@ -39,7 +41,9 @@ function focusEdge(edgeId: string, zoom = 16.5) {
  */
 export function AnomaliesPage() {
   const anomalies = useIncidentStore((s) => s.anomalies);
-  const candidates = useIncidentStore((s) => s.incidents.filter((i) => i.status === "candidate").length);
+  const detectorCandidates = useIncidentStore((s) => s.incidents.filter((i) => i.status === "candidate").length);
+  const clipFindings = useClipStore((s) => s.clips.filter(needsReview).length);
+  const candidates = detectorCandidates + clipFindings;
   const selectedId = useIncidentStore((s) => s.selectedAnomalyId);
   const selectAnomaly = useIncidentStore((s) => s.selectAnomaly);
   const setInteractionMode = useMapStore((s) => s.setInteractionMode);
@@ -103,7 +107,10 @@ export function AnomaliesPage() {
         <AnimatePresence mode="wait" initial={false}>
           <motion.div key={tab} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.2, ease: EASE_OUT }}>
             {tab === "review" ? (
-              <IncidentInbox />
+              <>
+                <ClipReview />
+                <IncidentInbox />
+              </>
             ) : list.length === 0 ? (
               tab === "active" ? (
                 <EmptyState

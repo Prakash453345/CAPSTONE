@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { fetchSession, login, logout, type SessionUser } from "@/services/auth/authApi";
+import { AuthError, fetchSession, login, logout, type SessionUser } from "@/services/auth/authApi";
 
 /**
  * Who is signed in. The session itself is an HttpOnly cookie the browser
@@ -18,6 +18,11 @@ interface AuthState {
   user: SessionUser | null;
   /** The last session check couldn't reach a working sign-in service. */
   serviceDown: boolean;
+  /** Why, when it is down -- "network" means nothing answered on /api at all
+   *  (api-service isn't running); "unavailable" means api-service answered but
+   *  can't sign anyone in, which in practice is Postgres being unreachable.
+   *  The two need different fixes, so the sign-in card says which it is. */
+  downKind: "network" | "unavailable" | null;
   /** Re-ask the server who is signed in. Safe to call often. */
   check: () => Promise<void>;
   signIn: (username: string, password: string, signal?: AbortSignal) => Promise<void>;
@@ -33,6 +38,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   status: "checking",
   user: null,
   serviceDown: false,
+  downKind: null,
 
   check: () => {
     // Several callers (app start, tab focus, route guards) can ask at once.
@@ -43,14 +49,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         if (started !== epoch) return;
         set(
           user
-            ? { status: "authed", user, serviceDown: false }
-            : { status: "anon", user: null, serviceDown: false },
+            ? { status: "authed", user, serviceDown: false, downKind: null }
+            : { status: "anon", user: null, serviceDown: false, downKind: null },
         );
-      } catch {
+      } catch (err) {
         // A blip must not sign out someone mid-task: an already-confirmed
         // session stays until the server says 401.
         if (started === epoch && get().status !== "authed") {
-          set({ status: "anon", user: null, serviceDown: true });
+          const kind = err instanceof AuthError && err.kind === "unavailable" ? "unavailable" : "network";
+          set({ status: "anon", user: null, serviceDown: true, downKind: kind });
         }
       } finally {
         inflight = null;
@@ -62,12 +69,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   signIn: async (username, password, signal) => {
     const user = await login(username, password, signal);
     epoch++;
-    set({ status: "authed", user, serviceDown: false });
+    set({ status: "authed", user, serviceDown: false, downKind: null });
   },
 
   signOut: async () => {
     await logout();
     epoch++;
-    set({ status: "anon", user: null, serviceDown: false });
+    set({ status: "anon", user: null, serviceDown: false, downKind: null });
   },
 }));

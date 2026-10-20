@@ -16,6 +16,7 @@ import {
   type RoadEdge,
 } from "@/data/network";
 import { haversineMeters, pointAlongPath, type LngLat } from "@/utils/geo";
+import { useCrewStore } from "@/store/crewStore";
 import { mulberry32, pick } from "@/utils/rng";
 import { junctionVehicleStats } from "@/services/traffic/intersectionStats";
 import type {
@@ -387,6 +388,20 @@ export function createMockProvider(seed = 42): TrafficDataProvider {
       if (timer !== null) return;
       setStatus("connecting");
       startedAt = Date.now();
+      // A small demo fleet, so the crew page and the dispatch sheet have
+      // units to show without a backend (live, it comes from CrewRosterUpdated).
+      useCrewStore.getState().applyFleet({
+        units: [
+          ["amb-01", "ambulance", "Ambulance 1", true],
+          ["amb-02", "ambulance", "Ambulance 2", false],
+          ["pol-01", "police", "Police 1", false],
+          ["fire-01", "fire_truck", "Fire 1", false],
+        ].map(([id, kind, callSign, busy], i) => {
+          const edge = roadEdges[(i * 7) % roadEdges.length]!;
+          const [lng, lat] = edge.path[Math.floor(edge.path.length / 2)]!;
+          return { unit_id: id, kind, call_sign: callSign, on_duty: true, busy, edge_id: edge.id, lat, lon: lng };
+        }),
+      });
       window.setTimeout(() => setStatus("online"), 500);
       const loop = () => step((Date.now() - startedAt) / 1000);
       loop();

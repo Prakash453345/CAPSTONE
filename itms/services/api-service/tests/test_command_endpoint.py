@@ -75,3 +75,44 @@ async def test_payload_not_matching_schema_is_a_422():
         await post_command(cmd, _request(bus))
     assert ei.value.status_code == 422
     assert not bus.published
+
+
+# ---- who may send what ---------------------------------------------------
+
+
+def _user(role: str, unit: str | None = None):
+    from api_service.auth import UserRecord
+
+    return UserRecord(username=f"{role}1", display_name="x", password_hash="x",
+                      role=role, unit_id=unit)
+
+
+def test_a_crew_may_answer_and_choose_its_own_hospital_but_not_run_the_city():
+    from api_service.main import _check_crew_command
+
+    crew = _user("responder", "AMB-03")
+    choice = CommandRequest(event_type="CrewHospitalChoice",
+                            payload={"unit_id": "AMB-99", "facility_id": "h1"})
+    _check_crew_command(crew, choice)
+    assert choice.payload["unit_id"] == "AMB-03"  # its own ambulance, whatever it sent
+    _check_crew_command(crew, CommandRequest(event_type="EmergencyCommand",
+                                             payload={"action": "RECALCULATE"}))
+    for event_type, payload in [("AnomalyCreateRequested", {}),
+                                ("EmergencyCommand", {"action": "CANCEL"})]:
+        with pytest.raises(HTTPException) as ei:
+            _check_crew_command(crew, CommandRequest(event_type=event_type, payload=payload))
+        assert ei.value.status_code == 403
+    # operators are not limited
+    _check_crew_command(_user("operator"), CommandRequest(event_type="AnomalyCreateRequested"))
+
+
+def test_commands_need_a_session_when_sign_in_is_required(monkeypatch):
+    from api_service import main
+
+    monkeypatch.setattr(main, "REQUIRE_SIGN_IN", True)
+    request = SimpleNamespace(cookies={})
+    with pytest.raises(HTTPException) as ei:
+        main._session_user(request)
+    assert ei.value.status_code == 401
+    monkeypatch.setattr(main, "REQUIRE_SIGN_IN", False)
+    assert main._session_user(request) is None

@@ -198,3 +198,44 @@ export function remainingSeconds(req: EmergencyRequest, remainingM: number): num
 export function hasArrived(req: EmergencyRequest, remainingM: number): boolean {
   return req.state === "completed" || req.live?.status === "arrived" || remainingM < 25;
 }
+
+/** Traffic on one stretch of the route, Google Maps' way: free, slow or heavy. */
+export type TrafficLevel = "free" | "slow" | "heavy";
+export interface TrafficStretch {
+  startM: number;
+  endM: number;
+  level: TrafficLevel;
+}
+
+const SLOW_TRAFFIC = 0.4;
+
+export function trafficLevel(congestion: number): TrafficLevel {
+  return congestion >= HEAVY_CONGESTION ? "heavy" : congestion >= SLOW_TRAFFIC ? "slow" : "free";
+}
+
+/** The route cut into stretches of equal traffic, merging neighbours alike. */
+export function trafficAlong(plan: RoutePlan, congestion: Readonly<Record<string, number>>): TrafficStretch[] {
+  const out: TrafficStretch[] = [];
+  for (const span of plan.spans) {
+    if (span.endM <= span.startM) continue;
+    const level = trafficLevel(congestion[span.edgeId] ?? 0);
+    const last = out[out.length - 1];
+    if (last && last.level === level && Math.abs(last.endM - span.startM) < 1) last.endM = span.endM;
+    else out.push({ startM: span.startM, endM: span.endM, level });
+  }
+  return out;
+}
+
+/** One line about the traffic still ahead: the first slow stretch, or clear. */
+export function trafficAhead(stretches: readonly TrafficStretch[], alongM: number): string {
+  const ahead = stretches.filter((s) => s.endM > alongM && s.level !== "free");
+  if (!ahead.length) return "Traffic is clear to the destination";
+  const first = ahead[0]!;
+  const inM = Math.max(0, first.startM - alongM);
+  const lenM = first.endM - Math.max(first.startM, alongM);
+  const what = first.level === "heavy" ? "Heavy traffic" : "Slow traffic";
+  const len = lenM >= 1000 ? `${(lenM / 1000).toFixed(1)} km` : `${Math.round(lenM / 10) * 10} m`;
+  if (inM < 30) return `${what} now, for ${len}`;
+  const dist = inM >= 1000 ? `${(inM / 1000).toFixed(1)} km` : `${Math.round(inM / 10) * 10} m`;
+  return `${what} in ${dist}, for ${len}`;
+}

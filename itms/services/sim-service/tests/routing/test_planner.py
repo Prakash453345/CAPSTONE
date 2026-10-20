@@ -168,12 +168,26 @@ def test_isolated_destination_raises_no_route():
     assert "isolated" in ei.value.reason or "terminus" in ei.value.reason
 
 
-def test_blocked_source_edge_raises_a_clear_message():
+def test_blocked_ends_of_a_trip_are_still_driven():
+    """Responders are sent *to* blocked roads, and leave them again (an
+    ambulance at a blocked accident going on to hospital)."""
     planner = RoutePlanner(_diamond())
-    with pytest.raises(NoRouteError) as ei:
-        planner.plan("S", "T", {"S": EdgeConditions(anomaly_severity="blocked")})
-    assert "current road" in ei.value.reason
+    blocked = EdgeConditions(anomaly_severity="blocked")
+    assert planner.plan("S", "T", {"S": blocked})[0].edges[0] == "S"
+    assert planner.plan("S", "T", {"T": blocked})[0].edges[-1] == "T"
 
+
+def test_a_trip_starting_on_a_dead_end_or_ending_on_an_entry_road_uses_the_other_carriageway():
+    """'-S' (S's other carriageway) leads nowhere; '-T' is entered by nothing.
+    A unit parked on '-S' starts on 'S'; an incident on '-T' is reached via 'T'."""
+    g = _diamond()
+    edges = {**g.edges, "-S": edge("-S", 100.0, to="jS0"), "-T": edge("-T", 100.0, to="jT0")}
+    adjacency = {**g.adjacency, "-T": (GraphEdge("-S", "jS0", False, None),)}
+    planner = RoutePlanner(RoadGraph(edges=edges, adjacency=adjacency,
+                                     signalised_junctions=g.signalised_junctions))
+    assert planner.usable_ends("-S", "-T") == ("S", "T")
+    route = planner.plan("-S", "-T")[0]
+    assert route.edges[0] == "S" and route.edges[-1] == "T"
 
 def test_invalid_config_is_rejected_before_searching():
     bad = EmergencyRoutingConfig(travel_time_weight=-1.0)
@@ -216,3 +230,29 @@ def test_evaluate_then_plan_is_the_monitoring_comparison():
     best = planner.plan("S", "T", cond)[0]
     assert best.edges == ("S", "B", "T")
     assert on_route.score > best.score
+
+
+def test_a_unit_parked_on_a_one_way_dead_end_starts_where_it_can_turn_off():
+    """'D' leads only into the dead end 'X' (no other carriageway): a trip
+    from 'X' starts back on 'S', the nearest road with another way out."""
+    g = _diamond()
+    edges = {**g.edges, "D": edge("D", 50.0, to="jD"), "X": edge("X", 50.0, to="jX")}
+    adjacency = {**g.adjacency, "S": (*g.adjacency["S"], GraphEdge("D", "jD", False, None)),
+                 "D": (GraphEdge("X", "jX", False, None),)}
+    planner = RoutePlanner(RoadGraph(edges=edges, adjacency=adjacency,
+                                     signalised_junctions=g.signalised_junctions))
+    assert planner.usable_ends("X", "T")[0] == "S"
+    assert planner.plan("X", "T")[0].edges[0] == "S"
+
+
+def test_a_cut_off_road_is_served_from_the_nearest_reachable_one():
+    g = _diamond()
+    edges = {**g.edges, "I": edge("I", 50.0, to="jI"), "-I": edge("-I", 50.0, to="jI0")}
+    adjacency = {**g.adjacency, "I": (GraphEdge("-I", "jI0", False, None),),
+                 "-I": (GraphEdge("I", "jI", False, None),)}
+    planner = RoutePlanner(RoadGraph(edges=edges, adjacency=adjacency,
+                                     signalised_junctions=g.signalised_junctions))
+    planner.edge_points = {"S": (0, 0), "A": (100, 50), "B": (100, -50), "T": (200, 0),
+                           "I": (110, 60), "-I": (110, 60)}
+    assert planner.usable_ends("S", "I") == ("S", "A")
+    assert planner.plan("S", "I")[0].edges[-1] == "A"

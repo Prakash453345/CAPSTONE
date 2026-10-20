@@ -75,6 +75,7 @@ import {
 } from "@/services/traffic/notifications";
 import { junctionVehicleStats } from "@/services/traffic/intersectionStats";
 import { mapIncident } from "@/services/traffic/incidents";
+import { useCrewStore } from "@/store/crewStore";
 
 const SNAPSHOT_MS = 500;
 /** Drop a vehicle / edge reading not refreshed within this long. */
@@ -315,6 +316,23 @@ export function createWebSocketProvider(): TrafficDataProvider {
         anomalies.set(id, { ...anomaly, _at: lastMessageAt });
         const notif = classifyAnomalyEvent(prevStatus, anomaly, lastMessageAt);
         if (notif) pendingEvents.push(notif);
+        break;
+      }
+      case "CrewOfferUpdated": {
+        // Straight to the crew store rather than into the map snapshot: an
+        // offer is addressed to one driver and is their page's state, not
+        // something the console's shared view of the city needs.
+        useCrewStore.getState().applyOffer(p as Record<string, unknown>);
+        break;
+      }
+      case "CrewRosterUpdated": {
+        // The fleet with its simulated positions, for both maps.
+        useCrewStore.getState().applyFleet(p as Record<string, unknown>);
+        break;
+      }
+      case "CrewHospitalOptions": {
+        // An ambulance at a scene, or on its way to the hospital its crew chose.
+        useCrewStore.getState().applyHospital(p as Record<string, unknown>);
         break;
       }
       case "SignalFaulted": {

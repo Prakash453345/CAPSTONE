@@ -1,4 +1,4 @@
-.PHONY: dev setup infra-up infra-up-all infra-down test test-fast test-anomaly test-all lint bench down clean \
+.PHONY: dev dev-amaravati seed-accounts setup infra-up infra-up-all infra-down test test-fast test-anomaly test-all lint bench down clean \
 	vision-dev vision-model test-vision m8-cameras m8-perception m8-incidents m8-closed-loop \
 	m8-video m8-live
 
@@ -35,6 +35,20 @@ infra-up-all:
 
 dev: setup infra-up
 	./scripts/dev.sh
+
+# The same stack on the Amaravati capital complex instead of the Vijayawada
+# corridor. Built the same way the corridor was (scenarios/generated/
+# amaravati_capital/build.sh): one named arterial, its real cross streets,
+# seven signals -- 86 edges, so it runs at 31x real time light / 13.5x heavy,
+# against the corridor's 44x. Vijayawada stays the default; this is opt-in.
+# Run the web app with VITE_CITY=amaravati so its road pickers match.
+dev-amaravati: setup infra-up
+	ITMS_SCENARIO=scenarios/generated/amaravati_capital ./scripts/dev.sh
+
+# Create or update every account listed in a CSV (default .local/accounts.csv,
+# git-ignored: it holds passwords). Safe to repeat. Format: api_service/seed_accounts.py.
+seed-accounts: setup
+	$(PY) -m api_service.seed_accounts $${ACCOUNTS:-.local/accounts.csv}
 
 # Default: everything except the M6 anomaly-detector tests, which need the
 # optional `[anomaly]` extra (numpy/torch, ~1GB, not installed by `setup`).

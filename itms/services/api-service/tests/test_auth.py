@@ -126,6 +126,7 @@ def test_login_sets_httponly_cookie_and_me_returns_user(client):
         "username": "operator",
         "display_name": "Op Erator",
         "role": "operator",
+        "crew_kind": None,
         "unit_id": None,
     }
     assert "password" not in res.text

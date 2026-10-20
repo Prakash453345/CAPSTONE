@@ -33,13 +33,19 @@ def traci_route_fn(vtype: str = "veh_emergency"):
     """
 
     def route(from_edge: str, to_edge: str) -> tuple[tuple[str, ...], float] | None:
-        try:
-            result = traci.simulation.findRoute(from_edge, to_edge, vType=vtype)
-        except traci.TraCIException:
-            return None
-        if not result.edges:
-            return None
-        return tuple(result.edges), float(result.travelTime)
+        # The live corridor never loads `vtype` (its emergency vehicles use
+        # SUMO's default type), and findRoute raises for an unknown type --
+        # which used to read as "no hospital reachable" for every scene. So
+        # an unknown type falls back to the default one rather than failing.
+        for vt in dict.fromkeys((vtype, "")):
+            try:
+                result = traci.simulation.findRoute(from_edge, to_edge, vType=vt)
+            except traci.TraCIException:
+                continue
+            if not result.edges:
+                return None
+            return tuple(result.edges), float(result.travelTime)
+        return None
 
     return route
 

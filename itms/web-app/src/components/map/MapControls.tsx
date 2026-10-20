@@ -4,7 +4,8 @@ import { useNavigate } from "react-router-dom";
 import { useMapInstance } from "@/components/map/MapContext";
 import { useMapStore, type MapLayerId } from "@/store/mapStore";
 import { useMapChromeStore } from "@/store/mapChromeStore";
-import { networkBounds } from "@/data/network";
+import { cityAt, cityBounds, networkBounds } from "@/data/network";
+import { HOME_CITY } from "@/data/city";
 import { cn } from "@/utils/cn";
 
 const LAYER_LABELS: Record<MapLayerId, string> = {
@@ -43,14 +44,18 @@ export function MapControls({
     return () => window.removeEventListener("mousedown", onDown);
   }, [layersOpen, closeSheet]);
 
-  const recenter = () =>
+  // Back to the whole of the city in view, not both cities at once.
+  const recenter = () => {
+    const c = map.getCenter();
+    const b = cityBounds.get(cityAt(c.lng, c.lat) ?? HOME_CITY.id) ?? networkBounds;
     map.fitBounds(
       [
-        [networkBounds.minLng, networkBounds.minLat],
-        [networkBounds.maxLng, networkBounds.maxLat],
+        [b.minLng, b.minLat],
+        [b.maxLng, b.maxLat],
       ],
       { padding: 64, duration: 700, pitch: map.getPitch() > 5 ? 55 : 0 },
     );
+  };
 
   // Camera state drives the 3D toggle and the compass, so a right-drag tilt
   // or a two-finger rotate updates them just like the buttons do.

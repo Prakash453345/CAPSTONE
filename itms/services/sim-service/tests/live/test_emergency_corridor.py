@@ -226,6 +226,22 @@ def test_vehicle_leaving_the_sim_completes_the_request_and_ends_the_corridor(wir
     assert "ARRIVED" in vstatuses
 
 
+def test_a_vehicle_stopped_on_its_last_road_has_reached_the_scene(wired):
+    """A unit sent to a BLOCKED road crawls onto it and never drives off the
+    end of its route; stopped there, it has arrived."""
+    c, corridor, veh, _ = wired
+    _activate(c)
+    last = c.active_requests()[0].route.edges[-1]
+    veh.state["amb-1"].update(edge="A", pos=50.0, speed=8.0)
+    c.tick(step=3, sim_time_s=3.0)          # departs
+    veh.state["amb-1"].update(edge=last, pos=5.0, speed=0.1)
+    c.tick(step=4, sim_time_s=10.0)         # stopped: not yet
+    assert c.active_requests()[0].state.name == "IN_TRANSIT"
+    c.tick(step=5, sim_time_s=16.0)         # stopped 6 s on the last road
+    assert c._requests["er-1"].state.name == "COMPLETED"
+    assert "amb-1" not in veh.state         # taken off the road
+
+
 def test_cancel_after_activate_tears_down_the_corridor_and_removes_the_vehicle(wired):
     c, corridor, veh, _ = wired
     _activate(c)
@@ -319,7 +335,15 @@ def test_no_viable_reroute_holds_the_current_route_without_crashing(wired_bypass
     c.tick(step=1100, sim_time_s=1_100.0)
     veh.routes_set.clear()
 
-    # everything ahead of A is blocked -> planner has nothing; hold, don't cancel
+    # everything ahead of A is blocked and the planner has nothing; hold,
+    # don't cancel. (A blocked destination alone no longer stops a plan --
+    # responders are sent to blocked roads -- so "nothing" is made explicit.)
+    from sim_service.routing.planner import NoRouteError
+
+    def no_route(*_a, **_k):
+        raise NoRouteError("no route is currently available")
+
+    c.planner.plan = no_route
     anoms.items = [_blocked("B"), _blocked("C", aid="an-c"), _blocked("T", aid="an-t")]
     veh.state["amb-1"].update(edge="A", pos=130.0, speed=8.0)
     c.tick(step=1104, sim_time_s=1_104.0)

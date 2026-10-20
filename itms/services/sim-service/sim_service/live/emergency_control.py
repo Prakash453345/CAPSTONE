@@ -53,6 +53,12 @@ _REPUBLISH_INTERVAL_S = 10.0
 _MONITOR_INTERVAL_S = 3.0  # how often a live route is re-evaluated for rerouting
 _EV_TYPE_ID = "DEFAULT_VEHTYPE"
 _EV_COLOR = (233, 72, 77, 255)
+# A unit stopped this long on the last road of its route has reached the
+# scene. Arrival used to mean only "drove off the end of the route", which a
+# unit sent to a BLOCKED road (crawl speed) never does: it sat there for an
+# hour of sim time and its crew was never free again.
+_AT_SCENE_MPS = 1.0
+_AT_SCENE_HOLD_S = 5.0
 _SEVERE = (AnomalySeverity.HIGH, AnomalySeverity.BLOCKED)
 
 _KIND_MAP = {
@@ -77,6 +83,7 @@ class _EvRun:
     seen_moving: bool = False
     last_progress_m: float = 0.0
     current_edge: str = ""  # last real (non-internal) route edge the EV was on
+    stopped_since_s: float | None = None  # on its last road and (nearly) still since
 
 
 class EmergencyController:
@@ -279,6 +286,16 @@ class EmergencyController:
     def get_request(self, request_id: str) -> EmergencyRequest | None:
         return self._requests.get(request_id)
 
+    def vehicle_edges(self) -> dict[str, str]:
+        """vehicle_id -> the road its SUMO vehicle is on, for every EV
+        currently driving (the simulated fleet's GPS)."""
+        out: dict[str, str] = {}
+        for request_id, run in self._ev_runs.items():
+            req = self._requests.get(request_id)
+            if req is not None and run.spawned and run.current_edge:
+                out[req.vehicle_id] = run.current_edge
+        return out
+
     # ---- live vehicle tracking -----------------------------------
 
     def _advance_vehicles(self, step: int, sim_time_s: float) -> dict[str, float]:
@@ -329,6 +346,16 @@ class EmergencyController:
             if not run.seen_moving and (speed > 0.1 or covered > 1.0):
                 run.seen_moving = True
                 self._depart(request_id, step=step, sim_time_s=sim_time_s)
+
+            on_last_road = bool(run.route_edges) and edge_id == run.route_edges[-1]
+            if run.seen_moving and on_last_road and speed < _AT_SCENE_MPS:
+                if run.stopped_since_s is None:
+                    run.stopped_since_s = sim_time_s
+                elif sim_time_s - run.stopped_since_s >= _AT_SCENE_HOLD_S:
+                    self._on_arrival(request_id, run, step=step, sim_time_s=sim_time_s)
+                    continue
+            else:
+                run.stopped_since_s = None
 
             eta_s = (
                 max(0.0, (run.total_length_m - covered) / max(1.0, speed))
@@ -406,9 +433,21 @@ class EmergencyController:
             dist_to_edge_start=dist_to_start, total_length_m=acc,
         )
         route_id = f"ev-route-{request_id}"
+        # Leaving a scene on a closed road (an ambulance at a BLOCKED accident
+        # heading for hospital): start at the far end of it, past the
+        # obstruction, instead of crawling its whole length at block speed.
+        extra: dict[str, str] = {}
+        first = self.graph.edges.get(edges[0]) if edges else None
+        if first is not None and any(
+            a.edge_id == edges[0] and a.severity is AnomalySeverity.BLOCKED
+            for a in self.anomalies.active_anomalies()
+        ):
+            extra["departPos"] = str(max(0.0, first.length_m - 1.0))
         try:
             traci.route.add(route_id, list(edges))
-            traci.vehicle.add(req.vehicle_id, route_id, typeID=_EV_TYPE_ID, departSpeed="max")
+            traci.vehicle.add(
+                req.vehicle_id, route_id, typeID=_EV_TYPE_ID, departSpeed="max", **extra
+            )
             traci.vehicle.setColor(req.vehicle_id, _EV_COLOR)
             run.spawned = True
         except Exception:  # noqa: BLE001

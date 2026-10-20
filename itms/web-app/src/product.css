@@ -5,12 +5,19 @@
 /* The map's top-left stack: search, the New menu, and the sheets below them. */
 .map-action-stack {
   z-index: 20;
-  max-width: calc(100% - 68px);
-  max-height: calc(100% - 96px);
+  /* The stack sits flush with the map's corner and carries the 12px inset as
+     padding, with room right and below for the cards' soft shadows: a
+     scrolling box clips whatever overflows it, and with only a few pixels
+     spare each card's shadow ended in a hard-edged grey rectangle. */
+  max-width: calc(100% - 44px);
+  max-height: calc(100% - 28px);
   overflow-x: hidden;
   overflow-y: auto;
-  /* Room for the card shadows, which overflow-x would otherwise clip. */
-  padding: 0 4px 6px 0;
+  padding: 12px 36px 56px 12px;
+  scrollbar-width: none;
+}
+.map-action-stack::-webkit-scrollbar {
+  display: none;
 }
 .map-chip-row {
   scrollbar-width: none;

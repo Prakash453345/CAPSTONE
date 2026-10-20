@@ -53,10 +53,8 @@ A crew account with no vehicle linked sees "ask dispatch to link your account".
 .venv/bin/python -m api_service.users list                       # role / vehicle for each account
 ```
 
-**Note:** the roles are enforced by the
-web pages. `POST /v1/commands` (the command channel) does not check the session
-yet, so a determined crew account could still call it directly; locking that
-endpoint to operators is the next step before this faces the public.
+**Note:** the pages enforce the roles, and `POST /v1/commands` checks them too:
+a crew account can only send its own crew commands (see below).
 
 ## Troubleshooting: "We can't reach the sign-in service"
 
@@ -121,6 +119,11 @@ Rate-limit `/api/v1/auth/forgot*` per IP in the reverse proxy, like login.
 
 ## Deploying
 
+The ready-made way is `deploy/` (Docker Compose: one address for the site, the
+API and the stream, a free HTTPS tunnel, and the same files on a server later);
+see [`deploy/README.md`](../deploy/README.md). The rest of this section is the
+manual equivalent.
+
 The browser calls `/api/v1/auth/*` on **the same origin as the site**, and the
 session is an HttpOnly cookie, so the site and api-service must sit behind one
 host. A static-only deployment (just the built `dist/` on a static host) cannot
@@ -165,13 +168,11 @@ password; first account created; `/api` proxied same-origin.
 ## What this does and does not protect
 
 - It gates the **web console**. A signed-out visitor cannot open any console page.
-- It does **not yet** protect api-service's own endpoints: the WebSocket stream,
-  `POST /v1/commands` and the incident reads are as open as before (incident
-  confirm/reject still need `X-API-Key`). Anyone who can reach api-service
-  directly can use them, so keep it off the public internet (bind it to
-  localhost / a private network, expose only the proxy) until those endpoints
-  take `Depends(auth.current_user)`. This was already listed as a deployment
-  gate in [`command-center-experience.md`](command-center-experience.md).
+- `POST /v1/commands` and the live stream (`/v1/stream`) need a signed-in
+  account too (`API_REQUIRE_SIGN_IN=true`, the default). Crew accounts may only
+  answer their own calls, choose their hospital and ask for a new route; every
+  other command is for operators (403 otherwise). The incident reads stay open,
+  and incident confirm/reject still need `X-API-Key`.
 - After five wrong passwords an account locks for 15 minutes. That also lets
   someone who knows a username lock that user out for a while; `users unlock`
   clears it.

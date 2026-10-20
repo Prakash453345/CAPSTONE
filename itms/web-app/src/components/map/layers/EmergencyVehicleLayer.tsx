@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { prefersReducedMotion } from "@/utils/motion";
 import type { ExpressionSpecification, GeoJSONSource } from "maplibre-gl";
 import type { Feature, FeatureCollection, Point } from "geojson";
@@ -31,9 +31,21 @@ const SELECTED_BOOST: ExpressionSpecification = ["case", [">", ["to-number", ["g
  * vehicle keeps its mission's colour (shared with `EmergencyRouteLayer`) and a
  * bigger, brighter halo while its request is the selected one.
  */
-export function EmergencyVehicleLayer({ visible }: { visible: boolean }) {
+/** `onlyRequestId` limits the layer to one request's vehicle. The console
+ *  shows every unit on the road; the crew page passes its own mission, because
+ *  another unit's ambulance driving past is not this crew's call and reads on
+ *  their screen as if it were. */
+/** `onlyRequestId`: omitted, every unit on the road is drawn (the console);
+ *  a request id, only that request's vehicle; `null`, none (a crew with no call
+ *  sees no one else's vehicle -- a police car passing their depot read as
+ *  their own ambulance moving). */
+export function EmergencyVehicleLayer({ visible, onlyRequestId }: { visible: boolean; onlyRequestId?: string | null }) {
   const map = useMapInstance();
-  const requests = useEmergencyStore((s) => s.requests);
+  const allRequests = useEmergencyStore((s) => s.requests);
+  const requests = useMemo(
+    () => (onlyRequestId === undefined ? allRequests : allRequests.filter((r) => r.id === onlyRequestId)),
+    [allRequests, onlyRequestId],
+  );
   const selectedRequestId = useEmergencyStore((s) => s.selectedRequestId);
 
   const prev = useRef(new Map<string, VehicleFrame>());

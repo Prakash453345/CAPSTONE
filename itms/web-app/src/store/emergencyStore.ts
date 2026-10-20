@@ -23,11 +23,21 @@ export interface PresetUnit {
 }
 
 /** A couple of always-available simulated responders for the prototype. */
+/**
+ * What an operator can ask for: a *kind* of unit, not a named vehicle.
+ *
+ * These used to be four invented call signs ("Ambulance 12"), which was
+ * misleading in both directions -- the operator had to know a fleet that did
+ * not exist, and the backend dispatched whatever id the console sent without
+ * checking that anyone could drive it. The real fleet is the set of crew
+ * accounts; the dispatcher finds the nearest crew of the kind asked for and
+ * offers them the call (`live/crew_dispatch.py`). `id` is the kind, and the
+ * dispatch command carries no vehicle_id at all.
+ */
 export const PRESET_UNITS: PresetUnit[] = [
-  { id: "EV-001", callSign: "Ambulance 12", kind: "ambulance" },
-  { id: "EV-002", callSign: "Ambulance 27", kind: "ambulance" },
-  { id: "EV-101", callSign: "Fire 4", kind: "fire_truck" },
-  { id: "EV-201", callSign: "Police 9", kind: "police" },
+  { id: "ambulance", callSign: "Ambulance", kind: "ambulance" },
+  { id: "police", callSign: "Police", kind: "police" },
+  { id: "fire_truck", callSign: "Fire", kind: "fire_truck" },
 ];
 
 /** One end of the dispatch being drafted — a map click resolved to an edge. */
@@ -43,7 +53,18 @@ export interface DispatchDraft {
   destination: RoutePoint | null;
 }
 
+/** A call the console sent and no crew has accepted yet: there is no request
+ *  to show until one does, so the panel follows the offers instead. */
+export interface PendingCall {
+  requestId: string;
+  unit: PresetUnit;
+  destination: RoutePoint;
+  sentAtMs: number;
+}
+
 interface EmergencyState {
+  pendingCall: PendingCall | null;
+  setPendingCall: (call: PendingCall | null) => void;
   requests: EmergencyRequest[];
   selectedRequestId: string | null;
   draft: DispatchDraft | null;
@@ -69,6 +90,8 @@ interface EmergencyState {
 }
 
 export const useEmergencyStore = create<EmergencyState>((set) => ({
+  pendingCall: null,
+  setPendingCall: (pendingCall) => set({ pendingCall }),
   requests: [],
   selectedRequestId: null,
   draft: null,

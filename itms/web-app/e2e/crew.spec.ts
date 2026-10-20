@@ -40,8 +40,8 @@ test("all directions opens over the cards and closes again", async ({ page }) =>
 test("a unit with no call is told it is standing by, and can switch back", async ({ page }) => {
   await page.goto("/crew");
   await expect(next(page)).toBeVisible({ timeout: 15_000 });
-  await page.getByLabel("Vehicle", { exact: true }).selectOption({ label: "Ambulance 12" });
-  await expect(page.getByText("Ambulance 12 is standing by")).toBeVisible();
+  await page.getByLabel("Vehicle", { exact: true }).selectOption({ label: "Ambulance 2" });
+  await expect(page.getByText("Ambulance 2 is standing by")).toBeVisible();
   await expect(next(page)).toBeHidden();
   await page.getByLabel("Vehicle", { exact: true }).selectOption({ label: "Ambulance 1 · on a mission" });
   await expect(next(page)).toBeVisible();

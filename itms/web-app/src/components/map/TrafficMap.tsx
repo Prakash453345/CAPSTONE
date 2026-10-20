@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import maplibregl, { Map as MapLibreMap, type MapMouseEvent } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { initialStyle } from "@/components/map/mapStyle";
@@ -22,25 +22,34 @@ import { IncidentLayer } from "@/components/map/layers/IncidentLayer";
 import { AnomalyLayer } from "@/components/map/layers/AnomalyLayer";
 import { EmergencyRouteLayer } from "@/components/map/layers/EmergencyRouteLayer";
 import { EmergencyVehicleLayer } from "@/components/map/layers/EmergencyVehicleLayer";
-import {
-  CreateAnomalyPanel,
-  type AnomalyTarget,
-} from "@/components/map/CreateAnomalyPanel";
+import type { AnomalyTarget } from "@/components/map/CreateAnomalyPanel";
 import { EmergencyPanel } from "@/components/map/EmergencyPanel";
 import { useMapStore } from "@/store/mapStore";
 import { useTransitionStore } from "@/store/transitionStore";
 import { useIncidentStore } from "@/store/incidentStore";
 import { selectSelectedRequest, useEmergencyStore } from "@/store/emergencyStore";
-import { networkBounds, nearestEdge } from "@/data/network";
+import { cityBounds, networkBounds, nearestEdge } from "@/data/network";
+import { CityChips } from "@/components/map/CityChips";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/utils/cn";
-import { CITIES_LABEL } from "@/data/city";
+import { CITIES_LABEL, HOME_CITY, LIVE_CITY, cityById } from "@/data/city";
 
+// Opened on demand, so they stay out of the map's first download.
+const CreateAnomalyPanel = lazy(() =>
+  import("@/components/map/CreateAnomalyPanel").then((m) => ({ default: m.CreateAnomalyPanel })),
+);
+const UploadClipPanel = lazy(() =>
+  import("@/components/map/UploadClipPanel").then((m) => ({ default: m.UploadClipPanel })),
+);
+
+// Open on the home city: with both cities in one frame, 25 km apart, each
+// was a smudge in a corner. The city chips move between them.
+const HOME_BOUNDS = cityBounds.get(HOME_CITY.id) ?? networkBounds;
 const FIT_BOUNDS: [number, number, number, number] = [
-  networkBounds.minLng,
-  networkBounds.minLat,
-  networkBounds.maxLng,
-  networkBounds.maxLat,
+  HOME_BOUNDS.minLng,
+  HOME_BOUNDS.minLat,
+  HOME_BOUNDS.maxLng,
+  HOME_BOUNDS.maxLat,
 ];
 
 export function TrafficMap({
@@ -70,6 +79,7 @@ export function TrafficMap({
   const setDraftPoint = useEmergencyStore((s) => s.setDraftPoint);
 
   const [pendingTarget, setPendingTarget] = useState<AnomalyTarget | null>(null);
+  const [clipTarget, setClipTarget] = useState<AnomalyTarget | null>(null);
   const [pickHint, setPickHint] = useState<string | null>(null);
   const creatingAnomaly = interactionMode === "create-anomaly";
 
@@ -214,6 +224,13 @@ export function TrafficMap({
         window.setTimeout(() => setPickHint(null), 1600);
         return;
       }
+      if (hit.edge.city !== LIVE_CITY) {
+        // Only the live city's roads exist in the simulation; anything placed
+        // elsewhere would be accepted here and then silently go nowhere.
+        setPickHint(`The live simulation runs ${cityById.get(LIVE_CITY)?.name ?? LIVE_CITY} only. Pick a road there`);
+        window.setTimeout(() => setPickHint(null), 2600);
+        return;
+      }
       setPickHint(null);
       const point = { edgeId: hit.edge.id, edgeName: hit.edge.name, at: hit.snapped };
       if (interactionMode === "create-anomaly") {
@@ -261,7 +278,8 @@ export function TrafficMap({
 
   const emergencyDraft = useEmergencyStore((s) => s.draft);
   const emergencySelected = useEmergencyStore(selectSelectedRequest);
-  const operatorPanelOpen = creatingAnomaly || Boolean(emergencyDraft || emergencySelected);
+  const operatorPanelOpen =
+    creatingAnomaly || clipTarget !== null || Boolean(emergencyDraft || emergencySelected);
   const panelOpen = operatorPanelOpen || selectedRoad !== null;
 
   const exitCreate = () => {
@@ -308,7 +326,7 @@ export function TrafficMap({
         )}
 
         {/* Google-style search row (search pill + chips), panels open below it */}
-        <div className="map-action-stack pointer-events-none absolute left-3 top-3 flex flex-col items-start gap-2">
+        <div className="map-action-stack pointer-events-none absolute left-0 top-0 flex flex-col items-start gap-2">
           <div className="flex max-w-full flex-wrap items-start gap-2">
             {map && ready && (
               <MapContext.Provider value={map}>
@@ -317,6 +335,11 @@ export function TrafficMap({
             )}
             <div className="map-chip-row flex h-11 max-w-full items-center gap-2">
               <MapNewMenu onCancelAnomaly={exitCreate} />
+              {map && ready && (
+                <MapContext.Provider value={map}>
+                  <CityChips />
+                </MapContext.Provider>
+              )}
             </div>
           </div>
 
@@ -326,28 +349,38 @@ export function TrafficMap({
             </div>
           )}
 
-          {creatingAnomaly && !pendingTarget && (
+          {((creatingAnomaly && !pendingTarget) || interactionMode === "pick-destination") && (
             <div className="pointer-events-none animate-fade-in rounded-full bg-foreground/85 px-3.5 py-1.5 text-xs text-background shadow-elevation-1">
-              {pickHint ?? "Click a road to place the anomaly"}
+              {pickHint ??
+                (creatingAnomaly ? "Click a road to place the anomaly" : "Click the road where help is needed")}
             </div>
           )}
 
           {pendingTarget && (
-            <CreateAnomalyPanel
-              target={pendingTarget}
-              onClose={exitCreate}
-              onCreated={(id) => {
-                selectAnomaly(id);
-                exitCreate();
-              }}
-            />
+            <Suspense fallback={null}>
+              <CreateAnomalyPanel
+                target={pendingTarget}
+                onClose={exitCreate}
+                onCreated={(id) => {
+                  selectAnomaly(id);
+                  exitCreate();
+                }}
+              />
+            </Suspense>
           )}
 
           <EmergencyPanel part="panel" />
 
+          {clipTarget && !creatingAnomaly && (
+            <Suspense fallback={null}>
+              <UploadClipPanel target={clipTarget} onClose={() => setClipTarget(null)} />
+            </Suspense>
+          )}
+
           {!operatorPanelOpen && (
             <RoadPlaceCard
               onCreateAnomaly={(target) => setPendingTarget(target)}
+              onUploadClip={(target) => setClipTarget(target)}
             />
           )}
         </div>

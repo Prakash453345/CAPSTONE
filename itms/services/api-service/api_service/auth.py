@@ -70,6 +70,11 @@ COOKIE_SECURE = os.environ.get("AUTH_COOKIE_SECURE", "true").strip().lower() not
 # crew sees); a crew account cannot open the console.
 ROLES = ("operator", "responder")
 DEFAULT_ROLE = "operator"
+
+# What a responder drives. The dispatcher needs this to answer "who is the
+# nearest ambulance", which it could not before: a responder account said only
+# that the person was crew, not what they crew. Operators have none.
+CREW_KINDS = ("ambulance", "police", "fire_truck")
 # A crew account is tied to one vehicle: the id dispatch uses for it (e.g. EV-001).
 _UNIT_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$")
 
@@ -243,6 +248,7 @@ class UserRecord:
     reset_attempts: int = 0
     reset_sent_at: dt.datetime | None = None
     role: str = DEFAULT_ROLE
+    crew_kind: str | None = None
     unit_id: str | None = None
 
 
@@ -353,6 +359,7 @@ CREATE TABLE IF NOT EXISTS app_user (
     reset_attempts   INTEGER NOT NULL DEFAULT 0,
     reset_sent_at    TIMESTAMPTZ,
     role             TEXT NOT NULL DEFAULT 'operator',
+    crew_kind        TEXT,
     unit_id          TEXT,
     CONSTRAINT app_user_username_lower CHECK (username = lower(username)),
     CONSTRAINT app_user_username_len CHECK (char_length(username) BETWEEN 1 AND 64)
@@ -364,7 +371,12 @@ ALTER TABLE app_user ADD COLUMN IF NOT EXISTS reset_expires_at TIMESTAMPTZ;
 ALTER TABLE app_user ADD COLUMN IF NOT EXISTS reset_attempts INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE app_user ADD COLUMN IF NOT EXISTS reset_sent_at TIMESTAMPTZ;
 ALTER TABLE app_user ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'operator';
+ALTER TABLE app_user ADD COLUMN IF NOT EXISTS crew_kind TEXT;
 ALTER TABLE app_user ADD COLUMN IF NOT EXISTS unit_id TEXT;
+-- One crew account per vehicle: two drivers claiming the same unit would both
+-- be offered its calls, and the second accept would overwrite the first.
+CREATE UNIQUE INDEX IF NOT EXISTS app_user_unit_idx ON app_user (unit_id)
+    WHERE unit_id IS NOT NULL;
 """
 
 
@@ -410,7 +422,8 @@ class PostgresUserStore:
             row = conn.execute(
                 "SELECT username, password_hash, display_name, is_active, failed_attempts,"
                 " locked_until, session_version, email, reset_code_hash, reset_expires_at,"
-                " reset_attempts, reset_sent_at, role, unit_id FROM app_user WHERE username = %s",
+                " reset_attempts, reset_sent_at, role, crew_kind, unit_id"
+                " FROM app_user WHERE username = %s",
                 (username,),
             ).fetchone()
         return None if row is None else UserRecord(*row)
@@ -506,6 +519,9 @@ class SessionUser(BaseModel):
     username: str
     display_name: str
     role: str
+    # What this crew drives, so the page knows an ambulance from a patrol car.
+    # Null for an operator.
+    crew_kind: str | None = None
     # The vehicle a crew account drives; null for operators (who see every unit).
     unit_id: str | None = None
 
@@ -515,6 +531,11 @@ def _user_out(record: UserRecord) -> SessionUser:
         username=record.username,
         display_name=record.display_name or record.username,
         role=record.role if record.role in ROLES else DEFAULT_ROLE,
+        crew_kind=(
+            record.crew_kind
+            if record.role == "responder" and record.crew_kind in CREW_KINDS
+            else None
+        ),
         unit_id=record.unit_id if record.role == "responder" else None,
     )
 

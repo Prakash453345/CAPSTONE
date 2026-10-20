@@ -38,6 +38,7 @@ export function LoginPage() {
 
   const status = useAuthStore((s) => s.status);
   const serviceDown = useAuthStore((s) => s.serviceDown);
+  const downKind = useAuthStore((s) => s.downKind);
   const signIn = useAuthStore((s) => s.signIn);
   const check = useAuthStore((s) => s.check);
 
@@ -194,7 +195,11 @@ export function LoginPage() {
               >
                 <TriangleAlert className="mt-px size-4 shrink-0" aria-hidden />
                 <div className="min-w-0 flex-1">
-                  <p>We can't reach the sign-in service.</p>
+                  <p>
+                    {downKind === "unavailable"
+                      ? "Sign-in is unavailable right now \u2014 the service is running but can't reach its database."
+                      : "We can't reach the sign-in service."}
+                  </p>
                   <button
                     type="button"
                     onClick={retryCheck}

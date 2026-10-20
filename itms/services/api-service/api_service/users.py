@@ -3,6 +3,7 @@
     python -m api_service.users create <username> [--name "Display Name"] [--email you@example.org]
                                          [--role operator|responder] [--unit EV-001]
     python -m api_service.users set-role <username> operator|responder
+    python -m api_service.users set-crew <username> ambulance|police|fire_truck|none
     python -m api_service.users set-unit <username> <vehicle-id>   # a crew account's vehicle
     python -m api_service.users passwd <username>
     python -m api_service.users set-email <username> <email>
@@ -83,6 +84,12 @@ def main(argv: list[str] | None = None) -> None:
         help="operator = the console (and crew page); responder = the crew page only",
     )
     create.add_argument(
+        "--crew-kind",
+        choices=auth.CREW_KINDS,
+        help="what a responder drives; the dispatcher only offers a call to the "
+             "nearest crew of the kind the incident needs",
+    )
+    create.add_argument(
         "--unit",
         default="",
         help="the vehicle id a crew account drives (as dispatch knows it, e.g. EV-001)",
@@ -97,6 +104,10 @@ def main(argv: list[str] | None = None) -> None:
     setrole = sub.add_parser("set-role", help="change what an account can open")
     setrole.add_argument("username")
     setrole.add_argument("role", choices=auth.ROLES)
+    setcrew = sub.add_parser("set-crew", help="set what a responder drives, and their vehicle")
+    setcrew.add_argument("username")
+    setcrew.add_argument("crew_kind", choices=(*auth.CREW_KINDS, "none"),
+                         help="'none' clears it; the vehicle itself is `set-unit`")
     setmail = sub.add_parser("set-email", help="set where password-reset codes are sent")
     setmail.add_argument("username")
     setmail.add_argument("email")
@@ -116,14 +127,16 @@ def main(argv: list[str] | None = None) -> None:
             if args.cmd == "list":
                 rows = conn.execute(
                     "SELECT username, display_name, is_active, locked_until,"
-                    " last_login_at, email, role, unit_id FROM app_user ORDER BY username"
+                    " last_login_at, email, role, unit_id, crew_kind"
+                    " FROM app_user ORDER BY username"
                 ).fetchall()
-                for username, name, active, locked, last, email, role, unit in rows:
+                for username, name, active, locked, last, email, role, unit, crew in rows:
                     flags = ("" if active else " [disabled]") + (
                         " [locked]" if locked and locked > auth.utcnow() else ""
                     )
                     print(
-                        f"{username}\t{role}{' / ' + unit if unit else ''}\t{name}\t"
+                        f"{username}\t{role}{' ' + crew if crew else ''}"
+                        f"{' / ' + unit if unit else ''}\t{name}\t"
                         f"{email or 'no email'}\tlast login: {last or 'never'}{flags}"
                     )
                 if not rows:
@@ -134,12 +147,16 @@ def main(argv: list[str] | None = None) -> None:
                 unit = _unit(args.unit) if args.unit else None
                 if unit and args.role != "responder":
                     raise SystemExit("error: --unit is for crew accounts (use --role responder)")
+                if args.crew_kind and args.role != "responder":
+                    raise SystemExit(
+                        "error: --crew-kind is for crew accounts (use --role responder)"
+                    )
                 password = _read_password(args.stdin)
                 try:
                     conn.execute(
                         "INSERT INTO app_user"
-                        " (username, display_name, password_hash, email, role, unit_id)"
-                        " VALUES (%s, %s, %s, %s, %s, %s)",
+                        " (username, display_name, password_hash, email, role, unit_id,"
+                        " crew_kind) VALUES (%s, %s, %s, %s, %s, %s, %s)",
                         (
                             username,
                             args.name.strip(),
@@ -147,6 +164,7 @@ def main(argv: list[str] | None = None) -> None:
                             _email(args.email) if args.email else None,
                             args.role,
                             unit,
+                            args.crew_kind,
                         ),
                     )
                 except psycopg.errors.UniqueViolation:
@@ -176,6 +194,18 @@ def main(argv: list[str] | None = None) -> None:
                 )
                 _require_one(cur, username)
                 print(f"{username} is now a {args.role}")
+            elif args.cmd == "set-crew":
+                kind = None if args.crew_kind == "none" else args.crew_kind
+                cur = conn.execute(
+                    "UPDATE app_user SET crew_kind = %s WHERE username = %s AND role = 'responder'",
+                    (kind, username),
+                )
+                if cur.rowcount != 1:
+                    raise SystemExit(
+                        f"error: no such crew account: {username} "
+                        "(crew kinds are for --role responder)"
+                    )
+                print(f"{username} is no longer crew" if kind is None else f"{username} crews a {kind}")
             elif args.cmd == "set-email":
                 cur = conn.execute(
                     "UPDATE app_user SET email = %s WHERE username = %s",

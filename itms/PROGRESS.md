@@ -6140,3 +6140,44 @@ weighted router: -4.6 % [-7.9, -0.2] EV time with an incident (H1 target -5 %: F
 without. Current router is +5.6 % worse than the shortest route when nothing happens. Hex band:
 same routes, 2.4x fewer edges sampled, plan 60 vs 93 ms on Vijayawada. Opt in:
 `ITMS_ROUTE_COST=eta`; default unchanged. Vijayawada ran without the bluelight device (SUMO crash).
+
+## Crew dispatch, patient leg and console redesign (2026-10-19, not committed)
+Live mode (`SIM_MODE=live`), Vijayawada corridor.
+- Console "Send help": pick ambulance / police / fire and only the destination (no source, no
+  "nearest crew" label). The call is offered to the nearest free crew by live ETA (Ambulance 1/2,
+  Police 1/2, Fire 1 = the crew accounts); the sheet shows who is being asked, refusals and
+  "nobody took it" with Try again.
+- Simulated GPS: idle units park at depots of their kind (ambulances at hospitals, police/fire at
+  police stations); while driving their position is their SUMO vehicle's road (`CrewRosterUpdated`
+  every 5 s). New `live/crew_missions.py`.
+- Ambulance at the scene: hospitals offered fastest first by live traffic, first one picked; the crew
+  confirms or changes it, also while driving (`CrewHospitalOptions` / `CrewHospitalChoice`). Police
+  and fire are free on arrival, ambulances after the hospital.
+- Crew page: route coloured by live traffic and a traffic bar with "slow traffic in 400 m".
+- Bugs fixed (found by testing every one of the 33 corridor roads x anomaly types): no responder
+  could reach a BLOCKED road; units stuck forever at a blocked scene; units parked on dead-end or
+  entry roads could not start/arrive; a cut-off road was unreachable; hospital routing always failed
+  in live mode (unknown vType); one crew could be offered two calls at once; offers expired in 8 s at
+  3x pace; cleared incidents kept their offers; crew roster events were undecodable. After the fixes:
+  33/33 roads dispatch and free their crews; BLOCKED accident -> scene -> hospital completes.
+- Redesign (Apple/Google Maps style): shared sheet style, road search instead of the id dropdown,
+  city chips, opens on Vijayawada, card shadows no longer clipped, status pill off the search on
+  phones, theme-aware fills for dark mode. Map pages back under the bundle budget (sheets load on demand).
+
+## Crews without sign-in, call alerts, accounts file, Docker server setup (2026-10-19, not committed)
+
+- Simulation dispatch no longer needs a crew to be signed in (`CREW_REQUIRE_SIGN_IN=false` default),
+  and the nearest free crew is assigned at once (`CREW_AUTO_ACCEPT=true`); `false` brings back
+  Accept/Decline. An ambulance whose crew does not pick a hospital gets the fastest one after 45 s.
+- Crew page: browser notifications, sound and vibration for a new call, an offer or a hospital list
+  ("Turn on call alerts" card). They need HTTPS (or localhost) and a one-time permission.
+- Commands and the live stream need a signed-in account (`API_REQUIRE_SIGN_IN=true`); crew accounts
+  may only answer offers, choose a hospital for their own vehicle and ask for a new route.
+- Depots on roads cut off from the network (AMB-4 on 679017002) are no longer used for parking.
+- Accounts: `make seed-accounts` creates/updates every row of `.local/accounts.csv` (git-ignored);
+  5 new drivers added (passwords in `.local/console_credentials.txt`). Settings: `.env` (from
+  `.env.example`), loaded by `scripts/dev.sh`.
+- Server: `deploy/` (Dockerfile, docker-compose with Postgres, Redis, API+site on one address, sim,
+  Cloudflare quick tunnel or Caddy HTTPS). See deploy/README.md. Image built and run here with
+  stand-in base images (registries blocked in the workspace); not yet built on the Mac.
+- Tests: sim live 100 passed; api 84 passed, 4 skipped; web vitest 270 passed, tsc and eslint clean.

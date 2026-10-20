@@ -11,6 +11,7 @@ import { EASE_OUT } from "@/components/console/motion";
 import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/notifications/Toaster";
 import { TrafficDataBridge } from "@/services/traffic/TrafficDataBridge";
+import { ClipBridge } from "@/services/traffic/ClipBridge";
 import { useSystemStore } from "@/store/systemStore";
 
 // Split view mounts two map pages, so it pulls in MapLibre; loading it on
@@ -85,6 +86,7 @@ export function AppShell() {
     <div className="flex h-full w-full overflow-hidden bg-background text-foreground">
       <a href="#workspace" className="skip-link">Skip to workspace</a>
       <TrafficDataBridge />
+      <ClipBridge />
       <Toaster />
       <div className={immersive ? "hidden" : "hidden lg:block"}>
         <SideNav
@@ -162,7 +164,8 @@ export function AppShell() {
         <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
         {immersive && (
           // the full-screen map hides the top bar, but never the data status
-          <div className="absolute left-1/2 top-3 z-30 -translate-x-1/2 rounded-xl bg-surface-raised shadow-elevation-2">
+          // On a phone the centre is under the search pill, so it moves to the corner.
+          <div className="absolute right-3 top-3 z-30 rounded-xl bg-surface-raised shadow-elevation-2 md:left-1/2 md:right-auto md:-translate-x-1/2">
             <StatusMenu />
           </div>
         )}

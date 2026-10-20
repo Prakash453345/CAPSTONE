@@ -1,5 +1,8 @@
 import rawVijayawada from "../../../scenarios/networks/vijayawada/vijayawada_corridor.geojson?raw";
-import amaravatiUrl from "../../../scenarios/generated/amaravati_v2/amaravati_v2.geojson?url";
+// The capital-complex crop (86 edges, 7 signals, named streets), not the
+// 603-edge amaravati_v2 export: that one covers 17 x 13 km of mostly unnamed
+// planned grid, and every road it offered read as "Secondary road".
+import amaravatiUrl from "../../../scenarios/generated/amaravati_capital/amaravati_capital.geojson?url";
 import type { Feature, FeatureCollection } from "geojson";
 import { SHOWN_CITIES, type City, type CityId } from "@/data/city";
 import { cumulativeLengths, haversineMeters, type LngLat } from "@/utils/geo";
@@ -104,6 +107,41 @@ export const networkBounds = {
   minLat: Math.min(...points.map((p) => p[1])),
   maxLat: Math.max(...points.map((p) => p[1])),
 };
+export type Bounds = typeof networkBounds;
+
+function boundsOf(pts: readonly LngLat[]): Bounds {
+  return {
+    minLng: Math.min(...pts.map((p) => p[0])),
+    maxLng: Math.max(...pts.map((p) => p[0])),
+    minLat: Math.min(...pts.map((p) => p[1])),
+    maxLat: Math.max(...pts.map((p) => p[1])),
+  };
+}
+
+/** Each loaded city's road extent, for framing the map on one city. */
+export const cityBounds = new Map<CityId, Bounds>(
+  [...new Set(roadEdges.map((e) => e.city))].map((city) => [
+    city,
+    boundsOf(roadEdges.filter((e) => e.city === city).flatMap((e) => e.path)),
+  ]),
+);
+
+/** The city whose roads are nearest a point (for "which city am I looking at"). */
+export function cityAt(lng: number, lat: number): CityId | null {
+  let best: CityId | null = null;
+  let bestD = Infinity;
+  for (const [city, b] of cityBounds) {
+    const dx = Math.max(b.minLng - lng, 0, lng - b.maxLng);
+    const dy = Math.max(b.minLat - lat, 0, lat - b.maxLat);
+    const d = dx * dx + dy * dy;
+    if (d < bestD) {
+      bestD = d;
+      best = city;
+    }
+  }
+  return best;
+}
+
 /** A road's display name: its street, or "Service road" when unnamed. */
 export function roadLabel(edgeOrId: RoadEdge | string | undefined | null): string {
   const e = typeof edgeOrId === "string" ? edgeById.get(edgeOrId) : edgeOrId;

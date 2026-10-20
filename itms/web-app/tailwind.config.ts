@@ -43,6 +43,7 @@ export default {
           DEFAULT: "hsl(var(--surface))",
           raised: "hsl(var(--surface-raised))",
           sunken: "hsl(var(--surface-sunken))",
+          fill: "hsl(var(--fill))",
         },
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",

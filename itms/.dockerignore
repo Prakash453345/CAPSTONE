@@ -1,0 +1,23 @@
+# Keep the server image build small and secret-free (deploy/Dockerfile copies
+# only what it needs; this stops the rest being uploaded to Docker at all).
+**/node_modules
+**/.venv
+**/__pycache__
+**/*.pyc
+.env
+**/.env
+.local
+var
+data
+baselines
+bench
+cases
+notebooks
+astra-handoff
+web
+web-app/dist
+web-app/test-results
+web-app/playwright-report
+scenarios/**/raw_osm.xml
+*.docx
+*.osm.xml

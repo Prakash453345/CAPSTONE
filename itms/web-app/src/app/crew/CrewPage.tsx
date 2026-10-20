@@ -16,6 +16,10 @@ import { useWakeLock } from "@/crew/useWakeLock";
 import { TrafficDataBridge } from "@/services/traffic/TrafficDataBridge";
 import { trafficAdvice } from "@/services/weather/weather";
 import { useAuthStore } from "@/store/authStore";
+import { OfferCard, useMyOffer } from "@/components/crew/OfferCard";
+import { HospitalCard, useMyHospital } from "@/components/crew/HospitalCard";
+import { AlertsPrompt } from "@/components/crew/AlertsPrompt";
+import { useCallAlerts } from "@/crew/useCallAlerts";
 import { useCrewStore } from "@/store/crewStore";
 import { useEmergencyStore } from "@/store/emergencyStore";
 import { useSystemStore } from "@/store/systemStore";
@@ -38,6 +42,11 @@ export function CrewPage() {
   const voice = useCrewStore((s) => s.voice);
   const setVoice = useCrewStore((s) => s.setVoice);
   const { request, mission, units } = useMission(unitId);
+  // Dispatch offering this crew a call. It is keyed on the unit the account is
+  // bound to, so a driver only ever sees their own calls.
+  const offer = useMyOffer(unitId);
+  // An ambulance at a scene chooses where the patient goes; on the way it can change it.
+  const hospital = useMyHospital(unitId);
   const selectRequest = useEmergencyStore((s) => s.selectRequest);
   const connection = useSystemStore((s) => s.connectionStatus);
   const lastUpdate = useSystemStore((s) => s.summary.lastUpdate);
@@ -87,6 +96,7 @@ export function CrewPage() {
   useGuidanceVoice(mission, voice);
 
   const name = unitId ? (units.find((u) => u.id === unitId)?.name ?? unitName(unitId)) : null;
+  useCallAlerts({ unitName: name, request, offer, hospital });
   const finished = Boolean(mission && (mission.arrived || mission.request.state === "completed" || mission.request.state === "cancelled"));
   const showArrival = finished && mission && dismissed !== mission.request.id;
   const stale = connection === "reconnecting" || connection === "offline";
@@ -130,7 +140,13 @@ export function CrewPage() {
         <TrafficDataBridge />
 
         <div className="absolute inset-0 lg:relative lg:col-start-2 lg:row-start-1 lg:m-4 lg:ml-0 lg:overflow-hidden lg:rounded-2xl lg:shadow-elevation-1">
-          <CrewMap mission={mission} preview={mission ? Math.min(preview, mission.routes.length - 1) : 0} onPreview={setPreview} />
+          <CrewMap mission={mission} unitId={unitId} preview={mission ? Math.min(preview, mission.routes.length - 1) : 0} onPreview={setPreview} />
+          {offer && <OfferCard offer={offer} />}
+          {!offer && hospital?.state === "at_scene" && (
+            <div className="pointer-events-none absolute inset-x-3 top-3 z-20 animate-sheet-in lg:left-auto lg:right-4 lg:top-4 lg:w-[400px]">
+              <HospitalCard mission={hospital} variant="choose" />
+            </div>
+          )}
           <AnimatePresence initial={false}>
             {showTrip && mission && (
               <motion.div
@@ -165,6 +181,7 @@ export function CrewPage() {
 
         <div className="pointer-events-none absolute inset-0 z-10 flex flex-col gap-3 p-3 pb-[176px] lg:pointer-events-auto lg:static lg:col-start-1 lg:row-start-1 lg:min-h-0 lg:overflow-y-auto lg:p-4 lg:pr-3">
           <CrewHeader units={withCurrent(units, unitId, name)} unitId={unitId} onUnit={setUnit} locked={locked} />
+          {locked && <AlertsPrompt />}
           <AnimatePresence initial={false}>
             {showBanner && mission?.next && (
               <motion.div
@@ -195,6 +212,7 @@ export function CrewPage() {
                 transition={{ duration: 0.16 }}
                 className="pointer-events-none flex flex-col gap-3"
               >
+                {hospital?.state === "to_hospital" && <HospitalCard mission={hospital} variant="enroute" />}
                 {body}
               </motion.div>
             </AnimatePresence>

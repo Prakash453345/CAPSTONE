@@ -80,6 +80,7 @@ class RoutePlanner:
         """`allowed_edges` limits the search to a band of edges (hex band);
         if no route exists inside it, the full graph is searched."""
         cond = dict(conditions or {})
+        source_edge, dest_edge = self.usable_ends(source_edge, dest_edge)
         self._preflight(source_edge, dest_edge, cond)
         res = None
         if allowed_edges is not None:
@@ -131,12 +132,13 @@ class RoutePlanner:
         cond: dict,
     ) -> list[RouteResult]:
 
-        blocked = {e for e, c in cond.items() if c.is_blocked}
+        # The two ends of a trip are never avoided, blocked or not: a vehicle
+        # on a closed road still has to drive off it, and a closed road is
+        # exactly where police, ambulance and fire are sent. Refusing them
+        # meant no responder could ever reach a BLOCKED incident, and an
+        # ambulance at one could not leave for the hospital.
+        blocked = {e for e, c in cond.items() if c.is_blocked} - {source_edge, dest_edge}
         avoiding = full.without_edges(blocked)
-        if source_edge not in avoiding.edges:
-            raise NoRouteError("the emergency vehicle's current road is blocked")
-        if dest_edge not in avoiding.edges:
-            raise NoRouteError("the destination road is blocked")
 
         k = 1 + max(0, self.config.max_alternatives)
         graph = avoiding
@@ -222,6 +224,95 @@ class RoutePlanner:
             forced_through=blocked & set(edges),
         )
 
+    def usable_ends(self, source_edge: str, dest_edge: str) -> tuple[str, str]:
+        """The roads a trip between these two can actually start and end on.
+
+        A road that leads nowhere (it leaves the map) cannot start a trip, and
+        one nothing leads into (it enters the map) cannot end one. A unit
+        parked on the first, or an incident on the second, used to be simply
+        unreachable. Both are usually one carriageway of a two-way road in OSM
+        data, so the trip uses the other carriageway of the same road (SUMO
+        names it with the sign flipped: "123#4" / "-123#4"); failing that, a
+        start moves back along the road to where it can turn off, and an end
+        moves on to the road just after.
+
+        Last, a destination the start cannot reach at all -- a stretch of road
+        the map extract cut off from everything else -- becomes the nearest
+        road that can be reached, when `edge_points` (road midpoints) is set:
+        responders stop on the closest connected road rather than not go.
+        """
+        g = self.graph
+        if g.has_edge(source_edge) and not g.neighbours(source_edge):
+            alt = _reverse_edge(source_edge)
+            if g.has_edge(alt) and g.neighbours(alt):
+                source_edge = alt
+            else:
+                source_edge = self._way_out(source_edge) or source_edge
+        entered = self._entered_edges()
+        if g.has_edge(dest_edge) and dest_edge not in entered:
+            alt = _reverse_edge(dest_edge)
+            if g.has_edge(alt) and alt in entered:
+                dest_edge = alt
+            else:
+                after = sorted(
+                    ge.to_edge for ge in g.neighbours(dest_edge) if ge.to_edge in entered
+                )
+                if after:
+                    dest_edge = after[0]
+        points = getattr(self, "edge_points", None)
+        if points and g.has_edge(source_edge) and dest_edge in points:
+            reach = self._reachable(source_edge)
+            if dest_edge not in reach:
+                px, py = points[dest_edge]
+                near = [e for e in reach if e in points and e != source_edge]
+                if near:
+                    dest_edge = min(
+                        near, key=lambda e: (points[e][0] - px) ** 2 + (points[e][1] - py) ** 2
+                    )
+        return source_edge, dest_edge
+
+    def _way_out(self, dead_end: str) -> str | None:
+        """The nearest road behind a dead end from which another road leads
+        off, walking back along the roads that feed it."""
+        preds: dict[str, list[str]] = {}
+        for e, ges in self.graph.adjacency.items():
+            for ge in ges:
+                preds.setdefault(ge.to_edge, []).append(e)
+        seen, frontier = {dead_end}, [dead_end]
+        for _ in range(12):
+            nxt: list[str] = []
+            for e in frontier:
+                for p in sorted(preds.get(e, ())):
+                    if p in seen:
+                        continue
+                    seen.add(p)
+                    if any(ge.to_edge not in seen for ge in self.graph.neighbours(p)):
+                        return p
+                    nxt.append(p)
+            frontier = nxt
+            if not frontier:
+                break
+        return None
+
+    def _reachable(self, source_edge: str) -> set[str]:
+        """Every road a trip starting on `source_edge` can get to."""
+        seen, stack = {source_edge}, [source_edge]
+        while stack:
+            for ge in self.graph.neighbours(stack.pop()):
+                if ge.to_edge not in seen:
+                    seen.add(ge.to_edge)
+                    stack.append(ge.to_edge)
+        return seen
+
+    def _entered_edges(self) -> set[str]:
+        """Every road some other road leads into (cached: the graph is fixed)."""
+        if getattr(self, "_entered_for", None) is not self.graph:
+            self._entered_cache = {
+                ge.to_edge for ges in self.graph.adjacency.values() for ge in ges
+            }
+            self._entered_for = self.graph
+        return self._entered_cache
+
     # ---- internals ----------------------------------------------
 
     def _preflight(
@@ -238,11 +329,7 @@ class RoutePlanner:
                 "with no onward road connections"
             )
             
-        has_incoming = any(
-            dest_edge in [ge.to_edge for ge in ges]
-            for ges in self.graph.adjacency.values()
-        )
-        if not has_incoming:
+        if dest_edge not in self._entered_edges():
             raise NoRouteError(
                 f"cannot route to {dest_edge!r} — it is a network boundary entry "
                 "edge with no incoming roads"
@@ -351,3 +438,8 @@ def _with_signal(ec: EdgeConditions | None) -> EdgeConditions:
     if ec.entry_is_signalised:
         return ec
     return replace(ec, entry_is_signalised=True)
+
+
+def _reverse_edge(edge_id: str) -> str:
+    """SUMO's id for the other carriageway of an OSM two-way road."""
+    return edge_id[1:] if edge_id.startswith("-") else f"-{edge_id}"

@@ -18,6 +18,10 @@ node_modules/
 *.log
 data/
 
+# Runtime state: uploaded road videos with their analysis results and
+# snapshots (CLIPS_DIR, api-service + vision-service), and evidence clips.
+var/
+
 # Redis persistence snapshot -- a runtime artifact from `make dev`'s redis
 # container, not source. Regenerates on the next `docker compose up`.
 dump.rdb

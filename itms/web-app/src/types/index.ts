@@ -272,7 +272,9 @@ export type NotificationKind =
   | "route-failure"
   | "signal-fault"
   | "connection-lost"
-  | "connection-restored";
+  | "connection-restored"
+  | "clip-finding"
+  | "clip-failed";
 
 /** Same vocabulary as `StatusDot`'s tone, minus "neutral" — every notification
  *  carries a meaning worth colouring. */
