@@ -5,10 +5,10 @@
 
 The file has a header row and these columns (extra columns are ignored):
 
-    username,password,email,role,crew_kind,unit_id,display_name
+    username,password,email,role,unit_kind,unit_id,display_name
 
 - role: operator (the console) or responder (a crew: the crew page only)
-- crew_kind: ambulance, police or fire_truck (responders only; blank for operators)
+- unit_kind: ambulance, police or fire_truck (responders only; blank for operators)
 - unit_id: the vehicle a responder drives, e.g. AMB-03 (blank for operators)
 - email: where forgot-password codes go; blank for none
 
@@ -33,7 +33,7 @@ import psycopg
 from api_service import auth
 from api_service.users import _email, _unit, _username
 
-FIELDS = ("username", "password", "email", "role", "crew_kind", "unit_id", "display_name")
+FIELDS = ("username", "password", "email", "role", "unit_kind", "unit_id", "display_name")
 ROLES = ("operator", "responder")
 
 
@@ -61,22 +61,22 @@ def _check(row: dict[str, str]) -> dict:
     role = row["role"] or "operator"
     if role not in ROLES:
         raise SystemExit(f"error: {name}: role must be operator or responder, not {role!r}")
-    kind = row["crew_kind"] or None
+    kind = row["unit_kind"] or None
     unit = _unit(row["unit_id"]) if row["unit_id"] else None
     if role == "responder":
-        if kind not in auth.CREW_KINDS:
-            kinds = ", ".join(auth.CREW_KINDS)
-            raise SystemExit(f"error: {name}: crew_kind must be one of {kinds}")
+        if kind not in auth.UNIT_KINDS:
+            kinds = ", ".join(auth.UNIT_KINDS)
+            raise SystemExit(f"error: {name}: unit_kind must be one of {kinds}")
         if not unit:
             raise SystemExit(f"error: {name}: a responder needs a unit_id (its vehicle)")
     elif kind or unit:
-        raise SystemExit(f"error: {name}: crew_kind and unit_id are for responders only")
+        raise SystemExit(f"error: {name}: unit_kind and unit_id are for responders only")
     return {
         "username": username,
         "password": row["password"],
         "email": _email(row["email"]) if row["email"] else None,
         "role": role,
-        "crew_kind": kind,
+        "unit_kind": kind,
         "unit_id": unit,
         "display_name": row["display_name"] or username,
     }
@@ -97,17 +97,17 @@ def seed(rows: list[dict], conn: psycopg.Connection, *, dry_run: bool = False) -
             if not dry_run:
                 conn.execute(
                     "INSERT INTO app_user (username, display_name, password_hash, email, role,"
-                    " unit_id, crew_kind) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                    " unit_id, unit_kind) VALUES (%s, %s, %s, %s, %s, %s, %s)",
                     (r["username"], r["display_name"], auth.hash_password(r["password"]),
-                     r["email"], r["role"], r["unit_id"], r["crew_kind"]),
+                     r["email"], r["role"], r["unit_id"], r["unit_kind"]),
                 )
             out.append(f"created  {r['username']}")
             continue
         if not dry_run:
             conn.execute(
                 "UPDATE app_user SET display_name = %s, email = %s, role = %s, unit_id = %s,"
-                " crew_kind = %s, is_active = TRUE WHERE username = %s",
-                (r["display_name"], r["email"], r["role"], r["unit_id"], r["crew_kind"],
+                " unit_kind = %s, is_active = TRUE WHERE username = %s",
+                (r["display_name"], r["email"], r["role"], r["unit_id"], r["unit_kind"],
                  r["username"]),
             )
         if auth.verify_password(r["password"], found[0]):

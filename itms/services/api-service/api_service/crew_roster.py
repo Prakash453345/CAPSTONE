@@ -1,7 +1,7 @@
 """Publish the fleet onto the bus, so the dispatcher knows who exists.
 
 The fleet is not a list anyone maintains: it *is* the set of crew accounts.
-A responder account with a `crew_kind` and a `unit_id` is a vehicle; create
+A responder account with a `unit_kind` and a `unit_id` is a vehicle; create
 the account and the vehicle exists, disable it and the vehicle is gone. That
 removes the class of bug where a hardcoded unit list and the real crews drift
 apart -- the console used to offer "Ambulance 12" whether or not anyone could
@@ -50,9 +50,9 @@ REQUIRE_SIGN_IN = os.environ.get("CREW_REQUIRE_SIGN_IN", "false").strip().lower(
 }
 
 _SQL = """
-SELECT username, display_name, crew_kind, unit_id, is_active, last_login_at
+SELECT username, display_name, unit_kind, unit_id, is_active, last_login_at
 FROM app_user
-WHERE role = 'responder' AND crew_kind IS NOT NULL AND unit_id IS NOT NULL
+WHERE role = 'responder' AND unit_kind IS NOT NULL AND unit_id IS NOT NULL
 ORDER BY unit_id
 """
 
@@ -73,14 +73,14 @@ def read_roster(now: dt.datetime | None = None) -> list[dict]:
         raise auth.StoreUnavailable(str(exc)) from exc
 
     units: list[dict] = []
-    for username, display_name, crew_kind, unit_id, is_active, last_login in rows:
-        if not is_active or crew_kind not in auth.CREW_KINDS:
+    for username, display_name, unit_kind, unit_id, is_active, last_login in rows:
+        if not is_active or unit_kind not in auth.UNIT_KINDS:
             continue
         units.append(
             {
                 "username": username,
                 "display_name": display_name or username,
-                "crew_kind": crew_kind,
+                "unit_kind": unit_kind,
                 "unit_id": unit_id,
                 # A disabled account is already filtered out above; this is the
                 # "have they been around today" part.

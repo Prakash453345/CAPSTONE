@@ -126,8 +126,8 @@ def test_login_sets_httponly_cookie_and_me_returns_user(client):
         "username": "operator",
         "display_name": "Op Erator",
         "role": "operator",
-        "crew_kind": None,
         "unit_id": None,
+        "unit_kind": None,
     }
     assert "password" not in res.text
     cookie = res.headers["set-cookie"].lower()
@@ -469,3 +469,27 @@ class TestPostgresStore:
             assert pg.get("operator").reset_code_hash is None
         finally:
             main.app.dependency_overrides.clear()
+
+
+def test_a_crew_account_reports_what_it_drives(client, store):
+    store.add("p1", PASSWORD, role="responder", unit_id="unit-police-3", unit_kind="police")
+    assert login(client, "p1").json()["unit_kind"] == "police"
+    # an account made before kinds were recorded: worked out from the vehicle id
+    store.add("old", PASSWORD, role="responder", unit_id="unit-ambulance-2")
+    assert login(client, "old").json()["unit_kind"] == "ambulance"
+    # a vehicle id that says nothing and no recorded kind: unknown, not guessed
+    store.add("who", PASSWORD, role="responder", unit_id="EV-001")
+    assert login(client, "who").json()["unit_kind"] is None
+    # operators drive nothing
+    store.add("boss", PASSWORD, role="operator", unit_kind="police")
+    assert login(client, "boss").json()["unit_kind"] is None
+
+
+def test_unit_kind_validation_and_inference():
+    assert auth.validate_unit_kind("fire_truck") is None
+    assert auth.validate_unit_kind("tank") is not None
+    assert auth.infer_unit_kind("unit-police-0") == "police"
+    assert auth.infer_unit_kind("Fire-4") == "fire_truck"
+    assert auth.infer_unit_kind("amb-01") == "ambulance"
+    assert auth.infer_unit_kind("EV-001") is None
+    assert auth.infer_unit_kind(None) is None

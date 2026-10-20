@@ -37,20 +37,27 @@ sign in as an operator by picking it.
 | `operator` (default) | `/console` | the console, and `/crew` (to see what a crew sees) | every vehicle (picks one on `/crew`) |
 | `responder` (crew) | `/crew` | the crew page only; the console redirects them back to it | only **their own vehicle**, no picker |
 
-A crew account is tied to one vehicle by **vehicle id**: the id dispatch uses for
-it (the preset units are `EV-001` Ambulance 12, `EV-002` Ambulance 27, `EV-101`
-Fire 4, `EV-201` Police 9; in the browser demo the simulated ambulance is `amb-01`).
-A crew account with no vehicle linked sees "ask dispatch to link your account".
+A crew account is tied to one vehicle by **vehicle id** (the id dispatch uses for
+it) and says **what it drives**: `ambulance`, `police` or `fire_truck`. Dispatch
+sends a call to the nearest free crew *of the right kind*, so the kind is required
+for a crew account (it is worked out from the vehicle id when that names one, e.g.
+`unit-police-3`). Units dispatch creates itself are `unit-police-N`,
+`unit-ambulance-N` (one per depot; see [crew_dispatch.md](crew_dispatch.md)). In the
+browser demo the simulated ambulance is `amb-01`. A crew account with no vehicle
+linked sees "ask dispatch to link your account".
 
 ```bash
 # operator (the "admin": console + everything)
 .venv/bin/python -m api_service.users create komal --name "Komal S" --email komal@example.org
-# crew account for Ambulance 12   (it asks for the password: type it twice)
-.venv/bin/python -m api_service.users create amb12 --role responder --unit EV-001 --name "Ambulance 12 crew"
+# a police crew (the kind is worked out from the vehicle id)
+.venv/bin/python -m api_service.users create pol3 --role responder --unit unit-police-3 --name "Police 3 crew"
+# an ambulance crew with a vehicle id that does not say what it is: give the kind
+.venv/bin/python -m api_service.users create amb12 --role responder --unit EV-001 --kind ambulance
 # later changes
-.venv/bin/python -m api_service.users set-unit amb12 EV-002      # give the crew another vehicle
+.venv/bin/python -m api_service.users set-unit amb12 unit-ambulance-2   # give the crew another vehicle
+.venv/bin/python -m api_service.users set-kind amb12 ambulance
 .venv/bin/python -m api_service.users set-role komal operator
-.venv/bin/python -m api_service.users list                       # role / vehicle for each account
+.venv/bin/python -m api_service.users list                       # role / vehicle (kind) for each account
 ```
 
 **Note:** the pages enforce the roles, and `POST /v1/commands` checks them too:
@@ -94,6 +101,8 @@ can see where the code went. That does let someone probe which usernames exist,
 which is acceptable for a small operator console but is why `forgot*` should be
 rate-limited per IP in the proxy. An account without an email can't reset
 itself; an administrator uses `passwd` instead.
+
+Mail is sent over SMTP. For local runs, copy `.env.local.example` to `.env.local` and fill it in; `scripts/dev.sh` loads it every time (git ignores it).
 
 Mail is sent over SMTP:
 

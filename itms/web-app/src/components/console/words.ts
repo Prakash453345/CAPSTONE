@@ -1,4 +1,3 @@
-import { PRESET_UNITS } from "@/store/emergencyStore";
 import type { AnomalyKind, EmergencyRequest, IncidentType } from "@/types";
 import type { Tone } from "@/components/console/tone";
 
@@ -62,16 +61,19 @@ export const STATE_WORDS: Record<EmergencyRequest["state"], { label: string; ton
   cancelled: { label: "Stood down", tone: "neutral" },
 };
 
-/** "Ambulance 12" for a preset unit, otherwise its id tidied up. */
+const UNIT_WORDS: Record<string, string> = {
+  amb: "Ambulance",
+  ambulance: "Ambulance",
+  pol: "Police",
+  police: "Police",
+  fire: "Fire truck",
+  fire_truck: "Fire truck",
+};
+
+/** "Police 3" for `unit-police-3`, "Ambulance 1" for `amb-01`; any other id as it is. */
 export function unitName(vehicleId: string): string {
-  const preset = PRESET_UNITS.find((u) => u.id === vehicleId);
-  if (preset) return preset.callSign;
-  // Crew units (AMB-1, POL-2, FIRE-1) and the old ambulance ids (amb_12).
-  const m = /^(amb|pol|fire)[-_]?0*(\d+)$/i.exec(vehicleId);
-  if (m) return `${{ amb: "Ambulance", pol: "Police", fire: "Fire" }[m[1]!.toLowerCase() as "amb" | "pol" | "fire"]} ${m[2]}`;
-  // Depot units the system sends when no crew is signed in.
-  const d = /^unit-(police|ambulance|fire_truck)-(\d+)$/.exec(vehicleId);
-  if (d) return `${{ police: "Police", ambulance: "Ambulance", fire_truck: "Fire" }[d[1] as "police"]} unit ${Number(d[2]) + 1}`;
+  const m = /^(?:unit[-_])?(amb|ambulance|pol|police|fire_truck|fire)[-_]?0*(\d+)$/i.exec(vehicleId);
+  if (m) return `${UNIT_WORDS[m[1]!.toLowerCase()]} ${m[2]}`;
   return vehicleId;
 }
 

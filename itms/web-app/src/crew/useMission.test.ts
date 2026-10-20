@@ -25,6 +25,18 @@ describe("unitOptions", () => {
     expect(names).toEqual(["Ambulance 1", "Police 2"]);
   });
 
+  it("lists only units that have had a call, named by what they are", () => {
+    expect(unitOptions([])).toEqual([]);
+    const options = unitOptions([
+      req({ id: "a", vehicleId: "unit-police-3", vehicleKind: "police" }),
+      req({ id: "b", vehicleId: "unit-ambulance-0", vehicleKind: "ambulance" }),
+    ]);
+    expect(options.map((u) => [u.name, u.kind])).toEqual([
+      ["Ambulance 0", "ambulance"],
+      ["Police 3", "police"],
+    ]);
+  });
+
   it("marks a unit with a live call as active and lists it first", () => {
     const options = unitOptions([req({ vehicleId: "EV-101" })]);
     expect(options[0]).toMatchObject({ id: "EV-101", active: true });

@@ -23,8 +23,8 @@ CREATE TABLE IF NOT EXISTS app_user (
     reset_attempts   INTEGER NOT NULL DEFAULT 0,
     reset_sent_at    TIMESTAMPTZ,
     role             TEXT NOT NULL DEFAULT 'operator',
-    crew_kind        TEXT,
     unit_id          TEXT,
+    unit_kind        TEXT,
     CONSTRAINT app_user_username_lower CHECK (username = lower(username)),
     CONSTRAINT app_user_username_len CHECK (char_length(username) BETWEEN 1 AND 64)
 );
@@ -35,8 +35,8 @@ ALTER TABLE app_user ADD COLUMN IF NOT EXISTS reset_expires_at TIMESTAMPTZ;
 ALTER TABLE app_user ADD COLUMN IF NOT EXISTS reset_attempts INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE app_user ADD COLUMN IF NOT EXISTS reset_sent_at TIMESTAMPTZ;
 ALTER TABLE app_user ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'operator';
-ALTER TABLE app_user ADD COLUMN IF NOT EXISTS crew_kind TEXT;
 ALTER TABLE app_user ADD COLUMN IF NOT EXISTS unit_id TEXT;
+ALTER TABLE app_user ADD COLUMN IF NOT EXISTS unit_kind TEXT;
 -- One crew account per vehicle: two drivers claiming the same unit would both
 -- be offered its calls, and the second accept would overwrite the first.
 CREATE UNIQUE INDEX IF NOT EXISTS app_user_unit_idx ON app_user (unit_id)

@@ -16,29 +16,26 @@ import type {
  * incident/anomaly views.
  */
 
-export interface PresetUnit {
-  id: string;
-  callSign: string;
+/**
+ * What an operator asks for when dispatching: a kind of crew, not a named
+ * vehicle. Dispatch finds the nearest free crew of that kind to the location
+ * (the same lookup an anomaly triggers), the way a ride-hailing app picks the
+ * driver, so there is no fixed list of vehicles to choose from here.
+ */
+export interface CrewType {
   kind: EmergencyVehicleKind;
+  label: string;
 }
 
-/** A couple of always-available simulated responders for the prototype. */
-/**
- * What an operator can ask for: a *kind* of unit, not a named vehicle.
- *
- * These used to be four invented call signs ("Ambulance 12"), which was
- * misleading in both directions -- the operator had to know a fleet that did
- * not exist, and the backend dispatched whatever id the console sent without
- * checking that anyone could drive it. The real fleet is the set of crew
- * accounts; the dispatcher finds the nearest crew of the kind asked for and
- * offers them the call (`live/crew_dispatch.py`). `id` is the kind, and the
- * dispatch command carries no vehicle_id at all.
- */
-export const PRESET_UNITS: PresetUnit[] = [
-  { id: "ambulance", callSign: "Ambulance", kind: "ambulance" },
-  { id: "police", callSign: "Police", kind: "police" },
-  { id: "fire_truck", callSign: "Fire", kind: "fire_truck" },
+export const CREW_TYPES: CrewType[] = [
+  { kind: "ambulance", label: "Ambulance" },
+  { kind: "police", label: "Police" },
+  { kind: "fire_truck", label: "Fire truck" },
 ];
+
+export function crewTypeFor(kind: EmergencyVehicleKind): CrewType {
+  return CREW_TYPES.find((t) => t.kind === kind) ?? CREW_TYPES[0]!;
+}
 
 /** One end of the dispatch being drafted — a map click resolved to an edge. */
 export interface RoutePoint {
@@ -48,7 +45,7 @@ export interface RoutePoint {
 }
 
 export interface DispatchDraft {
-  unit: PresetUnit;
+  unit: CrewType;
   source: RoutePoint | null;
   destination: RoutePoint | null;
 }
@@ -57,7 +54,7 @@ export interface DispatchDraft {
  *  to show until one does, so the panel follows the offers instead. */
 export interface PendingCall {
   requestId: string;
-  unit: PresetUnit;
+  unit: CrewType;
   destination: RoutePoint;
   sentAtMs: number;
 }
@@ -83,8 +80,8 @@ interface EmergencyState {
   setPreviewRank: (rank: number) => void;
   archiveRequest: (id: string) => void;
 
-  startDraft: (unit: PresetUnit) => void;
-  setDraftUnit: (unit: PresetUnit) => void;
+  startDraft: (unit: CrewType) => void;
+  setDraftUnit: (unit: CrewType) => void;
   setDraftPoint: (which: "source" | "destination", point: RoutePoint) => void;
   clearDraft: () => void;
 }

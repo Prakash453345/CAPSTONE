@@ -5,7 +5,7 @@ import { useIncidentStore } from "@/store/incidentStore";
 import { useTrafficStore } from "@/store/trafficStore";
 import { unitName } from "@/components/console/words";
 import { pointAlongPath, type LngLat } from "@/utils/geo";
-import type { EmergencyRequest, EmergencyRouteView, GreenCorridorView } from "@/types";
+import type { EmergencyRequest, EmergencyRouteView, EmergencyVehicleKind, GreenCorridorView } from "@/types";
 import { buildPlan, maneuverAfter, nextManeuver, type Maneuver, type RoutePlan } from "@/crew/plan";
 import {
   alongFor,
@@ -20,6 +20,8 @@ import {
 export interface UnitOption {
   id: string;
   name: string;
+  /** Ambulance, police or fire truck, when a call has told us. */
+  kind?: EmergencyVehicleKind;
   /** Has a mission that is still on the road. */
   active: boolean;
 }
@@ -54,7 +56,9 @@ export interface Mission {
   hazards: Hazard[];
 }
 
-/** Everyone a responder might be: the fleet (crew accounts) plus any unit with a request. */
+/** Everyone a responder might be: the fleet (crew accounts) plus any unit with a request.
+ *  Units are whoever dispatch has sent (the nearest free crew of the right
+ *  kind), so there is no fixed list beyond the fleet itself. */
 export function unitOptions(
   requests: readonly EmergencyRequest[],
   fleet: readonly { unitId: string; callSign: string }[] = [],
@@ -64,7 +68,12 @@ export function unitOptions(
   for (const r of requests) {
     const known = byId.get(r.vehicleId);
     const active = !isTerminalRequest(r);
-    byId.set(r.vehicleId, { id: r.vehicleId, name: known?.name ?? unitName(r.vehicleId), active: active || !!known?.active });
+    byId.set(r.vehicleId, {
+      id: r.vehicleId,
+      name: unitName(r.vehicleId),
+      kind: r.vehicleKind,
+      active: active || !!known?.active,
+    });
   }
   return [...byId.values()].sort((a, b) => Number(b.active) - Number(a.active) || a.name.localeCompare(b.name));
 }

@@ -2,7 +2,7 @@ import { Suspense, lazy } from "react";
 import { Ambulance } from "lucide-react";
 import { cn } from "@/utils/cn";
 import { MAP_CHIP, MAP_CHIP_ACTIVE } from "@/components/map/mapChrome";
-import { PRESET_UNITS, selectSelectedRequest, useEmergencyStore } from "@/store/emergencyStore";
+import { CREW_TYPES, selectSelectedRequest, useEmergencyStore } from "@/store/emergencyStore";
 
 const EmergencySheets = lazy(() => import("@/components/map/EmergencySheets"));
 
@@ -36,7 +36,7 @@ export function EmergencyPanel({ part }: { part: "chip" | "panel" }) {
   return (
     <button
       type="button"
-      onClick={() => startDraft(PRESET_UNITS[0])}
+      onClick={() => startDraft(CREW_TYPES[0]!)}
       aria-pressed={busy}
       className={cn(MAP_CHIP, busy && MAP_CHIP_ACTIVE)}
     >

@@ -12,6 +12,7 @@ import { unitName } from "@/components/console/words";
 import { HOME_CITY } from "@/data/city";
 import { useGuidanceVoice } from "@/crew/useGuidanceVoice";
 import { useMission } from "@/crew/useMission";
+import { useNewCallAlert } from "@/crew/useNewCallAlert";
 import { useWakeLock } from "@/crew/useWakeLock";
 import { TrafficDataBridge } from "@/services/traffic/TrafficDataBridge";
 import { trafficAdvice } from "@/services/weather/weather";
@@ -94,6 +95,7 @@ export function CrewPage() {
   const guiding = Boolean(mission?.plan && mission.underway && !mission.arrived);
   useWakeLock(guiding);
   useGuidanceVoice(mission, voice);
+  useNewCallAlert(request, voice);
 
   const name = unitId ? (units.find((u) => u.id === unitId)?.name ?? unitName(unitId)) : null;
   useCallAlerts({ unitName: name, request, offer, hospital });
@@ -180,7 +182,7 @@ export function CrewPage() {
         )}
 
         <div className="pointer-events-none absolute inset-0 z-10 flex flex-col gap-3 p-3 pb-[176px] lg:pointer-events-auto lg:static lg:col-start-1 lg:row-start-1 lg:min-h-0 lg:overflow-y-auto lg:p-4 lg:pr-3">
-          <CrewHeader units={withCurrent(units, unitId, name)} unitId={unitId} onUnit={setUnit} locked={locked} />
+          <CrewHeader units={withCurrent(units, unitId, name)} unitId={unitId} onUnit={setUnit} locked={locked} kind={locked ? (user?.unitKind ?? null) : null} />
           {locked && <AlertsPrompt />}
           <AnimatePresence initial={false}>
             {showBanner && mission?.next && (

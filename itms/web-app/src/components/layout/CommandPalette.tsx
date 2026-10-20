@@ -21,7 +21,7 @@ import { EASE_OUT } from "@/components/console/motion";
 import { useSystemStore } from "@/store/systemStore";
 import { useThemeStore } from "@/store/themeStore";
 import { useMapStore } from "@/store/mapStore";
-import { PRESET_UNITS, useEmergencyStore } from "@/store/emergencyStore";
+import { CREW_TYPES, useEmergencyStore } from "@/store/emergencyStore";
 import { cn } from "@/utils/cn";
 
 interface Command {
@@ -85,12 +85,12 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
         id: "act-dispatch",
         group: "Actions",
         label: "Dispatch an emergency unit",
-        hint: "Pick a start and a destination on the map",
+        hint: "Pick the kind of unit and where it is needed",
         icon: Ambulance,
         keywords: "ambulance emergency route corridor",
         run: () => {
           navigate("/console/emergency");
-          useEmergencyStore.getState().startDraft(PRESET_UNITS[0]!);
+          useEmergencyStore.getState().startDraft(CREW_TYPES[0]!);
         },
       },
       {

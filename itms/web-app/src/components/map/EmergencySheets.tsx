@@ -17,7 +17,7 @@ import { SimModeNotice } from "@/components/map/SimModeNotice";
 import { cn } from "@/utils/cn";
 import { CommandError, postCommand } from "@/services/traffic/commands";
 import {
-  PRESET_UNITS,
+  CREW_TYPES,
   corridorHoldSeconds,
   isTerminalRequest,
   nextCorridorReservation,
@@ -26,8 +26,8 @@ import {
   rerouteCount,
   useEmergencyStore,
   selectSelectedRequest,
+  type CrewType,
   type PendingCall,
-  type PresetUnit,
 } from "@/store/emergencyStore";
 import { useCrewStore, type FleetUnit, type HospitalMission } from "@/store/crewStore";
 import { useMapStore } from "@/store/mapStore";
@@ -60,7 +60,7 @@ const WEIGHT_LABEL: Record<string, string> = {
   reliability_weight: "reliability",
 };
 
-type Kind = PresetUnit["kind"];
+type Kind = CrewType["kind"];
 
 const KIND_EVENT: Record<Kind, string> = {
   ambulance: "AMBULANCE",
@@ -175,9 +175,9 @@ function DispatchSheet() {
       <SimModeNotice />
       <Segmented
         label="What is needed"
-        value={draft.unit.id as Kind}
-        onChange={(id) => setDraftUnit(PRESET_UNITS.find((u) => u.id === id)!)}
-        options={PRESET_UNITS.map((u) => ({ id: u.id as Kind, label: u.callSign, icon: KIND_ICON[u.kind] }))}
+        value={draft.unit.kind as Kind}
+        onChange={(kind) => setDraftUnit(CREW_TYPES.find((u) => u.kind === kind)!)}
+        options={CREW_TYPES.map((u) => ({ id: u.kind as Kind, label: u.label, icon: KIND_ICON[u.kind] }))}
       />
 
       <div>

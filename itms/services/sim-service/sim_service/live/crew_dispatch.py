@@ -458,7 +458,7 @@ def units_from_accounts(accounts: Iterable[Mapping[str, object]]) -> list[CrewUn
     out: list[CrewUnit] = []
     for a in accounts:
         unit_id = str(a.get("unit_id") or "").strip()
-        raw_kind = str(a.get("crew_kind") or "").strip()
+        raw_kind = str(a.get("unit_kind") or "").strip()
         if not unit_id or not raw_kind:
             continue
         try:

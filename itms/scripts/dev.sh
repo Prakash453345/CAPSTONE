@@ -19,6 +19,15 @@ if [ -f .env ]; then
   done < .env
   echo "loaded settings from .env"
 fi
+# Your own settings (SMTP_* for password-reset email, etc.) live in .env.local,
+# which git ignores. Load it so they apply on every run without retyping.
+if [ -f ".env.local" ]; then
+  set -a
+  # shellcheck disable=SC1091
+  . ./.env.local
+  set +a
+  echo "loaded settings from .env.local"
+fi
 # A fixed session key, so a restart does not sign everyone out: .env's
 # AUTH_SECRET, else the one kept in .local/auth_secret.env.
 if [ -z "${AUTH_SECRET:-}" ] && [ -f .local/auth_secret.env ]; then

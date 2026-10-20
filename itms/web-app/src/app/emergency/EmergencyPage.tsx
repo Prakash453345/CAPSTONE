@@ -8,7 +8,7 @@ import { MissionCard } from "@/components/console/briefing";
 import { missionFacts } from "@/components/console/briefingData";
 import { mmss, STATE_WORDS, unitName } from "@/components/console/words";
 import {
-  PRESET_UNITS,
+  CREW_TYPES,
   isTerminalRequest,
   orderedReservations,
   selectSelectedRequest,
@@ -71,7 +71,7 @@ export function EmergencyPage() {
             {requests.filter((r) => !isTerminalRequest(r)).length} on the road · {requests.length} today
           </p>
         </div>
-        <Button variant="primary" size="sm" icon={Plus} disabled={Boolean(draft)} onClick={() => startDraft(PRESET_UNITS[0]!)}>
+        <Button variant="primary" size="sm" icon={Plus} disabled={Boolean(draft)} onClick={() => startDraft(CREW_TYPES[0]!)}>
           Dispatch
         </Button>
       </header>
@@ -79,7 +79,7 @@ export function EmergencyPage() {
       <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-4">
         {draft && (
           <div className="mx-2 mb-3 rounded-xl bg-primary-muted px-3.5 py-3 text-[13px] leading-relaxed text-primary">
-            Requesting {draft.unit.callSign.toLowerCase()}. Say where help is needed; the nearest free crew is
+            Requesting {draft.unit.label.toLowerCase()}. Say where help is needed; the nearest free crew is
             asked and drives from wherever it is.
           </div>
         )}
@@ -90,7 +90,7 @@ export function EmergencyPage() {
             title="No units on the road"
             body="Send help to a road: the nearest free crew takes the call, the console plans the fastest route and turns the lights ahead of it green."
             action={
-              <Button variant="primary" icon={Plus} onClick={() => startDraft(PRESET_UNITS[0]!)}>
+              <Button variant="primary" icon={Plus} onClick={() => startDraft(CREW_TYPES[0]!)}>
                 Dispatch a unit
               </Button>
             }

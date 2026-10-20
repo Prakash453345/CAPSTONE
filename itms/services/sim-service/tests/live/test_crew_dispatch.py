@@ -230,10 +230,10 @@ def test_roster_refresh_keeps_live_position_and_busy_state():
 
 def test_accounts_without_a_unit_or_kind_are_not_vehicles():
     units = units_from_accounts([
-        {"username": "komal", "crew_kind": None, "unit_id": None},        # operator
-        {"username": "half", "crew_kind": "ambulance", "unit_id": ""},    # no vehicle
-        {"username": "weird", "crew_kind": "spaceship", "unit_id": "X1"},  # bad kind
-        {"username": "amb12", "crew_kind": "ambulance", "unit_id": "EV-001",
+        {"username": "komal", "unit_kind": None, "unit_id": None},        # operator
+        {"username": "half", "unit_kind": "ambulance", "unit_id": ""},    # no vehicle
+        {"username": "weird", "unit_kind": "spaceship", "unit_id": "X1"},  # bad kind
+        {"username": "amb12", "unit_kind": "ambulance", "unit_id": "EV-001",
          "on_duty": True, "edge_id": "depot-a"},
     ])
     assert [u.unit_id for u in units] == ["EV-001"]

@@ -189,7 +189,9 @@ def run_live(
         missions.on_arrival(request.request_id, request.vehicle_id, request.destination_edge)
 
     emergency.on_arrival = _on_arrival
-    handler = command_handler or _build_dispatch(anomalies, emergency, crew, missions)
+    handler = command_handler or _build_dispatch(
+        anomalies, emergency, crew, missions, incident_response
+    )
 
     drained = 0
 
@@ -313,6 +315,7 @@ def _build_dispatch(
     emergency: EmergencyController,
     crew: CrewDispatcher | None = None,
     missions: CrewMissions | None = None,
+    incident_response: IncidentResponseOrchestrator | None = None,
 ) -> CommandHandler:
     """The built-in command handler. `EmergencyCommand`'s ACTIVATE_CORRIDOR is
     routed to `EmergencyController.handle_command`, which arms the corridor and
@@ -334,18 +337,28 @@ def _build_dispatch(
         elif etype == "EmergencyRequestCreated":
             # No vehicle named: the operator asked for *a kind* of unit, which
             # is the normal case now -- the console offers "an ambulance", not
-            # "Ambulance 12". The dispatcher finds the nearest crew of that
-            # kind and the call becomes a request when one of them accepts.
-            if crew is not None and not str(payload.get("vehicle_id", "")).strip():
-                kind = _CREW_KIND.get(
-                    str(payload.get("vehicle_kind", "")).upper(), EmergencyKind.AMBULANCE
-                )
-                crew.request(
-                    str(payload.get("request_id", "")),
-                    kind,
-                    str(payload.get("destination_edge", "")),
-                    now_s=sim_time,
-                )
+            # "Ambulance 12". Try a real crew account first; the dispatcher
+            # finds the nearest one of that kind and the call becomes a
+            # request when they accept. With no real crew of that kind free,
+            # fall back to the nearest depot-based unit.
+            if (crew is not None or incident_response is not None) and not str(
+                payload.get("vehicle_id", "")
+            ).strip():
+                offer = None
+                if crew is not None:
+                    kind = _CREW_KIND.get(
+                        str(payload.get("vehicle_kind", "")).upper(), EmergencyKind.AMBULANCE
+                    )
+                    offer = crew.request(
+                        str(payload.get("request_id", "")),
+                        kind,
+                        str(payload.get("destination_edge", "")),
+                        now_s=sim_time,
+                    )
+                if offer is None and incident_response is not None:
+                    incident_response.handle_nearest_request(
+                        payload, step=step, sim_time_s=sim_time, create=emergency.handle_create
+                    )
             else:
                 emergency.handle_create(payload, step=step, sim_time_s=sim_time)
         elif etype == "EmergencyCommand":

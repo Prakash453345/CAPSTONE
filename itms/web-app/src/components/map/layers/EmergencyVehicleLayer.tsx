@@ -31,15 +31,16 @@ const SELECTED_BOOST: ExpressionSpecification = ["case", [">", ["to-number", ["g
  * vehicle keeps its mission's colour (shared with `EmergencyRouteLayer`) and a
  * bigger, brighter halo while its request is the selected one.
  */
-/** `onlyRequestId` limits the layer to one request's vehicle. The console
- *  shows every unit on the road; the crew page passes its own mission, because
- *  another unit's ambulance driving past is not this crew's call and reads on
- *  their screen as if it were. */
-/** `onlyRequestId`: omitted, every unit on the road is drawn (the console);
- *  a request id, only that request's vehicle; `null`, none (a crew with no call
- *  sees no one else's vehicle -- a police car passing their depot read as
- *  their own ambulance moving). */
-export function EmergencyVehicleLayer({ visible, onlyRequestId }: { visible: boolean; onlyRequestId?: string | null }) {
+export function EmergencyVehicleLayer({
+  visible,
+  onlyRequestId,
+}: {
+  visible: boolean;
+  /** Draw just this request's vehicle (`null`: none). Left out, every active vehicle
+   *  is drawn, which is what the operator console wants. A crew must see only
+   *  its own vehicle; other crews' missions are not its business. */
+  onlyRequestId?: string | null;
+}) {
   const map = useMapInstance();
   const allRequests = useEmergencyStore((s) => s.requests);
   const requests = useMemo(
@@ -247,8 +248,10 @@ export function EmergencyVehicleLayer({ visible, onlyRequestId }: { visible: boo
     interval.current = Math.min(2500, Math.max(250, now - updatedAt.current));
     updatedAt.current = now;
     prev.current = new Map(target.current);
-    target.current = buildVehicleFrames(requests, selectedRequestId);
-  }, [requests, selectedRequestId]);
+    const shown =
+      onlyRequestId === undefined ? requests : requests.filter((r) => r.id === onlyRequestId);
+    target.current = buildVehicleFrames(shown, selectedRequestId);
+  }, [requests, selectedRequestId, onlyRequestId]);
 
   return null;
 }

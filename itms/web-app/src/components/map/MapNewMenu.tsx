@@ -5,7 +5,7 @@ import { Ambulance, Plus, TriangleAlert, X } from "lucide-react";
 import { MAP_CHIP, MAP_CHIP_ACTIVE } from "@/components/map/mapChrome";
 import { EASE_OUT } from "@/components/console/motion";
 import { useDismiss } from "@/components/console/hooks";
-import { PRESET_UNITS, selectSelectedRequest, useEmergencyStore } from "@/store/emergencyStore";
+import { CREW_TYPES, selectSelectedRequest, useEmergencyStore } from "@/store/emergencyStore";
 import { useMapStore } from "@/store/mapStore";
 import { cn } from "@/utils/cn";
 
@@ -53,9 +53,9 @@ export function MapNewMenu({ onCancelAnomaly }: { onCancelAnomaly: () => void })
     },
     {
       label: "Dispatch a unit",
-      hint: "Route an ambulance with a green corridor",
+      hint: "Send the nearest ambulance, police or fire crew",
       icon: Ambulance,
-      run: () => startDraft(PRESET_UNITS[0]!),
+      run: () => startDraft(CREW_TYPES[0]!),
     },
   ];
 

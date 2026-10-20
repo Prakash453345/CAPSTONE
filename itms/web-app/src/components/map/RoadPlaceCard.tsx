@@ -3,7 +3,7 @@ import { AlertTriangle, Ambulance, Gauge, Layers, Ruler, Video, X } from "lucide
 import { edgeById } from "@/data/network";
 import { useMapChromeStore } from "@/store/mapChromeStore";
 import { useTrafficStore } from "@/store/trafficStore";
-import { PRESET_UNITS, useEmergencyStore } from "@/store/emergencyStore";
+import { CREW_TYPES, useEmergencyStore } from "@/store/emergencyStore";
 import { useMapStore } from "@/store/mapStore";
 import type { AnomalyTarget } from "@/components/map/CreateAnomalyPanel";
 import { cn } from "@/utils/cn";
@@ -116,7 +116,7 @@ export function RoadPlaceCard({
             primary
             onClick={() => {
               selectRoad(null);
-              startDraft(PRESET_UNITS[0]);
+              startDraft(CREW_TYPES[0]);
               setDraftPoint("destination", target);
             }}
           />
