@@ -17,8 +17,11 @@ Usage: python export_geojson.py [path/to/vijayawada_corridor.net.xml]
        python export_geojson.py NET OUT.geojson
 
 The second form writes only OUT.geojson, compact (shapes simplified to 1 m,
-coordinates to 5 decimals), for other networks such as the district grid the console
-bundles; the corridor's two files above are left alone.
+coordinates to 5 decimals), for other networks such as the district grid the
+console bundles or another city (the web app's `VITE_CITY`); the corridor's two
+files above are left alone. A junction whose own coordinates are off its roads
+(netconvert left four joined Amaravati junctions at y = 0) is placed at the
+mean of its roads' ends there instead.
 """
 
 from __future__ import annotations
@@ -36,6 +39,17 @@ _GEOJSON_OUT = _HERE / "vijayawada_corridor.geojson"
 # The archived static demo (docs/archive/legacy-web-demo) reads the network as
 # a JS global; it is refreshed only while that archive exists.
 _JS_OUT = _HERE.parents[5] / "docs" / "archive" / "legacy-web-demo" / "network_data.js"
+
+
+def _junction_xy(node, tolerance_m: float = 200.0) -> tuple[float, float]:
+    """The node's coordinates, or the mean of its roads' ends at it when the
+    node lies more than `tolerance_m` from all of them."""
+    x, y = node.getCoord()
+    ends = [e.getShape()[-1] for e in node.getIncoming() if not e.isSpecial()]
+    ends += [e.getShape()[0] for e in node.getOutgoing() if not e.isSpecial()]
+    if ends and min(((ex - x) ** 2 + (ey - y) ** 2) ** 0.5 for ex, ey in ends) > tolerance_m:
+        return (sum(ex for ex, _ in ends) / len(ends), sum(ey for _, ey in ends) / len(ends))
+    return x, y
 
 
 def build_feature_collection(net_path: str) -> dict:
@@ -56,12 +70,13 @@ def build_feature_collection(net_path: str) -> dict:
                     "name": edge.getName() or None,
                     "num_lanes": edge.getLaneNumber(),
                     "speed_limit_mps": edge.getSpeed(),
+                    "road_type": edge.getType() or None,
                 },
             }
         )
 
     for node in net.getNodes():
-        x, y = node.getCoord()
+        x, y = _junction_xy(node)
         lon, lat = net.convertXY2LonLat(x, y)
         features.append(
             {
@@ -129,7 +144,7 @@ def _compact(fc: dict) -> str:
 def main() -> None:
     net_path = sys.argv[1] if len(sys.argv) > 1 else str(_DEFAULT_NET)
     fc = build_feature_collection(net_path)
-    if len(sys.argv) > 2:
+    if len(sys.argv) > 2:  # another network: just its GeoJSON, compact
         out = Path(sys.argv[2])
         out.write_text(_compact(fc) + "\n")
         print(f"wrote {out} ({len(fc['features'])} features)")

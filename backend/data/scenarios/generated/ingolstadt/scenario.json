@@ -1,0 +1,73 @@
+{
+ "name": "ingolstadt",
+ "net": "ingolstadt.net.xml",
+ "mix": "cars",
+ "levels": {
+  "light": {
+   "sumocfg": "ingolstadt_light.sumocfg",
+   "route": "ingolstadt_light.rou.xml",
+   "target_ds": 0.25,
+   "achieved_ds": 0.2532,
+   "busiest_tls": "gneJ21",
+   "period_s": 4.7263,
+   "iterations": [
+    [
+     4.0,
+     0.2954
+    ],
+    [
+     4.7263,
+     0.2532
+    ]
+   ]
+  },
+  "medium": {
+   "sumocfg": "ingolstadt_medium.sumocfg",
+   "route": "ingolstadt_medium.rou.xml",
+   "target_ds": 0.5,
+   "achieved_ds": 0.4992,
+   "busiest_tls": "gneJ21",
+   "period_s": 2.3006,
+   "iterations": [
+    [
+     4.0,
+     0.2954
+    ],
+    [
+     2.3631,
+     0.4868
+    ],
+    [
+     2.3006,
+     0.4992
+    ]
+   ]
+  },
+  "heavy": {
+   "sumocfg": "ingolstadt_heavy.sumocfg",
+   "route": "ingolstadt_heavy.rou.xml",
+   "target_ds": 1.0,
+   "achieved_ds": 1.0087,
+   "busiest_tls": "gneJ21",
+   "period_s": 1.1816,
+   "iterations": [
+    [
+     4.0,
+     0.2954
+    ],
+    [
+     1.1816,
+     1.0087
+    ]
+   ]
+  }
+ },
+ "demand": "randomTrips --fringe-factor 5, 0-1800 s, routed by duarouter",
+ "source_net": "/home/claude/capstone/itms/.venv/lib/python3.11/site-packages/sumo/tools/game/fkk_in/ingolstadt.net.xml.gz",
+ "signalised_junctions": 2,
+ "phases_per_junction": [
+  3,
+  3
+ ],
+ "map_center": "48.775216,11.424603"
+}

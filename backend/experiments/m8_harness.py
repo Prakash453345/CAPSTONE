@@ -27,6 +27,7 @@ from itms_domain.overlaps import (  # noqa: E402
     turnaround_links,
     with_overlaps,
 )
+from itms_domain.phase_layout import compact_layout, net_links, paired_layout  # noqa: E402
 from itms_geo import RoadNetwork  # noqa: E402
 from m5_ccacamp_gate import _ARMS, CEILING_FACTOR  # noqa: E402
 from m5_cycle_ceiling_probe import (  # noqa: E402
@@ -81,6 +82,14 @@ def rig(box: bool = False) -> CameraRig:
 
 
 @cache
+def yield_lanes():
+    """Per signal, per link: the lanes that give way to the link's exit road."""
+    from sim_service.signal_controller.yield_lanes import yield_lanes_from_net  # noqa: PLC0415
+
+    return yield_lanes_from_net(H.NET_PATH)
+
+
+@cache
 def link_maps():
     return network().link_lane_maps()
 
@@ -110,19 +119,28 @@ worse, heavy unchanged; Amaravati plan grid light -16.4 % [-21.2, -11.6].
 # demand and gap-out are as without it. `truth:noovl` is the controller before it.
 SHOWN_OVERLAPS = True
 
+# A split-phased junction (one phase per approach) is rebuilt with facing
+# approaches sharing a phase, the turn across the oncoming stream giving way
+# (`itms_domain.phase_layout`; adopted 2026-10-13, held-out test
+# baselines/2026-10-13_paired_phases). Other junctions are unchanged.
+# `truth:nopair` is the controller before it.
+PHASE_LAYOUT: str | None = "pair"
+
 
 def ccacamp_inputs(level: str, ceiling: float = CEILING_FACTOR,
                    floor_s: float = CEILING_FLOOR_S, overlaps: bool = False,
-                   shown_overlaps: bool = SHOWN_OVERLAPS):
+                   shown_overlaps: bool = SHOWN_OVERLAPS, layout: str | None = PHASE_LAYOUT):
     """`overlaps`: every phase also shows *and owns* each movement that
     conflicts with nothing it shows (`itms_domain.overlaps`), applied before
     Webster's greens and the ceilings are worked out -- the first form, kept
     for the record (heavy demand +70 % on arterial_lh). `shown_overlaps`: the
-    adopted form, added after the timing and not owned."""
+    adopted form, added after the timing and not owned. `layout`: "pair" or
+    "pairt" rebuild split-phased junctions (`itms_domain.phase_layout`) before
+    anything else is worked out."""
     if floor_s <= 0.0:
-        inputs = configs_with_ceiling(_scenario_inputs(level, overlaps), ceiling)
+        inputs = configs_with_ceiling(_scenario_inputs(level, overlaps, layout), ceiling)
     else:
-        inputs = ccacamp_inputs_with_floor(level, floor_s, ceiling, overlaps)
+        inputs = ccacamp_inputs_with_floor(level, floor_s, ceiling, overlaps, layout)
     return overlaps_kept_timing(inputs, owned=False) if shown_overlaps else inputs
 
 
@@ -142,8 +160,17 @@ def overlaps_kept_timing(inputs, owned: bool = True, uturns: bool = True):
              for tls, cfg in configs.items()}, flows, pcu, paths)
 
 
-def _scenario_inputs(level: str, overlaps: bool = False):
+def _scenario_inputs(level: str, overlaps: bool = False, layout: str | None = None):
     configs, flows, pcu, paths = H.scenario_inputs(level)
+    if layout is not None:
+        links, heading, lefthand = net_links(H.NET_PATH)
+        if layout == "compact":
+            configs = {tls: compact_layout(cfg, links.get(tls, {}), heading, lefthand)
+                       for tls, cfg in configs.items()}
+        else:
+            configs = {tls: paired_layout(cfg, links.get(tls, {}), heading, lefthand,
+                                          turn_phases=layout == "pairt")
+                       for tls, cfg in configs.items()}
     if overlaps:
         walk = pedestrian_links(H.NET_PATH)
         configs = {tls: with_overlaps(cfg, walk.get(tls, ())) for tls, cfg in configs.items()}
@@ -151,7 +178,7 @@ def _scenario_inputs(level: str, overlaps: bool = False):
 
 
 def ccacamp_inputs_with_floor(level: str, floor_s: float, ceiling: float = CEILING_FACTOR,
-                              overlaps: bool = False):
+                              overlaps: bool = False, layout: str | None = None):
     """CC-A-CAMP's inputs with no phase's green ceiling below `floor_s`.
 
     The ceiling is `ceiling` times Webster's green. At light demand Webster
@@ -162,8 +189,8 @@ def ccacamp_inputs_with_floor(level: str, floor_s: float, ceiling: float = CEILI
     heavy demand). A floor leaves heavy demand, where Webster's greens are
     longer than the floor, as it was."""
     if floor_s <= 0.0:
-        return configs_with_ceiling(_scenario_inputs(level, overlaps), ceiling)
-    configs, flows, pcu, paths = _scenario_inputs(level, overlaps)
+        return configs_with_ceiling(_scenario_inputs(level, overlaps, layout), ceiling)
+    configs, flows, pcu, paths = _scenario_inputs(level, overlaps, layout)
     out = {}
     for tls, cfg in configs.items():
         ceilings = {p: max(g, floor_s)
@@ -292,7 +319,7 @@ def hol_inputs(level: str, single_lane_only: bool = True, ceiling: float = CEILI
     """CC-A-CAMP's inputs with each junction's split variants added to its
     phases (not to its ring), and `{tls: {variant: base}}`."""
     configs, flows, pcu, paths = ccacamp_inputs(level, ceiling, floor_s,
-                                                shown_overlaps=False)
+                                                shown_overlaps=False, layout=None)
     approach, _ = link_maps()
     out, base_of = {}, {}
     for tls, cfg in configs.items():
@@ -348,6 +375,7 @@ def run_scenario(
     vias: bool = True,
     detector_upstream: bool = True,
     vias_short_m: float | None = SHORT_APPROACH_M,
+    arrival_horizon_s: float | None = None,
 ) -> dict:
     """One scenario, scored with the project's own metrics (person delay,
     stops, throughput, waits), plus the runner's interlock count.
@@ -379,6 +407,7 @@ def run_scenario(
     )
     if controller != "webster":
         kwargs["receiving_lanes"] = receiving
+        kwargs["yield_lanes"] = yield_lanes()
         kwargs["vtype_pcu"] = vtype_pcu
         if H.lane_chains() is not None:
             kwargs["lane_chains"] = H.lane_chains()
@@ -388,6 +417,8 @@ def run_scenario(
             # short to hold them, count toward the queue and raise a call
             kwargs["lane_vias"] = H.lane_vias(vias_short_m)
             kwargs["detector_upstream"] = detector_upstream
+    if arrival_horizon_s is not None and controller != "webster":
+        kwargs["arrival_horizon_s"] = arrival_horizon_s
     if incident_injector is not None:
         kwargs["incident_injector"] = incident_injector
     kwargs.update(runner_kwargs or {})

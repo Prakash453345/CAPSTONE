@@ -301,10 +301,12 @@ def main() -> int:
             link_to_lane_map,
             link_to_receiving_lane_map,
         )
+        from sim_service.control.ceilings import with_webster_ceilings
         from sim_service.control.runner import run_controlled_scenario
         from sim_service.live.anomaly_control import OperatorAnomalyController
         from sim_service.live.emergency_control import EmergencyController
         from sim_service.live.green_corridor import CorridorController
+        from sim_service.live.incident_response import IncidentResponseOrchestrator
         from sim_service.routing import RoadGraph
     except Exception as exc:  # pragma: no cover - environment problem, not logic
         msg = (
@@ -348,6 +350,10 @@ def main() -> int:
 
     configs = load_configs(NET_PATH)
     flows = merged_flows(NET_PATH, route_paths)
+    if args.controller not in ("fixed_time", "webster", "camp"):
+        # A-CA-MP runs with Webster-referenced green ceilings (1.25x, 20 s floor),
+        # as sim_service.main and scripts/m8_harness.ccacamp_inputs do
+        configs = with_webster_ceilings(configs, flows)
     vtype_pcu, vtype_occ = merged_vtype_params(route_paths)
     link_lanes = link_to_lane_map(NET_PATH)
     receiving_lanes = link_to_receiving_lane_map(NET_PATH)
@@ -368,6 +374,9 @@ def main() -> int:
     corridor = CorridorController(graph, config=routing_config)
     anomalies = OperatorAnomalyController()
     emergency = EmergencyController(graph, anomalies, corridor_controller=corridor, config=routing_config)
+    # severe anomalies auto-dispatch police/ambulance (and chain to a hospital),
+    # as in sim_service.live.service.run_live
+    incident_response = IncidentResponseOrchestrator(anomalies, emergency)
     # A-CA-MP's own anticipation/debt pressure terms (A(p)/D(p)) can lean on
     # a `sim_service.control.corridor` engine (scripts/m7_corridor_benchmark.py's
     # offline build_arm wires one up) -- but that is a different object from
@@ -483,6 +492,10 @@ def main() -> int:
 
         anomalies.tick(step, sim_time)
         emergency.tick(step, sim_time)
+        try:
+            incident_response.tick(step, sim_time)
+        except Exception:
+            log.exception("incident response tick raised at step %s", step)
 
         for p in anomalies.drain_events():
             counters["anomaly_events"] += 1
@@ -519,6 +532,8 @@ def main() -> int:
                 "detail": p.get("detail"),
             }
             publish(EMERGENCY_REQUEST_TOPIC, "EmergencyRequestUpdated", p, p["request_id"])
+        for p in incident_response.drain_events():
+            publish("emergency.dispatched", "EmergencyDispatched", p, p["anomaly_id"])
         for p in emergency.drain_vehicle_events():
             publish(EMERGENCY_VEHICLE_TOPIC, "EmergencyVehicleUpdated", p, p["vehicle_id"])
         for p in corridor.drain_events():

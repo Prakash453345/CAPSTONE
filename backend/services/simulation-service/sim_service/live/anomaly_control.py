@@ -68,12 +68,16 @@ class _Active:
     anomaly: Anomaly
     lane_originals: dict[str, float]  # lane_id -> pre-anomaly max speed (m/s)
     expire_at_sim_s: float | None
+    lane_targets: dict[str, float] = field(default_factory=dict)  # lane_id -> throttled speed
 
 
 class OperatorAnomalyController:
     def __init__(self, impact_cfg: AnomalyImpactConfig | None = None):
         self.cfg = impact_cfg or AnomalyImpactConfig()
         self._active: dict[str, _Active] = {}
+        # lane_id -> un-throttled max speed, captured once when the lane first gets
+        # throttled and kept until no active anomaly touches it (overlap-safe)
+        self._baseline: dict[str, float] = {}
         self._events: list[dict] = []
         self._last_republish_s = 0.0
 
@@ -99,9 +103,13 @@ class OperatorAnomalyController:
             return
 
         originals: dict[str, float] = {}
+        targets: dict[str, float] = {}
         for lane in lanes:
             try:
-                original = float(traci.lane.getMaxSpeed(lane))
+                original = (
+                    self._baseline[lane] if lane in self._baseline
+                    else float(traci.lane.getMaxSpeed(lane))
+                )
             except traci.TraCIException:
                 log.warning("anomaly %s: lane %s not in the network -- skipping it",
                             anomaly_id, lane)
@@ -112,7 +120,8 @@ class OperatorAnomalyController:
                 if severity is AnomalySeverity.BLOCKED
                 else max(_BLOCK_SPEED_MPS, original * self.cfg.speed_keep_frac.get(sev_key, 0.5))
             )
-            traci.lane.setMaxSpeed(lane, target)
+            self._baseline.setdefault(lane, original)
+            targets[lane] = target
         if not originals:
             return
 
@@ -133,7 +142,9 @@ class OperatorAnomalyController:
             operator=str(payload.get("operator", "operator:console")),
         )
         expire_at = None if not duration_s else sim_time_s + float(duration_s)
-        self._active[anomaly_id] = _Active(anomaly, originals, expire_at)
+        self._active[anomaly_id] = _Active(anomaly, originals, expire_at, targets)
+        for lane in targets:
+            self._apply_lane(lane)
         log.info(
             "anomaly %s ACTIVE on %s (%s/%s) over %d lane(s), impact=%.2f",
             anomaly_id, edge_id, atype.value, severity.value, len(originals), impact,
@@ -190,9 +201,9 @@ class OperatorAnomalyController:
         return [a.anomaly for a in self._active.values()]
 
     def restore_all(self) -> None:
-        for active in list(self._active.values()):
-            self._restore(active)
         self._active.clear()
+        for lane in list(self._baseline):
+            self._apply_lane(lane)
 
     # ---- internals ----------------------------------------------
 
@@ -206,13 +217,24 @@ class OperatorAnomalyController:
             return []
         return [f"{edge_id}_{i}" for i in range(n)]
 
-    @staticmethod
-    def _restore(active: _Active) -> None:
-        for lane, original in active.lane_originals.items():
-            try:
-                traci.lane.setMaxSpeed(lane, original)
-            except Exception:  # noqa: BLE001 -- connection already closed (FatalTraCIError)
-                pass           # or the lane is gone; nothing left to restore either way
+    def _apply_lane(self, lane: str) -> None:
+        """Set `lane` to the tightest limit among active anomalies, or back to its
+        baseline (and forget it) when none remain. Callers pop the finished
+        anomaly from `_active` first."""
+        speeds = [a.lane_targets[lane] for a in self._active.values() if lane in a.lane_targets]
+        value = min(speeds) if speeds else self._baseline.get(lane)
+        if value is None:
+            return
+        try:
+            traci.lane.setMaxSpeed(lane, value)
+        except Exception:  # noqa: BLE001 -- connection already closed (FatalTraCIError)
+            pass           # or the lane is gone; nothing left to restore either way
+        if not speeds:
+            self._baseline.pop(lane, None)
+
+    def _restore(self, active: _Active) -> None:
+        for lane in active.lane_originals:
+            self._apply_lane(lane)
 
     def _queue_event(self, anomaly: Anomaly, step: int, sim_time_s: float) -> None:
         self._events.append(anomaly_updated_payload(anomaly, sim_tick=step))

@@ -129,6 +129,7 @@ class IncidentRegistry:
                 graph_score=payload["graph_score"],
                 vision_score=payload["vision_score"],
                 fused_probability=payload["fused_probability"],
+                detail=payload.get("detail", ""),
             )
         except IllegalTransition:
             log.warning(

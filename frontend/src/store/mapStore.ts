@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { LatLng } from "@/types";
+import { HOME_CITY } from "@/data/city";
 
 /**
  * Map view + layer state, shared so "View Traffic" (Phase 5) and Split View
@@ -37,12 +38,9 @@ export type MapInteractionMode =
   | "pick-source"
   | "pick-destination";
 
-/** Vijayawada corridor centroid — the default ITMS SUMO scenario. */
-const VIJAYAWADA_CENTER: LatLng = { latitude: 16.5062, longitude: 80.6335 };
-
 /** `VITE_MAP_CENTER="lat,lon"` for any other scenario — `build_scenario.py`
  * writes the value to use as `map_center` in its `scenario.json`. Anything
- * unparseable falls back to the corridor. */
+ * unparseable falls back to the first shown city's centre (`VITE_CITY`). */
 export function parseCenter(raw: string | undefined, fallback: LatLng): LatLng {
   if (!raw) return fallback;
   const [lat, lon] = raw.split(",").map((v) => Number(v.trim()));
@@ -53,7 +51,7 @@ export function parseCenter(raw: string | undefined, fallback: LatLng): LatLng {
 
 export const DEFAULT_CENTER: LatLng = parseCenter(
   import.meta.env.VITE_MAP_CENTER as string | undefined,
-  VIJAYAWADA_CENTER,
+  HOME_CITY.center,
 );
 export const DEFAULT_ZOOM = 14;
 

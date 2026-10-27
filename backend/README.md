@@ -62,15 +62,18 @@ it has not seen Vijayawada footage.**
   separate M6 on the `VIVEK` branch is not merged --
   [`docs/m6_branch_decision.md`](docs/m6_branch_decision.md) says why.
 
-- **M7 — green corridor (emergency vehicle preemption) + dispatch — done,
-  measured, due a re-run.** Against field-standard reactive preemption at
-  medium demand, 10 paired seeds, a trauma call routed through all seven
-  signals: EV travel time -3.5%, time lost to signals -25.3%, stops -31.5%,
-  worst individual wait -10.1%, all significant; cross-street person-delay
-  +1.6%, not significant. **These were measured before the 18 September
-  fixes** (the occupancy bug reached the corridor engine's `rho_couple` test,
-  and clearance, minimum green and speed limits all changed underneath it), so
-  re-run `scripts/m7_corridor_benchmark.py` before quoting them as current.
+- **M7 — green corridor (emergency vehicle preemption) + dispatch — built; the
+  original advantage over reactive preemption did not survive the 18 September
+  fixes.** Original measurement (medium demand, 10 paired seeds, a trauma call
+  through all seven signals, corridor vs field-standard reactive preemption): EV
+  travel time -3.5%, time lost to signals -25.3%, stops -31.5%, worst wait -10.1%.
+  **Re-run 2026-10-14 on the post-fix code** (`baselines/2026-10-14_m7_rerun`,
+  `scripts/m5_artifacts/m7_corridor_gate_rerun_20261014.json`): corridor vs
+  reactive is EV travel time +6.7 s [+0.01, +13.4], time lost +6.95 s
+  [+0.22, +13.7], stops +0.9 (n.s.), cross-street person-delay not significant.
+  Preemption itself still works (both arms cut EV time ~210-220 s vs none, zero
+  interlock violations), but the corridor engine is no better than reactive
+  preemption on this corridor. Do not quote the original percentages as current.
   One negative result reported honestly: the "anticipation" and
   "debt-recovery" pressure terms (Contribution 1) show no measurable benefit
   (10 paired seeds at medium demand, 30 at heavy); they stay on by default and
@@ -320,7 +323,7 @@ backend/
 | M4 | CA-MP Layer 1 | ✅ done — loses to Webster; superseded by M5 |
 | M5 | A-CA-MP (adaptive, with memory) + cycle supervisor | ✅ done — -25% to -31% person-delay vs tuned Webster at all three levels, zero violations; the cycle supervisor shows no measured benefit over the same controller without it (18 Sep) |
 | M6 | Anomaly detection (incident spotting) | ⚠️ built + tested, model undertrained — not gate-passing yet |
-| M7 | Green corridor + dispatch | ✅ done, verified — numbers predate the 18 Sep fixes and need a re-run; Contribution 1 pressure terms unproven |
+| M7 | Green corridor + dispatch | ✅ built, verified safe — re-run on post-18-Sep code (14 Oct) shows no advantage over reactive preemption; original gains did not reproduce; Contribution 1 pressure terms unproven |
 | — | Interactive emergency response (`SIM_MODE=live`) | ✅ built + tested, not benchmarked — anomaly → alert → police/ambulance dispatch → corridor → hospital; not yet fed by the M6 detector |
 | M8 | Vision on real footage | 🟡 built and gated on a digital twin (controller keeps its win on cameras; camera failure handled); wired into the live controller; real-footage smoke test; an Indian-traffic detector (IISc UVH-26) measured on Bengaluru CCTV; no Vijayawada footage yet; incident rules weak |
 | M9 | Benchmark, evaluation, site | 🟡 partial — benchmark harness, Command Center (`../frontend/`), test lab (`../docs/archive/testing_site/`); final evaluation not written |

@@ -104,3 +104,25 @@ def test_below_the_ceiling_nothing_changes():
     for queues in ({"m0": 5.0}, {"m0": 5.0, "m1": 9.0}, {}):
         ctx = _ctx(queues, elapsed=12.0)
         assert a(cfg, ctx) == b(cfg, ctx)
+
+
+def test_rest_needs_free_exit_ends_the_rest_while_a_give_way_waits_past_the_exit():
+    cfg = _ring_config()
+    ctx_waiting = JunctionContext(
+        intersection_id="J", current_phase_id="P0", current_phase_elapsed_s=20.0,
+        queue_pcu={"m0": 5.0}, yield_waiting_pcu={"m0": 1.0},
+    )
+    c = _controller(rest_in_green=True, rest_needs_free_exit=True)
+    plan = c(cfg, ctx_waiting)
+    assert plan.steps[-1].phase_id != "P0"
+    assert c.stats["rest_exit_wanted"] == 1 and c.stats["rest_in_green"] == 0
+    # nobody waiting past the exit: the rest goes on
+    c = _controller(rest_in_green=True, rest_needs_free_exit=True)
+    assert [s.phase_id for s in c(cfg, _ctx({"m0": 5.0})).steps] == ["P0"]
+    # a give-way waiting past another phase's exit does not matter
+    other = JunctionContext(
+        intersection_id="J", current_phase_id="P0", current_phase_elapsed_s=20.0,
+        queue_pcu={"m0": 5.0}, yield_waiting_pcu={"m1": 3.0},
+    )
+    c = _controller(rest_in_green=True, rest_needs_free_exit=True)
+    assert [s.phase_id for s in c(cfg, other).steps] == ["P0"]

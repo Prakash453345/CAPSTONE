@@ -309,7 +309,12 @@ class EmergencyController:
 
             if edge_id and not edge_id.startswith(":"):
                 run.current_edge = edge_id
-            covered = run.dist_to_edge_start.get(edge_id, run.last_progress_m) + max(0.0, lane_pos)
+            if edge_id in run.dist_to_edge_start:
+                covered = run.dist_to_edge_start[edge_id] + max(0.0, lane_pos)
+            else:
+                # internal junction edge (":cluster_...") -- not on the route map,
+                # so hold progress rather than adding lane_pos every tick
+                covered = run.last_progress_m
             covered = max(run.last_progress_m, min(covered, run.total_length_m))
             run.last_progress_m = covered
             progress[request_id] = covered

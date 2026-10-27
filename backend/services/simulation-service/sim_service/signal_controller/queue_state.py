@@ -115,6 +115,7 @@ class QueueSample:
     receiving_queue_pcu: dict[str, float] = field(default_factory=dict)
     approaching_pcu: dict[str, float] = field(default_factory=dict)
     blocked_by: dict[str, str] = field(default_factory=dict)
+    yield_waiting_pcu: dict[str, float] = field(default_factory=dict)
 
 
 def load_vtype_pcu(route_path: str | Path) -> dict[str, float]:
@@ -158,8 +159,10 @@ class QueueStateSampler:
         downstream: Mapping[str, Chain] | None = None,
         internal_links: Mapping[str, str] | None = None,
         vias: Mapping[str, list[tuple[str, float]]] | None = None,
+        yield_lanes: Mapping[str, tuple[str, ...]] | None = None,
     ):
         self._approach_lanes = approach_lanes
+        self._yield_lanes = yield_lanes or {}
         self._vias = vias or {}
         """`itms_domain.lane_chains.vias_from_sumo_net`: the internal lanes
         inside an approach's chain. Vehicles halted on them count toward the
@@ -419,4 +422,8 @@ class QueueStateSampler:
             receiving_queue_pcu=receiving_queue_pcu,
             approaching_pcu=approaching_pcu,
             blocked_by=self._blocked_by(),
+            yield_waiting_pcu={
+                link_id: sum(self._halting_pcu(x) for x in lanes)
+                for link_id, lanes in self._yield_lanes.items()
+            },
         )

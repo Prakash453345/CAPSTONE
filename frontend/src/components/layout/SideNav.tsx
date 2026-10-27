@@ -9,6 +9,7 @@ import { useSystemStore } from "@/store/systemStore";
 import { useIncidentStore } from "@/store/incidentStore";
 import { useActiveRequests } from "@/store/emergencyStore";
 import { cn } from "@/utils/cn";
+import { CITIES_LABEL, SHOWN_CITIES } from "@/data/city";
 
 interface SideNavProps {
   collapsed: boolean;
@@ -94,7 +95,9 @@ export function SideNav({ collapsed, onToggleCollapsed, onNavigate }: SideNavPro
         {!collapsed && (
           <div className="min-w-0 leading-tight">
             <div className="text-[15px] font-semibold tracking-[-0.01em]">Traffix</div>
-            <div className="text-[11.5px] text-muted-foreground">Vijayawada operations</div>
+            <div className="text-[11.5px] text-muted-foreground">
+              {SHOWN_CITIES.length > 1 ? CITIES_LABEL : `${CITIES_LABEL} operations`}
+            </div>
           </div>
         )}
       </div>
