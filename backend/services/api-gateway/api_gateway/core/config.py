@@ -61,7 +61,17 @@ class Settings:
     api_key: str = field(default_factory=lambda: secrets.token_urlsafe(24))
     clips_dir: Path = VAR_DIR / "clips"
     clip_max_bytes: int = 300 * 1024 * 1024
-    cors_origins: tuple[str, ...] = ("*",)
+    # Which websites may call this API from a browser. The console never
+    # needs CORS (Vite serves it and proxies /api and /ws same-origin), so
+    # the default is only the console's own dev and preview origins, not "*":
+    # with "*" any page an operator opened could post commands to a gateway
+    # running on their machine. Set CORS_ORIGINS for other deployments.
+    cors_origins: tuple[str, ...] = (
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:4173",
+        "http://127.0.0.1:4173",
+    )
     topics: tuple[str, ...] = RELAYED_TOPICS
 
     @classmethod
@@ -73,8 +83,9 @@ class Settings:
             clips_dir=Path(os.environ.get("CLIPS_DIR", cls.clips_dir)).resolve(),
             clip_max_bytes=int(float(os.environ.get("CLIP_MAX_MB", "300")) * 1024 * 1024),
             cors_origins=tuple(
-                o.strip() for o in os.environ.get("CORS_ORIGINS", "*").split(",") if o.strip()
-            ),
+                o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()
+            )
+            or cls.cors_origins,
         )
         if not env_key:
             log.warning(

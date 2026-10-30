@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import maplibregl, { Map as MapLibreMap, type MapMouseEvent } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { initialStyle } from "@/components/map/mapStyle";
@@ -22,12 +22,7 @@ import { IncidentLayer } from "@/components/map/layers/IncidentLayer";
 import { AnomalyLayer } from "@/components/map/layers/AnomalyLayer";
 import { EmergencyRouteLayer } from "@/components/map/layers/EmergencyRouteLayer";
 import { EmergencyVehicleLayer } from "@/components/map/layers/EmergencyVehicleLayer";
-import {
-  CreateAnomalyPanel,
-  type AnomalyTarget,
-} from "@/components/map/CreateAnomalyPanel";
-import { EmergencyPanel } from "@/components/map/EmergencyPanel";
-import { UploadClipPanel } from "@/components/map/UploadClipPanel";
+import type { AnomalyTarget } from "@/components/map/CreateAnomalyPanel";
 import { FollowCamera } from "@/components/map/FollowCamera";
 import { useMapStore } from "@/store/mapStore";
 import { useTransitionStore } from "@/store/transitionStore";
@@ -37,6 +32,19 @@ import { networkBounds, nearestEdge } from "@/data/network";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/utils/cn";
 import { CITIES_LABEL } from "@/data/city";
+
+// The operator forms only appear after a click (or, for the emergency panel,
+// once a dispatch is under way), so they load just after the map instead of
+// in every map page's first download (scripts/check-bundle-budget.mjs).
+const CreateAnomalyPanel = lazy(() =>
+  import("@/components/map/CreateAnomalyPanel").then((m) => ({ default: m.CreateAnomalyPanel })),
+);
+const EmergencyPanel = lazy(() =>
+  import("@/components/map/EmergencyPanel").then((m) => ({ default: m.EmergencyPanel })),
+);
+const UploadClipPanel = lazy(() =>
+  import("@/components/map/UploadClipPanel").then((m) => ({ default: m.UploadClipPanel })),
+);
 
 const FIT_BOUNDS: [number, number, number, number] = [
   networkBounds.minLng,
@@ -340,22 +348,24 @@ export function TrafficMap({
             </div>
           )}
 
-          {pendingTarget && (
-            <CreateAnomalyPanel
-              target={pendingTarget}
-              onClose={exitCreate}
-              onCreated={(id) => {
-                selectAnomaly(id);
-                exitCreate();
-              }}
-            />
-          )}
+          <Suspense fallback={null}>
+            {pendingTarget && (
+              <CreateAnomalyPanel
+                target={pendingTarget}
+                onClose={exitCreate}
+                onCreated={(id) => {
+                  selectAnomaly(id);
+                  exitCreate();
+                }}
+              />
+            )}
 
-          <EmergencyPanel part="panel" />
+            <EmergencyPanel part="panel" />
 
-          {clipTarget && !creatingAnomaly && (
-            <UploadClipPanel target={clipTarget} onClose={() => setClipTarget(null)} />
-          )}
+            {clipTarget && !creatingAnomaly && (
+              <UploadClipPanel target={clipTarget} onClose={() => setClipTarget(null)} />
+            )}
+          </Suspense>
 
           {!operatorPanelOpen && (
             <RoadPlaceCard

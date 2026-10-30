@@ -4,7 +4,7 @@ import { CheckCircle2, FileVideo, Loader2, Upload, Video, X } from "lucide-react
 import { Button } from "@/components/ui/button";
 import type { AnomalyTarget } from "@/components/map/CreateAnomalyPanel";
 import { CommandError } from "@/services/traffic/commands";
-import { uploadClip } from "@/services/traffic/clips";
+import { clipFileProblem, uploadClip } from "@/services/traffic/clips";
 import { useClipStore } from "@/store/clipStore";
 import { useSystemStore } from "@/store/systemStore";
 import { cn } from "@/utils/cn";
@@ -34,6 +34,12 @@ export function UploadClipPanel({ target, onClose }: { target: AnomalyTarget; on
   const road = roadLabel(target.edgeId);
 
   useEffect(() => () => cancelRef.current?.(), []);
+
+  const choose = (f: File | null | undefined) => {
+    const problem = f ? clipFileProblem(f) : null;
+    setError(problem);
+    setFile(f && !problem ? f : null);
+  };
 
   const start = async () => {
     if (!file) return;
@@ -128,8 +134,7 @@ export function UploadClipPanel({ target, onClose }: { target: AnomalyTarget; on
               onDrop={(e) => {
                 e.preventDefault();
                 setDragging(false);
-                const f = e.dataTransfer.files[0];
-                if (f) setFile(f);
+                choose(e.dataTransfer.files[0]);
               }}
               className={cn(
                 "flex cursor-pointer flex-col items-center gap-1.5 rounded-lg border border-dashed px-3 py-5 text-center transition-colors",
@@ -149,7 +154,7 @@ export function UploadClipPanel({ target, onClose }: { target: AnomalyTarget; on
                 accept={ACCEPT}
                 className="sr-only"
                 disabled={!live || progress !== null}
-                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                onChange={(e) => choose(e.target.files?.[0])}
               />
             </label>
 

@@ -133,6 +133,24 @@ export async function fetchClips(signal?: AbortSignal): Promise<Clip[]> {
     .filter((c): c is Clip => c !== null);
 }
 
+/** The video types the gateway accepts (api_gateway/services/clip_registry.py). */
+export const CLIP_EXTENSIONS = [".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v"] as const;
+/** The gateway's default CLIP_MAX_MB. It is the server's limit that counts;
+ *  this only saves sending 2 GB to hear "too large". */
+export const CLIP_MAX_BYTES = 300 * 1024 * 1024;
+
+/** Why a file can't be uploaded, or null when it can. The picker's `accept`
+ *  filter doesn't apply to drag and drop, so dropped files are checked too. */
+export function clipFileProblem(file: { name: string; size: number }): string | null {
+  const ext = file.name.slice(file.name.lastIndexOf(".")).toLowerCase();
+  if (!file.name.includes(".") || !(CLIP_EXTENSIONS as readonly string[]).includes(ext)) {
+    return "That isn\u2019t a video this can check. Use MP4, MOV, AVI, MKV or WebM.";
+  }
+  if (file.size === 0) return "That file is empty.";
+  if (file.size > CLIP_MAX_BYTES) return `That video is over the ${CLIP_MAX_BYTES / 1024 / 1024} MB limit.`;
+  return null;
+}
+
 export interface UploadTarget {
   edgeId: string;
   roadName: string;

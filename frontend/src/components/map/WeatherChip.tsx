@@ -189,7 +189,7 @@ export function WeatherChip() {
 
           <p className="px-4 pb-3 text-[11px] text-muted-foreground">
             Weather data by{" "}
-            <a href="https://open-meteo.com/" target="_blank" rel="noreferrer" className="underline">
+            <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer" className="underline">
               Open-Meteo.com
             </a>{" "}
             (CC BY 4.0)

@@ -2,12 +2,24 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { fileURLToPath, URL } from "node:url";
 import { itmsNetwork, networkAlias } from "./network.config";
+import { cspPlugin } from "./csp.config";
+
+// Response headers for the dev and preview servers. A meta-tag CSP (see
+// csp.config.ts) cannot stop framing, so clickjacking is blocked here; a
+// production host should send the same headers.
+const SECURITY_HEADERS = {
+  "X-Frame-Options": "DENY",
+  "Content-Security-Policy": "frame-ancestors 'none'",
+  "X-Content-Type-Options": "nosniff",
+  "Referrer-Policy": "strict-origin-when-cross-origin",
+  "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
+};
 
 // TRAFFIX Command Center — Vite config.
 // Dev server proxies /api and /ws to the ITMS api-service so the browser can
 // talk to it without CORS juggling. (Vitest config lives in vitest.config.ts.)
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), cspPlugin()],
   define: {
     "import.meta.env.VITE_ITMS_NETWORK": JSON.stringify(itmsNetwork()),
   },
@@ -36,8 +48,12 @@ export default defineConfig({
       },
     },
   },
+  preview: {
+    headers: SECURITY_HEADERS,
+  },
   server: {
     port: 5173,
+    headers: SECURITY_HEADERS,
     proxy: {
       "/api": {
         target: "http://localhost:8000",

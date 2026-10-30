@@ -19,7 +19,9 @@ trap cleanup EXIT INT TERM
 "$VENV/bin/python" -m sim_service.main &
 SIM_PID=$!
 
-"$VENV/bin/uvicorn" api_gateway.main:app --host 0.0.0.0 --port 8000 --reload &
+# 127.0.0.1, not 0.0.0.0: commands and uploads need no API key, so keep the
+# gateway off the network; the console reaches it through Vite's proxy.
+"$VENV/bin/uvicorn" api_gateway.main:app --host 127.0.0.1 --port 8000 --reload &
 API_PID=$!
 
 sleep 1
