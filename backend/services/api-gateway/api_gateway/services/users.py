@@ -1,0 +1,264 @@
+"""Manage console accounts from the command line.
+
+    python -m api_gateway.services.users create <username> [--name "Display Name"]
+        [--email you@example.org]
+                                         [--role operator|responder] [--unit unit-police-0]
+                                         [--kind ambulance|police|fire_truck]
+    python -m api_gateway.services.users set-role <username> operator|responder
+    python -m api_gateway.services.users set-unit <username> <vehicle-id> [--kind <kind>]
+    python -m api_gateway.services.users set-kind <username> ambulance|police|fire_truck
+    python -m api_gateway.services.users passwd <username>
+    python -m api_gateway.services.users set-email <username> <email>
+    python -m api_gateway.services.users disable <username>
+    python -m api_gateway.services.users enable <username>
+    python -m api_gateway.services.users unlock <username>
+    python -m api_gateway.services.users list
+
+Passwords are prompted for (never taken as an argument, which would land in
+shell history and `ps`). For scripted setup, pipe the password on stdin and
+pass --stdin. Reads DATABASE_URL, like the API.
+"""
+
+from __future__ import annotations
+
+import argparse
+import getpass
+import re
+import sys
+
+import psycopg
+
+from api_gateway.services import auth
+
+
+def _read_password(from_stdin: bool) -> str:
+    if from_stdin:
+        password = sys.stdin.readline().rstrip("\r\n")
+    else:
+        password = getpass.getpass("Password: ")
+        if getpass.getpass("Repeat password: ") != password:
+            raise SystemExit("error: passwords do not match")
+    problem = auth.validate_password(password)
+    if problem:
+        raise SystemExit(f"error: {problem}")
+    return password
+
+
+def _username(raw: str) -> str:
+    username = auth.normalize_username(raw)
+    problem = auth.validate_username(username)
+    if problem:
+        raise SystemExit(f"error: {problem}")
+    return username
+
+
+def _email(raw: str) -> str:
+    email = raw.strip().lower()
+    if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email) or len(email) > 254:
+        raise SystemExit(f"error: not a valid email address: {raw}")
+    return email
+
+
+def _unit(raw: str) -> str:
+    unit = raw.strip()
+    problem = auth.validate_unit(unit)
+    if problem:
+        raise SystemExit(f"error: {problem}")
+    return unit
+
+
+def _kind(raw: str) -> str:
+    kind = raw.strip().lower()
+    problem = auth.validate_unit_kind(kind)
+    if problem:
+        raise SystemExit(f"error: {problem}")
+    return kind
+
+
+def _resolve_kind(kind: str, unit: str | None) -> str | None:
+    """The kind to store: the one given, else one inferred from the vehicle id."""
+    if kind:
+        return _kind(kind)
+    return auth.infer_unit_kind(unit)
+
+
+def _require_one(cur: psycopg.Cursor, username: str) -> None:
+    if cur.rowcount != 1:
+        raise SystemExit(f"error: no such user: {username}")
+
+
+def main(argv: list[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(prog="python -m api_gateway.services.users",
+                                     description=__doc__)
+    sub = parser.add_subparsers(dest="cmd", required=True)
+    create = sub.add_parser("create", help="add a user")
+    create.add_argument("username")
+    create.add_argument("--name", default="", help="display name shown in the console")
+    create.add_argument("--email", default="", help="where password-reset codes are sent")
+    create.add_argument(
+        "--role",
+        choices=auth.ROLES,
+        default=auth.DEFAULT_ROLE,
+        help="operator = the console (and crew page); responder = the crew page only",
+    )
+    create.add_argument(
+        "--unit",
+        default="",
+        help="the vehicle id a crew account drives (as dispatch knows it, e.g. unit-police-0)",
+    )
+    create.add_argument(
+        "--kind",
+        default="",
+        help="what the crew drives: ambulance | police | fire_truck "
+        "(worked out from the vehicle id when it names one)",
+    )
+    create.add_argument("--stdin", action="store_true", help="read the password from stdin")
+    passwd = sub.add_parser("passwd", help="change a password (signs the user out everywhere)")
+    passwd.add_argument("username")
+    passwd.add_argument("--stdin", action="store_true", help="read the password from stdin")
+    setunit = sub.add_parser("set-unit", help="set the vehicle a crew account drives")
+    setunit.add_argument("username")
+    setunit.add_argument("unit")
+    setunit.add_argument("--kind", default="", help="ambulance | police | fire_truck")
+    setkind = sub.add_parser("set-kind", help="set what a crew account drives")
+    setkind.add_argument("username")
+    setkind.add_argument("kind")
+    setrole = sub.add_parser("set-role", help="change what an account can open")
+    setrole.add_argument("username")
+    setrole.add_argument("role", choices=auth.ROLES)
+    setmail = sub.add_parser("set-email", help="set where password-reset codes are sent")
+    setmail.add_argument("username")
+    setmail.add_argument("email")
+    for name, text in (
+        ("disable", "block sign-in and end existing sessions"),
+        ("enable", "allow sign-in again"),
+        ("unlock", "clear a failed-attempt lockout"),
+    ):
+        sub.add_parser(name, help=text).add_argument("username")
+    sub.add_parser("list", help="show all users")
+    args = parser.parse_args(argv)
+
+    try:
+        with psycopg.connect(auth.DATABASE_URL, connect_timeout=5, client_encoding="utf8") as conn:
+            conn.execute("SELECT pg_advisory_xact_lock(727401)")
+            conn.execute(auth.SCHEMA_SQL)
+            if args.cmd == "list":
+                rows = conn.execute(
+                    "SELECT username, display_name, is_active, locked_until,"
+                    " last_login_at, email, role, unit_id, unit_kind"
+                    " FROM app_user ORDER BY username"
+                ).fetchall()
+                for username, name, active, locked, last, email, role, unit, kind in rows:
+                    flags = ("" if active else " [disabled]") + (
+                        " [locked]" if locked and locked > auth.utcnow() else ""
+                    )
+                    print(
+                        f"{username}\t{role}{' / ' + unit if unit else ''}"
+                        f"{' (' + kind + ')' if kind else ''}\t{name}\t"
+                        f"{email or 'no email'}\tlast login: {last or 'never'}{flags}"
+                    )
+                if not rows:
+                    print("no users yet -- create one: "
+                          "python -m api_gateway.services.users create <name>")
+                return
+            username = _username(args.username)
+            if args.cmd == "create":
+                unit = _unit(args.unit) if args.unit else None
+                if (unit or args.kind) and args.role != "responder":
+                    raise SystemExit(
+                        "error: --unit/--kind are for crew accounts (use --role responder)"
+                    )
+                kind = _resolve_kind(args.kind, unit)
+                if args.role == "responder" and kind is None:
+                    raise SystemExit(
+                        "error: say what this crew drives: --kind ambulance|police|fire_truck"
+                    )
+                password = _read_password(args.stdin)
+                try:
+                    conn.execute(
+                        "INSERT INTO app_user"
+                        " (username, display_name, password_hash, email, role, unit_id, unit_kind)"
+                        " VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                        (
+                            username,
+                            args.name.strip(),
+                            auth.hash_password(password),
+                            _email(args.email) if args.email else None,
+                            args.role,
+                            unit,
+                            kind,
+                        ),
+                    )
+                except psycopg.errors.UniqueViolation:
+                    raise SystemExit(f"error: user already exists: {username}") from None
+                print(f"created {username}")
+            elif args.cmd == "passwd":
+                password = _read_password(args.stdin)
+                cur = conn.execute(
+                    "UPDATE app_user SET password_hash = %s, failed_attempts = 0,"
+                    " locked_until = NULL, session_version = session_version + 1"
+                    " WHERE username = %s",
+                    (auth.hash_password(password), username),
+                )
+                _require_one(cur, username)
+                print(f"password changed for {username}; their sessions are signed out")
+            elif args.cmd == "set-unit":
+                unit = _unit(args.unit)
+                kind = _resolve_kind(args.kind, unit)
+                cur = conn.execute(
+                    "UPDATE app_user SET unit_id = %s, unit_kind = COALESCE(%s, unit_kind)"
+                    " WHERE username = %s AND role = 'responder'",
+                    (unit, kind, username),
+                )
+                if cur.rowcount != 1:
+                    raise SystemExit(f"error: {username} is not a crew account (role responder)")
+                print(f"{username} now drives {unit}" + (f" ({kind})" if kind else ""))
+            elif args.cmd == "set-kind":
+                cur = conn.execute(
+                    "UPDATE app_user SET unit_kind = %s WHERE username = %s AND role = 'responder'",
+                    (_kind(args.kind), username),
+                )
+                if cur.rowcount != 1:
+                    raise SystemExit(f"error: {username} is not a crew account (role responder)")
+                print(f"{username} is now a {args.kind.strip().lower()} crew")
+            elif args.cmd == "set-role":
+                cur = conn.execute(
+                    "UPDATE app_user SET role = %s WHERE username = %s", (args.role, username)
+                )
+                _require_one(cur, username)
+                print(f"{username} is now a {args.role}")
+            elif args.cmd == "set-email":
+                cur = conn.execute(
+                    "UPDATE app_user SET email = %s WHERE username = %s",
+                    (_email(args.email), username),
+                )
+                _require_one(cur, username)
+                print(f"email set for {username}")
+            elif args.cmd == "disable":
+                cur = conn.execute(
+                    "UPDATE app_user SET is_active = false, session_version = session_version + 1"
+                    " WHERE username = %s",
+                    (username,),
+                )
+                _require_one(cur, username)
+                print(f"disabled {username}")
+            elif args.cmd == "enable":
+                cur = conn.execute(
+                    "UPDATE app_user SET is_active = true WHERE username = %s", (username,)
+                )
+                _require_one(cur, username)
+                print(f"enabled {username}")
+            elif args.cmd == "unlock":
+                cur = conn.execute(
+                    "UPDATE app_user SET failed_attempts = 0, locked_until = NULL"
+                    " WHERE username = %s",
+                    (username,),
+                )
+                _require_one(cur, username)
+                print(f"unlocked {username}")
+    except psycopg.OperationalError as exc:
+        raise SystemExit(f"error: cannot reach the database: {exc}") from None
+
+
+if __name__ == "__main__":
+    main()

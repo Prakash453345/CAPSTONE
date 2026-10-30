@@ -1,0 +1,200 @@
+# Console sign-in
+
+The web console (`/console/*`) requires an account. Signed-out visitors are
+redirected to `/login`; after signing in they land on the page they asked for.
+The landing page (`/`) stays public.
+
+## Database
+
+**PostgreSQL**, the instance the platform already runs (`docker compose up -d
+postgres`). Accounts live in one table, `app_user`
+([`infra/postgres/init/003_app_user.sql`](../infra/postgres/init/003_app_user.sql)).
+Passwords are stored only as scrypt hashes. api-service creates the table itself
+the first time it needs it, so an existing database needs no manual migration.
+
+No account exists until you create one. There is no default password.
+
+```bash
+cd backend
+make setup                                   # installs api-service (+ psycopg)
+make infra-up                                # Postgres + Redis (MinIO: infra-up-all)
+.venv/bin/python -m api_gateway.services.users create komal --name "Komal S"
+make dev                                     # then open http://localhost:5173
+```
+
+Other account commands: `passwd`, `disable`, `enable`, `unlock`, `list`
+(`python -m api_gateway.services.users --help`). Changing a password or disabling an
+account signs that user out everywhere. Passwords are at least 10 characters.
+
+## Roles: who sees what
+
+There is one sign-in form. The **account's role** decides where someone lands and
+what they can open, so nobody chooses a "login type" and a crew member cannot
+sign in as an operator by picking it.
+
+| Role | Lands on | Can open | Sees |
+|---|---|---|---|
+| `operator` (default) | `/console` | the console, and `/crew` (to see what a crew sees) | every vehicle (picks one on `/crew`) |
+| `responder` (crew) | `/crew` | the crew page only; the console redirects them back to it | only **their own vehicle**, no picker |
+
+A crew account is tied to one vehicle by **vehicle id** (the id dispatch uses for
+it) and says **what it drives**: `ambulance`, `police` or `fire_truck`. Dispatch
+sends a call to the nearest free crew *of the right kind*, so the kind is required
+for a crew account (it is worked out from the vehicle id when that names one, e.g.
+`unit-police-3`). Units dispatch creates itself are `unit-police-N`,
+`unit-ambulance-N` (one per depot; see [crew_dispatch.md](crew_dispatch.md)). In the
+browser demo the simulated ambulance is `amb-01`. A crew account with no vehicle
+linked sees "ask dispatch to link your account".
+
+```bash
+# operator (the "admin": console + everything)
+.venv/bin/python -m api_gateway.services.users create komal --name "Komal S" --email komal@example.org
+# a police crew (the kind is worked out from the vehicle id)
+.venv/bin/python -m api_gateway.services.users create pol3 --role responder --unit unit-police-3 --name "Police 3 crew"
+# an ambulance crew with a vehicle id that does not say what it is: give the kind
+.venv/bin/python -m api_gateway.services.users create amb12 --role responder --unit EV-001 --kind ambulance
+# later changes
+.venv/bin/python -m api_gateway.services.users set-unit amb12 unit-ambulance-2   # give the crew another vehicle
+.venv/bin/python -m api_gateway.services.users set-kind amb12 ambulance
+.venv/bin/python -m api_gateway.services.users set-role komal operator
+.venv/bin/python -m api_gateway.services.users list                       # role / vehicle (kind) for each account
+```
+
+**Note:** the pages enforce the roles, and `POST /v1/commands` checks them too:
+a crew account can only send its own crew commands (see below).
+
+## Troubleshooting: "We can't reach the sign-in service"
+
+The browser asks `/api/v1/auth/me`, and the dev server forwards `/api` to
+api-service on port 8000. This message means nothing answered there: only the
+web app (`npm run dev`) is running. Start the rest:
+
+```bash
+cd backend
+make setup && make infra-up      # Postgres + Redis (MinIO: infra-up-all)
+.venv/bin/python -m api_gateway.services.users create komal      # once, to make an account
+make dev                         # starts sim-service and api-service (:8000)
+```
+
+(If api-service is up but Postgres is not, the message is instead "Sign-in is
+unavailable right now".)
+
+## Forgot password
+
+"Forgot your password?" on the sign-in card walks through three steps: username,
+the 6-digit code we email, then a new password. The code is valid for 10 minutes,
+works once, and is burnt after 5 wrong guesses; a new one can be requested every
+60 seconds. Only a keyed digest of the code is stored. A successful reset signs
+the user out everywhere and clears any lockout.
+
+Codes go to the account's **email**, which is optional and set from the CLI:
+
+```bash
+.venv/bin/python -m api_gateway.services.users create komal --email komal@example.org
+.venv/bin/python -m api_gateway.services.users set-email komal komal@example.org
+```
+
+The endpoints are `POST /v1/auth/forgot`, `/forgot/verify` and `/forgot/reset`.
+`forgot` tells the person when the username doesn't exist (404) or the account
+has no email (409), and otherwise shows a masked address ("k\*\*\*@x.org") so they
+can see where the code went. That does let someone probe which usernames exist,
+which is acceptable for a small operator console but is why `forgot*` should be
+rate-limited per IP in the proxy. An account without an email can't reset
+itself; an administrator uses `passwd` instead.
+
+Mail is sent over SMTP. For local runs, copy `.env.local.example` to `.env.local` and fill it in; `scripts/dev.sh` loads it every time (git ignores it).
+
+Mail is sent over SMTP:
+
+| Variable | Default | Notes |
+|---|---|---|
+| `SMTP_HOST` | unset | Required to send mail. If unset (or the server refuses), forgot-password answers 503 "We couldn't send the email" instead of pretending. |
+| `AUTH_IDLE_MINUTES` | `30` | Sign out after this long without use. The page sends a heartbeat while someone is active; `0` turns it off. `AUTH_SESSION_HOURS` stays the hard limit. |
+| `AUTH_DEV_LOG_CODES` | `false` | Local dev only: with no `SMTP_HOST`, log the code instead of failing. `scripts/dev.sh` turns it on. Never set it in production. |
+| `SMTP_PORT` | `587` | Port 465 uses implicit TLS. |
+| `SMTP_USER` / `SMTP_PASSWORD` | unset | Optional login. |
+| `SMTP_FROM` | `ITMS <no-reply@localhost>` | Sender address. |
+| `SMTP_STARTTLS` | `true` | Turn off only for a trusted local relay. |
+
+Rate-limit `/api/v1/auth/forgot*` per IP in the reverse proxy, like login.
+
+## Configuration (api-service environment)
+
+| Variable | Default | Notes |
+|---|---|---|
+| `DATABASE_URL` | `postgresql://itms:itms@localhost:5432/itms` | Use a real password in production. |
+| `AUTH_SECRET` | random per process | **Required in production.** At least 32 characters (`openssl rand -hex 32`). Signs session cookies. If unset, every restart signs everyone out and several workers reject each other's cookies. |
+| `AUTH_COOKIE_SECURE` | `true` | Leave on behind HTTPS. `scripts/dev.sh` sets `false` for plain-http local dev only. |
+| `AUTH_SESSION_HOURS` | `12` | Session lifetime. |
+
+## Deploying
+
+The ready-made way is `deploy/` (Docker Compose: one address for the site, the
+API and the stream, a free HTTPS tunnel, and the same files on a server later);
+see [`deploy/README.md`](../deploy/README.md). The rest of this section is the
+manual equivalent.
+
+The browser calls `/api/v1/auth/*` on **the same origin as the site**, and the
+session is an HttpOnly cookie, so the site and api-service must sit behind one
+host. A static-only deployment (just the built `dist/` on a static host) cannot
+sign anyone in; the login page says "can't reach the sign-in service" and the
+console stays closed.
+
+Build the frontend (`npm run build`), serve `dist/` with a fallback to
+`index.html`, and proxy `/api/` (and `/ws/` for the live stream) to api-service. Example nginx:
+
+```nginx
+limit_req_zone $binary_remote_addr zone=itms_login:10m rate=10r/m;
+
+server {
+    listen 443 ssl;                       # HTTPS is required for Secure cookies
+    server_name console.example.org;
+    root /srv/itms/dist;
+
+    location / { try_files $uri /index.html; }
+
+    # Per-IP brake on password guessing, on top of the per-account lockout.
+    location = /api/v1/auth/login {
+        limit_req zone=itms_login burst=5 nodelay;
+        proxy_pass http://127.0.0.1:8000/v1/auth/login;
+    }
+    location /api/ {
+        proxy_pass http://127.0.0.1:8000/;      # strips the /api prefix
+        proxy_set_header Host $host;
+    }
+    location /ws/ {                             # live stream: browser uses /ws/v1/stream
+        proxy_pass http://127.0.0.1:8000/;      # strips the /ws prefix
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+}
+```
+
+Checklist before going live: HTTPS on; `AUTH_SECRET` set and identical on every
+api-service instance; `DATABASE_URL` points at a database with a non-default
+password; first account created; `/api` proxied same-origin.
+
+## What this does and does not protect
+
+- It gates the **web console**. A signed-out visitor cannot open any console page.
+- `POST /v1/commands` and the live stream (`/v1/stream`) need a signed-in
+  account too (`API_REQUIRE_SIGN_IN=true`, the default). Crew accounts may only
+  answer their own calls, choose their hospital and ask for a new route; every
+  other command is for operators (403 otherwise). The incident reads stay open,
+  and incident confirm/reject still need `X-API-Key`.
+- After five wrong passwords an account locks for 15 minutes. That also lets
+  someone who knows a username lock that user out for a while; `users unlock`
+  clears it.
+- Sessions are stateless cookies. "Sign out" clears the cookie in that browser;
+  to cut off a session elsewhere, change the password or disable the account.
+- There is no self-service sign-up or password reset: an administrator manages
+  accounts with the commands above.
+
+## Tests
+
+- `backend/services/api-gateway/tests/test_auth.py` (hashing, cookies, lockout, HTTP
+  contract). The Postgres class runs with `RUN_INTEGRATION_TESTS=1
+  AUTH_TEST_DATABASE_URL=postgresql://…` pointing at a scratch database.
+- `frontend/src/services/auth/*.test.ts` (client, store, redirect safety) and
+  `frontend/e2e/login.spec.ts` (the flow in a browser, plus axe in both themes).

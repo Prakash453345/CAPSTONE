@@ -1,0 +1,634 @@
+/* Landing page. Everything is scoped under .lp so none of it leaks into the
+   console, and the console's globals are reset here.
+
+   Colour rules: red, amber and green only ever mean a signal state; blue is
+   the one interactive colour (buttons, links, focus) and also the ambulance.
+   Neutrals are one cool-tinted family. See palette.ts for the JS side. */
+
+.lp {
+  --bg: #07090d;
+  --bg2: #0c0f15;
+  --ink: #f2f4f7;
+  --body: #a7afbd;
+  --dim: #8a93a3;
+  --faint: #4a5262;
+  --line: rgba(255, 255, 255, 0.08);
+  --line2: rgba(255, 255, 255, 0.14);
+  --red: #ff5a4e;
+  --amber: #f5a623;
+  --green: #3dd68c;
+  --blue: #7b93ff;
+  --accent: #3d63f5;
+  --accent-hover: #5476ff;
+  --link: #93a6ff;
+  --sans: "Google Sans Flex", -apple-system, system-ui, sans-serif;
+  --mono: "Google Sans Code", ui-monospace, monospace;
+  --gut: clamp(20px, 4.4vw, 64px);
+  --max: 1200px;
+  --nav-h: 56px;
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-io: cubic-bezier(0.65, 0, 0.35, 1);
+
+  position: relative;
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 17px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow-x: clip;
+}
+.lp *,
+.lp *::before,
+.lp *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  border-color: var(--line);
+}
+.lp a {
+  color: inherit;
+  text-decoration: none;
+}
+.lp button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.lp :focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+.lp ::selection {
+  background: rgba(123, 147, 255, 0.35);
+  color: #fff;
+}
+.lp .wrap {
+  max-width: var(--max);
+  margin: 0 auto;
+  padding: 0 var(--gut);
+}
+
+/* ------------------------------------------------------------ type */
+.lp .eyebrow {
+  font-size: 15px;
+  font-weight: 560;
+  color: var(--body);
+}
+.lp h1,
+.lp h2,
+.lp h3 {
+  font-weight: 560;
+  color: var(--ink);
+  text-wrap: balance;
+}
+.lp .h2 {
+  font-size: clamp(34px, 4.2vw, 58px);
+  line-height: 1.06;
+  letter-spacing: -0.022em;
+}
+.lp h3 {
+  font-size: 20px;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+}
+.lp p {
+  color: var(--body);
+  text-wrap: pretty;
+}
+.lp .lede {
+  font-size: clamp(17px, 1.3vw, 20px);
+  line-height: 1.5;
+  max-width: 52ch;
+}
+.lp .hl-red {
+  color: var(--red);
+  font-style: normal;
+}
+.lp .hl-green {
+  color: var(--green);
+  font-style: normal;
+}
+.lp a.inline {
+  color: var(--link);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+.lp a.inline:hover {
+  text-decoration-thickness: 2px;
+}
+
+/* ------------------------------------------------------------ actions */
+.lp .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 46px;
+  padding: 0 24px;
+  border-radius: 999px;
+  font-size: 16px;
+  font-weight: 560;
+  white-space: nowrap;
+  color: #fff;
+  background: var(--accent);
+  transition:
+    background 0.2s ease,
+    transform 0.12s ease;
+}
+.lp .btn:hover {
+  background: var(--accent-hover);
+}
+.lp .btn:active {
+  transform: scale(0.98);
+}
+/* the secondary action is a text link, not a second button */
+.lp .more {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 46px;
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--link);
+}
+.lp .more svg {
+  transition: transform 0.2s ease;
+}
+.lp .more:hover {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.lp .more:hover svg {
+  transform: translateX(2px);
+}
+.lp .ctas {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 28px;
+  margin-top: 32px;
+}
+
+/* ------------------------------------------------------------ nav */
+.lp .nav {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 120;
+  height: var(--nav-h);
+  border-bottom: 1px solid transparent;
+  transition:
+    background 0.3s ease,
+    border-color 0.3s ease;
+}
+.lp .nav.solid {
+  background: rgba(7, 9, 13, 0.78);
+  backdrop-filter: blur(20px) saturate(1.6);
+  -webkit-backdrop-filter: blur(20px) saturate(1.6);
+  border-bottom-color: var(--line);
+}
+.lp .nav-in {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  gap: 32px;
+}
+.lp .brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.lp .nav .links {
+  display: flex;
+  gap: 28px;
+  margin-right: auto;
+}
+.lp .nav .links a {
+  font-size: 14px;
+  color: var(--body);
+  transition: color 0.2s ease;
+}
+.lp .nav .links a:hover {
+  color: var(--ink);
+}
+.lp .nav-cta {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 16px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 560;
+  color: #fff;
+  background: var(--accent);
+  transition: background 0.2s ease;
+}
+.lp .nav .links + .nav-cta {
+  margin-left: 0;
+}
+.lp .nav-cta:hover {
+  background: var(--accent-hover);
+}
+
+/* ------------------------------------------------------------ hero */
+.lp .hero {
+  position: relative;
+  height: 220vh;
+}
+.lp .hero-stick {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  height: 100svh;
+  overflow: hidden;
+}
+.lp .hero-canvas {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(120% 60% at 50% 60%, #151826 0%, transparent 60%),
+    #0a0c14;
+}
+.lp .hero-shade {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, rgba(7, 9, 13, 0.92) 0%, rgba(7, 9, 13, 0.74) 32%, rgba(7, 9, 13, 0.36) 52%, rgba(7, 9, 13, 0) 70%),
+    linear-gradient(0deg, rgba(7, 9, 13, 1) 0%, rgba(7, 9, 13, 0.85) 8%, rgba(7, 9, 13, 0.4) 20%, rgba(7, 9, 13, 0) 34%),
+    linear-gradient(180deg, rgba(7, 9, 13, 0.75) 0%, rgba(7, 9, 13, 0) 20%);
+}
+/* The copy is a full-height flex column that starts below the nav, so the
+   headline can never slide up under it however short the window is. */
+.lp .hero-copy {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: calc(var(--nav-h) + clamp(24px, 6vh, 64px)) 0 clamp(48px, 8vh, 88px);
+}
+/* the column is a flex child, so without a width it shrinks to its content
+   and its auto margins float it off the page grid */
+.lp .hero-copy > .wrap {
+  width: 100%;
+}
+.lp .hero-copy .inner {
+  max-width: 660px;
+}
+.lp .hero-copy.b {
+  pointer-events: none;
+}
+.lp .hero h1,
+.lp .hero .hero-h {
+  margin: 18px 0 24px;
+  font-size: clamp(42px, min(6vw, 10vh), 88px);
+  line-height: 1;
+  letter-spacing: -0.028em;
+  text-wrap: initial;
+}
+.lp .hero .lede {
+  max-width: 46ch;
+  color: #c3cad5;
+  text-shadow: 0 1px 18px rgba(7, 9, 13, 0.9);
+}
+.lp .trust {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 22px;
+  margin-top: clamp(28px, 4.5vh, 44px);
+}
+.lp .trust li {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--dim);
+  text-shadow: 0 1px 12px rgba(7, 9, 13, 0.95);
+}
+/* a small tick, drawn as a mask so it takes the text colour */
+.lp .trust li::before {
+  content: "";
+  width: 12px;
+  height: 12px;
+  background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 6.2l2.3 2.3 4.7-5' fill='none' stroke='%23000' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 6.2l2.3 2.3 4.7-5' fill='none' stroke='%23000' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+.lp .reveal-line {
+  display: block;
+  overflow: hidden;
+  padding-bottom: 0.1em;
+  margin-bottom: -0.1em;
+}
+.lp .reveal-line > span {
+  display: inline-block;
+}
+
+/* ------------------------------------------------------------ sections */
+.lp section.block {
+  position: relative;
+  padding: clamp(96px, 11vw, 160px) 0;
+}
+.lp .shead {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+  gap: 24px 48px;
+  align-items: end;
+  margin-bottom: clamp(40px, 5vw, 64px);
+}
+
+/* manifesto */
+.lp .manifesto {
+  padding: clamp(120px, 15vw, 220px) 0 clamp(96px, 11vw, 160px);
+}
+.lp .manifesto p.big {
+  font-size: clamp(28px, 3.6vw, 52px);
+  line-height: 1.16;
+  letter-spacing: -0.022em;
+  font-weight: 500;
+  color: var(--ink);
+  max-width: 24ch;
+}
+.lp .manifesto p.big .w {
+  display: inline-block;
+  margin-right: 0.24em;
+}
+
+/* safety rules */
+.lp .caps {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0 40px;
+}
+.lp .caps li {
+  padding: 28px 0 36px;
+  border-top: 1px solid var(--line2);
+}
+.lp .caps p {
+  margin-top: 8px;
+  font-size: 15.5px;
+  max-width: 34ch;
+}
+
+/* numbers */
+.lp .metrics {
+  background: var(--bg2);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.lp .metrics .lede {
+  margin-top: 20px;
+}
+.lp .mets {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0 40px;
+  margin-top: clamp(48px, 6vw, 80px);
+}
+.lp .met {
+  display: flex;
+  flex-direction: column-reverse;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 24px;
+  border-top: 1px solid var(--line2);
+}
+.lp .met dd {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  font-size: clamp(40px, 4.4vw, 64px);
+  font-weight: 560;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.lp .met dd small {
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--dim);
+  padding: 3px 8px;
+  border-radius: 6px;
+  box-shadow: inset 0 0 0 1px var(--line2);
+}
+.lp .met dt {
+  font-size: 15.5px;
+  color: var(--body);
+  max-width: 28ch;
+}
+
+/* faq */
+.lp .faqgrid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  gap: 40px clamp(40px, 6vw, 96px);
+  align-items: start;
+}
+.lp .faqgrid > div:first-child {
+  position: sticky;
+  top: calc(var(--nav-h) + 40px);
+}
+.lp .faqgrid .lede {
+  margin-top: 20px;
+  max-width: 34ch;
+}
+.lp .fq {
+  border-bottom: 1px solid var(--line2);
+}
+.lp .fq:first-child {
+  border-top: 1px solid var(--line2);
+}
+.lp .fq h3 {
+  font-size: inherit;
+}
+.lp .fqb {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 22px 0;
+  text-align: left;
+}
+.lp .fqb .q {
+  flex: 1;
+  font-size: clamp(17px, 1.4vw, 19px);
+  font-weight: 500;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+  transition: color 0.2s ease;
+}
+.lp .fqb:hover .q {
+  color: #fff;
+}
+.lp .plus {
+  position: relative;
+  flex: 0 0 14px;
+  height: 14px;
+  color: var(--dim);
+}
+.lp .plus::before,
+.lp .plus::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 6px;
+  width: 14px;
+  height: 1.5px;
+  border-radius: 1px;
+  background: currentColor;
+  transition: transform 0.3s var(--ease);
+}
+.lp .plus::after {
+  transform: rotate(90deg);
+}
+.lp .fq.open .plus::after {
+  transform: rotate(0deg);
+}
+.lp .fqa {
+  overflow: hidden;
+}
+.lp .fqa p {
+  padding: 0 48px 26px 0;
+  font-size: 16px;
+  line-height: 1.6;
+  max-width: 64ch;
+}
+
+/* closing call to action */
+.lp .finale {
+  border-top: 1px solid var(--line);
+}
+.lp .finale-inner {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: clamp(40px, 7vw, 112px);
+  align-items: center;
+}
+.lp .finale .lede {
+  margin-top: 20px;
+  max-width: 46ch;
+}
+.lp .bigsig {
+  width: clamp(96px, 10vw, 150px);
+  height: auto;
+}
+
+/* ------------------------------------------------------------ footer */
+.lp footer {
+  padding: 56px 0 32px;
+  border-top: 1px solid var(--line);
+  background: var(--bg2);
+}
+.lp .ftop {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 32px;
+  padding-bottom: 40px;
+}
+.lp .fbrand p {
+  margin-top: 12px;
+  font-size: 14.5px;
+  max-width: 36ch;
+}
+.lp .flinks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 28px;
+}
+.lp .flinks a {
+  font-size: 14.5px;
+  color: var(--body);
+  transition: color 0.2s ease;
+}
+.lp .flinks a:hover {
+  color: var(--ink);
+}
+.lp .fbot {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px 24px;
+  flex-wrap: wrap;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+  color: var(--dim);
+}
+
+/* ------------------------------------------------------------ responsive */
+@media (max-width: 980px) {
+  .lp .shead,
+  .lp .faqgrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .lp .faqgrid > div:first-child {
+    position: static;
+  }
+  .lp .caps {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .lp .finale-inner {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: start;
+  }
+  .lp .bigsig {
+    width: 80px;
+  }
+}
+@media (max-width: 760px) {
+  .lp .nav .links {
+    display: none;
+  }
+  .lp .nav .links + .nav-cta {
+    margin-left: auto;
+  }
+  .lp .mets {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 32px;
+  }
+}
+@media (max-width: 640px) {
+  /* on a phone the copy covers the whole scene, so darken it top to bottom
+     behind the text rather than only on the left */
+  .lp .hero-shade {
+    background: linear-gradient(180deg, rgba(7, 9, 13, 0.7) 0%, rgba(7, 9, 13, 0.35) 22%, rgba(7, 9, 13, 0.62) 48%, rgba(7, 9, 13, 0.8) 72%, rgba(7, 9, 13, 1) 100%);
+  }
+  .lp .trust {
+    display: none;
+  }
+  .lp .caps {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .lp .fqa p {
+    padding-right: 0;
+  }
+}
+@media (max-height: 760px) {
+  .lp .trust {
+    display: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lp *,
+  .lp *::before,
+  .lp *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
