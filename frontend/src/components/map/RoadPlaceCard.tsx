@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { AlertTriangle, Ambulance, Gauge, Layers, Ruler, Video, X } from "lucide-react";
-import { edgeById } from "@/data/network";
+import { edgeById, roadLabel } from "@/data/network";
 import { useMapChromeStore } from "@/store/mapChromeStore";
 import { useTrafficStore } from "@/store/trafficStore";
 import { PRESET_UNITS, useEmergencyStore } from "@/store/emergencyStore";
@@ -49,7 +49,7 @@ export function RoadPlaceCard({
   const edge = selected ? edgeById.get(selected.edgeId) : undefined;
   if (!selected || !edge) return null;
 
-  const name = edge.name || `Road ${edge.id}`;
+  const name = roadLabel(edge);
   const level = trafficLevel(value);
   const target: AnomalyTarget = { edgeId: edge.id, edgeName: edge.name, at: selected.at };
 

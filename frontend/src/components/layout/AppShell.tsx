@@ -13,6 +13,7 @@ import { Toaster } from "@/components/notifications/Toaster";
 import { TrafficDataBridge } from "@/services/traffic/TrafficDataBridge";
 import { ClipBridge } from "@/services/traffic/ClipBridge";
 import { useSystemStore } from "@/store/systemStore";
+import { navItemFor } from "@/app/nav";
 
 // Split view mounts two map pages, so it pulls in MapLibre; loading it on
 // demand keeps the map library out of the landing page's first download.
@@ -47,6 +48,13 @@ export function AppShell() {
   // the demo notice stay. Split view never applies there.
   const immersive = pathname === "/console/map";
   const drawerRef = useRef<HTMLDivElement>(null);
+
+  // One tab title per workspace, so a row of console tabs can be told apart.
+  // An unknown address is left to RouteError, which names it "Page not found".
+  useEffect(() => {
+    const item = navItemFor(pathname);
+    if (item) document.title = `${item.label} · Traffix`;
+  }, [pathname]);
 
   useEffect(() => {
     if (!drawerOpen) return;

@@ -10,6 +10,7 @@ import { selectSelectedRequest, useEmergencyStore } from "@/store/emergencyStore
 import { prefersReducedMotion } from "@/utils/motion";
 import { angleDelta, bearingDeg, haversineMeters } from "@/utils/geo";
 import { cn } from "@/utils/cn";
+import { unitName } from "@/components/console/words";
 
 type Mode = "follow" | "overview";
 
@@ -212,11 +213,11 @@ export function FollowCamera({ leftInset }: { leftInset: number }) {
       ) : (
         <div
           role="group"
-          aria-label={`Camera for ${selected.vehicleId}`}
+          aria-label={`Camera for ${unitName(selected.vehicleId)}`}
           className="pointer-events-auto flex items-center gap-1 rounded-full bg-surface-raised p-1 shadow-elevation-2"
         >
           <span className="px-2.5 text-[12px] text-muted-foreground">
-            Following <span className="font-medium text-foreground">{selected.vehicleId}</span>
+            Following <span className="font-medium text-foreground">{unitName(selected.vehicleId)}</span>
           </span>
           {(
             [

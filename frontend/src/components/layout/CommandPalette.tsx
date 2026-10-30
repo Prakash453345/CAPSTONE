@@ -15,7 +15,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { NAV_ITEMS } from "@/app/nav";
-import { roadEdges } from "@/data/network";
+import { roadEdges, roadLabel } from "@/data/network";
 import { Kbd } from "@/components/console/kit";
 import { EASE_OUT } from "@/components/console/motion";
 import { useSystemStore } from "@/store/systemStore";
@@ -59,7 +59,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
     // one entry per street, focusing the map on its middle
     const streets = new Map<string, (typeof roadEdges)[number][]>();
     for (const e of roadEdges) {
-      const name = e.name ?? "Service road";
+      const name = roadLabel(e);
       streets.set(name, [...(streets.get(name) ?? []), e]);
     }
     const roads = [...streets.entries()]

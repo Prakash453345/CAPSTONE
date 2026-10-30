@@ -98,7 +98,7 @@ export function SplitWorkspace() {
 
 function PaneHeader({ label }: { label: string }) {
   return (
-    <div className="shrink-0 border-b border-border bg-surface px-3 py-1.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+    <div className="shrink-0 border-b border-border bg-surface px-3 py-1.5 text-[12px] font-medium text-muted-foreground">
       {label}
     </div>
   );

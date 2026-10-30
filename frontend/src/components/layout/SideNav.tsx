@@ -34,7 +34,7 @@ export function SideNav({ collapsed, onToggleCollapsed, onNavigate }: SideNavPro
   const badges = useBadges();
   // the active pill slides between items with a CSS transition
   const navRef = useRef<HTMLElement>(null);
-  const pill = useIndicator(navRef, '[aria-current="page"]', [current.id, collapsed, viewMode]);
+  const pill = useIndicator(navRef, '[aria-current="page"]', [current?.id, collapsed, viewMode]);
 
   // Split view replaces the routed page, so choosing a page leaves it.
   const goTo = () => {
@@ -43,7 +43,7 @@ export function SideNav({ collapsed, onToggleCollapsed, onNavigate }: SideNavPro
   };
 
   const item = (it: NavItem) => {
-    const active = viewMode !== "split" && it.id === current.id;
+    const active = viewMode !== "split" && it.id === current?.id;
     const count = badges[it.id] ?? 0;
     const link = (
       <NavLink

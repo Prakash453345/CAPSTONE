@@ -17,7 +17,7 @@ export function TopBar({ onOpenNav, onOpenSearch }: { onOpenNav: () => void; onO
   const { pathname } = useLocation();
   const viewMode = useSystemStore((s) => s.viewMode);
   const item = navItemFor(pathname);
-  const title = viewMode === "split" ? "Split view" : item.label;
+  const title = viewMode === "split" ? "Split view" : (item?.label ?? "Page not found");
   const mac = typeof navigator !== "undefined" && /Mac|iP(hone|ad)/.test(navigator.platform);
 
   return (
@@ -45,7 +45,7 @@ export function TopBar({ onOpenNav, onOpenSearch }: { onOpenNav: () => void; onO
         className="hidden h-9 w-[min(34vw,340px)] items-center gap-2.5 rounded-xl bg-surface px-3 text-[13.5px] text-muted-foreground shadow-elevation-1 transition-shadow hover:shadow-elevation-2 md:flex"
       >
         <Search className="size-4" />
-        <span className="flex-1 text-left">Search roads, pages, actions</span>
+        <span className="flex-1 text-left">Search roads, pages and actions</span>
         <Kbd>{mac ? "⌘" : "Ctrl"}</Kbd>
         <Kbd>K</Kbd>
       </button>

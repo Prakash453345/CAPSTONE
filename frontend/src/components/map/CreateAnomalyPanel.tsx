@@ -3,6 +3,7 @@ import { AlertTriangle, X, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SimModeNotice } from "@/components/map/SimModeNotice";
 import { cn } from "@/utils/cn";
+import { roadLabel } from "@/data/network";
 import { CommandError, postCommand } from "@/services/traffic/commands";
 import type { AnomalyKind, AnomalySeverity } from "@/types";
 
@@ -77,11 +78,17 @@ export function CreateAnomalyPanel({
   };
 
   return (
-    <div className="pointer-events-auto w-[300px] max-w-full origin-top-left animate-sheet-in overflow-hidden rounded-xl bg-surface-raised shadow-elevation-3">
+    <div
+      role="region"
+      aria-labelledby="create-anomaly-title"
+      className="pointer-events-auto w-[300px] max-w-full origin-top-left animate-sheet-in overflow-hidden rounded-xl bg-surface-raised shadow-elevation-3"
+    >
       <div className="flex items-center justify-between border-b border-border px-3 py-2.5">
         <div className="flex items-center gap-2">
-          <AlertTriangle className="size-4 text-[color:var(--severity-high,#e5622a)]" />
-          <span className="text-sm font-semibold">Create anomaly</span>
+          <AlertTriangle className="size-4 text-status-warn" />
+          <span id="create-anomaly-title" className="text-sm font-semibold">
+            Create anomaly
+          </span>
         </div>
         <button
           type="button"
@@ -98,9 +105,8 @@ export function CreateAnomalyPanel({
 
         <div>
           <FieldLabel>Location</FieldLabel>
-          <div className="rounded-md border border-border bg-surface px-2.5 py-1.5 font-mono text-xs text-foreground">
-            {target.edgeName ?? "Edge"} <span className="text-muted-foreground">·</span>{" "}
-            {target.edgeId}
+          <div className="rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs text-foreground">
+            {roadLabel(target.edgeId)}
           </div>
         </div>
 
@@ -148,7 +154,7 @@ export function CreateAnomalyPanel({
         </div>
 
         {error && (
-          <p className="rounded-md bg-[color-mix(in_srgb,#e5484d_14%,transparent)] px-2.5 py-1.5 text-[11px] text-[#f0a6a6]">
+          <p className="rounded-md bg-[color-mix(in_srgb,#e5484d_14%,transparent)] px-2.5 py-1.5 text-[11px] text-status-critical">
             {error}
           </p>
         )}
@@ -164,7 +170,7 @@ export function CreateAnomalyPanel({
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div className="mb-1 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+    <div className="mb-1 text-[12px] font-medium text-muted-foreground">
       {children}
     </div>
   );

@@ -29,13 +29,24 @@ import {
   type PresetUnit,
 } from "@/store/emergencyStore";
 import { useMapStore, type MapInteractionMode } from "@/store/mapStore";
-import { edgeById, roadEdges, shortJunctionName } from "@/data/network";
+import { unitName } from "@/components/console/words";
+import { edgeById, roadEdges, roadLabel, shortJunctionName } from "@/data/network";
 import type {
   EmergencyRequest,
   EmergencyRouteView,
   EmergencyVehicleLive,
   GreenCorridorView,
 } from "@/types";
+
+/** The road picker's options: each road by name, A to Z, with the area to
+ *  tell apart roads that share a name. */
+const ROAD_CHOICES = roadEdges
+  .map((e) => {
+    const label = roadLabel(e);
+    const where = e.name && e.area ? ` · ${e.area}` : "";
+    return { id: e.id, label: `${label}${where} · ${Math.round(e.lengthM)} m` };
+  })
+  .sort((a, b) => a.label.localeCompare(b.label, "en", { numeric: true }));
 
 const WEIGHT_LABEL: Record<string, string> = {
   travel_time_weight: "travel time",
@@ -176,7 +187,7 @@ function DispatchDraftPanel() {
                 )}
               >
                 <span className="block font-medium">{u.callSign}</span>
-                <span className="block text-[10px] uppercase tracking-wide opacity-70">
+                <span className="block text-[11px] opacity-70">
                   {u.kind.replace("_", " ")}
                 </span>
               </button>
@@ -202,7 +213,7 @@ function DispatchDraftPanel() {
         />
 
         {error && (
-          <p className="rounded-md bg-[color-mix(in_srgb,#e5484d_14%,transparent)] px-2.5 py-1.5 text-[11px] text-[#f0a6a6]">
+          <p className="rounded-md bg-[color-mix(in_srgb,#e5484d_14%,transparent)] px-2.5 py-1.5 text-[11px] text-status-critical">
             {error}
           </p>
         )}
@@ -268,7 +279,7 @@ function RoutePreview({ request }: { request: EmergencyRequest }) {
 
       <div className="max-h-[calc(100vh-9rem)] space-y-2.5 overflow-y-auto p-3">
         <div className="flex items-center justify-between text-xs">
-          <span className="font-medium">{request.vehicleId}</span>
+          <span className="font-medium">{unitName(request.vehicleId)}</span>
           <StatePill state={request.state} />
         </div>
 
@@ -289,7 +300,7 @@ function RoutePreview({ request }: { request: EmergencyRequest }) {
             )}
 
             {request.detail && /reroute/i.test(request.detail) && (
-              <p className="flex items-start gap-1.5 rounded-md border border-[#f5b83d]/40 bg-[color-mix(in_srgb,#f5b83d_10%,transparent)] px-2.5 py-1.5 text-[11px] text-[#f5b83d]">
+              <p className="flex items-start gap-1.5 rounded-md border border-status-warn/40 bg-[color-mix(in_srgb,#f5b83d_10%,transparent)] px-2.5 py-1.5 text-[11px] text-status-warn">
                 <RefreshCw className="mt-px size-3 shrink-0" />
                 {request.detail.replace(/^auto-reroute — /, "Auto-rerouted: ")}
               </p>
@@ -298,7 +309,7 @@ function RoutePreview({ request }: { request: EmergencyRequest }) {
             {previewed && (
               <>
                 {previewed.forcedThrough.length > 0 && (
-                  <p className="flex items-start gap-1.5 rounded-md border border-[#e5484d]/40 bg-[color-mix(in_srgb,#e5484d_10%,transparent)] px-2.5 py-1.5 text-[11px] text-[#f0a6a6]">
+                  <p className="flex items-start gap-1.5 rounded-md border border-status-critical/40 bg-[color-mix(in_srgb,#e5484d_10%,transparent)] px-2.5 py-1.5 text-[11px] text-status-critical">
                     <AlertTriangle className="mt-px size-3 shrink-0" />
                     <span>
                       This is the only route available, and it crosses{" "}
@@ -348,7 +359,7 @@ function RoutePreview({ request }: { request: EmergencyRequest }) {
                     <span
                       className={cn(
                         "font-mono font-semibold",
-                        previewed.reliable ? "text-[#46c46a]" : "text-[#f5b83d]",
+                        previewed.reliable ? "text-status-ok" : "text-status-warn",
                       )}
                     >
                       {previewed.reliable ? "OK" : "low"}
@@ -359,15 +370,15 @@ function RoutePreview({ request }: { request: EmergencyRequest }) {
                 <CostBar route={previewed} />
 
                 {previewed.anomalousSegmentsAvoided.length > 0 && (
-                  <p className="flex items-center gap-1 text-[11px] text-[#46c46a]">
-                    <span className="size-1.5 rounded-full bg-[#46c46a]" />
+                  <p className="flex items-center gap-1 text-[11px] text-status-ok">
+                    <span className="size-1.5 rounded-full bg-status-ok" />
                     steered around {previewed.anomalousSegmentsAvoided.length} anomalous segment
                     {previewed.anomalousSegmentsAvoided.length > 1 ? "s" : ""}
                   </p>
                 )}
                 {previewed.congestedSegments.length > 0 && (
-                  <p className="flex items-center gap-1 text-[11px] text-[#f5b83d]">
-                    <span className="size-1.5 rounded-full bg-[#f5b83d]" />
+                  <p className="flex items-center gap-1 text-[11px] text-status-warn">
+                    <span className="size-1.5 rounded-full bg-status-warn" />
                     {previewed.congestedSegments.length} congested segment
                     {previewed.congestedSegments.length > 1 ? "s" : ""} on this route
                   </p>
@@ -387,7 +398,7 @@ function RoutePreview({ request }: { request: EmergencyRequest }) {
             )}
 
             {error && (
-              <p className="rounded-md bg-[color-mix(in_srgb,#e5484d_14%,transparent)] px-2.5 py-1.5 text-[11px] text-[#f0a6a6]">
+              <p className="rounded-md bg-[color-mix(in_srgb,#e5484d_14%,transparent)] px-2.5 py-1.5 text-[11px] text-status-critical">
                 {error}
               </p>
             )}
@@ -459,11 +470,11 @@ function MissionSummary({
         className={cn(
           "rounded-md border px-2.5 py-2",
           cancelled
-            ? "border-[#e5484d]/40 bg-[color-mix(in_srgb,#e5484d_8%,transparent)]"
-            : "border-[#46c46a]/40 bg-[color-mix(in_srgb,#46c46a_8%,transparent)]",
+            ? "border-status-critical/40 bg-[color-mix(in_srgb,#e5484d_8%,transparent)]"
+            : "border-status-ok/40 bg-[color-mix(in_srgb,#46c46a_8%,transparent)]",
         )}
       >
-        <p className={cn("text-xs font-semibold", cancelled ? "text-[#f0a6a6]" : "text-[#46c46a]")}>
+        <p className={cn("text-xs font-semibold", cancelled ? "text-status-critical" : "text-status-ok")}>
           {cancelled ? "Mission cancelled" : "Mission complete"}
         </p>
         <p className="mt-0.5 text-[11px] text-muted-foreground">
@@ -474,7 +485,7 @@ function MissionSummary({
       </div>
 
       <div className="space-y-1 rounded-md border border-border bg-surface px-2.5 py-2 text-[11px]">
-        <SummaryRow label="Vehicle" value={request.vehicleId} />
+        <SummaryRow label="Vehicle" value={unitName(request.vehicleId)} />
         <SummaryRow label="From" value={source} />
         <SummaryRow label="To" value={destination} />
         <SummaryRow
@@ -569,7 +580,7 @@ function WhyThisRoute({ route }: { route: EmergencyRouteView }) {
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center gap-1 px-2.5 py-1.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground hover:text-foreground"
+        className="flex w-full items-center gap-1 px-2.5 py-1.5 text-[12px] font-medium text-muted-foreground hover:text-foreground"
       >
         <ChevronRight className={cn("size-3 transition-transform", open && "rotate-90")} />
         Why this route?
@@ -626,7 +637,7 @@ function Timeline({ entries }: { entries: EmergencyRequest["timeline"] }) {
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="mb-1.5 flex w-full items-center gap-1 font-mono text-[10px] uppercase tracking-wider text-muted-foreground hover:text-foreground"
+        className="mb-1.5 flex w-full items-center gap-1 text-[12px] font-medium text-muted-foreground hover:text-foreground"
       >
         <ChevronRight className={cn("size-3 transition-transform", open && "rotate-90")} />
         History · {entries.length}
@@ -662,28 +673,28 @@ const CORRIDOR_STATUS_META: Record<
 > = {
   proposed: {
     label: "Proposed", pulse: false,
-    dot: "bg-[#8a94a6]", border: "border-[#8a94a6]/40",
-    bg: "bg-[color-mix(in_srgb,#8a94a6_8%,transparent)]", text: "text-[#8a94a6]",
+    dot: "bg-muted-foreground", border: "border-muted-foreground/40",
+    bg: "bg-[color-mix(in_srgb,#8a94a6_8%,transparent)]", text: "text-muted-foreground",
   },
   active: {
     label: "Active", pulse: true,
-    dot: "bg-[#46c46a]", border: "border-[#46c46a]/40",
-    bg: "bg-[color-mix(in_srgb,#46c46a_8%,transparent)]", text: "text-[#46c46a]",
+    dot: "bg-status-ok", border: "border-status-ok/40",
+    bg: "bg-[color-mix(in_srgb,#46c46a_8%,transparent)]", text: "text-status-ok",
   },
   restoring: {
     label: "Restoring", pulse: true,
-    dot: "bg-[#f5b83d]", border: "border-[#f5b83d]/40",
-    bg: "bg-[color-mix(in_srgb,#f5b83d_8%,transparent)]", text: "text-[#f5b83d]",
+    dot: "bg-status-warn", border: "border-status-warn/40",
+    bg: "bg-[color-mix(in_srgb,#f5b83d_8%,transparent)]", text: "text-status-warn",
   },
   completed: {
     label: "Completed", pulse: false,
-    dot: "bg-[#8a94a6]", border: "border-[#8a94a6]/40",
-    bg: "bg-[color-mix(in_srgb,#8a94a6_8%,transparent)]", text: "text-[#8a94a6]",
+    dot: "bg-muted-foreground", border: "border-muted-foreground/40",
+    bg: "bg-[color-mix(in_srgb,#8a94a6_8%,transparent)]", text: "text-muted-foreground",
   },
   cancelled: {
     label: "Cancelled", pulse: false,
-    dot: "bg-[#e5484d]", border: "border-[#e5484d]/40",
-    bg: "bg-[color-mix(in_srgb,#e5484d_8%,transparent)]", text: "text-[#e5484d]",
+    dot: "bg-status-critical", border: "border-status-critical/40",
+    bg: "bg-[color-mix(in_srgb,#e5484d_8%,transparent)]", text: "text-status-critical",
   },
 };
 
@@ -741,8 +752,8 @@ function CorridorStatus({
               className={cn(
                 "rounded px-1.5 py-0.5 font-mono text-[10px] transition-colors",
                 isPassed && "bg-muted text-muted-foreground line-through",
-                !isPassed && isNext && "bg-[#46c46a]/30 text-[#46c46a] ring-1 ring-[#46c46a]",
-                !isPassed && !isNext && "bg-[#46c46a]/15 text-[#46c46a]/80",
+                !isPassed && isNext && "bg-status-ok/30 text-status-ok ring-1 ring-[#46c46a]",
+                !isPassed && !isNext && "bg-status-ok/15 text-status-ok/80",
               )}
             >
               J{r.order + 1}
@@ -761,7 +772,7 @@ function CorridorStatus({
           </div>
           <div className="h-1.5 overflow-hidden rounded-full bg-muted">
             <div
-              className="h-full rounded-full bg-[#46c46a] transition-[width] duration-500"
+              className="h-full rounded-full bg-status-ok transition-[width] duration-500"
               style={{ width: `${progressPct}%` }}
             />
           </div>
@@ -775,7 +786,7 @@ function CorridorStatus({
 
 function Label({ children }: { children: React.ReactNode }) {
   return (
-    <div className="mb-1 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+    <div className="mb-1 text-[12px] font-medium text-muted-foreground">
       {children}
     </div>
   );
@@ -811,9 +822,7 @@ function PointRow({
       >
         {icon}
         {point ? (
-          <span className="truncate font-mono">
-            {point.edgeName ?? "Edge"} · {point.edgeId}
-          </span>
+          <span className="truncate">{roadLabel(point.edgeId)}</span>
         ) : (
           <span>{picking ? "Click a road on the map…" : "Set on map"}</span>
         )}
@@ -823,7 +832,7 @@ function PointRow({
         if (!edge) return;
         useEmergencyStore.getState().setDraftPoint(which, { edgeId: edge.id, edgeName: edge.name, at: edge.path[Math.floor(edge.path.length / 2)] });
         useMapStore.getState().setInteractionMode("idle");
-      }}><option value="">Or choose a road…</option>{roadEdges.map((edge) => <option key={edge.id} value={edge.id}>{edge.name ?? "Road"} · {edge.id}</option>)}</select>
+      }}><option value="">Or choose a road…</option>{ROAD_CHOICES.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}</select>
     </div>
   );
 }
@@ -839,14 +848,14 @@ function Metric({
 }) {
   return (
     <div className="rounded-md border border-border bg-surface px-2 py-1.5">
-      <div className="font-mono text-[9px] uppercase tracking-wide text-muted-foreground">
+      <div className="text-[11px] text-muted-foreground">
         {label}
       </div>
       <div
         className={cn(
           "text-sm font-semibold",
-          tone === "good" && "text-[#46c46a]",
-          tone === "bad" && "text-[#f5b83d]",
+          tone === "good" && "text-status-ok",
+          tone === "bad" && "text-status-warn",
         )}
       >
         {value}
@@ -873,14 +882,14 @@ function StatePill({ state }: { state: EmergencyRequest["state"] }) {
   const map: Record<EmergencyRequest["state"], [string, string]> = {
     created: ["Created", "text-muted-foreground"],
     routing: ["Routing", "text-primary"],
-    route_ready: ["Route ready", "text-[#46c46a]"],
-    green_corridor_active: ["Corridor active", "text-[#46c46a]"],
+    route_ready: ["Route ready", "text-status-ok"],
+    green_corridor_active: ["Corridor active", "text-status-ok"],
     in_transit: ["In transit", "text-primary"],
     completed: ["Completed", "text-muted-foreground"],
-    cancelled: ["Cancelled", "text-[#f0a6a6]"],
+    cancelled: ["Cancelled", "text-status-critical"],
   };
   const [label, cls] = map[state];
-  return <span className={cn("font-mono text-[10px] uppercase tracking-wide", cls)}>{label}</span>;
+  return <span className={cn("text-[11px] font-medium", cls)}>{label}</span>;
 }
 
 function fmtDuration(s: number): string {

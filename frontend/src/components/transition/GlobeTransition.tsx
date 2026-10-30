@@ -5,6 +5,7 @@ import { DEFAULT_CENTER } from "@/store/mapStore";
 import { CITIES_LABEL, HOME_CITY, SHOWN_CITIES, formatLatLng } from "@/data/city";
 import { useTransitionStore } from "@/store/transitionStore";
 import type { EarthCamera } from "./cinematicEarth";
+import { hasFastWebGL } from "@/utils/webgl";
 
 /**
  * Landing → console cinematic: a single continuous camera move from high
@@ -92,14 +93,14 @@ function cameraAt(t: number): EarthCamera {
 type Caption = "orbit" | "region" | "city" | "live";
 
 const CAPTIONS: Record<Caption, { kicker: string; title: string; sub: string }> = {
-  orbit: { kicker: "Orbital view", title: "Earth", sub: "Traffic intelligence network" },
-  region: { kicker: "Regional approach", title: "South Asia", sub: "Andhra Pradesh · Krishna corridor" },
+  orbit: { kicker: "Opening the live demo", title: "Earth", sub: "Zooming in on the pilot city" },
+  region: { kicker: "Opening the live demo", title: "Andhra Pradesh", sub: "Along the Krishna river" },
   city: {
-    kicker: "Target acquired",
+    kicker: "Opening the live demo",
     title: CITIES_LABEL,
     sub: SHOWN_CITIES.length > 1 ? "Pilot deployment and capital region" : HOME_CITY.blurb,
   },
-  live: { kicker: "Handing over", title: "Live Command Center", sub: "Connecting to real-time traffic data" },
+  live: { kicker: "Almost there", title: "Traffix console", sub: "Connecting to live traffic data" },
 };
 
 function captionAt(t: number): Caption {
@@ -198,6 +199,7 @@ function TransitionStage() {
       .then(async (tex) => {
         if (cancelled) return;
         if (!tex) throw new Error("textures timed out");
+        if (!hasFastWebGL()) throw new Error("no GPU for the cinematic");
         const { CinematicEarth } = await moduleLoad;
         earth = new CinematicEarth(canvas, tex);
         const size = () => earth?.setSize(host.clientWidth, host.clientHeight);
@@ -342,14 +344,14 @@ function TransitionStage() {
 
       {/* target reticle — positioned every frame from the 3D projection */}
       <div ref={reticleRef} className="pointer-events-none absolute left-0 top-0" style={{ opacity: 0, willChange: "transform, opacity" }}>
-        <div className="absolute -left-7 -top-7 h-14 w-14 rounded-full border border-[#7fe6ff]/70" />
-        <div className="absolute -left-[3px] -top-[3px] h-[6px] w-[6px] rounded-full bg-[#7fe6ff] shadow-[0_0_14px_3px_rgba(127,230,255,0.7)]" />
-        <div className="absolute -left-12 top-0 h-px w-4 bg-[#7fe6ff]/70" />
-        <div className="absolute left-8 top-0 h-px w-4 bg-[#7fe6ff]/70" />
-        <div className="absolute -top-12 left-0 h-4 w-px bg-[#7fe6ff]/70" />
-        <div className="absolute left-0 top-8 h-4 w-px bg-[#7fe6ff]/70" />
+        <div className="absolute -left-7 -top-7 h-14 w-14 rounded-full border border-[#9db0ff]/70" />
+        <div className="absolute -left-[3px] -top-[3px] h-[6px] w-[6px] rounded-full bg-[#9db0ff] shadow-[0_0_14px_3px_rgba(157,176,255,0.7)]" />
+        <div className="absolute -left-12 top-0 h-px w-4 bg-[#9db0ff]/70" />
+        <div className="absolute left-8 top-0 h-px w-4 bg-[#9db0ff]/70" />
+        <div className="absolute -top-12 left-0 h-4 w-px bg-[#9db0ff]/70" />
+        <div className="absolute left-0 top-8 h-4 w-px bg-[#9db0ff]/70" />
         <div className="absolute left-14 -top-3 whitespace-nowrap" style={{ fontFamily: "'Google Sans Code', ui-monospace, monospace" }}>
-          <div className="text-[10px] tracking-[0.28em] text-[#7fe6ff]">{HOME_CITY.name.toUpperCase()}</div>
+          <div className="text-[10px] tracking-[0.28em] text-[#9db0ff]">{HOME_CITY.name.toUpperCase()}</div>
           <div className="mt-0.5 text-[10px] tracking-[0.12em] text-white/55">{formatLatLng(DEFAULT_CENTER)}</div>
         </div>
       </div>
@@ -375,10 +377,10 @@ function TransitionStage() {
       >
         <div className="flex items-center gap-2.5">
           <span className="relative flex h-1.5 w-1.5">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#7fe6ff] opacity-50" />
-            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-[#7fe6ff]" />
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#9db0ff] opacity-50" />
+            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-[#9db0ff]" />
           </span>
-          ITMS · ORBITAL APPROACH
+          <span className="font-sans text-[14px] font-semibold tracking-normal text-white/80">Traffix</span>
         </div>
         <div className="grid grid-cols-[auto_auto] gap-x-4 gap-y-1 text-right tabular-nums">
           <span className="text-white/35">LAT</span>
@@ -402,11 +404,10 @@ function TransitionStage() {
               transition={{ duration: 0.7, ease: EASE }}
             >
               <div
-                className="flex items-center gap-3 text-[10px] tracking-[0.34em] text-[#7fe6ff]"
-                style={{ fontFamily: "'Google Sans Code', ui-monospace, monospace" }}
+                className="flex items-center gap-3 text-[14px] font-medium text-[#9db0ff]"
               >
-                <span className="h-px w-8 bg-[#7fe6ff]/60" />
-                {copy.kicker.toUpperCase()}
+                <span className="h-px w-8 bg-[#9db0ff]/60" />
+                {copy.kicker}
               </div>
               <div className="mt-3 text-[34px] font-light leading-none tracking-[-0.01em] text-white sm:text-[48px]">
                 {copy.title}
@@ -421,13 +422,12 @@ function TransitionStage() {
       <AnimatePresence>
         {loading && (
           <motion.div
-            className="pointer-events-none absolute inset-0 flex items-center justify-center text-[10px] tracking-[0.34em] text-white/45"
-            style={{ fontFamily: "'Google Sans Code', ui-monospace, monospace" }}
+            className="pointer-events-none absolute inset-0 flex items-center justify-center text-[14px] text-white/55"
             initial={{ opacity: 0 }}
             animate={{ opacity: [0.35, 1, 0.35], transition: { duration: 1.8, repeat: Infinity } }}
             exit={{ opacity: 0, transition: { duration: 0.4 } }}
           >
-            ACQUIRING ORBIT
+            Loading the map
           </motion.div>
         )}
       </AnimatePresence>
@@ -435,15 +435,14 @@ function TransitionStage() {
       {/* progress hairline + skip, sitting inside the lower letterbox */}
       <div className="absolute inset-x-6 bottom-[calc(4vh-6px)] flex items-center gap-5 sm:inset-x-10">
         <div className="h-px flex-1 overflow-hidden bg-white/10">
-          <div ref={progressRef} className="h-full w-full origin-left bg-[#7fe6ff]/80" style={{ transform: "scaleX(0)" }} />
+          <div ref={progressRef} className="h-full w-full origin-left bg-[#9db0ff]/80" style={{ transform: "scaleX(0)" }} />
         </div>
         <button
           type="button"
           onClick={reveal}
-          className="pointer-events-auto text-[10px] tracking-[0.28em] text-white/45 transition-colors hover:text-white/90"
-          style={{ fontFamily: "'Google Sans Code', ui-monospace, monospace" }}
+          className="pointer-events-auto text-[14px] text-white/55 transition-colors hover:text-white/90"
         >
-          SKIP ↵
+          Skip
         </button>
       </div>
     </motion.div>

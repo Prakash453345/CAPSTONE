@@ -17,13 +17,21 @@ export function AreaChart({
   color,
   height = 200,
   max,
+  minTop = 0,
+  maxTop = Infinity,
   format = (v) => v.toFixed(0),
   label,
 }: {
   points: Point[];
   color: string;
   height?: number;
+  /** A fixed top for the value axis. */
   max?: number;
+  /** Without `max`, the axis fits the data but never shows less than
+   *  0-minTop (so 1% congestion isn't drawn as a full-height line) or more
+   *  than 0-maxTop. */
+  minTop?: number;
+  maxTop?: number;
   format?: (v: number) => string;
   label: string;
 }) {
@@ -42,7 +50,8 @@ export function AreaChart({
 
   const valid = points.filter((p): p is { at: number; value: number } => p.value !== null && Number.isFinite(p.value));
   // the left gutter fits the widest axis label, so "40 km/h" is never clipped
-  const top = max ?? niceCeil((valid.length ? Math.max(...valid.map((p) => p.value)) : 1) * 1.1 || 1);
+  const peak = valid.length ? Math.max(...valid.map((p) => p.value)) : 1;
+  const top = max ?? Math.min(maxTop, niceCeil(Math.max(minTop, peak * 1.1) || 1));
   const labelChars = Math.max(...[0, top / 2, top].map((v) => format(v).length));
   const pad = { l: Math.max(28, labelChars * 6.6 + 12), r: 8, t: 10, b: 24 };
   const w = width - pad.l - pad.r;
@@ -66,7 +75,7 @@ export function AreaChart({
     const flat = segs.flat();
     return { t0, t1, hi, x, y, segs: segs.filter((s) => s.length > 1), flat };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [points, width, height, max]);
+  }, [points, width, height, top]);
 
   if (!geom)
     return (
@@ -76,7 +85,10 @@ export function AreaChart({
     );
 
   const ticks = [0, 0.5, 1].map((f) => geom.hi * f);
-  const time = (t: number) => new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  // Under five minutes of history both ends share a minute, so show seconds.
+  const short = geom.t1 - geom.t0 < 5 * 60_000;
+  const time = (t: number) =>
+    new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", ...(short ? { second: "2-digit" } : {}) });
   const hovered = hover !== null ? geom.flat[hover] : null;
 
   const onMove = (e: React.PointerEvent) => {

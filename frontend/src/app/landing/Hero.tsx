@@ -1,17 +1,17 @@
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, useMotionValueEvent, useScroll, useTransform } from "framer-motion";
 import type { HeroScene } from "./heroScene";
-import { ArrowIcon, Lines } from "./motion";
+import { ChevronIcon, Lines } from "./motion";
+import { hasFastWebGL } from "@/utils/webgl";
 
 const EASE = [0.16, 1, 0.3, 1] as const;
-const cssVar = (name: string, value: string) => ({ [name]: value }) as CSSProperties;
 
 /**
  * Full-bleed WebGL night avenue, pinned for two screens. Scrolling lifts the
  * camera to an aerial view while the copy hands over from the problem ("an
  * ambulance should never meet a red light") to the answer.
  */
-export function Hero({ ready, paused, reduced }: { ready: boolean; paused: boolean; reduced: boolean }) {
+export function Hero({ paused, reduced }: { paused: boolean; reduced: boolean }) {
   const sectionRef = useRef<HTMLElement>(null);
   const hostRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<HeroScene | null>(null);
@@ -42,6 +42,7 @@ export function Hero({ ready, paused, reduced }: { ready: boolean; paused: boole
     import("./heroScene")
       .then(({ HeroScene }) => {
         if (cancelled) return;
+        if (!hasFastWebGL()) throw new Error("no GPU: showing the still hero");
         scene = new HeroScene(host, { reducedMotion: reduced, mobile: window.innerWidth < 760 });
         sceneRef.current = scene;
         scene.setProgress(scrollYProgress.get() / 0.82);
@@ -76,7 +77,6 @@ export function Hero({ ready, paused, reduced }: { ready: boolean; paused: boole
   const aEvents = useTransform(scrollYProgress, (v) => (v > 0.12 ? "none" : "auto"));
   const bOpacity = useTransform(scrollYProgress, [0.36, 0.52], [0, 1]);
   const bY = useTransform(scrollYProgress, [0.36, 0.56], [50, 0]);
-  const cueOpacity = useTransform(scrollYProgress, [0, 0.06], [1, 0]);
 
   return (
     <section className="hero" id="top" ref={sectionRef}>
@@ -87,17 +87,17 @@ export function Hero({ ready, paused, reduced }: { ready: boolean; paused: boole
         <motion.div className="hero-copy a" style={{ opacity: aOpacity, y: aY, pointerEvents: aEvents }}>
           <div className="wrap">
             <div className="inner">
-              <motion.span
-                className="pill"
-                initial={{ opacity: 0, y: 16 }}
-                animate={ready ? { opacity: 1, y: 0 } : {}}
-                transition={{ duration: 1, ease: EASE }}
+              <motion.p
+                className="eyebrow"
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.8, ease: EASE }}
               >
-                <i className="dot" /> Now live as a pilot in Vijayawada
-              </motion.span>
+                Emergency-aware traffic control for Vijayawada
+              </motion.p>
               <Lines
                 as="h1"
-                play={ready}
+                play
                 lines={[
                   "An ambulance should",
                   "never meet",
@@ -108,45 +108,35 @@ export function Hero({ ready, paused, reduced }: { ready: boolean; paused: boole
               />
               <motion.p
                 className="lede"
-                initial={{ opacity: 0, y: 20 }}
-                animate={ready ? { opacity: 1, y: 0 } : {}}
-                transition={{ duration: 1.1, delay: 0.45, ease: EASE }}
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.9, delay: 0.35, ease: EASE }}
               >
-                ITMS is a smart traffic system for cities. It spots accidents on its own, has a real person confirm
-                them, sends the nearest ambulance and turns the traffic lights ahead of it green, so help arrives
-                faster.
+                Traffix watches the city&rsquo;s existing cameras for accidents, asks an operator to confirm what it
+                sees, sends the nearest ambulance and turns each light on its route green just before it arrives.
               </motion.p>
               <motion.div
                 className="ctas"
-                initial={{ opacity: 0, y: 20 }}
-                animate={ready ? { opacity: 1, y: 0 } : {}}
-                transition={{ duration: 1.1, delay: 0.6, ease: EASE }}
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.9, delay: 0.5, ease: EASE }}
               >
                 <a className="btn" href="/console">
-                  <span className="lamp">
-                    <ArrowIcon />
-                  </span>
-                  Try the live demo
+                  Open the live demo
                 </a>
-                <a className="btn ghost" href="#flow">
-                  See how it works
+                <a className="more" href="#flow">
+                  See how it works <ChevronIcon />
                 </a>
               </motion.div>
               <motion.ul
                 className="trust"
                 initial={{ opacity: 0 }}
-                animate={ready ? { opacity: 1 } : {}}
-                transition={{ duration: 1.2, delay: 0.85 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 1, delay: 0.7 }}
               >
-                <li>
-                  <i style={cssVar("--c", "#2bf59a")} /> A person approves every alert
-                </li>
-                <li>
-                  <i style={cssVar("--c", "#3fe0ff")} /> Works with existing city cameras
-                </li>
-                <li>
-                  <i style={cssVar("--c", "#ffb020")} /> Every decision recorded
-                </li>
+                <li>An operator approves every dispatch</li>
+                <li>Uses the cameras already on the street</li>
+                <li>Every decision is logged</li>
               </motion.ul>
             </div>
           </div>
@@ -155,7 +145,7 @@ export function Hero({ ready, paused, reduced }: { ready: boolean; paused: boole
         <motion.div className="hero-copy b" style={{ opacity: bOpacity, y: bY }}>
           <div className="wrap">
             <div className="inner">
-              <span className="eyebrow">Our answer</span>
+              <p className="eyebrow">What Traffix does</p>
               <h2 className="hero-h">
                 So we turn
                 <br />
@@ -169,10 +159,6 @@ export function Hero({ ready, paused, reduced }: { ready: boolean; paused: boole
           </div>
         </motion.div>
 
-        <motion.a href="#why" className="scrollcue" style={{ opacity: cueOpacity }}>
-          <span className="track" />
-          Scroll
-        </motion.a>
       </div>
     </section>
   );

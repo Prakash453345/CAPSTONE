@@ -8,6 +8,7 @@ import { uploadClip } from "@/services/traffic/clips";
 import { useClipStore } from "@/store/clipStore";
 import { useSystemStore } from "@/store/systemStore";
 import { cn } from "@/utils/cn";
+import { roadLabel } from "@/data/network";
 
 const ACCEPT = ".mp4,.mov,.avi,.mkv,.webm,.m4v,video/*";
 const REVIEW_PATH = "/console/anomalies";
@@ -30,7 +31,7 @@ export function UploadClipPanel({ target, onClose }: { target: AnomalyTarget; on
   const [error, setError] = useState<string | null>(null);
   const [doneId, setDoneId] = useState<string | null>(null);
   const cancelRef = useRef<(() => void) | null>(null);
-  const road = target.edgeName || `Road ${target.edgeId}`;
+  const road = roadLabel(target.edgeId);
 
   useEffect(() => () => cancelRef.current?.(), []);
 

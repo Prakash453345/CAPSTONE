@@ -295,6 +295,9 @@ export class CinematicEarth {
       antialias: true,
       alpha: false,
       powerPreference: "high-performance",
+      // Refuse a software-rendered context (no usable GPU): the transition's
+      // catch then goes straight to the console instead of a 1 fps flight.
+      failIfMajorPerformanceCaveat: true,
     });
     // Capped at 1.5: on 2x/2.25x laptop panels the full ratio more than
     // doubles the pixels shaded for no visible gain in a moving shot.

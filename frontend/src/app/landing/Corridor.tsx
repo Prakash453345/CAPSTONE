@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { AnimatePresence, motion, useMotionValueEvent, useScroll } from "framer-motion";
 import type { StoryScene } from "./city3d/scenes";
+import { AMBER, BLUE, GREEN, RED } from "./palette";
 import "./showcase.css";
+import { hasFastWebGL } from "@/utils/webgl";
 
 const EASE = [0.16, 1, 0.3, 1] as const;
 
@@ -10,39 +12,39 @@ const STEPS = [
     key: "detect",
     t: "0:00",
     title: "Spot the problem",
-    color: "#ff3b30",
+    color: RED,
     body: "Street cameras notice a crash or a broken-down car within seconds, often before anyone calls it in.",
   },
   {
     key: "confirm",
     t: "0:15",
     title: "A person checks it",
-    color: "#ffb020",
+    color: AMBER,
     body: "An operator looks at the live video and confirms it's real. Nothing happens without a person's OK.",
   },
   {
     key: "dispatch",
     t: "0:16",
     title: "Send help",
-    color: "#3fe0ff",
+    color: BLUE,
     body: "The nearest free ambulance is sent on the fastest route, based on how busy the roads are right now.",
   },
   {
     key: "clear",
     t: "0:50",
     title: "Clear the way",
-    color: "#2bf59a",
+    color: GREEN,
     body: "Each traffic light ahead turns green just before the ambulance arrives, then goes straight back to normal.",
   },
 ] as const;
 
 /** What the incident window reports at each moment of the story. */
 const EVENTS = [
-  { title: "Broken-down car detected", sub: "Camera 07, Bandar Road", color: "#ff3b30" },
-  { title: "Confirmed by an operator", sub: "Checked on live video", color: "#ffb020" },
-  { title: "Ambulance on its way", sub: "Nearest free unit, by the fastest route", color: "#3fe0ff" },
-  { title: "Green corridor active", sub: "Lights turn green just ahead of it", color: "#2bf59a" },
-  { title: "On scene in 50 seconds", sub: "Every light back to its normal cycle", color: "#2bf59a" },
+  { title: "Broken-down car detected", sub: "Camera 07, Bandar Road", color: RED },
+  { title: "Confirmed by an operator", sub: "Checked on live video", color: AMBER },
+  { title: "Ambulance on its way", sub: "Nearest free unit, by the fastest route", color: BLUE },
+  { title: "Green corridor active", sub: "Lights turn green just ahead of it", color: GREEN },
+  { title: "On scene in 50 seconds", sub: "Every light back to its normal cycle", color: GREEN },
 ] as const;
 
 // story progress at which each step begins (matches the phases in cityScenes)
@@ -97,7 +99,7 @@ export function Corridor({ paused, reduced }: { paused: boolean; reduced: boolea
       loading = true;
       import("./city3d/scenes")
         .then(({ createStory }) => {
-          if (cancelled) return;
+          if (cancelled || !hasFastWebGL()) return;
           const map = createStory(canvas, overlay, reduced);
           mapRef.current = map;
           map.setStory(scrollYProgress.get());
@@ -155,11 +157,11 @@ export function Corridor({ paused, reduced }: { paused: boolean; reduced: boolea
   const ev = EVENTS[event]!;
 
   return (
-    <section className="corridor" id="flow" ref={sectionRef} aria-label="How ITMS responds to an incident">
+    <section className="corridor" id="flow" ref={sectionRef} aria-label="How Traffix responds to an incident">
       <div className="corridor-stick">
         <div className="hw">
           <div className="hw-side">
-            <span className="eyebrow">How it works</span>
+            <p className="eyebrow">How it works</p>
             <h2 className="hw-h">
               From a breakdown to help on scene in under a minute.
             </h2>

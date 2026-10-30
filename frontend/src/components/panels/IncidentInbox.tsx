@@ -211,7 +211,7 @@ function ReviewForm({
           required
           value={actor}
           onChange={(e) => setActor(e.target.value)}
-          placeholder="operator:your-name"
+          placeholder="e.g. operator:priya"
         />
       </label>
       <label>

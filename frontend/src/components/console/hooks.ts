@@ -82,3 +82,34 @@ export function useIndicator(container: RefObject<HTMLElement | null>, selector:
       : "none",
   };
 }
+
+/**
+ * A live ranking that reads steadily. Live values reorder a "busiest first"
+ * list every second, so rows jump under the pointer and are hard to read or
+ * click. This keeps the order fixed while the pointer or keyboard focus is
+ * on the list, and otherwise re-ranks at most every `everyMs`; the values
+ * shown in each row stay live. Spread `hold` on the list's container.
+ */
+export function useSteadyOrder(ranked: string[], everyMs = 10_000) {
+  const [held, setHeld] = useState(false);
+  const last = useRef<{ order: string[]; at: number }>({ order: [], at: 0 });
+  const now = Date.now();
+  if (!held && (last.current.order.length === 0 || now - last.current.at >= everyMs)) {
+    last.current = { order: ranked, at: now };
+  }
+  const pos = new Map(last.current.order.map((name, i) => [name, i]));
+  // anything new since the last ranking goes after it, in live order
+  const order = ranked
+    .map((name, i) => ({ name, rank: pos.get(name) ?? ranked.length + i }))
+    .sort((a, b) => a.rank - b.rank)
+    .map((r) => r.name);
+  const hold = {
+    onPointerEnter: () => setHeld(true),
+    onPointerLeave: () => setHeld(false),
+    onFocus: () => setHeld(true),
+    onBlur: (e: React.FocusEvent<HTMLElement>) => {
+      if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setHeld(false);
+    },
+  };
+  return { order, hold };
+}

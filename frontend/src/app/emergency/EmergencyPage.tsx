@@ -16,7 +16,7 @@ import {
   useVisibleRequests,
 } from "@/store/emergencyStore";
 import { useMapStore } from "@/store/mapStore";
-import { edgeById, roadLabel, shortJunctionName } from "@/data/network";
+import { edgeById, routeLabel, shortJunctionName } from "@/data/network";
 import { cn } from "@/utils/cn";
 import type { EmergencyRequest } from "@/types";
 
@@ -139,7 +139,7 @@ export function EmergencyPage() {
                       <Pill tone={state.tone}>{state.label}</Pill>
                     </span>
                     <span className="mt-0.5 block truncate text-[12.5px] text-muted-foreground">
-                      {roadLabel(r.sourceEdge)} to {roadLabel(r.destinationEdge)}
+                      {routeLabel(r.sourceEdge, r.destinationEdge)}
                       {!isTerminalRequest(r) && eta != null && ` · ${mmss(eta)} away`}
                     </span>
                   </span>

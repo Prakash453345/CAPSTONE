@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronDown, Radio, Search, Waypoints } from "lucide-react";
 import { edgeById, networkName, roadEdges, roadLabel, shortJunctionName, signalJunctions } from "@/data/network";
@@ -7,6 +7,7 @@ import { useIncidentStore } from "@/store/incidentStore";
 import { useMapStore } from "@/store/mapStore";
 import { EmptyState, Meter, Pill, Segmented } from "@/components/console/kit";
 import { EASE_OUT } from "@/components/console/motion";
+import { useSteadyOrder } from "@/components/console/hooks";
 import { toneText } from "@/components/console/tone";
 import { congestionTone, congestionWord } from "@/components/console/words";
 import { cn } from "@/utils/cn";
@@ -64,11 +65,7 @@ function Roads() {
   const congestion = useTrafficStore((s) => s.roadCongestion);
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState<string | null>(null);
-  // hold the order still while the pointer is over the list, so rows never jump under it
-  const hovering = useRef(false);
-  const lastOrder = useRef<string[]>([]);
-
-  const streets = useMemo(() => {
+  const live = useMemo(() => {
     const map = new Map<string, Street>();
     for (const e of roadEdges) {
       const name = roadLabel(e);
@@ -79,19 +76,17 @@ function Roads() {
       if (v != null && (s.worst == null || v > s.worst)) s.worst = v;
       map.set(name, s);
     }
-    let list = [...map.values()];
+    const list = [...map.values()];
     for (const s of list) s.segments.sort((a, b) => (b.value ?? -1) - (a.value ?? -1));
-    if (hovering.current && lastOrder.current.length) {
-      const rank = new Map(lastOrder.current.map((n, i) => [n, i]));
-      list.sort((a, b) => (rank.get(a.name) ?? 99) - (rank.get(b.name) ?? 99));
-    } else {
-      list.sort((a, b) => (b.worst ?? -1) - (a.worst ?? -1));
-      lastOrder.current = list.map((s) => s.name);
-    }
-    const q = query.trim().toLowerCase();
-    if (q) list = list.filter((s) => s.name.toLowerCase().includes(q) || s.segments.some((g) => g.id.includes(q)));
-    return list;
-  }, [congestion, query]);
+    return list.sort((a, b) => (b.worst ?? -1) - (a.worst ?? -1));
+  }, [congestion]);
+  // busiest first, but steady: rows never jump under the pointer or focus
+  const { order, hold } = useSteadyOrder(live.map((s) => s.name));
+  const byName = new Map(live.map((s) => [s.name, s]));
+  const q = query.trim().toLowerCase();
+  const streets = order
+    .map((name) => byName.get(name)!)
+    .filter((s) => !q || s.name.toLowerCase().includes(q) || s.segments.some((g) => g.id.includes(q)));
 
   return (
     <>
@@ -107,8 +102,7 @@ function Roads() {
       </label>
       <div
         className="min-h-0 flex-1 overflow-y-auto px-2 pb-3"
-        onMouseEnter={() => (hovering.current = true)}
-        onMouseLeave={() => (hovering.current = false)}
+        {...hold}
       >
         {streets.length === 0 && <EmptyState icon={Search} title="No matching streets" body="Try another name." />}
         <ul>

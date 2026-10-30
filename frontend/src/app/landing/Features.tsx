@@ -2,13 +2,11 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties, type Keyb
 import { AnimatePresence, motion, useInView } from "framer-motion";
 import { Lines, Reveal } from "./motion";
 import type { JunctionState, Scene3D } from "./city3d/scenes";
+import { AMBER as A, BLUE as C, GREEN as G, RED as R } from "./palette";
 import "./showcase.css";
+import { hasFastWebGL } from "@/utils/webgl";
 
 const EASE = [0.16, 1, 0.3, 1] as const;
-const G = "#2bf59a";
-const R = "#ff3b30";
-const A = "#ffb020";
-const C = "#3fe0ff";
 
 // ------------------------------------------------------------ icons
 
@@ -68,7 +66,7 @@ function Live({ make, reduced, className }: { make: Make; reduced: boolean; clas
     const sync = () => scene?.setRunning(visible && !document.hidden);
     import("./city3d/scenes")
       .then((mod) => {
-        if (cancelled) return;
+        if (cancelled || !hasFastWebGL()) return;
         scene = makeRef.current(mod, canvas, overlay, reduced);
         setReady(true);
         sync();
@@ -247,7 +245,7 @@ const FEATURES = [
     key: "signals",
     title: "Smarter traffic lights",
     body: "Each light counts the cars waiting and gives the busier road more green time, instead of running the same fixed timer all day.",
-    color: G,
+    color: C,
     Icon: SignalIcon,
     Scene: SignalsScene,
   },
@@ -255,7 +253,7 @@ const FEATURES = [
     key: "detect",
     title: "Automatic accident alerts",
     body: "Existing street cameras notice a crash or a stopped car within seconds and alert the control room, often before anyone calls.",
-    color: R,
+    color: C,
     Icon: CameraIcon,
     Scene: DetectScene,
   },
@@ -271,7 +269,7 @@ const FEATURES = [
     key: "audit",
     title: "A record of every decision",
     body: "Every alert, approval and signal change is saved in order: who did it, when, and why. Anything can be reviewed later.",
-    color: A,
+    color: C,
     Icon: LogIcon,
     Scene: AuditScene,
   },
@@ -308,16 +306,11 @@ export function Features({ reduced }: { reduced: boolean }) {
     <section className="block" id="modules">
       <div className="wrap">
         <div className="shead">
-          <div>
-            <Reveal>
-              <span className="eyebrow">What it does</span>
-            </Reveal>
-            <Lines className="h2" lines={[<span className="dim">Four tools,</span>, "working as one."]} />
-          </div>
+          <Lines className="h2" lines={["Lights, cameras and ambulances", "on one live map."]} />
           <Reveal delay={0.1}>
             <p className="lede">
-              Traffic lights, cameras, ambulance routing and record-keeping share one live picture of the city, so
-              they respond together, not one at a time.
+              Signal control, accident detection, ambulance routing and the incident log all read the same picture
+              of the city, so one event moves all four at once.
             </p>
           </Reveal>
         </div>
@@ -330,7 +323,8 @@ export function Features({ reduced }: { reduced: boolean }) {
             onMouseEnter={() => setHold(true)}
             onMouseLeave={() => setHold(false)}
           >
-            <div className="ft-tabs" role="tablist" aria-label="Features">
+            <div className="ft-tabs">
+              <div className="ft-tablist" role="tablist" aria-label="Features">
               {FEATURES.map((x, i) => (
                 <button
                   key={x.key}
@@ -349,7 +343,6 @@ export function Features({ reduced }: { reduced: boolean }) {
                     <x.Icon />
                   </span>
                   <span className="ft-txt">
-                    <span className="ft-n">0{i + 1}</span>
                     <b>{x.title}</b>
                     <span className="ft-more">
                       <span>{x.body}</span>
@@ -362,8 +355,9 @@ export function Features({ reduced }: { reduced: boolean }) {
                   )}
                 </button>
               ))}
+              </div>
               <a className="ft-cta" href="/console">
-                See all four working together in the live demo
+                See all four together in the live demo
                 <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
                   <path d="M2 7h10M8 3l4 4-4 4" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>

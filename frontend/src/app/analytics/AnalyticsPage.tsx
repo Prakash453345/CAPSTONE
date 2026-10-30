@@ -7,6 +7,9 @@ import { EASE_OUT } from "@/components/console/motion";
 import { useAnalyticsStore, telemetryCsv, type TelemetrySample } from "@/store/analyticsStore";
 import { useSystemStore } from "@/store/systemStore";
 
+// Each chart is one series, so they share one colour: the console accent.
+const CHART = "hsl(var(--primary))";
+
 type Window = "1" | "5" | "15" | "30";
 
 function mean(xs: (number | null)[]) {
@@ -39,10 +42,10 @@ export function AnalyticsPage() {
   const peakVehicles = samples.length ? Math.max(...samples.map((s) => s.vehicles)) : null;
 
   const charts = [
-    { title: "Congestion", sub: "Mean road occupancy across reported roads", color: "#e8a33d", max: 100, points: series((s) => s.congestion), format: (v: number) => `${v.toFixed(0)}%` },
-    { title: "Average speed", sub: "Of observed vehicles, not a travel-time estimate", color: "#34c3a0", points: series((s) => s.speed), format: (v: number) => `${v.toFixed(0)} km/h` },
-    { title: "Vehicles on the network", sub: "Seen at the same moment, not throughput", color: "#6f8fff", points: series((s) => s.vehicles), format: (v: number) => v.toFixed(0) },
-    { title: "Signals reporting", sub: "Controllers with recent activity", color: "#a78bfa", points: series((s) => s.signals), format: (v: number) => v.toFixed(0) },
+    { title: "Congestion", sub: "Mean road occupancy across reported roads", color: CHART, minTop: 10, maxTop: 100, points: series((s) => s.congestion), format: (v: number) => `${v.toFixed(0)}%` },
+    { title: "Average speed", sub: "Of observed vehicles, not a travel-time estimate", color: CHART, points: series((s) => s.speed), format: (v: number) => `${v.toFixed(0)} km/h` },
+    { title: "Vehicles on the network", sub: "Seen at the same moment, not throughput", color: CHART, points: series((s) => s.vehicles), format: (v: number) => v.toFixed(0) },
+    { title: "Signals reporting", sub: "Controllers with recent activity", color: CHART, points: series((s) => s.signals), format: (v: number) => v.toFixed(0) },
   ];
 
   return (
@@ -75,11 +78,11 @@ export function AnalyticsPage() {
           { label: "Average congestion", value: mean(samples.map((s) => s.congestion)), unit: "%", fmt: (v: number) => v.toFixed(1) },
           { label: "Average speed", value: mean(samples.map((s) => s.speed)), unit: "km/h", fmt: (v: number) => v.toFixed(1) },
           { label: "Peak vehicles", value: peakVehicles, unit: "", fmt: (v: number) => Math.round(v).toString() },
-          { label: "Disruptions seen", value: samples.length ? Math.max(...samples.map((s) => s.anomalies)) : null, unit: "at once, at most", fmt: (v: number) => Math.round(v).toString() },
+          { label: "Most disruptions at once", value: samples.length ? Math.max(...samples.map((s) => s.anomalies)) : null, unit: "", fmt: (v: number) => Math.round(v).toString() },
         ].map((s, i) => (
           <div key={s.label} className={i ? "border-l border-border px-5 py-4 max-lg:[&:nth-child(3)]:border-l-0 max-lg:[&:nth-child(n+3)]:border-t" : "px-5 py-4"}>
             <p className="text-[12.5px] text-muted-foreground">{s.label}</p>
-            <p className="mt-1 flex items-baseline gap-1.5">
+            <p className={`mt-1 flex items-baseline ${s.unit === "%" ? "gap-0" : "gap-1.5"}`}>
               <AnimatedNumber value={s.value} format={s.fmt} className="text-[24px] font-semibold tracking-[-0.02em] text-foreground" />
               <span className="text-[13px] text-muted-foreground">{s.unit}</span>
             </p>
@@ -93,7 +96,7 @@ export function AnalyticsPage() {
             <Panel>
               <PanelHeader title={c.title} subtitle={c.sub} />
               <div className="px-4 pb-4">
-                <AreaChart points={c.points} color={c.color} max={c.max} format={c.format} label={`${c.title} over the last ${minutes} minutes`} />
+                <AreaChart points={c.points} color={c.color} minTop={c.minTop} maxTop={c.maxTop} format={c.format} label={`${c.title} over the last ${minutes} minutes`} />
               </div>
             </Panel>
           </motion.div>

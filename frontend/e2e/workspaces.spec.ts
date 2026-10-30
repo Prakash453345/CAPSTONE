@@ -187,7 +187,7 @@ test("road place card opens from search and starts operator actions", async ({ p
   await search.press("Enter");
   await card.getByRole("button", { name: "Create anomaly" }).click();
   await expect(card).toHaveCount(0);
-  await expect(page.getByText("-177626285", { exact: false }).first()).toBeVisible();
+  await expect(page.getByRole("region", { name: "Create anomaly" }).getByText("Eat Street", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Cancel", exact: true }).first().click();
 
   // "Send unit here" opens the dispatch draft with the road as destination.

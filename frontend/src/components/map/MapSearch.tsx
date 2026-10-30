@@ -2,7 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { LngLatBoundsLike } from "maplibre-gl";
 import { ArrowLeft, MapPin, Search, TrafficCone, X } from "lucide-react";
 import { useMapInstance } from "@/components/map/MapContext";
-import { roadEdges, signalJunctions, shortJunctionName } from "@/data/network";
+import { roadEdges, roadLabel, signalJunctions, shortJunctionName } from "@/data/network";
 import type { LngLat } from "@/utils/geo";
 import { cn } from "@/utils/cn";
 import { useMapChromeStore } from "@/store/mapChromeStore";
@@ -25,7 +25,7 @@ const ENTRIES: Result[] = [
   ...roadEdges.map((e) => ({
     key: `road:${e.id}`,
     kind: "road" as const,
-    title: e.name ?? `Road ${e.id}`,
+    title: roadLabel(e),
     subtitle: `${e.numLanes} lane${e.numLanes === 1 ? "" : "s"} · ${(e.lengthM / 1000).toFixed(2)} km · ${Math.round(e.speedLimitMps * 3.6)} km/h`,
     path: e.path,
   })),

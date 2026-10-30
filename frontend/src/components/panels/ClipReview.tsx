@@ -366,7 +366,7 @@ function ClipReviewForm({ clip: c }: { clip: Clip }) {
       )}
       <label>
         Operator identity
-        <input required value={actor} onChange={(e) => setActor(e.target.value)} placeholder="operator:your-name" />
+        <input required value={actor} onChange={(e) => setActor(e.target.value)} placeholder="e.g. operator:priya" />
       </label>
       <label>
         API key

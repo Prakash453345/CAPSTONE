@@ -1,41 +1,14 @@
-import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { AnimatePresence, animate, motion, useInView, useScroll } from "framer-motion";
-import { ArrowIcon, Lines, Reveal, ScrubWord } from "./motion";
+import { useRef, useState } from "react";
+import { AnimatePresence, motion, useScroll } from "framer-motion";
+import { Mark } from "./chrome";
+import { Lines, Reveal, ScrubWord } from "./motion";
 
 const EASE = [0.16, 1, 0.3, 1] as const;
-const cssVar = (name: string, value: string) => ({ [name]: value }) as CSSProperties;
-
-// ------------------------------------------------------------ LED ticker
-
-const TICKER: [string, string][] = [
-  ["Accidents spotted in seconds", "#ff3b30"],
-  ["A real person checks every alert", "#ffb020"],
-  ["The nearest ambulance is sent", "#3fe0ff"],
-  ["Traffic lights ahead turn green", "#2bf59a"],
-  ["Roads go back to normal right after", "#2bf59a"],
-  ["Every decision is recorded", "#ffb020"],
-];
-
-export function Ticker() {
-  const items = [...TICKER, ...TICKER];
-  return (
-    <div className="ticker" aria-hidden="true">
-      <div className="ticker-track">
-        {items.map(([t, c], i) => (
-          <span key={i} className="item">
-            <i style={cssVar("--c", c)} />
-            {t}
-          </span>
-        ))}
-      </div>
-    </div>
-  );
-}
 
 // ------------------------------------------------------------ manifesto
 
 const MANIFESTO =
-  "Technology should help people decide, never decide for them. Our system can confirm a broken-down car on its own, but *a *real *person *always checks anything that involves someone's life.";
+  "Technology should help people decide, never decide for them. Traffix can confirm a broken-down car on its own, but a person always checks anything that involves someone\u2019s life.";
 
 export function Manifesto() {
   const ref = useRef<HTMLParagraphElement>(null);
@@ -44,125 +17,52 @@ export function Manifesto() {
   return (
     <section className="block manifesto" id="why">
       <div className="wrap">
-        <Reveal>
-          <span className="eyebrow">Our promise</span>
-        </Reveal>
         <p className="big" ref={ref}>
-          {words.map((w, i) => {
-            const hl = w.startsWith("*");
-            return (
-              <ScrubWord
-                key={i}
-                progress={scrollYProgress}
-                range={[i / words.length, (i + 1) / words.length]}
-                className={hl ? "hl" : ""}
-              >
-                {hl ? w.slice(1) : w}
-              </ScrubWord>
-            );
-          })}
+          {words.map((w, i) => (
+            <ScrubWord key={i} progress={scrollYProgress} range={[i / words.length, (i + 1) / words.length]}>
+              {w}
+            </ScrubWord>
+          ))}
         </p>
-        <Reveal delay={0.1}>
-          <div className="sign">
-            <span className="shield">
-              <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-                <path d="M9 2l6 3v4c0 3.4-2.4 6.2-6 7-3.6-.8-6-3.6-6-7V5l6-3z" stroke="#ffb020" strokeWidth="1.4" strokeLinejoin="round" />
-              </svg>
-            </span>
-            <span>
-              <b>People stay in charge</b>An ambulance is sent only after a person says yes
-            </span>
-          </div>
-        </Reveal>
       </div>
     </section>
   );
 }
 
-// ------------------------------------------------------------ capabilities
+// ------------------------------------------------------------ safety
 
 const CAPS: [string, string][] = [
-  ["Keeps working if something fails", "Lights fall back to safe, normal timing on their own"],
-  ["Never acts alone on people", "Anything involving a person is checked by a human first"],
-  ["No gridlock from emergencies", "Only a safe number of green paths can run at once"],
-  ["Fastest route, not shortest", "Routes use live traffic, not just distance on a map"],
-  ["Fair to everyone else", "Lights go back to normal the moment the ambulance passes"],
-  ["Nothing is hidden", "Every decision is saved, approved or turned down"],
-  ["Look back at any moment", "See exactly what happened, when, and why"],
+  ["Falls back to normal timing", "If smart control drops out, every junction returns to its fixed, safe plan on its own."],
+  ["People decide about people", "Anything that involves a person goes to an operator before the system acts on it."],
+  ["No gridlock from emergencies", "Only a safe number of green corridors can run at the same time."],
+  ["Fastest route, not shortest", "Routes are planned on live traffic, not on distance alone."],
+  ["Fair to cross traffic", "Each light goes back to its normal cycle as soon as the ambulance has passed."],
+  ["A complete record", "Every alert, approval and signal change is saved with who, when and why, and can be replayed."],
 ];
-
-function MiniSignal() {
-  return (
-    <span className="minisig" aria-hidden="true">
-      <i style={cssVar("--c", "#ff3b30")} />
-      <i style={cssVar("--c", "#ffb020")} />
-      <i style={cssVar("--c", "#2bf59a")} />
-    </span>
-  );
-}
-
-/** A reliability row whose little signal cycles red → amber → green once it scrolls in. */
-function CapRow({ name, desc, i }: { name: string; desc: string; i: number }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const inView = useInView(ref, { once: true, margin: "0px 0px -18% 0px" });
-  const [lamp, setLamp] = useState(0);
-  useEffect(() => {
-    if (!inView) return;
-    const t1 = window.setTimeout(() => setLamp(1), 500 + i * 90);
-    const t2 = window.setTimeout(() => setLamp(2), 1100 + i * 90);
-    return () => {
-      window.clearTimeout(t1);
-      window.clearTimeout(t2);
-    };
-  }, [inView, i]);
-  return (
-    <motion.div
-      ref={ref}
-      className="caprow"
-      data-lamp={lamp}
-      initial={{ opacity: 0, x: 30 }}
-      whileInView={{ opacity: 1, x: 0 }}
-      viewport={{ once: true, margin: "0px 0px -8% 0px" }}
-      transition={{ duration: 0.9, delay: i * 0.05, ease: EASE }}
-    >
-      <span className="ix">{String(i + 1).padStart(2, "0")}</span>
-      <div>
-        <h4>{name}</h4>
-        <p>{desc}</p>
-      </div>
-      <MiniSignal />
-    </motion.div>
-  );
-}
 
 export function Capabilities() {
   return (
-    <section className="block" id="capabilities" style={{ paddingTop: 0 }}>
-      <div className="wrap caps">
-        <div className="sticky">
-          <Reveal>
-            <span className="eyebrow">Reliability</span>
-          </Reveal>
-          <Lines className="h2" lines={[<span className="dim">Built to be</span>, "trusted."]} />
+    <section className="block" id="capabilities">
+      <div className="wrap">
+        <div className="shead">
+          <Lines className="h2" lines={["Designed to fail safe."]} />
           <Reveal delay={0.1}>
-            <p className="lede" style={{ marginTop: 22, maxWidth: "38ch" }}>
-              When lives are involved, "usually works" isn't good enough. Each of these exists to prevent a real problem
-              on the road.
+            <p className="lede">
+              When lives are involved, &ldquo;usually works&rdquo; isn&rsquo;t good enough. Each rule below exists to
+              prevent a specific problem on the road.
             </p>
-            <div className="chips">
-              {["Always on", "Human-approved", "Privacy-first", "Ready to grow"].map((c) => (
-                <span className="chip" key={c}>
-                  {c}
-                </span>
-              ))}
-            </div>
           </Reveal>
         </div>
-        <div>
-          {CAPS.map(([name, desc], i) => (
-            <CapRow key={name} name={name} desc={desc} i={i} />
-          ))}
-        </div>
+        <Reveal>
+          <ul className="caps">
+            {CAPS.map(([name, desc]) => (
+              <li key={name}>
+                <h3>{name}</h3>
+                <p>{desc}</p>
+              </li>
+            ))}
+          </ul>
+        </Reveal>
       </div>
     </section>
   );
@@ -170,69 +70,35 @@ export function Capabilities() {
 
 // ------------------------------------------------------------ metrics
 
-function Count({
-  to,
-  prefix = "",
-  suffix = "",
-  decimals = 0,
-}: {
-  to: number;
-  prefix?: string;
-  suffix?: string;
-  decimals?: number;
-}) {
-  const ref = useRef<HTMLElement>(null);
-  const inView = useInView(ref, { once: true, margin: "0px 0px -15% 0px" });
-  useEffect(() => {
-    if (!inView || !ref.current) return;
-    const el = ref.current;
-    const c = animate(0, to, {
-      duration: 1.8,
-      ease: [0.16, 1, 0.3, 1],
-      onUpdate: (v) => (el.textContent = `${prefix}${v.toFixed(decimals)}${suffix}`),
-    });
-    return () => c.stop();
-  }, [inView, to, prefix, suffix, decimals]);
-  return (
-    <b ref={ref}>
-      {prefix}0{suffix}
-    </b>
-  );
-}
+const METS = [
+  { value: "7", label: "Signalised junctions on the MG Road corridor model" },
+  { value: "1 s", label: "Between live map updates" },
+  { value: "< 0.5 s", label: "For a light to respond to a corridor request", note: "Target" },
+];
 
 export function Metrics() {
-  const mets = [
-    { to: 20, label: "Junctions in the live pilot", tag: "Today", c: "#2bf59a" },
-    { to: 1, suffix: "s", label: "How often the live map updates", tag: "Real-time", c: "#3fe0ff" },
-    { to: 0.5, prefix: "<", suffix: "s", decimals: 1, label: "For a traffic light to respond", tag: "Target", c: "#ffb020" },
-    { to: 24, suffix: "/7", label: "Watching the roads", tag: "Always on", c: "#2bf59a" },
-  ];
   return (
-    <section className="block" id="scale" style={{ paddingTop: 0 }}>
+    <section className="block metrics" id="scale">
       <div className="wrap">
-        <Reveal y={50}>
-          <div className="metrics">
-            <div className="grid-bg" />
-            <span className="eyebrow">By the numbers</span>
-            <h2 className="h2" style={{ marginTop: 22, position: "relative" }}>
-              <span className="dim">Built for one city.</span>
-              <br />
-              Ready for many.
-            </h2>
-            <p className="lede" style={{ maxWidth: "52ch", marginTop: 22, position: "relative" }}>
-              Designed to grow from a handful of junctions to an entire city without changing how it makes
-              decisions.
-            </p>
-            <div className="mets">
-              {mets.map((m) => (
-                <div className="met" key={m.label}>
-                  <Count to={m.to} prefix={m.prefix} suffix={m.suffix} decimals={m.decimals} />
-                  <span>{m.label}</span>
-                  <em style={cssVar("--c", m.c)}>{m.tag}</em>
-                </div>
-              ))}
-            </div>
-          </div>
+        <Lines className="h2" lines={["The pilot, in numbers."]} />
+        <Reveal delay={0.1}>
+          <p className="lede">
+            Built and tested on a digital twin of Vijayawada&rsquo;s roads, so it can be proven safe before it touches
+            a real signal.
+          </p>
+        </Reveal>
+        <Reveal>
+          <dl className="mets">
+            {METS.map((m) => (
+              <div className="met" key={m.label}>
+                <dt>{m.label}</dt>
+                <dd>
+                  {m.value}
+                  {m.note && <small>{m.note}</small>}
+                </dd>
+              </div>
+            ))}
+          </dl>
         </Reveal>
       </div>
     </section>
@@ -267,66 +133,56 @@ const FAQ: [string, string][] = [
 export function Faq() {
   const [open, setOpen] = useState(0);
   return (
-    <section className="block" id="faq" style={{ paddingTop: 0 }}>
-      <div className="wrap">
-        <div className="shead">
-          <div>
-            <Reveal>
-              <span className="eyebrow">FAQ</span>
-            </Reveal>
-            <Lines className="h2" lines={["Your questions,", <span className="dim">answered.</span>]} />
-          </div>
-        </div>
-        <div className="faqgrid">
-          <Reveal>
-            <div>
-              {FAQ.map(([q, a], i) => {
-                const isOpen = open === i;
-                return (
-                  <div className={`fq ${isOpen ? "open" : ""}`} key={q}>
-                    <button className="fqb" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? -1 : i)}>
-                      <span className="n">{String(i + 1).padStart(2, "0")}</span>
-                      <span className="q">{q}</span>
-                      <span className="lamp3" aria-hidden="true">
-                        <i style={cssVar("--c", "#ff3b30")} />
-                        <i style={cssVar("--c", "#ffb020")} />
-                        <i style={cssVar("--c", "#2bf59a")} />
-                      </span>
-                    </button>
-                    <AnimatePresence initial={false}>
-                      {isOpen && (
-                        <motion.div
-                          className="fqa"
-                          initial={{ height: 0, opacity: 0 }}
-                          animate={{ height: "auto", opacity: 1 }}
-                          exit={{ height: 0, opacity: 0 }}
-                          transition={{ duration: 0.6, ease: EASE }}
-                        >
-                          <p>{a}</p>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
-                );
-              })}
-            </div>
-          </Reveal>
-          <Reveal delay={0.12} className="askcol">
-            <aside className="askcard">
-              <span className="eyebrow">Still not sure?</span>
-              <h3>
-                See it for yourself.
-              </h3>
-              <p>Trigger an incident, watch it get verified and dispatched, and see traffic signals respond in real time.</p>
-              <a className="btn" href="/console">
-                <span className="lamp">
-                  <ArrowIcon />
-                </span>
-                Try the live demo
+    <section className="block" id="faq">
+      <div className="wrap faqgrid">
+        <div>
+          <Lines className="h2" lines={["Questions"]} />
+          <Reveal delay={0.1}>
+            <p className="lede">
+              What people ask most about how Traffix behaves on a real road. Something else?{" "}
+              <a className="inline" href="/console">
+                Try it in the demo
               </a>
-            </aside>
+              .
+            </p>
           </Reveal>
         </div>
+        <Reveal>
+          <div>
+            {FAQ.map(([q, a], i) => {
+              const isOpen = open === i;
+              return (
+                <div className={`fq ${isOpen ? "open" : ""}`} key={q}>
+                  <h3>
+                    <button
+                      className="fqb"
+                      aria-expanded={isOpen}
+                      aria-controls={`fq-${i}`}
+                      onClick={() => setOpen(isOpen ? -1 : i)}
+                    >
+                      <span className="q">{q}</span>
+                      <span className="plus" aria-hidden="true" />
+                    </button>
+                  </h3>
+                  <AnimatePresence initial={false}>
+                    {isOpen && (
+                      <motion.div
+                        className="fqa"
+                        id={`fq-${i}`}
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.4, ease: EASE }}
+                      >
+                        <p>{a}</p>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              );
+            })}
+          </div>
+        </Reveal>
       </div>
     </section>
   );
@@ -338,51 +194,25 @@ export function Footer() {
   return (
     <footer>
       <div className="wrap">
-        <div className="fgrid">
-          <div>
-            <div className="kin">
-              Let's{" "}
-              <span className="rot">
-                <span>
-                  <i>detect</i>
-                  <i>dispatch</i>
-                  <i>clear</i>
-                  <i>detect</i>
-                </span>
-              </span>
-              <br />
-              the road ahead.
-            </div>
-            <p style={{ fontSize: 14.5, maxWidth: "34ch" }}>
-              Intelligent Traffic Management &amp; Emergency Response Platform, piloted in Vijayawada.
-            </p>
+        <div className="ftop">
+          <div className="fbrand">
+            <a className="brand" href="#top">
+              <Mark />
+              Traffix
+            </a>
+            <p>Intelligent traffic management and emergency response, designed for Vijayawada.</p>
           </div>
-          <div>
-            <h5>Platform</h5>
-            <a href="#modules">Modules</a>
-            <a href="#flow">How it responds</a>
+          <nav className="flinks" aria-label="Footer">
+            <a href="#flow">How it works</a>
+            <a href="#modules">Features</a>
+            <a href="#capabilities">Safety</a>
             <a href="#faq">FAQ</a>
-          </div>
-          <div>
-            <h5>Our commitments</h5>
-            <span>Human oversight</span>
-            <span>Full audit trail</span>
-            <span>Privacy by design</span>
-            <span>Built to scale</span>
-          </div>
-          <div>
-            <h5>Access</h5>
             <a href="/console">Live demo</a>
-            <span>Citizen app (coming soon)</span>
-            <span>Field mobile app (coming soon)</span>
-          </div>
-        </div>
-        <div className="wm" aria-hidden="true">
-          ITMS
+          </nav>
         </div>
         <div className="fbot">
-          <span>© 2026 Intelligent Traffic Management Platform</span>
-          <span>Some figures reflect target performance at full-city scale</span>
+          <span>&copy; 2026 Traffix</span>
+          <span>Response-time figures are targets for a city-wide rollout, measured on the simulation.</span>
         </div>
       </div>
     </footer>

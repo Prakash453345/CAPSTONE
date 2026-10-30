@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Bell, X } from "lucide-react";
+import { Bell, BellOff, X } from "lucide-react";
 import { useNotificationStore } from "@/store/notificationStore";
 import { TONE_META } from "@/components/notifications/meta";
 import { Button } from "@/components/ui/button";
@@ -78,9 +78,15 @@ export function NotificationBell() {
 
             <div className="max-h-80 overflow-y-auto">
               {items.length === 0 ? (
-                <p className="px-3 py-6 text-center text-xs text-muted-foreground">
-                  No notifications yet
-                </p>
+                <div className="px-6 py-8 text-center">
+                  <span className="mx-auto grid size-10 place-items-center rounded-full bg-muted text-muted-foreground">
+                    <BellOff className="size-[18px]" />
+                  </span>
+                  <p className="mt-3 text-[13px] font-medium text-foreground">You&rsquo;re all caught up</p>
+                  <p className="mx-auto mt-1 max-w-[30ch] text-xs leading-relaxed text-muted-foreground">
+                    New incidents, dispatches and signal changes that need you will show up here.
+                  </p>
+                </div>
               ) : (
                 items.map((ev) => {
                   const meta = TONE_META[ev.tone];
