@@ -1,0 +1,50 @@
+{
+ "scenario": "amaravati_v2",
+ "seed": 1,
+ "units": 2,
+ "end_s": 3600.0,
+ "fleet": {
+  "POLICE": [
+   "unit-police-0",
+   "unit-police-1"
+  ],
+  "AMBULANCE": [
+   "unit-ambulance-0",
+   "unit-ambulance-1"
+  ],
+  "FIRE_TRUCK": []
+ },
+ "stats": {
+  "anomaly_ACCIDENT_HIGH": 4,
+  "dispatches": 16,
+  "anomaly_LANE_BLOCKAGE_BLOCKED": 6,
+  "blocks_ahead": 4,
+  "anomaly_ACCIDENT_MEDIUM": 14,
+  "cleared_early": 7,
+  "anomaly_ACCIDENT_LOW": 6,
+  "served_from_queue": 9,
+  "suggestions": 5,
+  "ticks_suggestable": 1524,
+  "reassigned": 3,
+  "operator_cancels": 2,
+  "trips": 18,
+  "completed": 9,
+  "reroutes": 23,
+  "still_waiting": 10
+ },
+ "violations_by_rule": {
+  "R11": 2
+ },
+ "violations": [
+  {
+   "rule": "R11",
+   "t": 1469.0,
+   "msg": "suggestion reassign-3 is stale but still open (blocks new suggestions for unit-police-1)"
+  },
+  {
+   "rule": "R11",
+   "t": 2698.0,
+   "msg": "suggestion reassign-10 is stale but still open (blocks new suggestions for unit-ambulance-1)"
+  }
+ ]
+}

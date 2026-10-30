@@ -1,0 +1,43 @@
+{
+ "scenario": "random_lh",
+ "seed": 1,
+ "units": 1,
+ "end_s": 3600.0,
+ "fleet": {
+  "POLICE": [
+   "unit-police-0"
+  ],
+  "AMBULANCE": [
+   "unit-ambulance-0"
+  ],
+  "FIRE_TRUCK": []
+ },
+ "stats": {
+  "anomaly_ACCIDENT_HIGH": 15,
+  "dispatches": 16,
+  "served_from_queue": 13,
+  "anomaly_LANE_BLOCKAGE_BLOCKED": 9,
+  "blocks_ahead": 6,
+  "anomaly_ACCIDENT_MEDIUM": 7,
+  "cleared_early": 7,
+  "operator_cancels": 1,
+  "anomaly_ACCIDENT_LOW": 2,
+  "suggestions": 2,
+  "ticks_suggestable": 2739,
+  "reassigned": 1,
+  "trips": 20,
+  "completed": 16,
+  "reroutes": 11,
+  "still_waiting": 16
+ },
+ "violations_by_rule": {
+  "R11": 1
+ },
+ "violations": [
+  {
+   "rule": "R11",
+   "t": 3132.0,
+   "msg": "suggestion reassign-11 is stale but still open (blocks new suggestions for unit-police-0)"
+  }
+ ]
+}
