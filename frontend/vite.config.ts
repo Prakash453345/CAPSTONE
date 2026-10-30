@@ -27,10 +27,6 @@ export default defineConfig({
     alias: [
       networkAlias(),
       { find: "@", replacement: fileURLToPath(new URL("./src", import.meta.url)) },
-      // The vendored TacticalGlobe3D component (src/vendor/TacticalGlobe3D.js)
-      // imports the editor-only "framer" package; this shim stands in for it
-      // at runtime. See src/vendor/framer-shim.ts for why that's safe.
-      { find: "framer", replacement: fileURLToPath(new URL("./src/vendor/framer-shim.ts", import.meta.url)) },
     ],
   },
   build: {
