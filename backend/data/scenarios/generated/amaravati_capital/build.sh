@@ -64,9 +64,9 @@ python3 "$VJW/cap_speeds.py" amaravati_capital.net.xml
 echo "4/5  demand at three levels, plus scenario.json ..."
 # Levels are defined by how loaded the busiest junction is (0.25 / 0.5 / 1.0),
 # the same targets the corridor measures at, so the two are comparable.
-(cd ../../.. && python3 scenarios/build_scenario.py \
-  --net scenarios/generated/amaravati_capital/amaravati_capital.net.xml \
-  --out scenarios/generated/amaravati_capital \
+(cd ../../../.. && python3 data/scenarios/build_scenario.py \
+  --net data/scenarios/generated/amaravati_capital/amaravati_capital.net.xml \
+  --out data/scenarios/generated/amaravati_capital \
   --name amaravati_capital --mix india)
 
 echo "5/5  GeoJSON for the web app, hospitals and police depots ..."
@@ -88,7 +88,7 @@ PY
 echo "done -> amaravati_capital.net.xml (+ demand, geojson, facilities, depots)"
 echo
 echo "Cameras need the vision extras installed:"
-echo "  python3 ../../../scripts/m8_plan_cameras.py \\"
+echo "  python3 ../../../../experiments/m8_plan_cameras.py \\"
 echo "      --net amaravati_capital.net.xml --out cameras.json"
 echo
-echo "Run it:  ITMS_SCENARIO=scenarios/generated/amaravati_capital make dev"
+echo "Run it:  ITMS_SCENARIO=data/scenarios/generated/amaravati_capital make dev"

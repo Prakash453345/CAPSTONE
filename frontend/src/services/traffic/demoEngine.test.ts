@@ -139,3 +139,15 @@ describe("demo engine: dispatch", () => {
     expect(kinds).toEqual(["ambulance", "fire_truck", "police"]);
   });
 });
+
+describe("demo engine: opening mission", () => {
+  it("puts Ambulance 1 on a long call that is already under way", () => {
+    const { engine, run } = setup();
+    engine.startDemoMission();
+    const req = run(1).requests.find((r) => r.vehicleId === "amb-01")!;
+    expect(req.state).toBe("green_corridor_active");
+    expect(req.route!.totalDistanceM).toBeGreaterThan(1000);
+    expect(req.live?.status).toBe("en_route");
+    expect(useCrewStore.getState().fleet.find((u) => u.unitId === "amb-01")?.busy).toBe(true);
+  });
+});

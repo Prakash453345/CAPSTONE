@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Runs sim-service and api-service side by side, in the foreground, with both
+# Runs the simulation service and the api-gateway side by side, in the foreground, with both
 # logs interleaved and both processes killed together on Ctrl+C. This replaces
 # a heavier process manager for M0 — revisit once there are more than two
 # processes to juggle.
@@ -7,7 +7,7 @@ set -euo pipefail
 
 VENV=".venv"
 
-# Settings live in itms/.env (copy .env.example; it is git-ignored, so the SMTP
+# Settings live in backend/.env (copy .env.example; it is git-ignored, so the SMTP
 # password never lands in the repo). Values already exported in the shell win.
 if [ -f .env ]; then
   while IFS= read -r line || [ -n "$line" ]; do
@@ -48,7 +48,7 @@ export REDIS_URL="${REDIS_URL:-redis://localhost:6379/0}"
 # Local dev is plain http, where browsers drop "Secure" cookies (Safari even on
 # localhost), so sign-in would silently fail. Production must leave this on.
 export AUTH_COOKIE_SECURE="${AUTH_COOKIE_SECURE:-false}"
-# No mail server locally: print password-reset codes in the api-service log
+# No mail server locally: print password-reset codes in the api-gateway log
 # instead of failing. With SMTP_HOST set (in .env) the codes are emailed.
 export AUTH_DEV_LOG_CODES="${AUTH_DEV_LOG_CODES:-true}"
 export DATABASE_URL="${DATABASE_URL:-postgresql://itms:itms@localhost:5432/itms}"

@@ -52,7 +52,7 @@ export function SettingsPage() {
         <div className="grid gap-2 sm:grid-cols-2">
           {(
             [
-              ["live", "Live", Radio, "The running city simulation, streamed from api-service. Commands work."],
+              ["live", "Live", Radio, "The running city simulation, streamed from the api-gateway. Commands work."],
               ["simulation", "Demo", FlaskConical, "A self-contained simulation in this browser. Nothing to set up; reports and dispatches work but stay in the browser."],
             ] as [DataMode, string, typeof Radio, string][]
           ).map(([value, label, Icon, hint]) => {

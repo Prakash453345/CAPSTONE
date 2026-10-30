@@ -69,10 +69,9 @@ test("map, operational routes, analytics and CSV stay integrated", async ({
   await page.getByPlaceholder("Search a road").fill("eat");
   await page.getByRole("option", { name: /Eat Street/ }).first().click();
   await page.getByRole("button", { name: "Request ambulance", exact: true }).click();
-  await expect(
-    page.getByText("Demo is read-only.", { exact: false }),
-  ).toBeVisible();
-  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  // The demo answers the request itself: a crew is offered the call.
+  await expect(page.getByText(/^(Asking|Finding the nearest)/).first()).toBeVisible();
+  await page.getByRole("button", { name: "Cancel request", exact: true }).click();
   await navigate(page, "Analytics");
   await expect(
     page.getByRole("heading", { name: "Session analytics" }),

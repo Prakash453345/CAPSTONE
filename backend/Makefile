@@ -37,13 +37,13 @@ dev: setup infra-up
 	./scripts/dev.sh
 
 # The same stack on the Amaravati capital complex instead of the Vijayawada
-# corridor. Built the same way the corridor was (scenarios/generated/
+# corridor. Built the same way the corridor was (data/scenarios/generated/
 # amaravati_capital/build.sh): one named arterial, its real cross streets,
 # seven signals -- 86 edges, so it runs at 31x real time light / 13.5x heavy,
 # against the corridor's 44x. Vijayawada stays the default; this is opt-in.
 # Run the web app with VITE_CITY=amaravati so its road pickers match.
 dev-amaravati: setup infra-up
-	ITMS_SCENARIO=scenarios/generated/amaravati_capital ./scripts/dev.sh
+	ITMS_SCENARIO=data/scenarios/generated/amaravati_capital ./scripts/dev.sh
 
 # Create or update every account listed in a CSV (default .local/accounts.csv,
 # git-ignored: it holds passwords). Safe to repeat. Format: api_gateway/services/seed_accounts.py.

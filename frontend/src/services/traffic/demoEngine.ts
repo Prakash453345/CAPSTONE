@@ -253,6 +253,8 @@ interface Mission {
   recommendedHospital: string;
   hospitals: Hospital[];
   finishedAtMs: number;
+  /** The opening demo mission: skips the routing and corridor waits. */
+  underway?: boolean;
 }
 
 export interface DemoTick {
@@ -264,6 +266,9 @@ export interface DemoTick {
 export interface DemoEngine {
   /** Brings the demo fleet onto the crew store. */
   start(): void;
+  /** Puts Ambulance 1 on a long call, so the demo opens with a mission
+   *  under way (the crew page and the emergency map have something to follow). */
+  startDemoMission(): void;
   handle(cmd: OperatorCommand): CommandResult;
   tick(): DemoTick;
   /** 0..1: share of normal speed left on this edge because of anomalies. */
@@ -836,6 +841,7 @@ export function createDemoEngine(now: () => number = Date.now): DemoEngine {
         m.recommendedHospital = hospitalOptions(m)[0]!.facilityId;
         m.chosenHospital = m.recommendedHospital;
       }
+      if (m.underway) activateCorridor(m, "system");
       return;
     }
     if (m.phase === "ready" && t - m.phaseAtMs >= AUTO_CORRIDOR_S * 1000) {
@@ -921,6 +927,29 @@ export function createDemoEngine(now: () => number = Date.now): DemoEngine {
   return {
     start() {
       publishFleet(true);
+    },
+    startDemoMission() {
+      const unit = units.find((u) => u.id === "amb-01");
+      if (!unit || unit.busy) return;
+      // A scene far enough away that the run lasts a few minutes: the first
+      // sampled road 2.5 km or more away, else the farthest one there is.
+      const stride = Math.max(1, Math.floor(roadEdges.length / 80));
+      let best: { edge: RoadEdge; m: number } | null = null;
+      for (let i = 0; i < roadEdges.length; i += stride) {
+        const edge = roadEdges[i]!;
+        if (edge.id === unit.edgeId) continue;
+        const legs = planLegs(unit.edgeId, edge.id, new Map());
+        const m = legs ? (geometry(legs).cum.at(-1) ?? 0) : 0;
+        if (!best || m > best.m) best = { edge, m };
+        if (m >= 2500) break;
+      }
+      if (!best) return;
+      startMission({ requestId: "demo-amb-01", kind: "ambulance", sceneEdge: best.edge.id, asked: [unit.id] }, unit);
+      const m = missions.get("demo-amb-01");
+      if (m) {
+        m.underway = true;
+        m.phaseAtMs -= ROUTING_S * 1000;
+      }
     },
     handle(cmd) {
       const p = cmd.payload;

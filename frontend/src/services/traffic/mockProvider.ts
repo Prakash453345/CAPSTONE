@@ -276,6 +276,7 @@ export function createMockProvider(seed = 42): TrafficDataProvider {
       setStatus("connecting");
       startedAt = Date.now();
       engine.start();
+      engine.startDemoMission();
       setDemoCommandHandler((cmd) => {
         const result = engine.handle(cmd);
         // Answer straight away, as the live stream does, instead of on the next tick.

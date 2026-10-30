@@ -30,10 +30,10 @@ irregular random streets, left- or right-hand traffic) or one you give it, such
 as an OpenStreetMap export converted with `netconvert`:
 
 ```bash
-python scenarios/build_scenario.py --generate grid:3x3,300,2 --lefthand --out scenarios/generated/grid3_lh
-python scenarios/build_scenario.py --net my_city.net.xml --out scenarios/generated/my_city
-ITMS_SCENARIO=scenarios/generated/my_city python scripts/m8_closed_loop_gate.py ...
-ITMS_SCENARIO=scenarios/generated/my_city make dev     # the live services too
+python data/scenarios/build_scenario.py --generate grid:3x3,300,2 --lefthand --out data/scenarios/generated/grid3_lh
+python data/scenarios/build_scenario.py --net my_city.net.xml --out data/scenarios/generated/my_city
+ITMS_SCENARIO=data/scenarios/generated/my_city python scripts/m8_closed_loop_gate.py ...
+ITMS_SCENARIO=data/scenarios/generated/my_city make dev     # the live services too
 ```
 
 - **Demand levels are set by load, not by a trip rate:** the busiest
@@ -71,10 +71,10 @@ ITMS_SCENARIO=scenarios/generated/my_city make dev     # the live services too
 
   ```bash
   S=$SUMO_HOME/tools/game
-  python scenarios/build_scenario.py --net $S/DRT/osm.net.xml --name berlin_adlershof \
-      --out scenarios/generated/berlin_adlershof --mix cars --no-cameras
-  python scenarios/build_scenario.py --net $S/fkk_in/ingolstadt.net.xml.gz --name ingolstadt \
-      --out scenarios/generated/ingolstadt --mix cars --no-cameras
+  python data/scenarios/build_scenario.py --net $S/DRT/osm.net.xml --name berlin_adlershof \
+      --out data/scenarios/generated/berlin_adlershof --mix cars --no-cameras
+  python data/scenarios/build_scenario.py --net $S/fkk_in/ingolstadt.net.xml.gz --name ingolstadt \
+      --out data/scenarios/generated/ingolstadt --mix cars --no-cameras
   ```
 - **The web map** starts on the Vijayawada corridor. For another city, start
   it with `VITE_MAP_CENTER="<lat>,<lon>"` — the builder writes the value as

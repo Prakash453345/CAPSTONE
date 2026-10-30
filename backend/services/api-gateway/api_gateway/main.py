@@ -88,6 +88,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     return app
 
 
+# The same set the web app's dev and preview servers send (frontend/vite.config.ts):
+# a meta-tag CSP cannot stop framing, so the host that serves the site must.
+SECURITY_HEADERS = {
+    "X-Frame-Options": "DENY",
+    "Content-Security-Policy": "frame-ancestors 'none'",
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
+}
+
+
 class _StripPrefixes:
     """`/api/x` -> `/x` and `/ws/x` -> `/x`, as the dev server's proxy does."""
 
@@ -113,6 +124,13 @@ def _serve_web_app(app: FastAPI, settings: Settings) -> None:
         return
     web_root = Path(settings.web_dist).resolve()
     app.add_middleware(_StripPrefixes)
+
+    @app.middleware("http")
+    async def security_headers(request, call_next):
+        response = await call_next(request)
+        for name, value in SECURITY_HEADERS.items():
+            response.headers.setdefault(name, value)
+        return response
 
     @app.get("/{path:path}", include_in_schema=False)
     async def web_app(path: str) -> FileResponse:
