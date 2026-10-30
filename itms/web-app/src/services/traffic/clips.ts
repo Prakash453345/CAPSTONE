@@ -189,7 +189,7 @@ export async function reviewClip(
   requireLive();
   const res = await fetch(url(`/v1/clips/${encodeURIComponent(id)}/${action}`), {
     method: "POST",
-    headers: { "content-type": "application/json", "X-API-Key": key },
+    headers: { "content-type": "application/json", ...(key ? { "X-API-Key": key } : {}) },
     body: JSON.stringify({
       actor: body.actor,
       note: body.note ?? "",

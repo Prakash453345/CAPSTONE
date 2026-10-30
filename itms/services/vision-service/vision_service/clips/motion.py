@@ -127,7 +127,7 @@ class MotionAnalyser:
             if st.moving is not False or not st.moved_ever or st.heading is None:
                 continue
             for mid, mh in movers:
-                if mid != tid and mh[0] * st.heading[0] + mh[1] * st.heading[1] >= SAME_DIRECTION_COS:
+                if mid != tid and mh[0] * st.heading[0] + mh[1] * st.heading[1] >= SAME_DIRECTION_COS:  # noqa: E501
                     st.passers.add(mid)
             assert st.stop_since is not None
             stopped_for = t - st.stop_since

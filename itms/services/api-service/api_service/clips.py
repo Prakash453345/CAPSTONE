@@ -164,7 +164,7 @@ class ClipRegistry:
         if clip.review in ("CONFIRMED", "REJECTED"):
             raise ClipStateError(f"this clip was already {clip.review.lower()}")
         if clip.review != "PENDING":
-            raise ClipStateError("nothing to review: the analysis has not finished or found nothing")
+            raise ClipStateError("nothing to review: the analysis has not finished or found nothing")  # noqa: E501
         return clip
 
     def confirm(self, clip_id: str, *, actor: str, at_ms: int, anomaly_type: str | None = None,

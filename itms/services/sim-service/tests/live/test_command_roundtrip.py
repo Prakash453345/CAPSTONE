@@ -91,7 +91,7 @@ def _graph() -> RoadGraph:
         "A": (GraphEdge("T", "J2", True, "J2"),),
     }
     return RoadGraph(
-        edges=edges, adjacency=adjacency,
+        edges=edges, adjacency=adjacency,  # type: ignore[arg-type]
         signalised_junctions=frozenset({"J1", "J2"}),
         link_movements={"J1": {("S", "A"): frozenset({"L0"})},
                         "J2": {("A", "T"): frozenset({"L0"})}},
@@ -107,6 +107,7 @@ class _NoAnoms:
 def patched_edges(monkeypatch):
     monkeypatch.setattr(ec.traci.edge, "getLastStepOccupancy", lambda e: 0.0)
     monkeypatch.setattr(ec.traci.edge, "getLastStepMeanSpeed", lambda e: -1.0)
+    monkeypatch.setattr(ec.traci.edge, "getLastStepHaltingNumber", lambda e: 0)
 
 
 def test_emergency_create_and_command_accept_a_decoded_timestamp(patched_edges):

@@ -66,7 +66,7 @@ async function call(path: string, init: RequestInit & { timeoutMs?: number } = {
  *  signed-in user. */
 async function readUser(res: Response): Promise<SessionUser> {
   if (!(res.headers.get("content-type") ?? "").includes("application/json")) {
-    throw new AuthError("unavailable");
+    throw new AuthError("network");
   }
   const body: unknown = await res.json().catch(() => null);
   const b = body as { username?: unknown; display_name?: unknown; role?: unknown; unit_id?: unknown; unit_kind?: unknown } | null;
@@ -161,5 +161,21 @@ export async function resetPassword(
     const body = (await res.json().catch(() => null)) as { detail?: unknown } | null;
     throw new AuthError("weak", undefined, typeof body?.detail === "string" ? body.detail : undefined);
   }
+  if (res.status !== 204) throw new AuthError("unavailable");
+}
+
+/** Change the signed-in user's password. Other devices are signed out; this one stays. */
+export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
+  const res = await call("/v1/auth/password", {
+    ...JSON_POST,
+    body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+  });
+  const detail = async () => {
+    const body = (await res.json().catch(() => null)) as { detail?: unknown } | null;
+    return typeof body?.detail === "string" ? body.detail : undefined;
+  };
+  if (res.status === 400) throw new AuthError("invalid", undefined, await detail());
+  if (res.status === 422) throw new AuthError("weak", undefined, await detail());
+  if (res.status === 429) throw new AuthError("locked", undefined, await detail());
   if (res.status !== 204) throw new AuthError("unavailable");
 }

@@ -14,6 +14,7 @@ import {
   makeEmergencyIcon,
   upsertMapImage,
 } from "@/components/map/mapIcons";
+import { pathBetween, sampleAlong } from "@/components/map/layers/vehiclePath";
 import { angleDelta, bearingDeg } from "@/utils/geo";
 import type { EmergencyVehicleKind } from "@/types";
 
@@ -165,11 +166,14 @@ export function EmergencyVehicleLayer({
         const features: Feature<Point>[] = [];
         for (const [id, t] of target.current) {
           const p = prev.current.get(id) ?? t;
-          const lng = p.lng + (t.lng - p.lng) * f;
-          const lat = p.lat + (t.lat - p.lat) * f;
+          const along = !reduced && t.path ? sampleAlong(t.path, f) : null;
+          const lng = along ? along[0] : p.lng + (t.lng - p.lng) * f;
+          const lat = along ? along[1] : p.lat + (t.lat - p.lat) * f;
           const moved = Math.hypot(t.lng - p.lng, t.lat - p.lat) > 1e-7;
           const targetHeading = moved
-            ? bearingDeg([p.lng, p.lat], [t.lng, t.lat])
+            ? t.path && !reduced
+              ? bearingDeg(sampleAlong(t.path, Math.max(0, f - 0.05)), sampleAlong(t.path, Math.min(1, f + 0.05)))
+              : bearingDeg([p.lng, p.lat], [t.lng, t.lat])
             : (heading.current.get(id) ?? 0);
           const fromHeading = heading.current.get(id) ?? targetHeading;
           const hdg = fromHeading + angleDelta(fromHeading, targetHeading) * (reduced ? 1 : f);
@@ -250,7 +254,12 @@ export function EmergencyVehicleLayer({
     prev.current = new Map(target.current);
     const shown =
       onlyRequestId === undefined ? requests : requests.filter((r) => r.id === onlyRequestId);
-    target.current = buildVehicleFrames(shown, selectedRequestId);
+    const frames = buildVehicleFrames(shown, selectedRequestId);
+    for (const [id, frame] of frames) {
+      const before = prev.current.get(id);
+      if (before) frame.path = pathBetween(before, frame);
+    }
+    target.current = frames;
   }, [requests, selectedRequestId, onlyRequestId]);
 
   return null;

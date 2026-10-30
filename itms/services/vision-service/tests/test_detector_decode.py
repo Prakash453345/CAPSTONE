@@ -19,7 +19,7 @@ def _head(rows: list[tuple[tuple[float, float, float, float], list[float]]]) -> 
 
 def test_merge_matrix_only_for_many_to_one_maps() -> None:
     assert merge_matrix(class_map_for(["car", "bus"] + ["x"] * 78), 80) is None  # not COCO: by name
-    groups, m = merge_matrix(class_map_for(NAMES), len(NAMES))
+    groups, m = merge_matrix(class_map_for(NAMES), len(NAMES))  # type: ignore[misc]
     assert groups == [VClass.CAR, VClass.MOTORCYCLE]
     assert m.tolist() == [[1, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]]
 

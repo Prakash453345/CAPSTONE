@@ -151,8 +151,19 @@ def build_service(mode: str):
         fire = FireMonitorConfig()
     model = f"vision-m8/simcam:{preset}" if mode == "simcam" else \
         f"vision-m8/{Path(detector_path()).name}"
+    review_url = os.environ.get("VISION_REVIEW_URL", "")
+    review_sink = None
+    if review_url:
+        from vision_service.review import make_review_sink  # noqa: PLC0415
+
+        key = os.environ.get("API_KEY", "")
+        if not key:
+            raise SystemExit("VISION_REVIEW_URL is set but API_KEY is not: set the same API_KEY "
+                             "api-service runs with, so camera flags can reach the review inbox")
+        review_sink = make_review_sink(review_url, key)
+        log.info("camera flags go to the review inbox at %s", review_url)
     return VisionService(rig, approach, receiving, publish, preset=preset, fps=fps, model=model,
-                         evidence=evidence,
+                         evidence=evidence, review_sink=review_sink,
                          rules=os.environ.get("VISION_RULES", DEFAULT_OPERATING_POINT),
                          lane_chains=chains if (chains[0] or chains[1]) else None,
                          fire=fire), specs
@@ -211,7 +222,7 @@ def _run_video(service, specs) -> None:
             fire_scorer = FireScorer(*fire_cfg)
         except ImportError as e:
             raise SystemExit(f"fire detection is on but its packages are missing ({e}): "
-                             "pip install -e 'services/vision-service[fire]', or set VISION_FIRE=0") from e
+                             "pip install -e 'services/vision-service[fire]', or set VISION_FIRE=0") from e  # noqa: E501
         log.info("fire detection on: %s", fire_scorer.name)
     last_fire: dict[str, float] = {}
     latest = LatestFrames()

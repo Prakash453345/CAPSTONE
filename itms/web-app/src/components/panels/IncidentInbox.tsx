@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ScanEye, MapPin, Loader2, RefreshCw } from "lucide-react";
 import { useIncidentStore } from "@/store/incidentStore";
+import { useAuthStore } from "@/store/authStore";
 import { useSystemStore } from "@/store/systemStore";
 import { useMapStore } from "@/store/mapStore";
 import { fetchIncidents, reviewIncident } from "@/services/traffic/incidents";
@@ -151,8 +152,7 @@ function ReviewForm({
   onReviewed: (i: Incident) => void;
 }) {
   const [action, setAction] = useState<"confirm" | "reject" | null>(null);
-  const [key, setKey] = useState("");
-  const [actor, setActor] = useState("");
+  const actor = `operator:${useAuthStore((s) => s.user?.username ?? "console")}`;
   const [classification, setClassification] = useState("UNKNOWN");
   const [detail, setDetail] = useState("");
   const [busy, setBusy] = useState(false);
@@ -179,8 +179,8 @@ function ReviewForm({
           const next = await reviewIncident(
             incident.id,
             action,
-            key,
-            actor.trim(),
+            "",
+            actor,
             classification,
             detail,
           );
@@ -189,7 +189,6 @@ function ReviewForm({
               "Unexpected review response. Refresh the registry before retrying.",
             );
           onReviewed(next);
-          setKey("");
           setAction(null);
         } catch (err) {
           setError(
@@ -205,26 +204,7 @@ function ReviewForm({
           ? "Confirm this incident?"
           : "Reject this candidate as a false alarm?"}
       </p>
-      <label>
-        Operator identity
-        <input
-          required
-          value={actor}
-          onChange={(e) => setActor(e.target.value)}
-          placeholder="operator:your-name"
-        />
-      </label>
-      <label>
-        API key
-        <input
-          required
-          type="password"
-          autoComplete="off"
-          value={key}
-          onChange={(e) => setKey(e.target.value)}
-        />
-      </label>
-      <small>Used for this request only. Not saved.</small>
+      <small>Recorded as {actor} (your signed-in account).</small>
       {action === "confirm" && (
         <label>
           Classification
@@ -264,7 +244,7 @@ function ReviewForm({
         <button
           className="review-choice"
           type="submit"
-          disabled={busy || !actor.trim()}
+          disabled={busy}
         >
           {busy ? "Submitting…" : `Submit ${action}`}
         </button>
@@ -274,7 +254,6 @@ function ReviewForm({
           disabled={busy}
           onClick={() => {
             setAction(null);
-            setKey("");
           }}
         >
           Cancel

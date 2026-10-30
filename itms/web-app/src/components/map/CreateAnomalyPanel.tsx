@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { AlertTriangle, Loader2 } from "lucide-react";
-import { SimModeNotice } from "@/components/map/SimModeNotice";
 import { CommandError, postCommand } from "@/services/traffic/commands";
 import { edgeById, roadLabel } from "@/data/network";
 import { InlineError, Pill, PrimaryButton, SectionLabel, Sheet } from "@/components/map/sheet";
@@ -101,8 +100,6 @@ export function CreateAnomalyPanel({
         </PrimaryButton>
       }
     >
-      <SimModeNotice />
-
       <div>
         <SectionLabel>What happened</SectionLabel>
         <div className="flex flex-wrap gap-1.5">

@@ -56,11 +56,12 @@ def patched_edges(monkeypatch):
     spd: dict[str, float] = {}
     monkeypatch.setattr(ec.traci.edge, "getLastStepOccupancy", lambda e: occ.get(e, 0.0))
     monkeypatch.setattr(ec.traci.edge, "getLastStepMeanSpeed", lambda e: spd.get(e, -1.0))
+    monkeypatch.setattr(ec.traci.edge, "getLastStepHaltingNumber", lambda e: 0)
     return occ, spd
 
 
 def _controller(anoms: _Anoms, **cfg_over) -> EmergencyController:
-    return EmergencyController(_diamond(), anoms, EmergencyRoutingConfig(**cfg_over))
+    return EmergencyController(_diamond(), anoms, EmergencyRoutingConfig(**cfg_over))  # type: ignore[arg-type]
 
 
 def _create(c: EmergencyController, at_ms: int = 1000) -> None:
@@ -111,6 +112,23 @@ def test_a_cheaper_replan_triggers_a_reroute(patched_edges):
     c = _controller(anoms)
     _create(c)
 
+    # A is now crawling. Default (time-based) cost: the saving must beat
+    # max(15 s, 10 %) + 5 s switch cost, so the crawl has to be real.
+    occ["A"], spd["A"] = 95.0, 0.3
+    c.tick(step=40, sim_time_s=40.0)
+
+    assert _reroute_count(c) == 1
+    assert _route_edges(c) == ("S", "B", "T")
+    assert "faster path" in c._requests["er-1"].history[-1].detail
+
+
+def test_a_cheaper_replan_triggers_a_reroute_weighted_cost(patched_edges, monkeypatch):
+    monkeypatch.setenv("ITMS_ROUTE_COST", "weighted")
+    occ, spd = patched_edges
+    anoms = _Anoms()
+    c = _controller(anoms)
+    _create(c)
+
     occ["A"], spd["A"] = 95.0, 1.0              # A is now crawling
     c.tick(step=40, sim_time_s=40.0)
 
@@ -149,7 +167,10 @@ def test_a_new_severe_anomaly_ahead_only_fires_once(patched_edges):
 # ---- gates: cooldown / interval ---------------------------------------
 
 
-def test_cooldown_blocks_a_second_reroute_immediately_after(patched_edges):
+def test_new_blockage_ahead_skips_the_cooldown_once(patched_edges):
+    """Since 2026-10-27 a road ahead that has just become blocked is acted on
+    at once, inside the cooldown -- but only once per anomaly, so a blockage
+    with no way around is not retried every few seconds."""
     anoms = _Anoms()
     c = _controller(anoms)
     _create(c)
@@ -157,10 +178,27 @@ def test_cooldown_blocks_a_second_reroute_immediately_after(patched_edges):
     c.tick(step=40, sim_time_s=40.0)
     assert _reroute_count(c) == 1 and _route_edges(c) == ("S", "B", "T")
 
-    # block B too, tick again within reroute_cooldown_s (default 30) of the reroute
+    # B is blocked too, within reroute_cooldown_s (default 30) of the reroute:
+    # acted on now (there is no clean way round, so this is the forced route)
     anoms.items = [_blocked("A"), _blocked("B", aid="an-2")]
     c.tick(step=45, sim_time_s=45.0)
-    assert _reroute_count(c) == 1
+    assert _reroute_count(c) == 2
+
+    # same blockages, still inside the cooldown: no further reroute
+    c.tick(step=50, sim_time_s=50.0)
+    assert _reroute_count(c) == 2
+
+
+def test_blocked_destination_does_not_trigger_a_reroute(patched_edges):
+    """The destination is not 'ahead': an incident there is why the vehicle
+    is going."""
+    anoms = _Anoms()
+    c = _controller(anoms)
+    _create(c)
+    anoms.items = [_blocked("T")]
+    c.tick(step=40, sim_time_s=40.0)
+    c.tick(step=80, sim_time_s=80.0)
+    assert _reroute_count(c) == 0
 
 
 def test_monitor_interval_limits_evaluation_frequency(patched_edges):
@@ -184,3 +222,18 @@ def test_no_trigger_leaves_the_route_and_state_untouched(patched_edges):
     assert _reroute_count(c) == 0
     assert c.active_requests()[0].state.name == "ROUTE_READY"
     assert _route_edges(c) == ("S", "A", "T")
+
+
+def test_a_blockage_the_route_is_forced_through_is_not_retried(patched_edges):
+    """No way round: the route crosses the blocked road (forced_through). The
+    monitor must not keep 'rerouting' onto the same forced route."""
+    anoms = _Anoms()
+    c = _controller(anoms)
+    _create(c)
+    anoms.items = [_blocked("A"), _blocked("B", aid="an-2")]   # both ways blocked
+    c.tick(step=40, sim_time_s=40.0)
+    first = _reroute_count(c)
+    assert first <= 1                                       # at most one forced reroute
+    for t in (80.0, 120.0, 160.0, 200.0):                   # several cooldowns later
+        c.tick(step=int(t), sim_time_s=t)
+    assert _reroute_count(c) == first

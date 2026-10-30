@@ -101,7 +101,7 @@ export async function reviewIncident(
     `${API_BASE}/v1/incidents/${encodeURIComponent(id)}/${action}`,
     {
       method: "POST",
-      headers: { "content-type": "application/json", "X-API-Key": key },
+      headers: { "content-type": "application/json", ...(key ? { "X-API-Key": key } : {}) },
       body: JSON.stringify({ actor, classification, detail }),
       signal: AbortSignal.timeout(10_000),
     },

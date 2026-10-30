@@ -39,6 +39,36 @@
       "doc": "vehicle_kind values the response map called for but no depot vehicle was available/known for (e.g. fire_truck, until real fire-station data exists)."
     },
     {
+      "name": "queued_kinds",
+      "type": { "type": "array", "items": "string" },
+      "default": [],
+      "doc": "Kinds that had units but none free: the call waits in a queue and is served, highest severity first, when a unit frees up (2026-10-27)."
+    },
+    {
+      "name": "waited_s",
+      "type": ["null", "double"],
+      "default": null,
+      "doc": "Set when this dispatch served a waiting call: how long it waited, seconds."
+    },
+    {
+      "name": "reassigned_from",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Set when the unit was moved here from a lower-severity call by an operator-confirmed reassignment: that call's anomaly id (it goes back in the queue)."
+    },
+    {
+      "name": "reassign_suggestions",
+      "type": { "type": "array", "items": { "type": "record", "name": "ReassignSuggestion", "fields": [
+        { "name": "suggestion_id", "type": "string" },
+        { "name": "vehicle_id", "type": "string" },
+        { "name": "from_anomaly_id", "type": "string" },
+        { "name": "from_severity", "type": "string" },
+        { "name": "eta_s", "type": ["null", "double"], "default": null }
+      ] } },
+      "default": [],
+      "doc": "A unit on its way to a lower-severity call that could be moved here. Confirm with an EmergencyCommand, action REASSIGN, request_id = suggestion_id."
+    },
+    {
       "name": "notified",
       "type": {
         "type": "array",

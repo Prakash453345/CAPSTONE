@@ -85,13 +85,13 @@ class HexIndex:
                 self.cell_edges.setdefault(c, set()).add(eid)
         # directed cell graph: along each edge, and across each connection
         adj: dict[Cell, set[Cell]] = {}
-        for cells in self.edge_cells.values():
+        for cells in self.edge_cells.values():  # type: ignore[assignment]
             for a, b in zip(cells, cells[1:], strict=False):
                 adj.setdefault(a, set()).add(b)
-        for a, ges in graph.adjacency.items():
+        for a, ges in graph.adjacency.items():  # type: ignore[assignment]
             if a not in self.edge_cells:
                 continue
-            ca = self.edge_cells[a][-1]
+            ca = self.edge_cells[a][-1]  # type: ignore[index]
             for ge in ges:
                 if ge.to_edge in self.edge_cells:
                     cb = self.edge_cells[ge.to_edge][0]

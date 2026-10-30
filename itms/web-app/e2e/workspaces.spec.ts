@@ -107,8 +107,8 @@ test("live stream freshness, incident review and source isolation", async ({
   await page.route(
     "**/api/v1/incidents/live-incident/confirm",
     async (route) => {
-      expect(route.request().headers()["x-api-key"]).toBe("browser-test-key");
-      expect(route.request().postDataJSON().actor).toBe("operator:test");
+      expect(route.request().headers()["x-api-key"]).toBeUndefined(); // the session is the credential
+      expect(route.request().postDataJSON().actor).toMatch(/^operator:/);
       await route.fulfill({
         json: {
           incident_id: "live-incident",
@@ -147,8 +147,6 @@ test("live stream freshness, incident review and source isolation", async ({
   await expect(statusChip(page)).toHaveAccessibleName(/Updated (just now|\d+s ago)/);
   await navigate(page, "Incidents");
   await page.getByRole("button", { name: "Review & confirm" }).click();
-  await page.getByLabel("Operator identity").fill("operator:test");
-  await page.getByLabel("API key", { exact: true }).fill("browser-test-key");
   await page.getByRole("button", { name: "Submit confirm" }).click();
   // The card flips to "confirmed" once the (mocked) API answers; slow CI
   // runners have missed the default 5 s.
@@ -237,8 +235,9 @@ test("explore map opens full screen and back returns", async ({ page }) => {
   await expect(page.getByRole("navigation", { name: "Primary" })).toHaveCount(0);
   // The data status stays visible even in full screen.
   await expect(statusChip(page)).toContainText("Demo data");
-  const map = await page.locator(".maplibregl-map").boundingBox();
-  expect(map?.height ?? 0).toBeGreaterThan(600);
+  await expect
+    .poll(async () => (await page.locator(".maplibregl-map").boundingBox())?.height ?? 0)
+    .toBeGreaterThan(600);
   await page.getByRole("button", { name: "Back", exact: true }).click();
   await expect(page).toHaveURL(/\/console$/);
 
@@ -302,4 +301,41 @@ test("mobile drawer keyboard focus and reduced-motion preference", async ({
       page.getByRole("button", { name: "Open navigation", exact: true }),
     ).toBeFocused();
   }
+});
+
+test("a two-finger slide pans the map; a pinch still zooms", async ({ page }) => {
+  await page.goto("/console/map");
+  const canvas = page.locator("canvas.maplibregl-canvas").first();
+  await expect(canvas).toBeVisible();
+  const scale = page.locator(".maplibregl-ctrl-scale");
+  await expect(scale).toBeVisible();
+  const wheel = (init: WheelEventInit) =>
+    canvas.evaluate((el, i) => {
+      const e = new WheelEvent("wheel", { bubbles: true, cancelable: true, clientX: 300, clientY: 300, ...i });
+      el.dispatchEvent(e);
+      return e.defaultPrevented;
+    }, init);
+
+  const before = await scale.textContent();
+  // Smooth, fractional deltas with a sideways part: a trackpad slide.
+  expect(await wheel({ deltaX: 12, deltaY: 40 })).toBe(true);
+  await page.waitForTimeout(300);
+  expect(await scale.textContent()).toBe(before);
+
+  // ctrl+wheel is how browsers report a pinch.
+  for (let i = 0; i < 6; i++) await wheel({ deltaY: -60, ctrlKey: true });
+  await expect.poll(() => scale.textContent()).not.toBe(before);
+});
+
+test("the report button stays on screen in a short window", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 640 });
+  await page.goto("/console/traffic");
+  const search = page.getByRole("combobox", { name: "Search the road network" });
+  await search.fill("177626285");
+  await search.press("Enter");
+  await page.getByRole("region", { name: "Eat Street details" }).getByRole("button", { name: "Report" }).click();
+  const submit = page.getByRole("button", { name: /^Report / }).last();
+  await expect(submit).toBeVisible();
+  const box = await submit.boundingBox();
+  expect(box && box.y + box.height).toBeLessThanOrEqual(640);
 });

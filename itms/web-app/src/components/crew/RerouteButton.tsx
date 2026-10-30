@@ -6,7 +6,8 @@ import { cn } from "@/utils/cn";
 
 /** Asks the system to recalculate the route (the same command dispatchers use). */
 export function RerouteButton({ requestId, unitName, className }: { requestId: string; unitName: string; className?: string }) {
-  const live = useSystemStore((s) => s.dataMode === "live");
+  // Demo answers commands from its own simulation, so only a dropped Live link blocks it.
+  const live = useSystemStore((s) => s.dataMode === "simulation" || s.connectionStatus === "online");
   const [state, setState] = useState<"idle" | "busy" | "sent" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
 

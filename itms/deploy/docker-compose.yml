@@ -40,6 +40,9 @@ services:
         VITE_CITY: ${VITE_CITY:-}
         VITE_LIVE_CITY: ${VITE_LIVE_CITY:-}
     image: traffix-backend
+    # Built here (when missing, or with --build), never downloaded: there is
+    # no such image on Docker Hub.
+    pull_policy: never
     command: ["api"]
     restart: unless-stopped
     env_file: .env
@@ -60,7 +63,8 @@ services:
       retries: 12
 
   sim:
-    image: traffix-backend
+    image: traffix-backend  # the image the api service builds
+    pull_policy: never
     command: ["sim"]
     restart: unless-stopped
     env_file: .env
@@ -79,6 +83,9 @@ services:
     profiles: ["tunnel"]
     restart: unless-stopped
     command: ["tunnel", "--no-autoupdate", "--url", "http://api:8000"]
+    # Look names up with public DNS: some networks' DNS fails for
+    # api.trycloudflare.com ("server misbehaving"). Service names still resolve.
+    dns: ["1.1.1.1", "8.8.8.8"]
     depends_on:
       api: { condition: service_healthy }
 

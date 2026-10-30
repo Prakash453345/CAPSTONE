@@ -357,7 +357,7 @@ class QueueStateSampler:
                               - traci.vehicle.getLength(veh_id))
                     if nearest is None or tail_m < nearest[0]:
                         nearest = (tail_m, link)
-            if nearest is None or best + nearest[0] > _BLOCK_GAP_M:
+            if nearest is None or best + nearest[0] > _BLOCK_GAP_M:  # type: ignore[operator]
                 continue
             for m in movements:
                 out[m] = nearest[1]

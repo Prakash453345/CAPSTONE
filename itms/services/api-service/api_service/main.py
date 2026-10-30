@@ -132,6 +132,27 @@ def require_api_key(x_api_key: str = Header(default="")) -> None:
         raise HTTPException(status_code=401, detail="missing or invalid X-API-Key header")
 
 
+def require_uploader(request: Request, x_api_key: str = Header(default="")) -> None:
+    """Who may add a clip: an operator session (as everywhere else), or a camera
+    service holding the API key."""
+    if x_api_key and secrets.compare_digest(x_api_key, API_KEY):
+        return
+    _operator_only(request)
+
+
+def require_reviewer(request: Request, x_api_key: str = Header(default="")) -> None:
+    """Who may confirm or reject a candidate: a signed-in operator (the console's
+    own session), or a script holding the API key. Crew accounts may not."""
+    if x_api_key and secrets.compare_digest(x_api_key, API_KEY):
+        return
+    if REQUIRE_SIGN_IN:
+        user = auth_mod.current_user(request, auth_mod.get_user_store())
+        if user.role == "responder":
+            raise HTTPException(status_code=403, detail="Crew accounts can't review reports.")
+        return
+    raise HTTPException(status_code=401, detail="missing or invalid X-API-Key header")
+
+
 class ConfirmRequest(BaseModel):
     actor: str
     classification: str = IncidentClass.UNKNOWN.value
@@ -286,7 +307,14 @@ app = FastAPI(title="ITMS api-service", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        o.strip()
+        for o in os.environ.get(
+            "API_CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173"
+        ).split(",")
+        if o.strip()
+    ],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -335,6 +363,16 @@ def _session_user(request: Request) -> auth_mod.UserRecord | None:
     if not REQUIRE_SIGN_IN:
         return None
     return auth_mod.current_user(request, auth_mod.get_user_store())
+
+
+def _operator_only(request: Request) -> None:
+    """Clips and incidents are operator data: crew accounts get 403."""
+    user = _session_user(request)
+    if user is not None and user.role == "responder":
+        raise HTTPException(status_code=403, detail="Crew accounts can't open this.")
+
+
+_signed_in = [Depends(_operator_only)]
 
 
 def _check_crew_command(user: auth_mod.UserRecord, cmd: CommandRequest) -> None:
@@ -415,7 +453,7 @@ def _ws_signed_in(ws: WebSocket) -> bool:
     return bool(record and record.is_active and record.session_version == claims[1])
 
 
-@app.get("/v1/incidents")
+@app.get("/v1/incidents", dependencies=_signed_in)
 async def list_incidents() -> list[dict]:
     """Every incident this process has seen since it started (the registry
     is in-memory, rebuilt from the bus on each restart -- see
@@ -425,7 +463,7 @@ async def list_incidents() -> list[dict]:
     )]
 
 
-@app.get("/v1/incidents/{incident_id}")
+@app.get("/v1/incidents/{incident_id}", dependencies=_signed_in)
 async def get_incident(incident_id: str) -> dict:
     inc = registry.get(incident_id)
     if inc is None:
@@ -433,7 +471,7 @@ async def get_incident(incident_id: str) -> dict:
     return incident_to_json(inc)
 
 
-@app.post("/v1/incidents/{incident_id}/confirm", dependencies=[Depends(require_api_key)])
+@app.post("/v1/incidents/{incident_id}/confirm", dependencies=[Depends(require_reviewer)])
 async def confirm_incident(incident_id: str, body: ConfirmRequest) -> dict:
     """ADR-006's human gate, the affirmative half: turn a raised CANDIDATE
     into a real, dispatch-worthy incident. Requires `X-API-Key`."""
@@ -462,7 +500,7 @@ async def confirm_incident(incident_id: str, body: ConfirmRequest) -> dict:
     return incident_to_json(inc)
 
 
-@app.post("/v1/incidents/{incident_id}/reject", dependencies=[Depends(require_api_key)])
+@app.post("/v1/incidents/{incident_id}/reject", dependencies=[Depends(require_reviewer)])
 async def reject_incident(incident_id: str, body: RejectRequest) -> dict:
     """ADR-006's human gate, the negative half: dismiss a raised CANDIDATE
     as a false alarm -- plan 4.4's feedback signal for the conformal
@@ -515,10 +553,10 @@ def _inside_clips_dir(path: str) -> Path:
     return p
 
 
-@app.post("/v1/clips", status_code=201)
+@app.post("/v1/clips", status_code=201, dependencies=[Depends(require_uploader)])
 async def upload_clip(
     request: Request,
-    file: UploadFile = File(...),
+    file: UploadFile = File(...),  # noqa: B008
     edge_id: str = Form(..., min_length=1),
     road_name: str = Form(""),
     latitude: float | None = Form(None),
@@ -568,18 +606,18 @@ async def upload_clip(
     return clip_to_json(clip)
 
 
-@app.get("/v1/clips")
+@app.get("/v1/clips", dependencies=_signed_in)
 async def list_clips() -> list[dict]:
     """Every uploaded clip, newest first."""
     return [clip_to_json(c) for c in clips.all()]
 
 
-@app.get("/v1/clips/{clip_id}")
+@app.get("/v1/clips/{clip_id}", dependencies=_signed_in)
 async def get_clip(clip_id: str) -> dict:
     return clip_to_json(_clip_or_404(clip_id))
 
 
-@app.get("/v1/clips/{clip_id}/video")
+@app.get("/v1/clips/{clip_id}/video", dependencies=_signed_in)
 async def clip_video(clip_id: str) -> FileResponse:
     """The uploaded video, with range requests so a player can seek to the
     flagged moment."""
@@ -587,7 +625,7 @@ async def clip_video(clip_id: str) -> FileResponse:
     return FileResponse(path, media_type=_VIDEO_TYPES.get(path.suffix.lower(), "video/mp4"))
 
 
-@app.get("/v1/clips/{clip_id}/snapshot")
+@app.get("/v1/clips/{clip_id}/snapshot", dependencies=_signed_in)
 async def clip_snapshot(clip_id: str) -> FileResponse:
     """The flagged moment as a JPEG, people and plates pixelated."""
     snap = (_clip_or_404(clip_id).result or {}).get("snapshot_path") or ""
@@ -596,7 +634,7 @@ async def clip_snapshot(clip_id: str) -> FileResponse:
     return FileResponse(_inside_clips_dir(snap), media_type="image/jpeg")
 
 
-@app.post("/v1/clips/{clip_id}/confirm", dependencies=[Depends(require_api_key)])
+@app.post("/v1/clips/{clip_id}/confirm", dependencies=[Depends(require_reviewer)])
 async def confirm_clip(clip_id: str, body: ClipConfirmRequest, request: Request) -> dict:
     """ADR-006's human gate for a clip finding: confirm it into a live
     anomaly. Publishes the same `AnomalyCreateRequested` the Create Anomaly
@@ -621,7 +659,7 @@ async def confirm_clip(clip_id: str, body: ClipConfirmRequest, request: Request)
     return clip_to_json(clip)
 
 
-@app.post("/v1/clips/{clip_id}/reject", dependencies=[Depends(require_api_key)])
+@app.post("/v1/clips/{clip_id}/reject", dependencies=[Depends(require_reviewer)])
 async def reject_clip(clip_id: str, body: ClipRejectRequest) -> dict:
     """Dismiss a clip finding as a false alarm. Requires `X-API-Key`."""
     try:

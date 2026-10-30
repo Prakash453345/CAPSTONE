@@ -41,6 +41,7 @@ def test_a_frame_alarms_on_either_class_at_its_own_threshold() -> None:
 # ---- preprocessing -------------------------------------------------------------------------
 
 def test_crop_grows_the_box_by_a_quarter_and_clips_to_the_frame() -> None:
+    pytest.importorskip("cv2")
     frame = np.zeros((200, 300, 3), np.uint8)
     frame[40:80, 100:160] = 255            # the box: 60 wide, 40 high
     out = crop_box(frame, (100, 40, 160, 80))
@@ -163,7 +164,7 @@ def test_fire_payload_satisfies_the_avro_contract() -> None:
     mon = FireMonitor("cam9")
     run(mon, [(0, alarm()), (1, alarm()), (2, alarm())])
     out = decode_envelope(encode_envelope("AnomalyUpdated", "pytest", fire_payload(
-        mon.active, edge_id="in")))["payload"]
+        mon.active, edge_id="in")))["payload"]  # type: ignore[arg-type]
     assert out["anomaly_type"] == "fire" and out["source"] == "VISION"
 
 

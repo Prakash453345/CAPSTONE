@@ -156,7 +156,7 @@ class RoutePlanner:
             graph = full
             candidates = self._search(graph, source_edge, dest_edge, cond, k)
             if candidates:
-                forced_through = blocked & set(candidates[0].edges)
+                forced_through = frozenset(blocked & set(candidates[0].edges))
 
         if not candidates:
             raise NoRouteError(

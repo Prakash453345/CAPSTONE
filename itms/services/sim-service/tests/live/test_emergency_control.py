@@ -42,6 +42,7 @@ def patched_edges(monkeypatch):
     spd: dict[str, float] = {}
     monkeypatch.setattr(ec.traci.edge, "getLastStepOccupancy", lambda e: occ.get(e, 0.0))
     monkeypatch.setattr(ec.traci.edge, "getLastStepMeanSpeed", lambda e: spd.get(e, -1.0))
+    monkeypatch.setattr(ec.traci.edge, "getLastStepHaltingNumber", lambda e: 0)
     return occ, spd
 
 

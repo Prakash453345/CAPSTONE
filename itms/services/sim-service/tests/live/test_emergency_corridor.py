@@ -39,7 +39,7 @@ def _graph() -> RoadGraph:
         "J2": {("B", "T"): frozenset({"L0"})},
     }
     return RoadGraph(
-        edges=edges, adjacency=adjacency,
+        edges=edges, adjacency=adjacency,  # type: ignore[arg-type]
         signalised_junctions=frozenset({"J1", "J2"}), link_movements=link_movements,
     )
 
@@ -121,6 +121,7 @@ def wired(monkeypatch):
     routes: list[tuple] = []
     monkeypatch.setattr(ec.traci.edge, "getLastStepOccupancy", lambda e: 0.0)
     monkeypatch.setattr(ec.traci.edge, "getLastStepMeanSpeed", lambda e: -1.0)
+    monkeypatch.setattr(ec.traci.edge, "getLastStepHaltingNumber", lambda e: 0)
     monkeypatch.setattr(ec.traci, "vehicle", veh)
     monkeypatch.setattr(
         ec.traci.route, "add", lambda rid, edges: routes.append((rid, tuple(edges)))
@@ -141,6 +142,7 @@ def wired_bypass(monkeypatch):
     routes: list[tuple] = []
     monkeypatch.setattr(ec.traci.edge, "getLastStepOccupancy", lambda e: 0.0)
     monkeypatch.setattr(ec.traci.edge, "getLastStepMeanSpeed", lambda e: -1.0)
+    monkeypatch.setattr(ec.traci.edge, "getLastStepHaltingNumber", lambda e: 0)
     monkeypatch.setattr(ec.traci, "vehicle", veh)
     monkeypatch.setattr(
         ec.traci.route, "add", lambda rid, edges: routes.append((rid, tuple(edges)))

@@ -169,6 +169,29 @@ _CONFIDENCE_BLENDED_THRESHOLD = 0.5
 _SKIP_WAIT_MARGIN_S = 15.0
 
 
+def _wait_margin_s(cfg_t0: Tier0Config) -> float:
+    """Distance from I5's bound at which a waiting movement turns critical.
+
+    At least the historical 15 s, and never less than the junction's own
+    worst case for reaching a phase from wherever the junction is: finish the
+    current minimum green, then every other phase (which may be critical at
+    the same moment) once at its minimum green, each with a change (yellow +
+    all-red), plus a 1 s decision step:
+
+        (phases - 1) * (min green + yellow + all-red) + 1
+
+    The fixed 15 s produced the I5 interlock rejections of 2026-10-27 under
+    the ITE all-red: berlin_adlershof medium seed 103, joinedS_2 (a phase
+    committed at wait 179 s, 7 s change + 7 s min green + 7 s change, bound
+    195 s) and amaravati_v2 medium seed 103 (two phases critical together;
+    the one served second overran by 8 s). See
+    baselines/2026-10-28_paper_a/README.md."""
+    change = cfg_t0.yellow_s + cfg_t0.all_red_s
+    worst_min = max(cfg_t0.min_green_s.values(), default=0.0)
+    n = max(2, len(cfg_t0.ring_order))
+    return max(_SKIP_WAIT_MARGIN_S, (n - 1) * (worst_min + change) + 1.0)
+
+
 @dataclass(frozen=True)
 class AcampConfig:
     """Tier-1 tunables. Every field here is a *learnable* parameter --
@@ -727,6 +750,26 @@ class AcampConfig:
     measures against."""
 
     # -- gap-out --
+    # -- congestion-adaptive green ceiling (2026-10-29, weak-spots round) --
+    ceiling_relax_factor: float | None = None
+    """While the junction's congestion weight (`memory.congestion_weight`, the
+    same Hill curve that gates the switching cost: about 0.01 at light demand,
+    0.9 at heavy) is below `ceiling_relax_below`, the green ceiling is
+    `ceiling_relax_factor` times its configured value. `None` (default) keeps the
+    fixed ceiling. Why: under the ITE all-red the fixed 1.25x Webster ceiling cost
+    10-34 % delay at light demand on training seeds, while removing it caused jams
+    at heavy demand (baselines/2026-10-29_weak_spots)."""
+    ceiling_relax_below: float = 0.5
+    ceiling_relax_hold_s: float = 0.0
+    """Relax only if this junction has not been at or above `ceiling_relax_below`
+    for this many seconds (0 = no memory). Added 2026-10-29 after the fresh-seed test:
+    under heavy demand the smoothed congestion weight dips below the threshold for short
+    spells and the relaxed ceiling then cost delay on the networks that jam."""
+    ceiling_relax_network_max: float | None = None
+    """Relax only while at most this share of the network's signals are at or above
+    `ceiling_relax_below` (needs the shared `network` dict that `build_acamp` passes;
+    `None` = junction-only decision)."""
+
     gap_out_grace_s: float = 3.0
     """Seconds a phase may sit with no queue and no approaching vehicle before
     it yields to a phase that has one. `0.0` yields the instant it reads empty;
@@ -1034,7 +1077,7 @@ def _skippable(cfg_t0: Tier0Config, ctx: JunctionContext, phase_id: str) -> bool
         # discard the information the arrival term was added to provide.
         return False
     w = max((ctx.wait_times_s.get(m, 0.0) for m in phase.green_movements), default=0.0)
-    return w < cfg_t0.max_wait_s - _SKIP_WAIT_MARGIN_S
+    return w < cfg_t0.max_wait_s - _wait_margin_s(cfg_t0)
 
 
 def _critical_phases(cfg_t0: Tier0Config, ctx: JunctionContext, live: list[str]) -> list[str]:
@@ -1051,7 +1094,7 @@ def _critical_phases(cfg_t0: Tier0Config, ctx: JunctionContext, live: list[str])
         if not margins:
             continue
         margin = min(margins)
-        if margin <= _SKIP_WAIT_MARGIN_S:
+        if margin <= _wait_margin_s(cfg_t0):
             urgency.append((margin, p))
     urgency.sort(key=lambda pair: pair[0])
     return [p for _, p in urgency]
@@ -1149,8 +1192,13 @@ class AdaptiveCamp:
         calibration: OnlineCalibration | None = None,
         initial_baseline_load: float = 0.0,
         corridor=None,
+        network: dict | None = None,
     ) -> None:
         self.cfg = cfg or AcampConfig()
+        self._network = network
+        """Shared by all junctions of one run (built by the harness): id -> congestion
+        weight this tick. Read only by `ceiling_relax_network_max`."""
+        self._last_congested_s = -1e9
         self.nominal_cycle_s = nominal_cycle_s
         self.tick_s = tick_s
         self.memory = demand_memory
@@ -1516,6 +1564,23 @@ class AdaptiveCamp:
         }
         min_g = cfg_t0.min_green_s.get(current, 0.0)
         max_g = cfg_t0.max_green_s.get(current, min_g)
+        if self.cfg.ceiling_relax_factor is not None:
+            cw = memory_mod.congestion_weight(
+                self._load_ewma, self.cfg.switch_scale_ref, self.cfg.switch_scale_exponent
+            )
+            busy = cw >= self.cfg.ceiling_relax_below
+            if busy:
+                self._last_congested_s = self._sim_time_s
+            if self._network is not None:
+                self._network[id(self)] = busy
+            relax = not busy and (
+                self._sim_time_s - self._last_congested_s >= self.cfg.ceiling_relax_hold_s)
+            if relax and self.cfg.ceiling_relax_network_max is not None and self._network:
+                share = sum(self._network.values()) / len(self._network)
+                relax = share <= self.cfg.ceiling_relax_network_max
+            if relax:
+                max_g = max(min_g, max_g * self.cfg.ceiling_relax_factor)
+                self.stats["ceiling_relaxed"] = self.stats.get("ceiling_relaxed", 0) + 1
 
         # I3 (minimum green) is absolute and checked before everything
         # else, exactly as in `camp.propose` -- no pressure, starvation or
@@ -1535,7 +1600,7 @@ class AdaptiveCamp:
 
         # Cycle bookkeeping runs unconditionally (instrumentation in the
         # supervisor-off arm too); only the *action* below is gated.
-        cycle_elapsed_s, owed = self._cycle_state(cfg_t0, ctx, live, current)
+        cycle_elapsed_s, owed = self._cycle_state(cfg_t0, ctx, live, current)  # type: ignore[assignment]
         if self.cfg.cycle_supervisor and owed and cycle_elapsed_s > self._cycle_envelope_s(
             cfg_t0, live
         ):

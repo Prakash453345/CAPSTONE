@@ -173,3 +173,55 @@ def test_reject_with_correct_api_key_succeeds_and_publishes(client):
     env = decode_envelope(raw)
     assert env["event_type"] == "IncidentUpdated"
     assert env["payload"]["new_state"] == "REJECTED"
+
+
+def test_read_endpoints_need_a_session_when_sign_in_is_required(monkeypatch):
+    from api_service import main
+    from fastapi.testclient import TestClient
+
+    monkeypatch.setattr(main, "REQUIRE_SIGN_IN", True)
+    client = TestClient(main.app)
+    for path in ("/v1/incidents", "/v1/incidents/x", "/v1/clips", "/v1/clips/x",
+                 "/v1/clips/x/video", "/v1/clips/x/snapshot"):
+        assert client.get(path).status_code == 401, path
+    assert client.post("/v1/clips", files={"file": ("a.mp4", b"x")},
+                       data={"edge_id": "e"}).status_code == 401
+
+
+def test_crew_accounts_cannot_read_clips_or_incidents(monkeypatch):
+    from types import SimpleNamespace
+
+    import pytest
+    from api_service import main
+    from fastapi import HTTPException
+
+    monkeypatch.setattr(main, "REQUIRE_SIGN_IN", True)
+    monkeypatch.setattr(main, "_session_user", lambda request: SimpleNamespace(role="responder"))
+    with pytest.raises(HTTPException) as ei:
+        main._operator_only(SimpleNamespace(cookies={}))
+    assert ei.value.status_code == 403
+    monkeypatch.setattr(main, "_session_user", lambda request: SimpleNamespace(role="operator"))
+    main._operator_only(SimpleNamespace(cookies={}))
+
+
+def test_a_signed_in_operator_can_review_without_the_api_key(monkeypatch):
+    from types import SimpleNamespace
+
+    import pytest
+    from api_service import main
+    from fastapi import HTTPException
+
+    monkeypatch.setattr(main, "REQUIRE_SIGN_IN", True)
+    req = SimpleNamespace(cookies={})
+    monkeypatch.setattr(main.auth_mod, "get_user_store", lambda: None)
+    monkeypatch.setattr(main.auth_mod, "current_user", lambda r, s: SimpleNamespace(role="operator"))  # noqa: E501
+    main.require_reviewer(req, "")                                      # operator session
+    monkeypatch.setattr(main.auth_mod, "current_user", lambda r, s: SimpleNamespace(role="responder"))  # noqa: E501
+    with pytest.raises(HTTPException) as ei:
+        main.require_reviewer(req, "")
+    assert ei.value.status_code == 403
+    main.require_reviewer(req, main.API_KEY)                            # a script with the key
+    monkeypatch.setattr(main, "REQUIRE_SIGN_IN", False)
+    with pytest.raises(HTTPException) as ei:
+        main.require_reviewer(req, "wrong")
+    assert ei.value.status_code == 401

@@ -12,7 +12,8 @@ import {
   makeVehicleIcon,
   upsertMapImage,
 } from "@/components/map/mapIcons";
-import { angleDelta } from "@/utils/geo";
+import { angleDelta, type LngLat } from "@/utils/geo";
+import { pathBetween, sampleAlong } from "@/components/map/layers/vehiclePath";
 import type { Vehicle, VehicleType } from "@/types";
 
 const SRC = "vehicles";
@@ -23,6 +24,9 @@ const BACKPLATE = "vehicles-backplate";
 interface Frame {
   lng: number;
   lat: number;
+  lane?: string;
+  /** Road-following route from the previous snapshot to this one. */
+  path?: LngLat[];
   heading: number;
   type: Vehicle["type"];
   speed: number;
@@ -199,13 +203,17 @@ export function VehicleLayer({ visible }: { visible: boolean }) {
 
     const nextTarget = new Map<string, Frame>();
     for (const v of vehicles) {
-      nextTarget.set(v.id, {
+      const frame: Frame = {
         lng: v.longitude,
         lat: v.latitude,
+        lane: v.lane,
         heading: v.heading,
         type: v.type,
         speed: v.speed,
-      });
+      };
+      const before = prev.current.get(v.id);
+      if (before) frame.path = pathBetween(before, frame);
+      nextTarget.set(v.id, frame);
     }
     target.current = nextTarget;
   }, [vehicles]);
@@ -224,11 +232,12 @@ export function VehicleLayer({ visible }: { visible: boolean }) {
         const features: Feature<Point>[] = [];
         for (const [id, t] of target.current) {
           const p = prev.current.get(id);
+          const along = p && !reduced && t.path ? sampleAlong(t.path, f) : null;
           const frame =
             p && !reduced
               ? {
-                  lng: p.lng + (t.lng - p.lng) * f,
-                  lat: p.lat + (t.lat - p.lat) * f,
+                  lng: along ? along[0] : p.lng + (t.lng - p.lng) * f,
+                  lat: along ? along[1] : p.lat + (t.lat - p.lat) * f,
                   heading: p.heading + angleDelta(p.heading, t.heading) * f,
                   type: t.type,
                   speed: t.speed,

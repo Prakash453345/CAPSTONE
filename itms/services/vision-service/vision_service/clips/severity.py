@@ -4,14 +4,17 @@ There is no labelled severity data to train on, so severity is decided by
 rules a reviewer can check against the video, and every step of the decision
 is written into `reasons`:
 
-1. **Start from the type.** Fire and accident start at high, a stalled
-   vehicle at medium, congestion at low.
+1. **Start from the type.** Fire starts at high. An accident found only by
+   the accident model starts at medium: that model is best-effort and gave
+   about 120 alarm runs per camera-hour on accident-free Indian CCTV, so its
+   alarm alone must not read as "serious" (ADR-006: needs confirmation). A
+   stalled vehicle starts at medium, congestion at low.
 2. **Raise it from what the traffic does next**, measured by the vehicle
    tracker in the seconds after the finding starts:
    - *traffic past it stops* (vehicles in view, almost none moving) -> blocked
      for fire, accident and a stalled vehicle: the road is shut;
-   - a stalled vehicle with a queue of 5+ stopped vehicles, or one that stays
-     for 90 s or more -> high;
+   - an accident or a stalled vehicle with a queue of 5+ stopped vehicles,
+     or a stalled vehicle that stays for 90 s or more -> high;
    - congestion with 20+ stopped vehicles, or lasting 120 s or more -> medium.
      Congestion is never rated above medium: it is a traffic state, not an
      incident.
@@ -34,7 +37,7 @@ LEVELS = ("low", "medium", "high", "blocked")
 
 BASE_SEVERITY: dict[str, str] = {
     "fire": "high",
-    "accident": "high",
+    "accident": "medium",     # model-only evidence; raised below only when the traffic confirms it
     "vehicle_breakdown": "medium",
     "heavy_congestion": "low",
 }
@@ -80,6 +83,8 @@ def assess(
     base = BASE_SEVERITY.get(anomaly_type, "medium")
     level = base
     reasons = [f"{anomaly_type.replace('_', ' ')}: starts at {base}"]
+    if anomaly_type == "accident":
+        reasons.append("found by the accident model alone: needs confirmation by a person")
     if not scene:
         reasons.append("no vehicle detector on this clip, so severity comes from the type alone")
         return Severity(level, tuple(reasons))
@@ -102,6 +107,9 @@ def assess(
         reasons.append(
             f"traffic past it stopped: {mean_vehicles:.0f} vehicles in view, "
             f"{mean_moving:.1f} moving on average in the next {AFTER_WINDOW_S:.0f} s -> blocked")
+    if anomaly_type == "accident" and queue >= STALL_QUEUE:
+        level = _raise(level, "high")
+        reasons.append(f"{queue} vehicles stopped around it -> high")
     if anomaly_type == "vehicle_breakdown":
         if queue >= STALL_QUEUE:
             level = _raise(level, "high")

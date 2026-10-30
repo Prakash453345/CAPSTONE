@@ -6181,3 +6181,70 @@ Live mode (`SIM_MODE=live`), Vijayawada corridor.
   Cloudflare quick tunnel or Caddy HTTPS). See deploy/README.md. Image built and run here with
   stand-in base images (registries blocked in the workspace); not yet built on the Mac.
 - Tests: sim live 100 passed; api 84 passed, 4 skipped; web vitest 270 passed, tsc and eslint clean.
+
+## 2026-10-20 — production-readiness pass
+
+**What changed.** Read endpoints for incidents and clips now need a sign-in and
+are operator-only; CORS is an allow-list (`API_CORS_ORIGINS`); signed-in users
+can change their password (`POST /v1/auth/password`, Settings page); the
+Python CI workflow now lives in `.github/workflows/python.yml` (it sat in
+`itms/ci.yml` where GitHub never ran it).
+
+**Accident detection is now runnable in the app.** `clips/accident_videomae.py`
+runs the V4 VideoMAE model (`data/models/itms_accident_v4.pt`, rule thr 0.9,
+2-of-3) once per second on motion-proposed crops. Before this, the clip worker
+looked only for an EfficientNet ONNX that did not exist, so accident detection
+was off. Checked: strict weight load; probabilities within ~0.015 (mean) of the
+research script on the same video; end-to-end upload -> worker -> result. Not
+checked: any accident-positive clip (none on disk). Accuracy on Indian cameras
+remains unmeasured; V4's held-out numbers are in `baselines/2026-10-05_m8_accident_model/`.
+
+**Verified live (Docker + SUMO):** login, forgot/reset (real SMTP exchange
+against a local server), session revocation, lockout, anomaly -> police /
+ambulance / fire-truck dispatch -> green corridors -> hospital hand-off,
+the `deploy/` image (built and run), 101 browser tests, 1100+ Python tests.
+
+**Later the same day:** `mypy packages services` is clean and now blocks CI. It
+found one real bug: `control/runner.py` rebound `log` to a list inside the run
+loop, so the first controller note, fault warning or step-overrun warning after
+that point would have raised `AttributeError`. A 6-junction green corridor was
+run to the end live (armed, all junctions cleared, vehicle arrived, no errors).
+
+**Still open:** real Gmail STARTTLS untested (no credentials); no real
+Vijayawada footage; no accident-positive clip to test the V4 runtime on.
+
+**2026-10-20 (evening): review workflow and console fixes.** Sessions now also
+expire after 30 idle minutes (`AUTH_IDLE_MINUTES`). Confirm/reject of clips and
+incidents uses the operator's own session (no API key or typed identity; the
+key still works for scripts). A live camera's flag (fire, stalled/blocked lane)
+uploads its redacted evidence clip to the review inbox when `VISION_REVIEW_URL`
+and `API_KEY` are set, so a person watches it and decides before anything is
+dispatched. Map: trackpad two-finger slide pans, pinch and mouse wheel zoom;
+vehicle markers follow the road between snapshots instead of cutting corners;
+the report panel's submit button no longer falls below the window. Known gap:
+M6 graph-detector incidents confirmed in the inbox are recorded but nothing
+consumes `IncidentDetected` to dispatch (the live sim does not run that
+detector); the clip and camera paths do dispatch.
+
+## M7 + signal research round, 17-27 Oct 2026 (not committed)
+`baselines/2026-10-27_m7_signal_research/README.md`.
+- **Applied:** the time-based emergency router is now the default in `live/emergency_control.py` (`ITMS_ROUTE_COST=weighted` for the old one); held-out evidence in `baselines/2026-10-17_m7_routing`. Optional ITE all-red per junction (`SIGNAL_ALL_RED=ite`, off by default) in `extract_tier0_config.py`. Test fakes updated; 818 passed + 1 new test.
+- **Tried, not adopted (training seeds):** learned router constants, stall-triggered reroute, gap-acceptance junction cost, junction hold for EVs, green waves (neighbour outflow exchange). Upper-bound tests put remaining EV routing headroom at about 0-1 %, and green waves at about 5 % of person-delay at most; none of the variants gained.
+- **Safety finding:** flat 2.0 s all-red is shorter than ITE at 27-100 % of junctions. Switching costs +10.2 % (light) / +12.9 % (medium) person-delay over six networks, and produced 4 interlock violations (0 with 2.0 s) that are not yet explained.
+
+## Dispatch queue, reassignment, faster reroute (2026-10-27, not committed)
+`baselines/2026-10-27_dispatch_queue/README.md`. Calls with no free unit now wait in a severity-and-age priority queue instead of being dropped. A unit heading to a lower-severity call can be moved to a more severe one (suggested on the `EmergencyDispatched` stream; operator confirms with an `EmergencyCommand` action `REASSIGN`; no console button yet). A newly blocked road ahead is rerouted without waiting out the 30 s cooldown (once per anomaly), and a blockage the route is forced through no longer re-triggers. Contracts extended with defaults. Tests 826 + api 92 pass. SUMO check with one ambulance: all three accidents served, highest severity first; reroute 1 s after the block.
+
+## Dispatch stress test and bug fixes (2026-10-28, not committed)
+`baselines/2026-10-27_dispatch_stress/README.md`. A randomised real-SUMO stress test (`scripts/m7_dispatch_stress.py`: overloaded fleet, blocks ahead of moving vehicles, operator clears, cancels and reassignments, 13 rules checked every second; random_lh, amaravati_v2, Vijayawada) plus code review and probes found 9 bugs in the dispatch queue, reassignment and reroute logic:
+- priority inversion when a unit frees up;
+- new calls in one tick not ordered by severity;
+- stale suggestions blocking a unit for good (all 10 old-code runs);
+- duplicate suggestions per call;
+- unreachable calls retried every second;
+- free units beyond about 10 km never sent;
+- a stale hospital-leg flag after a cancel;
+- no corridor after rerouting onto a signalised road;
+- severe-anomaly reroute shared across trips and fired for already-known anomalies.
+
+All fixed, along with 3 issues from the fact-check and 1 from the final run. 14 new tests, each failing without its fix; repo 1111 passed, 12 skipped. Final code: 0 rule violations in 10 runs (old code: 20 in 10). Open design questions: operator cancel drops the call; unreachable calls dropped for good; units return to base instantly.

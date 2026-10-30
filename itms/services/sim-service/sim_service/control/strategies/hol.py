@@ -111,7 +111,7 @@ def _by_approach(phase: Phase, lane_of: Mapping[str, str]) -> dict[str, set[str]
     for m in phase.green_movements:
         lane = lane_of.get(m)
         if not _no_vehicle_lane(lane):
-            by_edge.setdefault(edge_of(lane), set()).add(m)
+            by_edge.setdefault(edge_of(lane), set()).add(m)  # type: ignore[arg-type]
     return by_edge
 
 

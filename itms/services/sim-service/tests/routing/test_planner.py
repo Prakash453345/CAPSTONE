@@ -89,7 +89,7 @@ def _single_path_graph() -> RoadGraph:
         "S": (GraphEdge("M", "jT", False, None),),
         "M": (GraphEdge("T", "jEnd", False, None),),
     }
-    return RoadGraph(edges=edges, adjacency=adjacency, signalised_junctions=frozenset())
+    return RoadGraph(edges=edges, adjacency=adjacency, signalised_junctions=frozenset())  # type: ignore[arg-type]
 
 
 def test_blocked_edge_on_the_only_route_is_crossed_anyway_as_a_last_resort():

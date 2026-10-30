@@ -13,7 +13,6 @@ import {
   Shield,
   X,
 } from "lucide-react";
-import { SimModeNotice } from "@/components/map/SimModeNotice";
 import { cn } from "@/utils/cn";
 import { CommandError, postCommand } from "@/services/traffic/commands";
 import {
@@ -172,7 +171,6 @@ function DispatchSheet() {
         </PrimaryButton>
       }
     >
-      <SimModeNotice />
       <Segmented
         label="What is needed"
         value={draft.unit.kind as Kind}

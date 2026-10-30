@@ -32,6 +32,13 @@ import { cityBounds, networkBounds, nearestEdge } from "@/data/network";
 import { CityChips } from "@/components/map/CityChips";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/utils/cn";
+
+/** A notched mouse wheel (zoom) as opposed to a trackpad's smooth two-finger slide (pan). */
+function isMouseWheel(e: WheelEvent): boolean {
+  if (e.deltaMode !== 0) return true; // line/page units only come from wheels
+  const w = (e as WheelEvent & { wheelDeltaY?: number }).wheelDeltaY;
+  return e.deltaX === 0 && typeof w === "number" && w !== 0 && w % 120 === 0;
+}
 import { CITIES_LABEL, HOME_CITY, LIVE_CITY, cityById } from "@/data/city";
 
 // Opened on demand, so they stay out of the map's first download.
@@ -91,6 +98,7 @@ export function TrafficMap({
     if (!el) return;
     let disposed = false;
     let instance: MapLibreMap | null = null;
+    let cleanupWheel = () => undefined as void;
 
     const create = () => {
       if (disposed || instance) return;
@@ -121,6 +129,19 @@ export function TrafficMap({
       };
       created.on("sourcedata", foldWhenCompact);
       instance.addControl(new maplibregl.ScaleControl({ maxWidth: 88, unit: "metric" }), "bottom-left");
+      // A two-finger slide on a trackpad pans the map; a pinch (ctrl+wheel) and
+      // a mouse wheel still zoom. MapLibre treats every wheel event as a zoom,
+      // so trackpad slides are taken here first, before it sees them.
+      const panned = instance;
+      const onWheel = (e: WheelEvent) => {
+        if (e.ctrlKey || e.metaKey || isMouseWheel(e)) return;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        panned.stop();
+        panned.panBy([e.deltaX, e.deltaY], { animate: false });
+      };
+      el.addEventListener("wheel", onWheel, { capture: true, passive: false });
+      cleanupWheel = () => el.removeEventListener("wheel", onWheel, { capture: true });
       instance.on("error", (e) => {
         if (disposed) return;
         console.warn("Map resource error:", e.error?.message ?? e);
@@ -183,6 +204,7 @@ export function TrafficMap({
 
     return () => {
       disposed = true;
+      cleanupWheel();
       ro.disconnect();
       // React runs parent passive cleanup before descendant layer cleanup.
       // Keep the style alive until those children have removed sources, listeners

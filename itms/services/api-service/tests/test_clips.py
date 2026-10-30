@@ -50,8 +50,8 @@ def analysed(clip_id: str, registry, tmp_path, *, anomaly="accident", severity="
         "clip_id": clip_id, "status": "DONE", "progress": 1.0,
         "anomaly_type": anomaly, "severity": severity if anomaly else None,
         "confidence": 0.91 if anomaly else None, "flagged_at_s": 12.5 if anomaly else None,
-        "reasons": ["accident model: 3 of 5 frames at or above 0.50 (peak 0.91)"] if anomaly else [],
-        "findings_json": json.dumps([{"anomaly_type": anomaly, "start_s": 12.5}] if anomaly else []),
+        "reasons": ["accident model: 3 of 5 frames at or above 0.50 (peak 0.91)"] if anomaly else [],  # noqa: E501
+        "findings_json": json.dumps([{"anomaly_type": anomaly, "start_s": 12.5}] if anomaly else []),  # noqa: E501
         "timeline_json": json.dumps({"t": [0, 1], "accident": [0.1, 0.9]}),
         "detectors": ["accident"], "snapshot_path": str(snap) if snap else None,
         "duration_s": 30.0, "error": "",

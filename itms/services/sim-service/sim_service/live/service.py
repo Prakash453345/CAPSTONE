@@ -130,7 +130,7 @@ def run_live(
         ok = incident_response._create_and_activate(  # noqa: SLF001
             request_id=offer.incident_id, vehicle_id=offer.unit_id, kind=offer.kind,
             source_edge=unit.edge_id if unit and unit.edge_id else offer.edge_id,
-            dest_edge=offer.edge_id, step=clock["step"], sim_time_s=clock["sim_time"],
+            dest_edge=offer.edge_id, step=clock["step"], sim_time_s=clock["sim_time"],  # type: ignore[arg-type]
         )
         if not ok:
             crew.release(offer.unit_id)
@@ -138,7 +138,7 @@ def run_live(
     # Road midpoints, so a trip to a stretch of road the extract cut off from
     # everything else goes to the nearest connected road instead of nowhere.
     try:
-        emergency.planner.edge_points = _edge_points(NET_PATH)
+        emergency.planner.edge_points = _edge_points(NET_PATH)  # type: ignore[attr-defined]
     except Exception:  # noqa: BLE001 -- only a fallback; routing works without it
         log.exception("could not read road midpoints from %s", NET_PATH)
     crew.on_accept = _on_crew_accept
@@ -167,12 +167,12 @@ def run_live(
         home_edges=depots,
         create_leg=lambda rid, uid, src, dst: incident_response._create_and_activate(  # noqa: SLF001
             request_id=rid, vehicle_id=uid, kind=EmergencyKind.AMBULANCE,
-            source_edge=src, dest_edge=dst, step=clock["step"], sim_time_s=clock["sim_time"],
+            source_edge=src, dest_edge=dst, step=clock["step"], sim_time_s=clock["sim_time"],  # type: ignore[arg-type]
         ),
         cancel=lambda rid: emergency.handle_command(
             {"request_id": rid, "action": "CANCEL", "operator": "system:crew",
              "reason": "crew changed hospital"},
-            step=clock["step"], sim_time_s=clock["sim_time"],
+            step=clock["step"], sim_time_s=clock["sim_time"],  # type: ignore[arg-type]
         ),
         vehicle_edges=emergency.vehicle_edges,
         edge_latlon=edge_latlon,
@@ -361,6 +361,13 @@ def _build_dispatch(
                     )
             else:
                 emergency.handle_create(payload, step=step, sim_time_s=sim_time)
+        elif etype == "EmergencyCommand" and str(payload.get("action")) == "REASSIGN":
+            # The operator confirmed moving a unit to a more severe waiting
+            # call; request_id carries the suggestion id (incident_response).
+            if incident_response is not None:
+                incident_response.accept_reassignment(
+                    str(payload.get("request_id", "")), step=step, sim_time_s=sim_time
+                )
         elif etype == "EmergencyCommand":
             emergency.handle_command(payload, step=step, sim_time_s=sim_time)
             # An operator standing a crew's call down frees that crew; one

@@ -134,7 +134,7 @@ class VisionLoop:
         out = {}
         for link, lane_id in system.estimator.approach_links.get(tls_id, {}).items():
             lane = lanes.get(lane_id)
-            front = self._front.get(lane_id)
+            front = self._front.get(lane_id)  # type: ignore[assignment]
             out[link] = lane is not None and front is not None and front >= lane.length - zone_m
         return out
 

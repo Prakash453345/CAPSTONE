@@ -31,7 +31,7 @@ export function Sheet({
   return (
     <section
       className={cn(
-        "pointer-events-auto flex max-h-[calc(100vh-9rem)] max-w-full origin-top-left animate-sheet-in flex-col overflow-hidden rounded-[20px] bg-surface-raised shadow-elevation-3",
+        "pointer-events-auto flex min-h-0 max-h-[calc(100vh-9rem)] max-w-full !shrink origin-top-left animate-sheet-in flex-col overflow-hidden rounded-[20px] bg-surface-raised shadow-elevation-3",
         width,
       )}
     >

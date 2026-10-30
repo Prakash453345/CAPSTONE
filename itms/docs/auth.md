@@ -109,6 +109,7 @@ Mail is sent over SMTP:
 | Variable | Default | Notes |
 |---|---|---|
 | `SMTP_HOST` | unset | Required to send mail. If unset (or the server refuses), forgot-password answers 503 "We couldn't send the email" instead of pretending. |
+| `AUTH_IDLE_MINUTES` | `30` | Sign out after this long without use. The page sends a heartbeat while someone is active; `0` turns it off. `AUTH_SESSION_HOURS` stays the hard limit. |
 | `AUTH_DEV_LOG_CODES` | `false` | Local dev only: with no `SMTP_HOST`, log the code instead of failing. `scripts/dev.sh` turns it on. Never set it in production. |
 | `SMTP_PORT` | `587` | Port 465 uses implicit TLS. |
 | `SMTP_USER` / `SMTP_PASSWORD` | unset | Optional login. |

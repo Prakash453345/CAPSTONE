@@ -40,7 +40,7 @@ def _graph() -> RoadGraph:
     }
     return RoadGraph(
         edges=edges,
-        adjacency=adjacency,
+        adjacency=adjacency,  # type: ignore[arg-type]
         signalised_junctions=frozenset({"J1", "J2"}),
         link_movements=link_movements,
     )

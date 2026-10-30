@@ -96,8 +96,8 @@ def test_the_split_phased_arterial_is_paired_with_right_turns_giving_way() -> No
     for j in root.findall("junction"):
         if j.get("id") == "C0":
             for r in j.findall("request"):
-                i = int(r.get("index"))
-                foes = r.get("foes")[::-1]
+                i = int(r.get("index"))  # type: ignore[arg-type]
+                foes = r.get("foes")[::-1]  # type: ignore[index]
                 conflicts[f"L{i}"] |= {f"L{k}" for k, c in enumerate(foes) if c == "1"}
     sym = {m: frozenset(c | {o for o, cs in conflicts.items() if m in cs})
            for m, c in conflicts.items()}

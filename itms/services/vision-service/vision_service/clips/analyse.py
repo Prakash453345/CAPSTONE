@@ -47,7 +47,9 @@ class FireScorerLike(Protocol):
 class AccidentModelLike(Protocol):
     rule: AlarmRule
 
-    def prob(self, frame: np.ndarray) -> float: ...
+    def prob(self, frame: np.ndarray) -> float | None:
+        """None while a stateful model has no new score due."""
+        ...
 
 
 @dataclass
@@ -87,6 +89,10 @@ def analyse_clip(
     motion = MotionAnalyser() if detectors.vehicles else None
     fire_monitor = FireMonitor("clip") if detectors.fire else None
     alarm = AccidentAlarm(detectors.accident.rule) if detectors.accident else None
+    accident_fps = getattr(detectors.accident, "sample_fps", ACCIDENT_FPS)
+    reset = getattr(detectors.accident, "reset", None)
+    if reset is not None:
+        reset()   # a stateful model starts each clip empty  # noqa: E501
     fire_candidates: list[FireCandidate] = []
     accident_p: dict[int, float] = {}
     fire_p: dict[int, float] = {}
@@ -103,9 +109,10 @@ def analyse_clip(
         if detectors.accident is not None and t >= next_accident:
             assert alarm is not None
             p = detectors.accident.prob(frame)
-            alarm.observe(t, p)
-            accident_p[int(t)] = max(p, accident_p.get(int(t), 0.0))
-            next_accident = _next_slot(t, ACCIDENT_FPS)
+            if p is not None:
+                alarm.observe(t, p)
+                accident_p[int(t)] = max(p, accident_p.get(int(t), 0.0))
+            next_accident = _next_slot(t, accident_fps)
         if detectors.fire is not None and t >= next_fire:
             assert fire_monitor is not None
             score = detectors.fire.score(frame)

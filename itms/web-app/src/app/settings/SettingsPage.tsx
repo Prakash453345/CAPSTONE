@@ -1,9 +1,10 @@
-import type { ReactNode } from "react";
+import { useState, type FormEvent, type ReactNode } from "react";
 import { Check, FlaskConical, Monitor, Moon, Radio, Sun } from "lucide-react";
 import { PageHeader, Panel, Segmented, Switch } from "@/components/console/kit";
 import { useSystemStore } from "@/store/systemStore";
 import { useThemeStore, type ThemeMode } from "@/store/themeStore";
 import { useMapStore, type MapLayerId } from "@/store/mapStore";
+import { AuthError, changePassword } from "@/services/auth/authApi";
 import { cn } from "@/utils/cn";
 import type { DataMode } from "@/types";
 
@@ -52,7 +53,7 @@ export function SettingsPage() {
           {(
             [
               ["live", "Live", Radio, "The running city simulation, streamed from api-service. Commands work."],
-              ["simulation", "Demo", FlaskConical, "A self-contained simulation in this browser. Nothing to set up; commands are off."],
+              ["simulation", "Demo", FlaskConical, "A self-contained simulation in this browser. Nothing to set up; reports and dispatches work but stay in the browser."],
             ] as [DataMode, string, typeof Radio, string][]
           ).map(([value, label, Icon, hint]) => {
             const on = dataMode === value;
@@ -97,6 +98,10 @@ export function SettingsPage() {
         </ul>
       </Section>
 
+      <Section title="Account" description="Change your sign-in password. Other devices are signed out.">
+        <PasswordForm />
+      </Section>
+
       <Section title="What's behind the numbers">
         <dl className="space-y-4 text-[13px] leading-relaxed">
           <div>
@@ -133,5 +138,53 @@ function Section({ title, description, children }: { title: string; description?
       {description && <p className="mt-0.5 text-[13px] text-muted-foreground">{description}</p>}
       <div className="mt-4">{children}</div>
     </Panel>
+  );
+}
+
+function PasswordForm() {
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [status, setStatus] = useState<{ ok: boolean; text: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setStatus(null);
+    try {
+      await changePassword(current, next);
+      setCurrent("");
+      setNext("");
+      setStatus({ ok: true, text: "Password changed." });
+    } catch (err) {
+      const text =
+        (err instanceof AuthError && err.detail) || "Couldn't change the password. Try again.";
+      setStatus({ ok: false, text });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const input = "h-9 w-full max-w-xs rounded-md border border-border bg-background px-3 text-[13px] text-foreground";
+  return (
+    <form onSubmit={submit} className="space-y-3">
+      <label className="block text-[13px] text-foreground">
+        Current password
+        <input type="password" autoComplete="current-password" required value={current}
+          onChange={(e) => setCurrent(e.target.value)} className={cn(input, "mt-1 block")} />
+      </label>
+      <label className="block text-[13px] text-foreground">
+        New password (at least 10 characters)
+        <input type="password" autoComplete="new-password" required minLength={10} value={next}
+          onChange={(e) => setNext(e.target.value)} className={cn(input, "mt-1 block")} />
+      </label>
+      <button type="submit" disabled={busy || !current || next.length < 10}
+        className="h-9 rounded-md bg-primary px-4 text-[13px] font-medium text-primary-foreground disabled:opacity-50">
+        {busy ? "Saving…" : "Change password"}
+      </button>
+      {status && (
+        <p role="status" className={cn("text-[13px]", status.ok ? "text-foreground" : "text-destructive")}>{status.text}</p>
+      )}
+    </form>
   );
 }

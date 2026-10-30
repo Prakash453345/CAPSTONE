@@ -62,3 +62,15 @@ def test_extracted_configs_use_the_rule_and_the_new_min_green():
             cfg.yellow_s + cfg.all_red_s
         )
         assert cfg.max_wait_s >= rotation
+
+
+def test_ite_all_red_is_width_plus_vehicle_over_speed():
+    """ITE red clearance r = (W + 6 m) / v, rounded up to 0.5 s, in [1, 4] s;
+    the slowest-to-clear crossing decides."""
+    m = _module()
+    assert m.ite_all_red_s([(12.0, 13.9)]) == 1.5        # 18 / 13.9 = 1.29 -> 1.5
+    assert m.ite_all_red_s([(30.0, 13.9)]) == 3.0        # 36 / 13.9 = 2.59 -> 3.0
+    assert m.ite_all_red_s([(12.0, 13.9), (30.0, 13.9)]) == 3.0
+    assert m.ite_all_red_s([(1.0, 20.0)]) == 1.0         # floor
+    assert m.ite_all_red_s([(80.0, 8.0)]) == 4.0         # ceiling
+    assert m.ite_all_red_s([]) == 2.0                    # no data: the old flat value

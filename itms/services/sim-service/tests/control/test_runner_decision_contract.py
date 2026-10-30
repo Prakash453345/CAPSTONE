@@ -62,7 +62,7 @@ def _junction(current: str, elapsed: float) -> _JunctionState:
     ctx = JunctionContext(
         intersection_id="J", current_phase_id=current, current_phase_elapsed_s=elapsed
     )
-    return _JunctionState(cfg=_cfg(), cabinet=cabinet, ctx=ctx)
+    return _JunctionState(cfg=_cfg(), cabinet=cabinet, ctx=ctx)  # type: ignore[arg-type]
 
 
 def _run_transition_to_completion(js: _JunctionState, step_length: float = 1.0) -> int:

@@ -47,7 +47,7 @@ def _graph() -> RoadGraph:
         "J2": {("B", "T"): frozenset({"L0"})},
     }
     return RoadGraph(
-        edges=edges, adjacency=adjacency,
+        edges=edges, adjacency=adjacency,  # type: ignore[arg-type]
         signalised_junctions=frozenset({"J1", "J2"}), link_movements=link_movements,
     )
 
@@ -126,6 +126,7 @@ def wired(monkeypatch):
     veh = _FakeVehicles()
     monkeypatch.setattr(ec.traci.edge, "getLastStepOccupancy", lambda e: 0.0)
     monkeypatch.setattr(ec.traci.edge, "getLastStepMeanSpeed", lambda e: -1.0)
+    monkeypatch.setattr(ec.traci.edge, "getLastStepHaltingNumber", lambda e: 0)
     monkeypatch.setattr(ec.traci, "vehicle", veh)
     monkeypatch.setattr(ec.traci.route, "add", lambda rid, edges: None)
     monkeypatch.setattr(ec.traci.simulation, "convertGeo", lambda x, y: (80.6, 16.5))
@@ -165,7 +166,7 @@ def test_heavy_congestion_pages_nobody():
 
 
 def test_fire_pages_fire_truck_and_police():
-    """Default policy for the M8 fire candidate once an operator confirms it; change here if the policy changes."""
+    """Default policy for the M8 fire candidate once an operator confirms it; change here if the policy changes."""  # noqa: E501
     assert set(_RESPONSE_MAP[AnomalyType.FIRE]) == {EmergencyKind.FIRE_TRUCK, EmergencyKind.POLICE}
 
 
@@ -360,3 +361,108 @@ def test_a_registered_crew_can_be_dispatched(wired):
     (alert,) = orch.drain_events()
     assert "fire_truck" not in alert["undispatched_kinds"]
     assert {d["vehicle_id"] for d in alert["dispatched"]} >= {"fire-1"}
+
+
+# ---- waiting queue and reassignment (2026-10-27) ------------------------
+
+
+def _anomaly(aid: str, edge: str, severity: AnomalySeverity) -> Anomaly:
+    return Anomaly.create(
+        anomaly_id=aid, source=AnomalySource.OPERATOR, anomaly_type=AnomalyType.ACCIDENT,
+        severity=severity, edge_id=edge, at_ms=1, estimated_impact=0.8,
+    )
+
+
+def _police_request(emergency: EmergencyController):
+    return next(r for r in emergency.active_requests() if r.vehicle_id == "unit-police-0")
+
+
+def test_waiting_call_is_served_when_the_unit_frees(wired):
+    from itms_common import encode_envelope
+
+    orch, emergency, anomalies, veh = wired
+    anomalies.items = [_anomaly("an-1", "T", AnomalySeverity.HIGH),
+                       _anomaly("an-2", "H", AnomalySeverity.HIGH)]
+    orch.tick(step=1, sim_time_s=1.0)
+    first = {a["anomaly_id"]: a for a in orch.drain_events()}
+    assert "police" in first["an-2"]["queued_kinds"]       # waits, not forgotten
+    assert [w["anomaly_id"] for w in orch.waiting if w["kind"] == "police"] == ["an-2"]
+
+    _arrive(emergency, veh, "unit-police-0", edge="T")     # police done at an-1
+    orch.tick(step=12, sim_time_s=12.0)
+
+    served = [a for a in orch.drain_events() if a["anomaly_id"] == "an-2" and a["dispatched"]]
+    assert served and served[0]["dispatched"][0]["vehicle_id"] == "unit-police-0"
+    assert served[0]["waited_s"] == 11.0
+    assert not [w for w in orch.waiting if w["kind"] == "police"]
+    encode_envelope(event_type="EmergencyDispatched", source="test", payload=served[0])
+
+
+def test_higher_severity_waiting_call_is_served_first(wired):
+    orch, emergency, anomalies, veh = wired
+    anomalies.items = [_anomaly("an-1", "T", AnomalySeverity.HIGH)]
+    orch.tick(step=1, sim_time_s=1.0)
+    anomalies.items.append(_anomaly("an-2", "H", AnomalySeverity.MEDIUM))
+    orch.tick(step=2, sim_time_s=2.0)                       # medium waits first ...
+    anomalies.items.append(_anomaly("an-3", "H", AnomalySeverity.HIGH))
+    orch.tick(step=3, sim_time_s=3.0)                       # ... a high one arrives later
+    orch.drain_events()
+
+    _arrive(emergency, veh, "unit-police-0", edge="T")
+    orch.tick(step=12, sim_time_s=12.0)
+    served = [a["anomaly_id"] for a in orch.drain_events()
+              if any(d["vehicle_kind"] == "POLICE" for d in a["dispatched"])]
+    assert served == ["an-3"]
+
+
+def test_resolved_anomaly_leaves_the_queue(wired):
+    orch, emergency, anomalies, veh = wired
+    anomalies.items = [_anomaly("an-1", "T", AnomalySeverity.HIGH),
+                       _anomaly("an-2", "H", AnomalySeverity.HIGH)]
+    orch.tick(step=1, sim_time_s=1.0)
+    anomalies.items = [anomalies.items[0]]                  # an-2 cleared meanwhile
+    _arrive(emergency, veh, "unit-police-0", edge="T")
+    orch.drain_events()
+    orch.tick(step=12, sim_time_s=12.0)
+    assert not [w for w in orch.waiting if w["anomaly_id"] == "an-2"]
+    assert not [a for a in orch.drain_events() if a["anomaly_id"] == "an-2"]
+
+
+def test_more_severe_call_suggests_and_reassigns_a_unit_on_its_way(wired):
+    from itms_common import encode_envelope
+
+    orch, emergency, anomalies, veh = wired
+    anomalies.items = [_anomaly("an-1", "T", AnomalySeverity.MEDIUM)]
+    orch.tick(step=1, sim_time_s=1.0)
+    old_request = _police_request(emergency).request_id
+    orch.drain_events()
+
+    anomalies.items.append(_anomaly("an-2", "H", AnomalySeverity.HIGH))
+    orch.tick(step=2, sim_time_s=2.0)
+    events = orch.drain_events()
+    suggestion = next(e for e in events if e.get("reassign_suggestions"))
+    (sug,) = suggestion["reassign_suggestions"]
+    assert sug["vehicle_id"] == "unit-police-0" and sug["from_anomaly_id"] == "an-1"
+    encode_envelope(event_type="EmergencyDispatched", source="test", payload=suggestion)
+
+    orch.tick(step=3, sim_time_s=3.0)                       # suggested once, not every tick
+    assert not [e for e in orch.drain_events() if e.get("reassign_suggestions")]
+
+    assert orch.accept_reassignment(sug["suggestion_id"], step=4, sim_time_s=4.0)
+    assert emergency.get_request(old_request).state.name == "CANCELLED"
+    moved = next(e for e in orch.drain_events() if e.get("reassigned_from"))
+    assert moved["anomaly_id"] == "an-2" and moved["reassigned_from"] == "an-1"
+    assert _police_request(emergency).destination_edge == "H"
+    # the medium call is back in line, keeping its original waiting time
+    assert [(w["anomaly_id"], w["since_s"]) for w in orch.waiting if w["kind"] == "police"] \
+        == [("an-1", 1.0)]
+    assert not orch.accept_reassignment(sug["suggestion_id"], step=5, sim_time_s=5.0)
+
+
+def test_equal_severity_never_suggests_a_reassignment(wired):
+    orch, emergency, anomalies, veh = wired
+    anomalies.items = [_anomaly("an-1", "T", AnomalySeverity.HIGH),
+                       _anomaly("an-2", "H", AnomalySeverity.HIGH)]
+    orch.tick(step=1, sim_time_s=1.0)
+    orch.tick(step=2, sim_time_s=2.0)
+    assert not [e for e in orch.drain_events() if e.get("reassign_suggestions")]

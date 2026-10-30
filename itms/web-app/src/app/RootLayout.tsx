@@ -56,6 +56,33 @@ function useSessionCheck() {
     const onVisible = () => document.visibilityState === "visible" && check();
     check();
     document.addEventListener("visibilitychange", onVisible);
-    return () => document.removeEventListener("visibilitychange", onVisible);
+
+    // Sliding session: real use (not just a tab sitting open) keeps it alive.
+    // The server signs out after AUTH_IDLE_MINUTES (30 by default); this does
+    // the same on the page so a screen left unattended is signed out too.
+    let lastInput = Date.now();
+    let lastBeat = Date.now();
+    const onInput = () => {
+      lastInput = Date.now();
+      if (lastInput - lastBeat > HEARTBEAT_MS) {
+        lastBeat = lastInput;
+        check();
+      }
+    };
+    const events = ["pointerdown", "keydown", "wheel", "touchstart"] as const;
+    events.forEach((e) => window.addEventListener(e, onInput, { passive: true }));
+    const idle = window.setInterval(() => {
+      const { status, signOut } = useAuthStore.getState();
+      if (status === "authed" && Date.now() - lastInput > IDLE_SIGN_OUT_MS) void signOut().catch(() => undefined);
+    }, 30_000);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      events.forEach((e) => window.removeEventListener(e, onInput));
+      window.clearInterval(idle);
+    };
   }, []);
 }
+
+const HEARTBEAT_MS = 60_000;
+/** Matches the server's default AUTH_IDLE_MINUTES. */
+const IDLE_SIGN_OUT_MS = 30 * 60_000;

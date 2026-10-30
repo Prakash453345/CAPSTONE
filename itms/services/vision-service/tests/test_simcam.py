@@ -144,7 +144,7 @@ def test_measured_presets_follow_their_fits() -> None:
     assert abs(sum(stock.confusion[VClass.AUTO_RICKSHAW].values()) - 1.0) < 1e-9
     # a 30 px car (about 110 m away on a planned camera) under each fit
     for name, lo, hi in (("uvh26_640", 0.1, 0.25), ("uvh26_1280", 0.4, 0.6),
-                         ("itms6_640", 0.1, 0.25), ("itms6_960", 0.25, 0.4), ("itms6aug_640", 0.1, 0.25)):
+                         ("itms6_640", 0.1, 0.25), ("itms6_960", 0.25, 0.4), ("itms6aug_640", 0.1, 0.25)):  # noqa: E501
         p = PRESETS[name]
         h50 = p.size_h50_by_class[VClass.CAR]
         s = float(_sigmoid(np.array([(30.0 - h50) / max(1.0, 0.25 * h50)]))[0])

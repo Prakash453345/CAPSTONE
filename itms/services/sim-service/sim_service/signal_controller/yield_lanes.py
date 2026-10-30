@@ -33,12 +33,12 @@ def yield_lanes_from_net(
             continue
         lanes = edge.findall("lane")
         if lanes:
-            length[edge.get("id")] = max(float(x.get("length", "0")) for x in lanes)
+            length[edge.get("id")] = max(float(x.get("length", "0")) for x in lanes)  # type: ignore[index]
     # at each edge's far junction: which connections keep right of way ('M'), which give way ('m')
     major: dict[str, set[str]] = defaultdict(set)   # edge -> {"M" seen}
     yielding: dict[str, list[str]] = defaultdict(list)  # to-junction key -> lanes that yield
     conns = root.findall("connection")
-    edge_to: dict[str, str] = {e.get("id"): e.get("to") for e in root.findall("edge")
+    edge_to: dict[str, str] = {e.get("id"): e.get("to") for e in root.findall("edge")  # type: ignore[misc]
                                if e.get("function") != "internal"}
     for c in conns:
         if c.get("tl") is not None:
@@ -47,7 +47,7 @@ def yield_lanes_from_net(
         if frm not in edge_to:
             continue
         if c.get("state") == "M":
-            major[frm].add(c.get("to"))
+            major[frm].add(c.get("to"))  # type: ignore[arg-type]
         elif c.get("state") == "m":
             lane = f"{frm}_{c.get('fromLane')}"
             if lane not in yielding[edge_to[frm]]:
@@ -57,7 +57,7 @@ def yield_lanes_from_net(
         tls, idx, to = c.get("tl"), c.get("linkIndex"), c.get("to")
         if tls is None or idx is None or to not in major or length.get(to, 1e9) > max_exit_m:
             continue
-        lanes = tuple(x for x in yielding.get(edge_to[to], ()) if not x.startswith(f"{to}_"))
+        lanes = tuple(x for x in yielding.get(edge_to[to], ()) if not x.startswith(f"{to}_"))  # type: ignore[assignment]
         if lanes:
-            out.setdefault(tls, {})[f"L{idx}"] = lanes
+            out.setdefault(tls, {})[f"L{idx}"] = lanes  # type: ignore[assignment]
     return out

@@ -16,6 +16,7 @@ import { needsReview, useClipStore } from "@/store/clipStore";
 import { useMapStore } from "@/store/mapStore";
 import { useSystemStore } from "@/store/systemStore";
 import { edgeById } from "@/data/network";
+import { useAuthStore } from "@/store/authStore";
 import { cn } from "@/utils/cn";
 import type { AnomalyKind } from "@/types";
 
@@ -109,6 +110,7 @@ function headline(c: Clip): string {
   if (c.status === "FAILED") return "Could not check this video";
   if (!c.anomalyType) return "Nothing unusual found";
   const type = c.review === "CONFIRMED" && c.confirmedType ? c.confirmedType : c.anomalyType;
+  if (type === "accident" && c.review !== "CONFIRMED") return "Possible accident, needs confirmation";   // ADR-006: the model alone does not establish an accident
   return anomalyWord(type);
 }
 
@@ -183,7 +185,9 @@ function ClipDetail({ clip: c }: { clip: Clip }) {
       {c.anomalyType ? (
         <div className="space-y-1.5">
           <p className="text-[12.5px] font-medium text-foreground">
-            Why: {Math.round((c.confidence ?? 0) * 100)}% sure, rated {SEVERITY[c.severity ?? "medium"].word.toLowerCase()}
+            Why: {c.anomalyType === "accident"
+              ? `model score ${(c.confidence ?? 0).toFixed(2)} (not a probability; a person must confirm)`
+              : `${Math.round((c.confidence ?? 0) * 100)}% sure`}, rated {SEVERITY[c.severity ?? "medium"].word.toLowerCase()}
           </p>
           <ul className="list-disc space-y-0.5 pl-4 text-[12.5px] leading-relaxed text-muted-foreground">
             {c.reasons.map((r) => (
@@ -288,8 +292,7 @@ function ClipReviewForm({ clip: c }: { clip: Clip }) {
   const [action, setAction] = useState<"confirm" | "reject" | null>(null);
   const [type, setType] = useState<AnomalyKind>(c.anomalyType ?? "accident");
   const [severity, setSeverity] = useState<ClipSeverity>(c.severity ?? "medium");
-  const [actor, setActor] = useState("");
-  const [key, setKey] = useState("");
+  const actor = `operator:${useAuthStore((s) => s.user?.username ?? "console")}`;
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -319,14 +322,13 @@ function ClipReviewForm({ clip: c }: { clip: Clip }) {
         setBusy(true);
         setError(null);
         try {
-          upsert(await reviewClip(c.id, action, key, { actor: actor.trim(), note, anomalyType: type, severity }));
-          setKey("");
+          upsert(await reviewClip(c.id, action, "", { actor, note, anomalyType: type, severity }));
           setAction(null);
         } catch (err) {
           setError(
             err instanceof CommandError
               ? err.status === 401
-                ? "That API key was not accepted."
+                ? "Your session has ended. Sign in again."
                 : err.detail
               : "Review failed. Please retry.",
           );
@@ -364,15 +366,7 @@ function ClipReviewForm({ clip: c }: { clip: Clip }) {
           </label>
         </>
       )}
-      <label>
-        Operator identity
-        <input required value={actor} onChange={(e) => setActor(e.target.value)} placeholder="operator:your-name" />
-      </label>
-      <label>
-        API key
-        <input required type="password" autoComplete="off" value={key} onChange={(e) => setKey(e.target.value)} />
-      </label>
-      <small>Used for this request only. Not saved.</small>
+      <small>Recorded as {actor} (your signed-in account).</small>
       <label>
         Review notes
         <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} />
@@ -383,7 +377,7 @@ function ClipReviewForm({ clip: c }: { clip: Clip }) {
         </p>
       )}
       <div className="flex gap-2">
-        <button className="review-choice" type="submit" disabled={busy || !actor.trim() || !key}>
+        <button className="review-choice" type="submit" disabled={busy}>
           {busy ? "Submitting…" : action === "confirm" ? "Confirm" : "Reject"}
         </button>
         <button
@@ -392,7 +386,6 @@ function ClipReviewForm({ clip: c }: { clip: Clip }) {
           disabled={busy}
           onClick={() => {
             setAction(null);
-            setKey("");
           }}
         >
           Cancel

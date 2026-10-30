@@ -36,7 +36,7 @@ Needs Docker Desktop (the same one `make infra-up` uses).
    ```
 5. Get the link and share it:
    ```bash
-   docker compose logs tunnel | grep -o 'https://[a-z0-9-]*\.trycloudflare\.com' | tail -1
+   docker compose logs tunnel | grep -oE 'https://[a-z0-9]+(-[a-z0-9]+)+\.trycloudflare\.com' | tail -1
    ```
    On your own Mac it is also at http://localhost:8080.
 

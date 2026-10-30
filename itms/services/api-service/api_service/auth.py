@@ -55,6 +55,11 @@ DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://itms:itms@localhost:
 
 COOKIE_NAME = "itms_session"
 SESSION_HOURS = float(os.environ.get("AUTH_SESSION_HOURS", "12"))
+# Sign out after this long without activity (the page sends a heartbeat to
+# /v1/auth/me while someone is using it). 0 turns the idle limit off.
+IDLE_MINUTES = float(os.environ.get("AUTH_IDLE_MINUTES", "30"))
+# /me only re-issues the cookie when the last one is older than this.
+_REFRESH_AFTER_S = 60
 # Secure cookies are only sent over HTTPS. Default on, so a deployment that
 # forgets to configure this fails safe; `scripts/dev.sh` turns it off for
 # plain-http local development.
@@ -231,7 +236,8 @@ def _sign(body: str) -> str:
 def issue_token(username: str, session_version: int, now: dt.datetime | None = None) -> str:
     now = now or utcnow()
     exp = int((now + dt.timedelta(hours=SESSION_HOURS)).timestamp())
-    body = _b64url(json.dumps({"u": username, "v": session_version, "exp": exp}).encode())
+    claims = {"u": username, "v": session_version, "exp": exp, "ls": int(now.timestamp())}
+    body = _b64url(json.dumps(claims).encode())
     return f"{body}.{_sign(body)}"
 
 
@@ -247,9 +253,22 @@ def read_token(token: str, now: dt.datetime | None = None) -> tuple[str, int] | 
             return None
     except (ValueError, KeyError, TypeError, binascii.Error):
         return None
-    if exp <= int((now or utcnow()).timestamp()):
+    now_s = int((now or utcnow()).timestamp())
+    if exp <= now_s:
+        return None
+    last_seen = claims.get("ls")
+    if IDLE_MINUTES > 0 and isinstance(last_seen, int) and now_s - last_seen > IDLE_MINUTES * 60:
         return None
     return username, version
+
+
+def token_age_s(token: str, now: dt.datetime | None = None) -> int:
+    """Seconds since the token was last refreshed (large when unreadable)."""
+    try:
+        claims = json.loads(_unb64url(token.split(".")[0]))
+        return max(0, int((now or utcnow()).timestamp()) - int(claims["ls"]))
+    except (ValueError, KeyError, TypeError, binascii.Error):
+        return 10**9
 
 
 # ------------------------------------------------------------------ store
@@ -647,9 +666,70 @@ def current_user(request: Request, store: StoreDep) -> UserRecord:
 
 
 @router.get("/me", response_model=SessionUser)
-def me(response: Response, record: Annotated[UserRecord, Depends(current_user)]) -> SessionUser:
+def me(
+    request: Request, response: Response, record: Annotated[UserRecord, Depends(current_user)]
+) -> SessionUser:
     _no_store(response)
+    # Sliding session: a page that is being used keeps asking, which keeps it alive.
+    if token_age_s(request.cookies.get(COOKIE_NAME, "")) >= _REFRESH_AFTER_S:
+        response.set_cookie(
+            COOKIE_NAME,
+            issue_token(record.username, record.session_version),
+            max_age=int(SESSION_HOURS * 3600),
+            httponly=True,
+            secure=COOKIE_SECURE,
+            samesite="lax",
+            path="/",
+        )
     return _user_out(record)
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(min_length=1, max_length=MAX_PASSWORD_LENGTH)
+    new_password: str = Field(min_length=1, max_length=MAX_PASSWORD_LENGTH)
+
+
+@router.post("/password", status_code=204)
+def change_password(
+    body: ChangePasswordRequest,
+    response: Response,
+    record: Annotated[UserRecord, Depends(current_user)],
+    store: StoreDep,
+) -> Response:
+    """Change the signed-in user's password. Every other session is signed out;
+    this one gets a fresh cookie so the person is not."""
+    now = utcnow()
+    if record.locked_until and record.locked_until > now:
+        raise HTTPException(status_code=429, detail="Too many failed attempts. Try again later.")
+    try:
+        if not verify_password(body.current_password, record.password_hash):
+            store.record_failure(record.username, now)
+            raise HTTPException(status_code=400, detail="Current password is incorrect.")
+        problem = validate_password(body.new_password)
+        if problem:
+            raise HTTPException(status_code=422, detail=problem.capitalize() + ".")
+        if verify_password(body.new_password, record.password_hash):
+            raise HTTPException(
+                status_code=422, detail="New password must differ from the current one."
+            )
+        store.complete_reset(record.username, hash_password(body.new_password))
+        fresh = store.get(record.username)
+    except StoreUnavailable as exc:
+        raise _store_down() from exc
+    if fresh is None:
+        raise _not_signed_in()
+    response.set_cookie(
+        COOKIE_NAME,
+        issue_token(fresh.username, fresh.session_version, now),
+        max_age=int(SESSION_HOURS * 3600),
+        httponly=True,
+        secure=COOKIE_SECURE,
+        samesite="lax",
+        path="/",
+    )
+    response.headers["Cache-Control"] = "no-store"
+    response.status_code = 204
+    return response
 
 
 # --------------------------------------------------------- forgot password
@@ -703,7 +783,11 @@ def _code_ok(store: UserStore, username: str, code: str, now: dt.datetime) -> bo
     )
     if not live:
         return False
-    if hmac.compare_digest(record.reset_code_hash, _code_digest(username, code.strip())):
+    if (
+        record
+        and record.reset_code_hash
+        and hmac.compare_digest(record.reset_code_hash, _code_digest(username, code.strip()))
+    ):
         return True
     store.record_reset_failure(username)
     return False

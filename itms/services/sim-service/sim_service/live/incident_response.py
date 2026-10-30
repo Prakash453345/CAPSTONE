@@ -33,7 +33,7 @@ from __future__ import annotations
 
 import logging
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from itms_domain import (
@@ -125,6 +125,49 @@ SHORTLIST = 5
 """How many nearby crews of a kind are considered (and notified) per call.
 The nearest by *road time* among them is the one sent."""
 
+# ---- waiting calls (added 2026-10-27) -------------------------------
+# A call whose kind had no free unit used to be logged ("skipping") and then
+# forgotten: the anomaly was marked seen, so when a unit came free nothing went
+# back for it. Now it waits in a queue, and each tick the waiting calls are
+# served in priority order by whichever units are free.
+_SEVERITY_RANK = {
+    AnomalySeverity.HIGH: 3,
+    AnomalySeverity.BLOCKED: 3,
+    AnomalySeverity.MEDIUM: 2,
+}
+QUEUE_AGING_S = 600.0
+"""A waiting call gains one priority step per this many seconds, so a
+medium-severity call is not starved by a stream of high-severity ones."""
+
+_EN_ROUTE = (
+    EmergencyRequestState.ROUTE_READY,
+    EmergencyRequestState.GREEN_CORRIDOR_ACTIVE,
+    EmergencyRequestState.IN_TRANSIT,
+)
+
+
+@dataclass
+class _Call:
+    """One need -- one unit of one kind -- for one anomaly."""
+
+    anomaly_id: str
+    anomaly_type: str
+    severity: AnomalySeverity
+    kind: EmergencyKind
+    edge_id: str
+    since_s: float
+    lat: float | None = None
+    lon: float | None = None
+    dispatches: int = field(default=0)
+    failed_units: set[str] = field(default_factory=set)  # units with no road to it
+
+    @property
+    def rank(self) -> int:
+        return _SEVERITY_RANK.get(self.severity, 1)
+
+    def priority(self, now_s: float) -> float:
+        return self.rank + max(0.0, now_s - self.since_s) / QUEUE_AGING_S
+
 
 def _haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     radius = 6_371_000.0
@@ -206,6 +249,11 @@ class IncidentResponseOrchestrator:
             u.vehicle_id: u for units in self._units.values() for u in units
         }
         self._seen_anomalies: set[str] = set()
+        self._waiting: dict[tuple[str, EmergencyKind], _Call] = {}
+        self._call_of_request: dict[str, _Call] = {}  # incident request -> what it serves
+        self._suggestions: dict[str, dict] = {}       # open reassignment suggestions
+        self._suggested: set[tuple[str, str]] = set()  # (vehicle, anomaly) already suggested
+        self._seq = 0
         self._pending_hospital: set[str] = set()  # vehicle_id awaiting a chained hospital leg
         self._events: list[dict] = []
         emergency.on_arrival = self._on_emergency_arrival
@@ -251,13 +299,20 @@ class IncidentResponseOrchestrator:
 
     def tick(self, step: int, sim_time_s: float) -> None:
         self._free_idle_crews()
+        new = []
         for anomaly in self.anomalies.active_anomalies():
             if anomaly.anomaly_id in self._seen_anomalies:
                 continue
             self._seen_anomalies.add(anomaly.anomaly_id)
-            if anomaly.severity not in _RESPONDING_SEVERITIES:
-                continue
+            if anomaly.severity in _RESPONDING_SEVERITIES:
+                new.append(anomaly)
+        # several new calls in one tick: the most severe gets the free unit
+        # first (stable, so equal severities keep their reporting order)
+        new.sort(key=lambda a: -_SEVERITY_RANK.get(a.severity, 1))
+        for anomaly in new:
             self._dispatch(anomaly, step=step, sim_time_s=sim_time_s)
+        self._serve_queue(step=step, sim_time_s=sim_time_s)
+        self._suggest_reassignments(step=step, sim_time_s=sim_time_s)
 
     def drain_events(self) -> list[dict]:
         out, self._events = self._events, []
@@ -269,8 +324,16 @@ class IncidentResponseOrchestrator:
         crew would stay marked busy and never be offered another call."""
         working = {r.vehicle_id for r in self.emergency.active_requests()}
         for unit in self._unit_by_vehicle_id.values():
-            if unit.busy and unit.vehicle_id not in working:
+            if unit.vehicle_id not in working:
                 unit.busy = False
+                # a trip that ended without arriving (cancelled, reassigned
+                # away, failed) must not leave a hospital leg armed for the
+                # unit's *next* trip, which may not be an incident at all
+                self._pending_hospital.discard(unit.vehicle_id)
+        # trips that have ended no longer need their call on record
+        for rid in [rid for rid in self._call_of_request
+                    if (r := self.emergency.get_request(rid)) is None or r.is_terminal]:
+            del self._call_of_request[rid]
 
     # ---- initial dispatch -------------------------------------------
 
@@ -288,20 +351,44 @@ class IncidentResponseOrchestrator:
 
         dispatched: list[dict] = []
         undispatched: list[str] = []
+        queued: list[str] = []
         offered: list[str] = []
         notified: list[dict] = []
         for kind in kinds:
+            call = _Call(
+                anomaly_id=anomaly.anomaly_id, anomaly_type=anomaly.anomaly_type.value,
+                severity=anomaly.severity, kind=kind, edge_id=anomaly.edge_id,
+                since_s=sim_time_s, lat=lat, lon=lon,
+            )
             if self._offer_to_crew(anomaly, kind, sim_time_s=sim_time_s):
                 offered.append(kind.value)
+                continue
+            if any(k is kind for (_, k) in self._waiting):
+                # older calls of this kind are already waiting: join the
+                # queue, which is served in priority order right after this
+                # (a unit that just came free must not go to the newest call
+                # ahead of a more urgent one that has been waiting)
+                self._waiting[(anomaly.anomaly_id, kind)] = call
+                undispatched.append(kind.value)
+                queued.append(kind.value)
                 continue
             unit, shortlist = self._nearest_available(kind, lat, lon, anomaly.edge_id)
             notified.extend(shortlist)
             if unit is None:
                 undispatched.append(kind.value)
-                log.info(
-                    "no available %s unit for anomaly %s -- skipping",
-                    kind.value, anomaly.anomaly_id,
-                )
+                if self._units.get(kind):
+                    # units of this kind exist, all busy: wait for one
+                    self._waiting[(anomaly.anomaly_id, kind)] = call
+                    queued.append(kind.value)
+                    log.info(
+                        "no free %s unit for anomaly %s -- queued (%d waiting)",
+                        kind.value, anomaly.anomaly_id, len(self._waiting),
+                    )
+                else:
+                    log.info(
+                        "no %s units exist for anomaly %s -- skipping",
+                        kind.value, anomaly.anomaly_id,
+                    )
                 continue
             request_id = f"resp-{anomaly.anomaly_id}-{kind.value}"
             unit.busy = True
@@ -313,7 +400,14 @@ class IncidentResponseOrchestrator:
             if not ok:
                 unit.busy = False
                 undispatched.append(kind.value)
+                call.failed_units.add(unit.vehicle_id)
+                if self._reachable_by_some(call):
+                    # this unit has no road there; another one might
+                    self._waiting[(anomaly.anomaly_id, kind)] = call
+                    queued.append(kind.value)
                 continue
+            call.dispatches += 1
+            self._call_of_request[request_id] = call
             if kind is EmergencyKind.AMBULANCE:
                 self._pending_hospital.add(unit.vehicle_id)
             dispatched.append(
@@ -332,6 +426,7 @@ class IncidentResponseOrchestrator:
             # dispatch, and not a failure to find anyone either.
             "offered_kinds": offered,
             "undispatched_kinds": undispatched,
+            "queued_kinds": queued,
             "notified": notified,
             "at_ms": int(sim_time_s * 1000),
             "sim_tick": step,
@@ -341,6 +436,232 @@ class IncidentResponseOrchestrator:
             anomaly.anomaly_id, anomaly.anomaly_type.value, anomaly.severity.value,
             [d["vehicle_kind"] for d in dispatched], undispatched,
         )
+
+    # ---- the waiting queue -----------------------------------------
+
+    @property
+    def waiting(self) -> list[dict]:
+        """Calls waiting for a unit, most severe first, then longest waiting
+        (for the console; the queue itself also ages calls, see `_Call.priority`)."""
+        return [
+            {"anomaly_id": c.anomaly_id, "kind": c.kind.value, "severity": c.severity.value,
+             "since_s": c.since_s}
+            for c in sorted(self._waiting.values(), key=lambda c: (-c.rank, c.since_s))
+        ]
+
+    def _serve_queue(self, *, step: int, sim_time_s: float) -> None:
+        """Send free units to waiting calls, highest priority first. A call
+        whose anomaly has been resolved or cancelled meanwhile is dropped."""
+        if not self._waiting:
+            return
+        active = {a.anomaly_id for a in self.anomalies.active_anomalies()}
+        for key, call in list(self._waiting.items()):
+            if call.anomaly_id not in active:
+                del self._waiting[key]
+                log.info("waiting %s call for %s dropped: anomaly no longer active",
+                         call.kind.value, call.anomaly_id)
+        order = sorted(
+            self._waiting.values(), key=lambda c: (-c.priority(sim_time_s), c.since_s)
+        )
+        for call in order:
+            while any(not u.busy and u.vehicle_id not in call.failed_units
+                      for u in self._units.get(call.kind, ())):
+                unit, notified = self._nearest_available(
+                    call.kind, call.lat, call.lon, call.edge_id, exclude=call.failed_units)
+                if unit is None:
+                    break
+                if self._send(call, unit, source_edge=unit.depot.edge, step=step,
+                              sim_time_s=sim_time_s, notified=notified):
+                    break
+            if (call.anomaly_id, call.kind) in self._waiting and not self._reachable_by_some(call):
+                self._drop_unreachable(call, step=step, sim_time_s=sim_time_s)
+
+    def _reachable_by_some(self, call: _Call) -> bool:
+        """Whether any unit of the call's kind has not yet failed to route there."""
+        return any(u.vehicle_id not in call.failed_units for u in self._units.get(call.kind, ()))
+
+    def _drop_unreachable(self, call: _Call, *, step: int, sim_time_s: float) -> None:
+        """No unit of this kind has a road to the call: retrying every tick
+        would only create a failed trip per tick. Say so once and stop."""
+        self._waiting.pop((call.anomaly_id, call.kind), None)
+        log.warning("waiting %s call for %s dropped: no %s unit can reach %s",
+                    call.kind.value, call.anomaly_id, call.kind.value, call.edge_id)
+        self._events.append({
+            "anomaly_id": call.anomaly_id,
+            "anomaly_type": call.anomaly_type,
+            "severity": call.severity.value,
+            "edge_id": call.edge_id,
+            "lat": call.lat,
+            "lon": call.lon,
+            "dispatched": [],
+            "undispatched_kinds": [call.kind.value],
+            "queued_kinds": [],
+            "notified": [],
+            "at_ms": int(sim_time_s * 1000),
+            "sim_tick": step,
+        })
+
+    def _send(
+        self, call: _Call, unit: _Unit, *, source_edge: str, step: int, sim_time_s: float,
+        notified: list[dict] | None = None, reassigned_from: str | None = None,
+        depart_pos_m: float | None = None,
+    ) -> bool:
+        """Dispatch `unit` to a waiting `call` and announce it. A routing
+        failure from the unit's depot marks the unit as unable to reach the
+        call; one from wherever a reassigned unit happens to be does not."""
+        self._seq += 1
+        request_id = f"resp-{call.anomaly_id}-{call.kind.value}-q{self._seq}"
+        unit.busy = True
+        ok = self._create_and_activate(
+            request_id=request_id, vehicle_id=unit.vehicle_id, kind=call.kind,
+            source_edge=source_edge, dest_edge=call.edge_id, step=step, sim_time_s=sim_time_s,
+            depart_pos_m=depart_pos_m,
+        )
+        if not ok:
+            unit.busy = False
+            if source_edge == unit.depot.edge:
+                call.failed_units.add(unit.vehicle_id)
+            return False
+        self._waiting.pop((call.anomaly_id, call.kind), None)
+        call.dispatches += 1
+        self._call_of_request[request_id] = call
+        if call.kind is EmergencyKind.AMBULANCE:
+            self._pending_hospital.add(unit.vehicle_id)
+        waited = round(sim_time_s - call.since_s, 1)
+        self._events.append({
+            "anomaly_id": call.anomaly_id,
+            "anomaly_type": call.anomaly_type,
+            "severity": call.severity.value,
+            "edge_id": call.edge_id,
+            "lat": call.lat,
+            "lon": call.lon,
+            "dispatched": [{"vehicle_kind": call.kind.name, "vehicle_id": unit.vehicle_id,
+                            "request_id": request_id}],
+            "undispatched_kinds": [],
+            "notified": notified or [],
+            "waited_s": waited,
+            "reassigned_from": reassigned_from,
+            "at_ms": int(sim_time_s * 1000),
+            "sim_tick": step,
+        })
+        log.info("waiting %s call for %s served by %s after %.0f s%s", call.kind.value,
+                 call.anomaly_id, unit.vehicle_id, waited,
+                 f" (reassigned from {reassigned_from})" if reassigned_from else "")
+        return True
+
+    # ---- reassignment suggestions ------------------------------------
+
+    def _suggest_reassignments(self, *, step: int, sim_time_s: float) -> None:
+        """For a waiting call, find a unit of its kind still on its way to a
+        call of *lower severity* and suggest moving it. Never done
+        automatically: the operator confirms (`accept_reassignment`), because
+        the crew may already be close to people who need them."""
+        # A suggestion stops applying once the unit's trip has ended (arrived,
+        # cancelled) or the call it was for is no longer waiting (served by a
+        # unit that came free, or resolved). Left open, it would block every
+        # later suggestion for that unit.
+        for sid, s in list(self._suggestions.items()):
+            req = self.emergency.get_request(s["request_id"])
+            if req is None or req.state not in _EN_ROUTE or s["to"] not in self._waiting:
+                del self._suggestions[sid]
+        if not self._waiting:
+            return
+        route_fn = None
+        open_vehicles = {v["vehicle_id"] for v in self._suggestions.values()}
+        open_calls = {v["to"] for v in self._suggestions.values()}
+        for call in sorted(self._waiting.values(), key=lambda c: (-c.rank, c.since_s)):
+            if (call.anomaly_id, call.kind) in open_calls:
+                continue  # one suggestion at a time per call
+            best: tuple[float, _Unit, str, _Call] | None = None
+            for rid, served in self._call_of_request.items():
+                if served.kind is not call.kind or served.rank >= call.rank:
+                    continue
+                req = self.emergency.get_request(rid)
+                if req is None or req.state not in _EN_ROUTE:
+                    continue
+                if (req.vehicle_id, call.anomaly_id) in self._suggested:
+                    continue
+                if req.vehicle_id in open_vehicles:
+                    continue  # one open suggestion per unit: the most severe call asks first
+                unit = self._unit_by_vehicle_id.get(req.vehicle_id)
+                here = self.emergency.current_edge(rid)
+                if unit is None or here is None:
+                    continue
+                eta = None
+                try:
+                    route_fn = route_fn or traci_route_fn()
+                    routed = route_fn(here, call.edge_id)
+                    eta = routed[1] if routed is not None else None
+                except Exception:  # noqa: BLE001 -- no SUMO (tests): rank unknown
+                    eta = None
+                key = eta if eta is not None else math.inf
+                if best is None or key < best[0]:
+                    best = (key, unit, rid, served)
+            if best is None:
+                continue
+            eta, unit, rid, served = best
+            self._seq += 1
+            sid = f"reassign-{self._seq}"
+            self._suggested.add((unit.vehicle_id, call.anomaly_id))
+            open_vehicles.add(unit.vehicle_id)
+            self._suggestions[sid] = {"vehicle_id": unit.vehicle_id, "request_id": rid,
+                                      "to": (call.anomaly_id, call.kind)}
+            self._events.append({
+                "anomaly_id": call.anomaly_id,
+                "anomaly_type": call.anomaly_type,
+                "severity": call.severity.value,
+                "edge_id": call.edge_id,
+                "lat": call.lat,
+                "lon": call.lon,
+                "dispatched": [],
+                "undispatched_kinds": [call.kind.value],
+                "queued_kinds": [call.kind.value],
+                "notified": [],
+                "reassign_suggestions": [{
+                    "suggestion_id": sid,
+                    "vehicle_id": unit.vehicle_id,
+                    "from_anomaly_id": served.anomaly_id,
+                    "from_severity": served.severity.value,
+                    "eta_s": None if not math.isfinite(eta) else round(eta, 1),
+                }],
+                "at_ms": int(sim_time_s * 1000),
+                "sim_tick": step,
+            })
+            log.info("suggest moving %s from %s (%s) to %s (%s)", unit.vehicle_id,
+                     served.anomaly_id, served.severity.value, call.anomaly_id,
+                     call.severity.value)
+
+    def accept_reassignment(self, suggestion_id: str, *, step: int, sim_time_s: float) -> bool:
+        """The operator confirmed a suggestion: cancel the unit's current trip,
+        put that call back in the queue (keeping its original waiting time),
+        and send the unit from where it is now to the more severe call."""
+        s = self._suggestions.pop(suggestion_id, None)
+        if s is None:
+            log.warning("unknown or already used reassignment %s", suggestion_id)
+            return False
+        call = self._waiting.get(s["to"])
+        old = self._call_of_request.get(s["request_id"])
+        req = self.emergency.get_request(s["request_id"])
+        unit = self._unit_by_vehicle_id.get(s["vehicle_id"])
+        if call is None or old is None or unit is None or req is None or req.state not in _EN_ROUTE:
+            log.info("reassignment %s no longer applies", suggestion_id)
+            return False
+        here = self.emergency.current_edge(s["request_id"]) or req.source_edge
+        pos = self.emergency.current_lane_pos(s["request_id"])
+        self.emergency.handle_command(
+            {"request_id": s["request_id"], "action": "CANCEL",
+             "operator": "system:incident-response",
+             "reason": f"reassigned to {call.anomaly_id}"},
+            step=step, sim_time_s=sim_time_s,
+        )
+        self._call_of_request.pop(s["request_id"], None)
+        if any(a.anomaly_id == old.anomaly_id for a in self.anomalies.active_anomalies()):
+            self._waiting[(old.anomaly_id, old.kind)] = old  # back in line, original wait kept
+        ok = self._send(call, unit, source_edge=here, step=step, sim_time_s=sim_time_s,
+                        reassigned_from=old.anomaly_id, depart_pos_m=pos)
+        if not ok:
+            unit.busy = False
+        return ok
 
     def _offer_to_crew(self, anomaly: Anomaly, kind: EmergencyKind, *, sim_time_s: float) -> bool:
         """Offer this call to the nearest real crew of `kind`. True if an offer
@@ -362,6 +683,7 @@ class IncidentResponseOrchestrator:
 
     def _nearest_available(
         self, kind: EmergencyKind, lat: float | None, lon: float | None, dest_edge: str,
+        exclude: set[str] | frozenset[str] = frozenset(),
     ) -> tuple[_Unit | None, list[dict]]:
         """The unit to send, and the shortlist that was weighed (every crew on
         it is told about the call; only the first is sent).
@@ -370,12 +692,16 @@ class IncidentResponseOrchestrator:
         travel time (a crew across the river is not "near"). With no GPS for
         the call there is nothing to search around, so the first free crew
         of the kind is used."""
+        free = [u for u in self._units.get(kind, ()) if not u.busy and u.vehicle_id not in exclude]
         if lat is None or lon is None:
-            free = [u for u in self._units.get(kind, ()) if not u.busy]
             return (free[0] if free else None), []
-        shortlist = self._crews.nearest(lat, lon, kind.name, k=SHORTLIST)
+        # last resort when nobody is within the hex search radius: the free
+        # unit nearest in a straight line, however far
+        free.sort(key=lambda u: _haversine_m(lat, lon, u.crew.lat, u.crew.lon))
+        shortlist = [c for c in self._crews.nearest(lat, lon, kind.name, k=SHORTLIST + len(exclude))
+                     if c.crew.crew_id not in exclude][:SHORTLIST]
         if not shortlist:
-            return None, []
+            return (free[0] if free else None), []
         ranked = self._rank(shortlist, dest_edge)
         chosen = self._unit_by_vehicle_id[ranked[0].crew.crew_id]
         return chosen, [_notified(c, selected=c is ranked[0]) for c in ranked]
@@ -428,7 +754,7 @@ class IncidentResponseOrchestrator:
         except Exception:  # noqa: BLE001
             lat, lon = None, None
         request_id = str(payload["request_id"])
-        event = {
+        event: dict[str, object] = {
             "anomaly_id": request_id,
             "anomaly_type": "operator_request",
             "severity": "high",
@@ -465,6 +791,7 @@ class IncidentResponseOrchestrator:
     def _create_and_activate(
         self, *, request_id: str, vehicle_id: str, kind: EmergencyKind,
         source_edge: str, dest_edge: str, step: int, sim_time_s: float,
+        depart_pos_m: float | None = None,
     ) -> bool:
         """Create the request and (if routing succeeded) activate its
         corridor. Returns whether the vehicle is actually on its way --
@@ -478,6 +805,7 @@ class IncidentResponseOrchestrator:
                 "source_edge": source_edge,
                 "destination_edge": dest_edge,
                 "operator": "system:incident-response",
+                **({"depart_pos_m": depart_pos_m} if depart_pos_m is not None else {}),
             },
             step=step, sim_time_s=sim_time_s,
         )

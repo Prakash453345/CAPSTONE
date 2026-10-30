@@ -79,9 +79,9 @@ describe("fetchSession", () => {
     expect(init.cache).toBe("no-store");
   });
 
-  it("treats a static host's index.html (200) as unavailable, never as signed in", async () => {
+  it("treats a static host's index.html (200) as unreachable, never as signed in", async () => {
     stub(async () => html());
-    expect(await kindOf(fetchSession())).toBe("unavailable");
+    expect(await kindOf(fetchSession())).toBe("network");
   });
 
   it.each([

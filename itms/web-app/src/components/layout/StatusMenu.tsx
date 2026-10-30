@@ -69,7 +69,7 @@ export function StatusMenu() {
           </div>
           {demo && (
             <p className="mt-3 rounded-xl bg-status-warn-muted px-3 py-2.5 text-[12.5px] leading-relaxed text-status-warn">
-              Demo environment. Illustrative browser simulation, not live city traffic. Commands are disabled.
+              Demo environment. Illustrative browser simulation, not live city traffic. Reports and dispatches work, but nothing leaves this browser.
             </p>
           )}
           {!demo && status !== "online" && (

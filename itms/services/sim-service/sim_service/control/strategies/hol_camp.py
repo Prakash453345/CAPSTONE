@@ -398,7 +398,7 @@ class HolAwareCamp(AdaptiveCamp):
             showing = shown.green_movements
             yielding = showing - (shown.protected_movements or frozenset())
             whole = cfg_t0.phases[base].green_movements
-            lanes_on = {}
+            lanes_on: dict = {}
             for x in whole:
                 lane = self.lane_of.get(x)
                 lanes_on[lane] = lanes_on.get(lane, True) and x in showing

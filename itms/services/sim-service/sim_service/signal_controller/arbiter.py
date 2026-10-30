@@ -235,7 +235,7 @@ def tick(
     # instead -- either way, control falls through as if no request had
     # been made.
     denial_events: list[dict] = []
-    notes: tuple[str, ...] = ()
+    notes = ()
     if corridor is not None:
         preempt_plan = corridor.propose(cfg, ctx)
         if preempt_plan is not None and preempt_plan.steps:

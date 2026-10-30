@@ -83,6 +83,7 @@ class _EvRun:
     seen_moving: bool = False
     last_progress_m: float = 0.0
     current_edge: str = ""  # last real (non-internal) route edge the EV was on
+    lane_pos_m: float = 0.0  # how far along `current_edge` it was
     stopped_since_s: float | None = None  # on its last road and (nearly) still since
 
 
@@ -97,9 +98,13 @@ class EmergencyController:
     ):
         self.graph = graph
         self.config = config or EmergencyRoutingConfig()
-        # ITMS_ROUTE_COST=eta opts in to the time-based cost (seconds)
+        # Time-based cost (seconds) is the default since 2026-10-23: held-out
+        # (baselines/2026-10-17_m7_routing) it was -4.6 % EV time vs the
+        # weighted cost with an incident and -6.4 % without, -19.0 % vs a
+        # fixed route with an incident. ITMS_ROUTE_COST=weighted restores the
+        # old weighted RouteCostModel.
         cost_model = None
-        if os.environ.get("ITMS_ROUTE_COST", "").lower() == "eta":
+        if os.environ.get("ITMS_ROUTE_COST", "").lower() != "weighted":
             cost_model = EtaCostModel(lefthand=graph.lefthand)
         self.planner = RoutePlanner(graph, self.config, cost_model=cost_model)
         self.anomalies = anomaly_controller
@@ -121,7 +126,12 @@ class EmergencyController:
         self._last_route_s: dict[str, float] = {}       # when each route was last (re)set
         self._progress_at_route: dict[str, float] = {}  # route-distance covered at that moment
         self._last_monitor_s: dict[str, float] = {}
-        self._severe_anomalies_seen: set[str] = set()
+        # per request: severe anomalies already accounted for (known when its
+        # route was planned, or already reacted to) -- per request, because
+        # one vehicle reacting to a new anomaly says nothing about another
+        self._severe_seen: dict[str, set[str]] = {}
+        self._urgent_seen: set[tuple[str, str]] = set()  # (request, anomaly) that skipped the gates
+        self._depart_pos: dict[str, float] = {}  # request -> where on its first road to start
 
     # ---- command handling --------------------------------------------
 
@@ -155,10 +165,33 @@ class EmergencyController:
             active_request_id=request_id,
         )
         self._requests[request_id] = req
+        if payload.get("depart_pos_m") is not None:
+            # a unit sent on from where it is (a reassignment): start where it
+            # is on the road, not back at the road's beginning
+            self._depart_pos[request_id] = max(0.0, float(payload["depart_pos_m"]))
         self._route_and_transition(
             request_id, at_ms=at_ms, step=step, sim_time_s=sim_time_s,
             action=EmergencyRequestAction.ROUTE_READY, initial=True,
         )
+
+    def current_edge(self, request_id: str) -> str | None:
+        """The road the request's vehicle is on now (its source road before it
+        departs); None for an unknown request."""
+        req = self._requests.get(request_id)
+        if req is None:
+            return None
+        run = self._ev_runs.get(request_id)
+        if run is not None and run.current_edge:
+            return run.current_edge
+        return req.source_edge
+
+    def current_lane_pos(self, request_id: str) -> float | None:
+        """How far along `current_edge` the request's vehicle is (metres), or
+        None if it is not driving yet."""
+        run = self._ev_runs.get(request_id)
+        if run is None or not run.current_edge:
+            return None
+        return run.lane_pos_m
 
     def handle_command(self, payload: Mapping, *, step: int, sim_time_s: float) -> None:
         request_id = str(payload["request_id"])
@@ -332,6 +365,7 @@ class EmergencyController:
 
             if edge_id and not edge_id.startswith(":"):
                 run.current_edge = edge_id
+                run.lane_pos_m = max(0.0, lane_pos)
             if edge_id in run.dist_to_edge_start:
                 covered = run.dist_to_edge_start[edge_id] + max(0.0, lane_pos)
             else:
@@ -443,6 +477,9 @@ class EmergencyController:
             for a in self.anomalies.active_anomalies()
         ):
             extra["departPos"] = str(max(0.0, first.length_m - 1.0))
+        elif first is not None and request_id in self._depart_pos:
+            extra["departPos"] = str(min(self._depart_pos[request_id],
+                                         max(0.0, first.length_m - 1.0)))
         try:
             traci.route.add(route_id, list(edges))
             traci.vehicle.add(
@@ -457,6 +494,10 @@ class EmergencyController:
     def _teardown(self, request_id: str, *, reason: str, step: int) -> None:
         if self.corridor is not None:
             self.corridor.deactivate(request_id, reason=reason, step=step)
+        # the trip is over: its monitoring state goes with it
+        for d in (self._last_monitor_s, self._severe_seen, self._depart_pos):
+            d.pop(request_id, None)
+        self._urgent_seen = {k for k in self._urgent_seen if k[0] != request_id}
         run = self._ev_runs.pop(request_id, None)
         if run is None or not run.spawned:
             return
@@ -481,6 +522,7 @@ class EmergencyController:
         from_edge: str | None = None,
         conditions: Mapping[str, EdgeConditions] | None = None,
         initial: bool = False,
+        keep_if_same: tuple[str, ...] | None = None,
     ) -> None:
         """Plan (or replan, when `from_edge` is set) and apply `action`.
 
@@ -542,6 +584,23 @@ class EmergencyController:
 
         best = routes[0]
         edges = tuple(best.edges)
+        # every severe anomaly active now has been weighed by this plan; only
+        # one that appears later is news for the monitor
+        self._severe_seen.setdefault(request_id, set()).update(
+            a.anomaly_id for a in self.anomalies.active_anomalies() if a.severity in _SEVERE
+        )
+        cur_forced = set(req.route.forced_through or ()) if req.route is not None else set()
+        if (keep_if_same is not None and edges == tuple(keep_if_same)
+                and set(best.forced_through or ()) <= cur_forced):
+            # the monitor's trigger, once weighed, leaves the route as it is:
+            # no reroute, no SUMO re-point, no corridor re-arm. (Same roads but
+            # now knowingly through a new blockage still goes through below,
+            # so the route records it and the monitor stops re-asking.)
+            self._last_route_s[request_id] = sim_time_s
+            run = self._ev_runs.get(request_id)
+            self._progress_at_route[request_id] = run.last_progress_m if run else 0.0
+            log.info("emergency request %s: replanned, route unchanged", request_id)
+            return
 
         # re-point SUMO + green corridor first (in-flight reroute only), so the
         # single state transition below carries the new corridor id
@@ -549,7 +608,9 @@ class EmergencyController:
         if from_edge is not None:
             self._repoint_sumo_route(request_id, edges)
             req_now = self._requests[request_id]
-            if self.corridor is not None and req_now.green_corridor_id:
+            # arm a corridor for the new route even if the old route had none
+            # (it crossed no signal); a signal on the new route still needs one
+            if self.corridor is not None:
                 new_corridor_id = self.corridor.activate(
                     request_id=request_id, vehicle_id=req_now.vehicle_id,
                     route_edges=edges, now_ms=int(sim_time_s * 1000), step=step,
@@ -609,21 +670,9 @@ class EmergencyController:
             if sim_time_s - self._last_monitor_s.get(request_id, -1e18) < _MONITOR_INTERVAL_S:
                 continue
             self._last_monitor_s[request_id] = sim_time_s
-            if (
-                sim_time_s - self._last_route_s.get(request_id, -1e18)
-                < self.config.reroute_cooldown_s
-            ):
-                continue
 
             run = self._ev_runs.get(request_id)
             in_transit = req.state is EmergencyRequestState.IN_TRANSIT
-            if run is not None and run.total_length_m > 0:
-                since_frac = (
-                    run.last_progress_m - self._progress_at_route.get(request_id, 0.0)
-                ) / run.total_length_m
-                if since_frac < self.config.reroute_min_progress_frac:
-                    continue
-
             current_edge = (
                 run.current_edge if run is not None and run.current_edge else req.source_edge
             )
@@ -631,7 +680,37 @@ class EmergencyController:
             if len(remaining) < 2:
                 continue
 
-            reason = self._blocked_or_severe_ahead(remaining)
+            # A road ahead that has just become blocked (or a new severe
+            # anomaly on it) is checked *before* the cooldown and progress
+            # gates: waiting out a 30 s cooldown there can mean driving past
+            # the last turn-off. Only the first trigger per anomaly skips the
+            # gates, so a blockage with no way around is retried at the normal
+            # cadence, not every few seconds. The vehicle's own road and its
+            # destination are not "ahead" -- it cannot avoid either, and an
+            # incident at the destination is why it is going there.
+            # A blockage the current route already crosses knowingly (no way
+            # round when it was planned: `forced_through`) is not news; the
+            # periodic cheaper-replan below still finds a way round if one
+            # opens up. Without this the monitor "rerouted" onto the same
+            # forced route every cooldown period.
+            forced = set(req.route.forced_through or ())
+            ahead_edges = tuple(e for e in remaining[1:-1] if e not in forced)
+            reason, trigger = self._blocked_or_severe_ahead(request_id, ahead_edges)
+            urgent = trigger is not None and (request_id, trigger) not in self._urgent_seen
+            if urgent:
+                self._urgent_seen.add((request_id, trigger))
+            else:
+                if (
+                    sim_time_s - self._last_route_s.get(request_id, -1e18)
+                    < self.config.reroute_cooldown_s
+                ):
+                    continue
+                if run is not None and run.total_length_m > 0:
+                    since_frac = (
+                        run.last_progress_m - self._progress_at_route.get(request_id, 0.0)
+                    ) / run.total_length_m
+                    if since_frac < self.config.reroute_min_progress_frac:
+                        continue
             if conditions is None:
                 conditions = self.sample_conditions()
             if reason is None:
@@ -652,6 +731,7 @@ class EmergencyController:
                 detail=f"auto-reroute — {reason}",
                 from_edge=current_edge if in_transit else None,
                 conditions=conditions,
+                keep_if_same=remaining,
             )
 
     @staticmethod
@@ -664,21 +744,26 @@ class EmergencyController:
             return route_edges  # EV drifted off-route -- treat the whole thing as ahead
         return route_edges[i:]
 
-    def _blocked_or_severe_ahead(self, remaining: tuple[str, ...]) -> str | None:
-        ahead = set(remaining)
+    def _blocked_or_severe_ahead(
+        self, request_id: str, ahead_edges: tuple[str, ...]
+    ) -> tuple[str | None, str | None]:
+        """(reason, anomaly id) for the first blocked or newly severe anomaly
+        on `ahead_edges`, or (None, None)."""
+        ahead = set(ahead_edges)
+        seen = self._severe_seen.setdefault(request_id, set())
         for a in self.anomalies.active_anomalies():
             if a.edge_id not in ahead:
                 continue
             if self.config.reroute_on_blocked_edge and a.severity == AnomalySeverity.BLOCKED:
-                return f"road blocked ahead on {a.edge_id}"
+                return f"road blocked ahead on {a.edge_id}", a.anomaly_id
             if (
                 self.config.reroute_on_new_severe_anomaly
                 and a.severity in _SEVERE
-                and a.anomaly_id not in self._severe_anomalies_seen
+                and a.anomaly_id not in seen
             ):
-                self._severe_anomalies_seen.add(a.anomaly_id)
-                return f"new {a.severity.value} anomaly ahead on {a.edge_id}"
-        return None
+                seen.add(a.anomaly_id)
+                return f"new {a.severity.value} anomaly ahead on {a.edge_id}", a.anomaly_id
+        return None, None
 
     def _cheaper_replan(
         self,

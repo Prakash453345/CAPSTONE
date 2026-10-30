@@ -341,7 +341,8 @@ class CorridorController:
             # `unprotected_junctions`. The corridor stays active and the other
             # junctions on its route are still served; this one is not, and
             # that has to be visible to whoever is watching the corridor.
-            return self._report_unprotected(cfg, wanted)
+            self._report_unprotected(cfg, wanted)
+            return None
 
         if target == ctx.current_phase_id:
             steps: tuple[PlanStep, ...] = (PlanStep(phase_id=target, green_s=tick_s),)

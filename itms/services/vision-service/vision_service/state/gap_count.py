@@ -236,7 +236,7 @@ def build_gaps(network, coverage_by_camera: Mapping[str, Mapping[str, LaneCovera
                 r = max(cand, key=lambda r: r[1])
                 common_end = r[1] if common_end is None else min(common_end, r[1])
                 common_start = r[0] if common_start is None else max(common_start, r[0])
-            if common_end is None or common_end - common_start < cfg.min_view_m:
+            if common_end is None or common_end - common_start < cfg.min_view_m:  # type: ignore[operator]
                 continue
             if best is None or common_end > best[2]:
                 best = (cam, common_start, common_end)
@@ -250,7 +250,7 @@ def build_gaps(network, coverage_by_camera: Mapping[str, Mapping[str, LaneCovera
                                      free_s=min(near_start.values()) / speed)
             continue
         cam_a, start_a, end_a = best
-        s_a = (start_a + end_a) / 2.0
+        s_a = (start_a + end_a) / 2.0  # type: ignore[operator]
         unseen = {ln: max(0.0, near_start[ln] - end_a) for ln in lanes}
         gaps[edge] = EdgeGap(edge_id=edge, lanes=lanes, s_a=s_a, end_a=end_a, s_b=s_b,
                              cam_a=cam_a, cam_b=cam_b, near_start=near_start, unseen_m=unseen,

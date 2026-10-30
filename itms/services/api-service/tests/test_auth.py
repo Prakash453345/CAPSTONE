@@ -493,3 +493,46 @@ def test_unit_kind_validation_and_inference():
     assert auth.infer_unit_kind("amb-01") == "ambulance"
     assert auth.infer_unit_kind("EV-001") is None
     assert auth.infer_unit_kind(None) is None
+
+
+# ---------------------------------------------------------- change password
+
+
+def test_change_password_really_changes_it_and_keeps_this_session(client, store):
+    login(client)
+    other = TestClient(main.app)
+    assert other.post("/v1/auth/login", json={"username": "operator", "password": PASSWORD}).status_code == 200  # noqa: E501
+    new = "A-brand-new-pass-77"
+    r = client.post("/v1/auth/password", json={"current_password": PASSWORD, "new_password": new})
+    assert r.status_code == 204
+    assert client.get("/v1/auth/me").status_code == 200          # this device stays signed in
+    assert other.get("/v1/auth/me").status_code == 401           # every other one is signed out
+    assert login(TestClient(main.app), password=PASSWORD).status_code == 401
+    assert login(TestClient(main.app), password=new).status_code == 200
+
+
+def test_change_password_rejects_wrong_current_weak_or_same(client):
+    assert client.post("/v1/auth/password", json={"current_password": PASSWORD, "new_password": "x" * 12}).status_code == 401  # noqa: E501
+    login(client)
+    bad = lambda cur, new: client.post(  # noqa: E731
+        "/v1/auth/password", json={"current_password": cur, "new_password": new}).status_code
+    assert bad("wrong-password-1", "A-brand-new-pass-77") == 400
+    assert bad(PASSWORD, "short") == 422
+    assert bad(PASSWORD, PASSWORD) == 422
+
+
+# ------------------------------------------------------------- idle timeout
+
+
+def test_a_session_idle_too_long_is_signed_out_and_me_keeps_an_active_one_alive(client, monkeypatch):  # noqa: E501
+    import datetime as dt
+
+    login(client)
+    token = client.cookies.get(auth.COOKIE_NAME)
+    later = auth.utcnow() + dt.timedelta(minutes=auth.IDLE_MINUTES + 1)
+    assert auth.read_token(token, later) is None                       # idle too long
+    soon = auth.utcnow() + dt.timedelta(minutes=auth.IDLE_MINUTES - 1)
+    assert auth.read_token(token, soon) is not None                    # still within the limit
+    monkeypatch.setattr(auth, "_REFRESH_AFTER_S", 0)
+    r = client.get("/v1/auth/me")
+    assert r.status_code == 200 and auth.COOKIE_NAME in r.headers.get("set-cookie", "")

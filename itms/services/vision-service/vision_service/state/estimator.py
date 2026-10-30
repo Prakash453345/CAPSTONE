@@ -526,7 +526,7 @@ class LinkStateEstimator:
         the camera is back."""
         cfg = self.cfg
         for gap in self.gaps.values():
-            if health.get(gap.cam_a, 1.0) <= 0.0 or health.get(gap.cam_b, 1.0) <= 0.0:
+            if health.get(gap.cam_a, 1.0) <= 0.0 or health.get(gap.cam_b, 1.0) <= 0.0:  # type: ignore[arg-type]
                 gap.anchored = False
                 gap.hidden = 0.0
                 continue

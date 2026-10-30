@@ -156,3 +156,27 @@ body {
     transition-duration: 0.001ms !important;
   }
 }
+
+/* Workspace shape follows the width of its own pane, not the window: in the
+   Split view each pane is half the screen, and a side panel plus map there
+   would squeeze the map to a sliver. Narrow panes stack panel over map. */
+.workspace-host {
+  container-type: size;
+  height: 100%;
+  min-height: 0;
+}
+.operational-workspace {
+  display: grid;
+  height: 100%;
+  gap: 1rem;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 2fr) minmax(0, 3fr);
+}
+.operational-workspace > aside { min-height: 0; }
+.operational-workspace > section { min-height: 0; }
+@container (min-width: 820px) {
+  .operational-workspace {
+    grid-template-columns: var(--panel-w) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+  }
+}

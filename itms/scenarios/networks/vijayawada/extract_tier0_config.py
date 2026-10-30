@@ -136,6 +136,8 @@ SUMO traffic-light id (== `Tier0Config.intersection_id`).
 from __future__ import annotations
 
 import json
+import math
+import os
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -248,6 +250,42 @@ def kinematic_yellow_s(approach_speed_mps: float) -> float:
     return round(clamped * 2.0) / 2.0
 
 
+_VEHICLE_LENGTH_M = 6.0         # ITE red-clearance design vehicle length
+_MIN_ALL_RED_S = 1.0
+_MAX_ALL_RED_S = 4.0
+
+
+def ite_all_red_s(crossings: list[tuple[float, float]]) -> float:
+    """ITE red clearance `r = (W + L) / v` (added 2026-10-23): the time a
+    vehicle that entered at the last instant of yellow needs to clear the
+    junction before the conflicting green starts. `crossings` is
+    `[(W metres across the junction along the path, approach speed m/s)]`;
+    the largest r wins, rounded up to the half second and clamped to
+    [1, 4] s. Used instead of the flat 2.0 s when SIGNAL_ALL_RED=ite."""
+    if not crossings:
+        return _ALL_RED_S
+    r = max((w + _VEHICLE_LENGTH_M) / max(1.0, v) for w, v in crossings)
+    r = math.ceil(r * 2.0) / 2.0
+    return max(_MIN_ALL_RED_S, min(_MAX_ALL_RED_S, r))
+
+
+def _crossings(tls_id: str, root: ET.Element, lane_speeds: dict[str, float],
+               lane_lengths: dict[str, float]) -> list[tuple[float, float]]:
+    """(width along the path, approach speed) for every straight-through
+    controlled connection of `tls_id` (all connections if none is straight),
+    width taken as the length of the connection's lane through the box."""
+    rows = []
+    for c in root.findall("connection"):
+        if c.get("tl") != tls_id or not c.get("via"):
+            continue
+        w = lane_lengths.get(c.get("via"))
+        v = lane_speeds.get(f"{c.get('from')}_{c.get('fromLane')}")
+        if w is not None and v is not None:
+            rows.append((c.get("dir") or "s", w, v))
+    straight = [(w, v) for d, w, v in rows if d == "s"]
+    return straight or [(w, v) for _, w, v in rows]
+
+
 def _approach_speed_mps(junction: ET.Element, lane_speeds: dict[str, float]) -> float:
     """The fastest speed limit among this junction's incoming lanes -- the
     approach a yellow has to be long enough for. Falls back to 13.9 m/s
@@ -294,6 +332,7 @@ def _extract_one(
     junction: ET.Element,
     measured_sat_flow: dict[str, float] | None = None,
     lane_speeds: dict[str, float] | None = None,
+    all_red_s: float = _ALL_RED_S,
 ) -> Tier0Config:
     # Conflict matrix from this junction's own <request> elements, keyed by
     # link-index labels ("L0", "L1", ...) matching the tlLogic state string
@@ -315,6 +354,13 @@ def _extract_one(
     # guessed yellow phase -- see the module docstring's clearance-interval
     # section for the measurement that forced the change.
     yellow_s = kinematic_yellow_s(_approach_speed_mps(junction, lane_speeds or {}))
+    if os.environ.get("SIGNAL_YELLOW", "").lower() == "netconvert":
+        # paper-A ablation (2026-10-28): the clearance netconvert guessed, as
+        # before 2026-09-18, instead of the kinematic rule
+        guessed = [float(ph.get("duration", 0)) for ph in tl_logic.findall("phase")
+                   if "y" in ph.get("state", "").lower()]
+        if guessed:
+            yellow_s = max(guessed)
 
     # The program's green stages, in program order: change intervals
     # (including the yellow-only clearances SUMO's default program inserts,
@@ -351,7 +397,7 @@ def _extract_one(
     # Tier0Config's blanket 120.0s default -- see module docstring for why
     # that default and a ring this wide are structurally incompatible.
     max_wait_s = (
-        sum(max_green_s.values()) + len(ring_order) * (yellow_s + _ALL_RED_S) + _MAX_WAIT_MARGIN_S
+        sum(max_green_s.values()) + len(ring_order) * (yellow_s + all_red_s) + _MAX_WAIT_MARGIN_S
     )
 
     return Tier0Config(
@@ -362,7 +408,7 @@ def _extract_one(
         min_green_s=min_green_s,
         max_green_s=max_green_s,
         yellow_s=yellow_s,
-        all_red_s=_ALL_RED_S,
+        all_red_s=all_red_s,
         max_wait_s=max_wait_s,
         sat_flow_pcu_s=sat_flow_pcu_s,
     )
@@ -387,12 +433,18 @@ def load_configs(net_path: str | Path) -> dict[str, Tier0Config]:
 
     junctions_by_id = {j.get("id"): j for j in root.findall("junction")}
     lane_speeds: dict[str, float] = {}
+    lane_lengths: dict[str, float] = {}
     for edge in root.findall("edge"):
         for lane in edge.findall("lane"):
             lane_id = lane.get("id")
             speed = lane.get("speed")
             if lane_id is not None and speed is not None:
                 lane_speeds[lane_id] = float(speed)
+            if lane_id is not None and lane.get("length") is not None:
+                lane_lengths[lane_id] = float(lane.get("length"))
+    mode = os.environ.get("SIGNAL_ALL_RED", "").lower()
+    ite = mode == "ite"
+    flat = float(mode[4:]) if mode.startswith("flat") else None  # diagnostic: flat<s>
     configs: dict[str, Tier0Config] = {}
     for tl_logic in root.findall("tlLogic"):
         tls_id = tl_logic.get("id")
@@ -403,8 +455,10 @@ def load_configs(net_path: str | Path) -> dict[str, Tier0Config]:
             # one light over several junctions (netconvert --tls.join), or a
             # light numbering its links its own way: conflicts from the program
             junction = _joined_view(tls_id, tl_logic, root)
+        all_red = (ite_all_red_s(_crossings(tls_id, root, lane_speeds, lane_lengths))
+                   if ite else flat if flat is not None else _ALL_RED_S)
         configs[tls_id] = _extract_one(
-            tls_id, tl_logic, junction, calibration.get(tls_id), lane_speeds
+            tls_id, tl_logic, junction, calibration.get(tls_id), lane_speeds, all_red
         )
     return configs
 

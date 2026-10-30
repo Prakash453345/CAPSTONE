@@ -30,7 +30,7 @@ def scene(seconds: int, vehicles: int, moving: int, stopped: int) -> list[Second
 def test_severity_starts_from_the_type():
     flowing = scene(60, 8, 6, 1)
     assert assess("fire", 5, 30, flowing).level == "high"
-    assert assess("accident", 5, 30, flowing).level == "high"
+    assert assess("accident", 5, 30, flowing).level == "medium"      # model-only: never "serious" on its own
     assert assess("vehicle_breakdown", 5, 30, flowing).level == "medium"
     assert assess("heavy_congestion", 5, 30, flowing).level == "low"
 
@@ -39,6 +39,12 @@ def test_traffic_stopping_after_an_accident_makes_it_blocked():
     sev = assess("accident", 5, 30, scene(60, 9, 0, 9))
     assert sev.level == "blocked"
     assert any("stopped" in r for r in sev.reasons)
+
+
+def test_an_accident_with_a_queue_of_stopped_vehicles_is_high():
+    sev = assess("accident", 5, 30, scene(60, 8, 3, 6))
+    assert sev.level == "high" and any("stopped around it" in r for r in sev.reasons)
+    assert sev.reasons[1].startswith("found by the accident model alone")
 
 
 def test_a_stalled_vehicle_with_a_queue_is_high_but_congestion_never_passes_medium():
@@ -211,8 +217,8 @@ def test_an_accident_is_found_where_it_happens_and_rated_from_its_type():
     main = result.main
     assert main is not None and main.anomaly_type == "accident"
     assert 10.0 <= main.start_s <= 11.0
-    assert main.severity == "high" and main.confidence == 0.9
-    assert main.reasons[0].startswith("accident model: 3 of 5 frames")
+    assert main.severity == "medium" and main.confidence == 0.9
+    assert any(r.startswith("accident model: 3 of 5 frames") for r in main.reasons)
     assert any("no vehicle detector" in r for r in main.reasons)
 
 
@@ -262,7 +268,7 @@ def test_the_worker_analyses_a_video_file_and_publishes_an_encodable_result(tmp_
 
     assert published[0]["status"] == "ANALYSING"
     assert final["status"] == "DONE" and published[-1] == final
-    assert final["anomaly_type"] == "accident" and final["severity"] == "high"
+    assert final["anomaly_type"] == "accident" and final["severity"] == "medium"
     assert 7.5 <= final["flagged_at_s"] <= 9.0
     assert 15.0 <= final["duration_s"] <= 16.5
     assert Path(final["snapshot_path"]).exists()
@@ -279,6 +285,7 @@ def test_the_worker_analyses_a_video_file_and_publishes_an_encodable_result(tmp_
 
 
 def test_a_file_that_is_not_a_video_fails_cleanly(tmp_path):
+    pytest.importorskip("cv2")
     clip_dir = tmp_path / "clip-2"
     clip_dir.mkdir()
     bad = clip_dir / "source.mp4"

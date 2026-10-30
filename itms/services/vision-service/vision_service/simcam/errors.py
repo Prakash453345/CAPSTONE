@@ -214,11 +214,11 @@ PRESETS["itms6_960"] = replace(
                _B: {_T: 0.076}, _C: {_A: 0.005, _B: 0.005, _T: 0.002},
                _T: {_A: 0.034, _B: 0.02, _C: 0.034}},
 )
-# Fine-tune v3 (`baselines/2026-10-04_m8_finetune_v3/`): v2's recipe plus degradation augmentation, the video-mode
-# default detector. Fitted the same way on the same 250 daylight frames (`simcam_fit.json`): it differs from
-# `itms6_640` by at most 0.03 in any class's recall (bus and bicycle have under 100 boxes), so this daytime error
-# model is practically unchanged. It does NOT represent v3's gains at night, in glare or with sensor noise: the
-# labelled frames are daylight. The default preset stays `itms6_640` so earlier baselines stay comparable.
+# Fine-tune v3 (`baselines/2026-10-04_m8_finetune_v3/`): v2's recipe plus degradation augmentation, the video-mode  # noqa: E501
+# default detector. Fitted the same way on the same 250 daylight frames (`simcam_fit.json`): it differs from  # noqa: E501
+# `itms6_640` by at most 0.03 in any class's recall (bus and bicycle have under 100 boxes), so this daytime error  # noqa: E501
+# model is practically unchanged. It does NOT represent v3's gains at night, in glare or with sensor noise: the  # noqa: E501
+# labelled frames are daylight. The default preset stays `itms6_640` so earlier baselines stay comparable.  # noqa: E501
 PRESETS["itms6aug_640"] = replace(
     PRESETS["finetuned_day"],
     name="itms6aug_640",

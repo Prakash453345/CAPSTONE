@@ -216,8 +216,11 @@ for (const colorScheme of ["light", "dark"] as const) {
       await signedOutApi(page);
       await page.goto("/login");
       await expect(submit(page)).toBeVisible();
-      const scan = () =>
-        new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze();
+      // The card and the error notice fade in; axe blends colours mid-fade.
+      const scan = async () => {
+        await page.waitForTimeout(800);
+        return new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze();
+      };
       expect((await scan()).violations.flatMap((v) => v.nodes.map((n) => `${v.id}: ${n.target.join(" ")}`))).toEqual([]);
 
       await signIn(page, { username: "komal", password: "wrong wrong wrong" });

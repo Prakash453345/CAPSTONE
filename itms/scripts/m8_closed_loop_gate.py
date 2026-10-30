@@ -92,6 +92,8 @@ def _with_fault(factory, kind: str = "offline"):
 def _job(args) -> dict:
     arm, level, seed, fps = args
     t0 = time.time()
+    if "ync" not in arm.split(":"):
+        os.environ.pop("SIGNAL_YELLOW", None)
     if arm == "webster":
         rec = M.run_scenario("webster", level, seed, inputs=H.scenario_inputs(level), tag=arm)
     elif arm == "webster:pair":
@@ -100,6 +102,16 @@ def _job(args) -> dict:
         inputs = M._scenario_inputs(level, layout="pair")  # noqa: SLF001
         rec = M.run_scenario("webster", level, seed, inputs=inputs,
                              strategy=H.build_webster(inputs[0], inputs[1]), tag="webster_pair")
+    elif arm == "maxpressure" or arm.startswith("maxpressure:s"):
+        # plain Varaiya max-pressure (paper-A baseline, scripts/paper_a_baselines.py)
+        import paper_a_baselines as PB  # noqa: PLC0415
+        slot = float(arm.split(":s")[1]) if ":s" in arm else 10.0
+        rec = PB.run_maxpressure(level, seed, slot_s=slot, tag=arm.replace(":", "_"))
+    elif arm == "actuated" or arm.startswith("actuated:"):
+        # SUMO's built-in actuated control on the same phases and clearances
+        import paper_a_baselines as PB  # noqa: PLC0415
+        mx = float(arm.split(":")[1]) if ":" in arm else PB.ACTUATED_MAX_DUR_S
+        rec = PB.run_actuated(level, seed, max_dur=mx, tag=arm.replace(":", "_"))
     elif arm == "truth":
         rec = M.run_scenario("ccacamp", level, seed, tag=arm)
     elif arm.startswith("truth:"):
@@ -115,10 +127,15 @@ def _job(args) -> dict:
         unknown = [t for t in mods
                    if t not in ("rest", "restf", "nov", "via", "vian", "via2",
                                 "ovl", "ovl2", "ovl3", "ovl4", "noovl", "restq", "restd", "restx",
-                                "pair", "pairt", "nopair", "minph")
+                                "pair", "pairt", "nopair", "minph", "ync")
                    and t[:1] not in ("c", "f") and not t.startswith(("restm", "restc", "s.", "hz"))]
         if unknown:
             raise SystemExit(f"arm {arm!r}: unknown modifier(s) {unknown}")
+        # ync: the yellow netconvert guessed instead of the kinematic rule (paper-A ablation)
+        if "ync" in mods:
+            os.environ["SIGNAL_YELLOW"] = "netconvert"
+        else:
+            os.environ.pop("SIGNAL_YELLOW", None)
         factor = next((float(t[1:]) for t in mods if t[:1] == "c"), None)
         floor = next((float(t[1:]) for t in mods if t[:1] == "f"), None)
         if floor is None:

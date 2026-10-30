@@ -77,11 +77,11 @@ class FireScorer:
         self.name = f"fire:{detector_path}+{self.cls.name}"
 
     def candidates(self, frame: np.ndarray) -> list[tuple[int, float, Box]]:
-        r = self.det.predict(frame, imgsz=IMGSZ, conf=DET_CONF, iou=DET_IOU, verbose=False,
+        r = self.det.predict(frame, imgsz=IMGSZ, conf=DET_CONF, iou=DET_IOU, verbose=False,  # type: ignore[index]
                              device=self.device)[0]
         bx = r.boxes
         out = [(int(c), float(cf), (float(b[0]), float(b[1]), float(b[2]), float(b[3])))
-               for c, cf, b in zip(bx.cls.tolist(), bx.conf.tolist(), bx.xyxy.tolist())
+               for c, cf, b in zip(bx.cls.tolist(), bx.conf.tolist(), bx.xyxy.tolist(), strict=True)  # type: ignore[union-attr]
                if int(c) in (0, 1)]
         return out
 
@@ -93,7 +93,7 @@ class FireScorer:
         probs = self.cls.probs(np.stack([crop_box(frame, b) for _, _, b in cands]))
         best = [0.0, 0.0]
         box: list[tuple[float, float, float, float] | None] = [None, None]
-        for (c, _conf, b), p in zip(cands, probs):
+        for (c, _conf, b), p in zip(cands, probs, strict=True):
             if p[c] > best[c]:
                 best[c], box[c] = float(p[c]), b
         return FireScore(best[0], best[1], box[0], box[1], (w, h), len(cands), self.thresholds,

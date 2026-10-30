@@ -1,6 +1,4 @@
 import type {
-  EmergencyRequest,
-  EmergencyRouteView,
   Incident,
   Intersection,
   SignalState,
@@ -16,7 +14,8 @@ import {
   type RoadEdge,
 } from "@/data/network";
 import { haversineMeters, pointAlongPath, type LngLat } from "@/utils/geo";
-import { useCrewStore } from "@/store/crewStore";
+import { setDemoCommandHandler } from "@/services/traffic/commands";
+import { createDemoEngine } from "@/services/traffic/demoEngine";
 import { mulberry32, pick } from "@/utils/rng";
 import { junctionVehicleStats } from "@/services/traffic/intersectionStats";
 import type {
@@ -63,36 +62,6 @@ function weightedType(rand: () => number): (typeof VEHICLE_TYPES)[number] {
 /** Vertex list of an edge in travel direction. */
 function dirPath(edge: RoadEdge, reversed: boolean): LngLat[] {
   return reversed ? [...edge.path].reverse() : edge.path;
-}
-
-/** Greedy connected walk to build a plausible corridor route for an ambulance.
- *  Returns both the polyline (for drawing) and the edge id chain it walked —
- *  the latter is what lets the mock ambulance be a real `EmergencyRequest`
- *  (the same shape the live router produces), not a parallel one-off type. */
-function buildRoute(
-  rand: () => number,
-  hops: number,
-): { coords: LngLat[]; edgeIds: string[] } {
-  let edge = pick(rand, roadEdges);
-  let reversed = false;
-  const coords: LngLat[] = [...dirPath(edge, reversed)];
-  const edgeIds: string[] = [edge.id];
-  const seen = new Set([edge.id]);
-  for (let i = 0; i < hops; i++) {
-    const links = (edgeAdjacency.get(edge.id) ?? []).filter(
-      (l) => !seen.has(l.edgeId),
-    );
-    if (!links.length) break;
-    const next = pick(rand, links);
-    const nEdge = edgeById.get(next.edgeId);
-    if (!nEdge) break;
-    edge = nEdge;
-    reversed = next.reversed;
-    seen.add(edge.id);
-    edgeIds.push(edge.id);
-    coords.push(...dirPath(edge, reversed).slice(1));
-  }
-  return { coords, edgeIds };
 }
 
 export function createMockProvider(seed = 42): TrafficDataProvider {
@@ -146,60 +115,7 @@ export function createMockProvider(seed = 42): TrafficDataProvider {
   ];
   let thirdIncidentAdded = false;
 
-  const { coords: routePath, edgeIds: routeEdgeIds } = buildRoute(rand, 9);
-  const routeCum = routePath.reduce<number[]>(
-    (acc, _, i) =>
-      i === 0
-        ? [0]
-        : [...acc, acc[i - 1] + haversineMeters(routePath[i - 1], routePath[i])],
-    [],
-  );
-  const routeLen = routeCum[routeCum.length - 1] || 1;
-  let routeProgress = 0.05;
-
-  // Static facts about the route, computed once — matches the shape
-  // `EmergencyRouteView` gives a live-mode operator, so the Phase 2 route
-  // panel (ETA/distance/cost breakdown/"why this route") has something real
-  // to show in Sim mode too. The cost numbers are illustrative (the mock has
-  // no cost model to run), not a stand-in for `RouteCostModel`.
-  const MOCK_SPEED_MPS = 9;
-  const signalisedOnRoute = signalJunctions
-    .filter((j) => routePath.some((p) => haversineMeters(p, [j.lng, j.lat]) < 40))
-    .map((j) => j.id);
-  const mockTravelTimeS = routeLen / MOCK_SPEED_MPS;
-  const mockRoute: EmergencyRouteView = {
-    edges: routeEdgeIds,
-    rank: 0,
-    totalDistanceM: Math.round(routeLen),
-    totalTravelTimeS: Math.round(mockTravelTimeS),
-    etaS: Math.round(mockTravelTimeS + signalisedOnRoute.length * 6),
-    nIntersections: Math.max(0, routeEdgeIds.length - 1),
-    signalisedIntersections: signalisedOnRoute,
-    congestedSegments: [],
-    anomalousSegmentsAvoided: [],
-    forcedThrough: [],
-    reliable: true,
-    cost: {
-      travelTimeS: Math.round(mockTravelTimeS * 10) / 10,
-      congestion: 0.2,
-      anomaly: 0,
-      signalDelayS: signalisedOnRoute.length * 6,
-      disruption: Math.round((routeLen / 400) * 100) / 100,
-      reliability: 0.1,
-      score:
-        Math.round(
-          (mockTravelTimeS / 60 + 0.2 * 0.6 + signalisedOnRoute.length * 6 * 0.4) * 10,
-        ) / 10,
-    },
-    weightsUsed: {
-      travel_time_weight: 1,
-      congestion_weight: 0.6,
-      anomaly_weight: 1,
-      signal_delay_weight: 0.4,
-      disruption_weight: 0.5,
-      reliability_weight: 0.3,
-    },
-  };
+  const engine = createDemoEngine();
 
   function signalPhase(index: number, elapsedS: number): SignalState {
     const offset = (index * 13) % SIGNAL_CYCLE_S;
@@ -224,8 +140,8 @@ export function createMockProvider(seed = 42): TrafficDataProvider {
     return best;
   }
 
-  function step(elapsedS: number) {
-    const dt = TICK_MS / 1000;
+  function step(elapsedS: number, advance = true) {
+    const dt = advance ? TICK_MS / 1000 : 0;
     const perEdgeCount: Record<string, number> = {};
 
     for (const a of agents) {
@@ -235,7 +151,7 @@ export function createMockProvider(seed = 42): TrafficDataProvider {
       // Ease off approaching a red/yellow light at the edge end.
       const distToEnd = a.edge.lengthM - a.dist;
       const sig = nearestSignalState(endPt[0], endPt[1], elapsedS);
-      let target = a.baseSpeed;
+      let target = a.baseSpeed * engine.speedFactor(a.edge.id);
       if (sig && sig.distM < 35 && distToEnd < 45 && sig.state !== "green") {
         target = 0.6;
       }
@@ -292,7 +208,7 @@ export function createMockProvider(seed = 42): TrafficDataProvider {
         1,
         (e.lengthM / SLOT_M) * Math.max(1, e.numLanes),
       );
-      roadCongestion[e.id] = Math.min(1, (perEdgeCount[e.id] ?? 0) / capacity);
+      roadCongestion[e.id] = Math.max(engine.congestion(e.id), Math.min(1, (perEdgeCount[e.id] ?? 0) / capacity));
     }
 
     const intersections: Intersection[] = signalJunctions.map((j, i) => ({
@@ -320,36 +236,7 @@ export function createMockProvider(seed = 42): TrafficDataProvider {
       thirdIncidentAdded = true;
     }
 
-    routeProgress = (routeProgress + (dt * 9) / routeLen) % 1;
-    const unitPt = pointAlongPath(routePath, routeCum, routeProgress * routeLen);
-    const remainingM = routeLen * (1 - routeProgress);
-
-    // The one mock mission, as a real EmergencyRequest — the same model a
-    // live dispatch produces — so the map's emergency layers (which render
-    // off `emergencyRequests`) have something to draw in Sim mode too.
-    const emergencyRequests: EmergencyRequest[] = [
-      {
-        id: "mock-amb-01",
-        vehicleId: "amb-01",
-        vehicleKind: "ambulance",
-        state: "in_transit",
-        sourceEdge: routeEdgeIds[0],
-        destinationEdge: routeEdgeIds[routeEdgeIds.length - 1],
-        etaS: Math.round(remainingM / MOCK_SPEED_MPS),
-        route: mockRoute,
-        alternatives: [],
-        timeline: [],
-        live: {
-          lat: unitPt.lat,
-          lon: unitPt.lng,
-          speedMps: MOCK_SPEED_MPS,
-          etaS: Math.round(remainingM / MOCK_SPEED_MPS),
-          routeProgress,
-          status: "en_route",
-        },
-        updatedAt: now,
-      },
-    ];
+    const demo = engine.tick();
 
     const congestionAvg =
       Object.values(roadCongestion).reduce((s, v) => s + v, 0) /
@@ -360,10 +247,10 @@ export function createMockProvider(seed = 42): TrafficDataProvider {
       vehicles,
       intersections,
       incidents: incidents.map((i) => ({ ...i })),
-      anomalies: [], // the offline mock has no operator-anomaly path
-      emergencyRequests,
+      anomalies: demo.anomalies,
+      emergencyRequests: demo.requests,
       roadCongestion,
-      events: [], // no wire events to classify in Sim mode — legitimately empty
+      events: demo.events,
       summary: {
         operational: true,
         vehicleCount: vehicles.length,
@@ -388,19 +275,12 @@ export function createMockProvider(seed = 42): TrafficDataProvider {
       if (timer !== null) return;
       setStatus("connecting");
       startedAt = Date.now();
-      // A small demo fleet, so the crew page and the dispatch sheet have
-      // units to show without a backend (live, it comes from CrewRosterUpdated).
-      useCrewStore.getState().applyFleet({
-        units: [
-          ["amb-01", "ambulance", "Ambulance 1", true],
-          ["amb-02", "ambulance", "Ambulance 2", false],
-          ["pol-01", "police", "Police 1", false],
-          ["fire-01", "fire_truck", "Fire 1", false],
-        ].map(([id, kind, callSign, busy], i) => {
-          const edge = roadEdges[(i * 7) % roadEdges.length]!;
-          const [lng, lat] = edge.path[Math.floor(edge.path.length / 2)]!;
-          return { unit_id: id, kind, call_sign: callSign, on_duty: true, busy, edge_id: edge.id, lat, lon: lng };
-        }),
+      engine.start();
+      setDemoCommandHandler((cmd) => {
+        const result = engine.handle(cmd);
+        // Answer straight away, as the live stream does, instead of on the next tick.
+        step((Date.now() - startedAt) / 1000, false);
+        return result;
       });
       window.setTimeout(() => setStatus("online"), 500);
       const loop = () => step((Date.now() - startedAt) / 1000);
@@ -408,6 +288,7 @@ export function createMockProvider(seed = 42): TrafficDataProvider {
       timer = window.setInterval(loop, TICK_MS);
     },
     stop() {
+      setDemoCommandHandler(null);
       if (timer !== null) {
         window.clearInterval(timer);
         timer = null;
