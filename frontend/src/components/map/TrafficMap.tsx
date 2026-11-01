@@ -10,8 +10,6 @@ import { MapLegend } from "@/components/map/MapLegend";
 import { MapSearch } from "@/components/map/MapSearch";
 import { RoadHighlight } from "@/components/map/RoadHighlight";
 import { RoadPlaceCard } from "@/components/map/RoadPlaceCard";
-import { WeatherLayer } from "@/components/map/WeatherLayer";
-import { WeatherChip } from "@/components/map/WeatherChip";
 import { MapChromeContext, createMapChromeStore } from "@/store/mapChromeStore";
 import { useStore } from "zustand";
 import { MapNewMenu } from "@/components/map/MapNewMenu";
@@ -23,7 +21,6 @@ import { AnomalyLayer } from "@/components/map/layers/AnomalyLayer";
 import { EmergencyRouteLayer } from "@/components/map/layers/EmergencyRouteLayer";
 import { EmergencyVehicleLayer } from "@/components/map/layers/EmergencyVehicleLayer";
 import type { AnomalyTarget } from "@/components/map/CreateAnomalyPanel";
-import { FollowCamera } from "@/components/map/FollowCamera";
 import { useMapStore } from "@/store/mapStore";
 import { useTransitionStore } from "@/store/transitionStore";
 import { useIncidentStore } from "@/store/incidentStore";
@@ -52,6 +49,18 @@ function isMouseWheel(e: WheelEvent): boolean {
 }
 const UploadClipPanel = lazy(() =>
   import("@/components/map/UploadClipPanel").then((m) => ({ default: m.UploadClipPanel })),
+);
+// The weather overlay and the follow-camera chips sit on top of a working map:
+// they can arrive a moment after it, outside the first download
+// (scripts/check-bundle-budget.mjs).
+const WeatherLayer = lazy(() =>
+  import("@/components/map/WeatherLayer").then((m) => ({ default: m.WeatherLayer })),
+);
+const WeatherChip = lazy(() =>
+  import("@/components/map/WeatherChip").then((m) => ({ default: m.WeatherChip })),
+);
+const FollowCamera = lazy(() =>
+  import("@/components/map/FollowCamera").then((m) => ({ default: m.FollowCamera })),
 );
 
 // Open on the home city: with both cities in one frame, 25 km apart, each
@@ -347,12 +356,16 @@ export function TrafficMap({
             <IncidentLayer visible={activeLayers.has("incidents")} />
             <AnomalyLayer visible={activeLayers.has("anomalies")} />
             <VehicleLayer visible={activeLayers.has("vehicles")} />
-            <WeatherLayer visible={activeLayers.has("weather")} />
+            <Suspense fallback={null}>
+              <WeatherLayer visible={activeLayers.has("weather")} />
+            </Suspense>
             <MapControls fullscreen={fullscreen} onExitFullscreen={onExitFullscreen} />
-            {/* the route panel covers the map's left edge on wide maps (308px + margin) */}
-            <FollowCamera
-              leftInset={operatorPanelOpen && (containerRef.current?.clientWidth ?? 0) >= 720 ? 336 : 0}
-            />
+            <Suspense fallback={null}>
+              {/* the route panel covers the map's left edge on wide maps (308px + margin) */}
+              <FollowCamera
+                leftInset={operatorPanelOpen && (containerRef.current?.clientWidth ?? 0) >= 720 ? 336 : 0}
+              />
+            </Suspense>
           </MapContext.Provider>
         )}
 
@@ -406,12 +419,6 @@ export function TrafficMap({
             )}
           </Suspense>
 
-          {clipTarget && !creatingAnomaly && (
-            <Suspense fallback={null}>
-              <UploadClipPanel target={clipTarget} onClose={() => setClipTarget(null)} />
-            </Suspense>
-          )}
-
           {!operatorPanelOpen && (
             <RoadPlaceCard
               onCreateAnomaly={(target) => setPendingTarget(target)}
@@ -421,7 +428,11 @@ export function TrafficMap({
         </div>
 
         <MapLegend hidden={panelOpen} />
-        {activeLayers.has("weather") && <WeatherChip />}
+        {activeLayers.has("weather") && (
+          <Suspense fallback={null}>
+            <WeatherChip />
+          </Suspense>
+        )}
       </div>
     </MapChromeContext.Provider>
   );

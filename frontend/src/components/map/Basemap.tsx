@@ -2,20 +2,15 @@ import { useEffect, useState } from "react";
 import { useMapInstance } from "@/components/map/MapContext";
 import { setBasemap } from "@/components/map/mapStyle";
 import { OSM_PREFIX, googleLookBasemap } from "@/components/map/googleLookStyle";
-import {
-  forgetGoogleSession,
-  googleCopyright,
-  googleSession,
-  googleTileUrl,
-  hasGoogleKey,
-} from "@/components/map/googleTiles";
+import { hasGoogleKey } from "@/components/map/googleKey";
 import { useThemeStore } from "@/store/themeStore";
 
 /**
  * Owns the basemap: Google Maps tiles when VITE_GOOGLE_MAPS_API_KEY is set,
  * otherwise (or if Google refuses the key) OpenFreeMap vector data recoloured
  * to Google's palette. Follows the light / dark theme, and renders the
- * attribution Google's terms require.
+ * attribution Google's terms require. The Google code loads only when a key
+ * is set, so the usual OpenFreeMap path doesn't download it.
  */
 export function Basemap() {
   const map = useMapInstance();
@@ -39,16 +34,18 @@ export function Basemap() {
         cancelled = true;
       };
     }
-    googleSession(theme)
-      .then(({ session }) => {
+    const google = import("@/components/map/googleTiles");
+    google
+      .then((g) => g.googleSession(theme).then(({ session }) => ({ g, session })))
+      .then(({ g, session }) => {
         if (cancelled) return;
         setGoogleSessionId(session);
         // Attribution is rendered by <GoogleAttribution>, per Google's terms.
-        setBasemap(map, theme, { provider: "google", tiles: [googleTileUrl(session)] });
+        setBasemap(map, theme, { provider: "google", tiles: [g.googleTileUrl(session)] });
       })
       .catch((err: unknown) => {
         console.warn("Google Map Tiles unavailable, using the OpenFreeMap basemap.", err);
-        forgetGoogleSession(theme);
+        void google.then((g) => g.forgetGoogleSession(theme)).catch(() => undefined);
         showOsm();
       });
     return () => {
@@ -102,12 +99,15 @@ function GoogleAttribution({ session }: { session: string }) {
       window.clearTimeout(timer);
       timer = window.setTimeout(() => {
         const b = map.getBounds();
-        googleCopyright(session, map.getZoom(), {
-          north: b.getNorth(),
-          south: b.getSouth(),
-          east: b.getEast(),
-          west: b.getWest(),
-        })
+        import("@/components/map/googleTiles")
+          .then((g) =>
+            g.googleCopyright(session, map.getZoom(), {
+              north: b.getNorth(),
+              south: b.getSouth(),
+              east: b.getEast(),
+              west: b.getWest(),
+            }),
+          )
           .then((c) => !cancelled && setCopyright(c))
           .catch(() => undefined);
       }, 800);
