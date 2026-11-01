@@ -9,7 +9,6 @@ import { MapControls } from "@/components/map/MapControls";
 import { MapLegend } from "@/components/map/MapLegend";
 import { MapSearch } from "@/components/map/MapSearch";
 import { RoadHighlight } from "@/components/map/RoadHighlight";
-import { RoadPlaceCard } from "@/components/map/RoadPlaceCard";
 import { MapChromeContext, createMapChromeStore } from "@/store/mapChromeStore";
 import { useStore } from "zustand";
 import { MapNewMenu } from "@/components/map/MapNewMenu";
@@ -50,9 +49,12 @@ function isMouseWheel(e: WheelEvent): boolean {
 const UploadClipPanel = lazy(() =>
   import("@/components/map/UploadClipPanel").then((m) => ({ default: m.UploadClipPanel })),
 );
-// The weather overlay and the follow-camera chips sit on top of a working map:
-// they can arrive a moment after it, outside the first download
-// (scripts/check-bundle-budget.mjs).
+// The weather overlay, the follow-camera chips and the road card (shown only
+// once a road is clicked) sit on top of a working map: they can arrive a moment
+// after it, outside the first download (scripts/check-bundle-budget.mjs).
+const RoadPlaceCard = lazy(() =>
+  import("@/components/map/RoadPlaceCard").then((m) => ({ default: m.RoadPlaceCard })),
+);
 const WeatherLayer = lazy(() =>
   import("@/components/map/WeatherLayer").then((m) => ({ default: m.WeatherLayer })),
 );
@@ -420,10 +422,12 @@ export function TrafficMap({
           </Suspense>
 
           {!operatorPanelOpen && (
-            <RoadPlaceCard
-              onCreateAnomaly={(target) => setPendingTarget(target)}
-              onUploadClip={(target) => setClipTarget(target)}
-            />
+            <Suspense fallback={null}>
+              <RoadPlaceCard
+                onCreateAnomaly={(target) => setPendingTarget(target)}
+                onUploadClip={(target) => setClipTarget(target)}
+              />
+            </Suspense>
           )}
         </div>
 
