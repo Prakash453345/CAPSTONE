@@ -159,14 +159,20 @@ def _job(args) -> dict:
         strategy = None
         if "ovl2" in mods and "rest" not in mods:
             strategy = H.build_acamp(timing[0], timing[1], acamp_cfg=M._ARMS["ccacamp"])  # noqa: SLF001
-        # s.<field>=<value>: any AcampConfig field (numbers; true/false)
+        # s.<field>=<value>: any AcampConfig field (numbers; true/false; none)
         overrides = {}
         for t in mods:
             if t.startswith("s."):
                 k, v = t[2:].split("=", 1)
+                if v.lower() == "none":
+                    overrides[k] = None  # e.g. s.ceiling_relax_factor=none: paper A's controller
+                    continue
                 overrides[k] = {"true": True, "false": False}.get(v.lower(), None)
                 if overrides[k] is None:
-                    overrides[k] = float(v)
+                    try:
+                        overrides[k] = float(v)
+                    except ValueError:
+                        overrides[k] = v  # a string field, e.g. ceiling_relax_net_signal=max
         if "rest" in mods:
             # restm<s>: rest at most s seconds past the ceiling; restf: rest only
             # while nothing stands halted on the running phase's movements; restc<x>: rest only
@@ -183,7 +189,7 @@ def _job(args) -> dict:
             strategy = H.build_acamp(timing[0], timing[1], acamp_cfg=replace(
                 M._ARMS["ccacamp"], **overrides))  # noqa: SLF001
         rec = M.run_scenario("ccacamp", level, seed, inputs=inputs, strategy=strategy,
-                             tag=arm.replace(":", "_"),
+                             tag=(arm.replace(":", "_") if len(arm) <= 80 else "arm" + __import__("hashlib").md5(arm.encode()).hexdigest()[:12]),
                              vias="nov" not in mods,
                              detector_upstream="vian" not in mods,
                              vias_short_m=None if {"via", "vian"} & set(mods)

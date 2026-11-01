@@ -751,16 +751,18 @@ class AcampConfig:
 
     # -- gap-out --
     # -- congestion-adaptive green ceiling (2026-10-29, weak-spots round) --
-    ceiling_relax_factor: float | None = None
+    ceiling_relax_factor: float | None = 8.0
     """While the junction's congestion weight (`memory.congestion_weight`, the
     same Hill curve that gates the switching cost: about 0.01 at light demand,
     0.9 at heavy) is below `ceiling_relax_below`, the green ceiling is
-    `ceiling_relax_factor` times its configured value. `None` (default) keeps the
-    fixed ceiling. Why: under the ITE all-red the fixed 1.25x Webster ceiling cost
+    `ceiling_relax_factor` times its configured value. `None` keeps the fixed
+    ceiling (paper A's controller; `paper_a_config()`). Default since 2026-10-31: 8x below
+    0.3 with a 900 s memory, a 750 s warm-up and the network latch below (v3; adopted
+    after the fresh-seed test in baselines/2026-10-31_gridlock). Why: under the ITE all-red the fixed 1.25x Webster ceiling cost
     10-34 % delay at light demand on training seeds, while removing it caused jams
     at heavy demand (baselines/2026-10-29_weak_spots)."""
-    ceiling_relax_below: float = 0.5
-    ceiling_relax_hold_s: float = 0.0
+    ceiling_relax_below: float = 0.3
+    ceiling_relax_hold_s: float = 900.0
     """Relax only if this junction has not been at or above `ceiling_relax_below`
     for this many seconds (0 = no memory). Added 2026-10-29 after the fresh-seed test:
     under heavy demand the smoothed congestion weight dips below the threshold for short
@@ -769,6 +771,32 @@ class AcampConfig:
     """Relax only while at most this share of the network's signals are at or above
     `ceiling_relax_below` (needs the shared `network` dict that `build_acamp` passes;
     `None` = junction-only decision)."""
+    ceiling_relax_warmup_s: float = 750.0
+    """No relaxation before this simulation time. Added 2026-10-31: the smoothed loads
+    start at zero, so without a warm-up every junction relaxes in the first minutes of
+    a heavy-demand run, which is enough to change which seeds gridlock
+    (baselines/2026-10-31_gridlock)."""
+    ceiling_relax_net_block: float | None = 0.7
+    """Network latch (needs the shared `network` dict; without it the ceiling is never
+    relaxed, so a controller built without one behaves like paper A's). When the mean congestion weight
+    over all signals reaches this, relaxation is blocked at every signal, and stays
+    blocked until the mean has stayed below it for `ceiling_relax_net_release_s`.
+    `None`: no latch. The idea is perimeter control's: congestion is a network state
+    with a tipping point, so the decision to loosen control is taken for the network."""
+    ceiling_relax_net_release_s: float = 1800.0
+    ceiling_relax_net_signal: str = "max"
+    """What the latch compares with `ceiling_relax_net_block`: "mean" (network mean of the
+    per-signal congestion weights) or "max" (the most congested signal). "max" does not
+    shrink with the number of signals: on a large network a few saturated junctions are
+    enough to start a gridlock, while the mean stays low (amaravati heavy: mean <= 0.17)."""
+    ceiling_relax_net_halflife_s: float | None = 60.0
+    """Half-life of the load the latch reads. `None`: the controller's own smoothed load
+    (`load_halflife_s`, 300 s). A number: a separate, faster EWMA of the same quantity,
+    so a heavy-demand run is recognised before its junctions saturate. Control is
+    otherwise unchanged."""
+    network_trace: bool = False
+    """Record the network mean congestion weight in `stats` (diagnostics only; needs the
+    shared `network` dict). No effect on control."""
 
     gap_out_grace_s: float = 3.0
     """Seconds a phase may sit with no queue and no approaching vehicle before
@@ -828,6 +856,12 @@ class AcampConfig:
 # historical value arrives pre-blended in `q_hat`, so these functions are
 # unit- and property-testable exactly like `camp`'s and `webster`'s.
 # --------------------------------------------------------------------
+
+
+def paper_a_config(**overrides) -> AcampConfig:
+    """Paper A's controller: the fixed green ceiling (no congestion-adaptive relaxation).
+    The default `AcampConfig()` is v3 since 2026-10-31 (baselines/2026-10-31_gridlock)."""
+    return AcampConfig(**{"ceiling_relax_factor": None, **overrides})
 
 
 def gate(occupancy: float, cfg: AcampConfig) -> float:
@@ -1199,6 +1233,7 @@ class AdaptiveCamp:
         """Shared by all junctions of one run (built by the harness): id -> congestion
         weight this tick. Read only by `ceiling_relax_network_max`."""
         self._last_congested_s = -1e9
+        self._load_net = 0.0
         self.nominal_cycle_s = nominal_cycle_s
         self.tick_s = tick_s
         self.memory = demand_memory
@@ -1361,11 +1396,62 @@ class AdaptiveCamp:
         n = max(1, len(cfg_t0.ring_order))
         return max(1.0, self.nominal_cycle_s / n)
 
+    def _network_state(self) -> bool:
+        """Post this junction's congestion weight to the shared `network` dict and return
+        whether the network latch (`ceiling_relax_net_block`) is engaged."""
+        net = self._network
+        assert net is not None
+        cws = net.setdefault("_cw", {})
+        load = self._load_net if self.cfg.ceiling_relax_net_halflife_s is not None else self._load_ewma
+        cws[id(self)] = memory_mod.congestion_weight(
+            load, self.cfg.switch_scale_ref, self.cfg.switch_scale_exponent)
+        mean = sum(cws.values()) / len(cws)
+        now = self._sim_time_s
+        net.setdefault("_reporter", id(self))
+        if self.cfg.network_trace and id(self) == net["_reporter"]:
+            # one junction reports, so the harness's sum over junctions stays the network value
+            m = int(round(mean * 1000))
+            self.stats["netcw_max_milli"] = max(self.stats.get("netcw_max_milli", 0), m)
+            for th in (10, 20, 30, 40, 50, 60, 70):
+                if mean * 100 >= th and f"netcw_first_above_{th}" not in self.stats:
+                    self.stats[f"netcw_first_above_{th}"] = int(now)
+            self.stats["netcw_samples"] = self.stats.get("netcw_samples", 0) + 1
+            self.stats["netcw_sum_milli"] = self.stats.get("netcw_sum_milli", 0) + m
+            top = max(cws.values())
+            for th in (50, 70, 90):
+                if top * 100 >= th and f"netmax_first_above_{th}" not in self.stats:
+                    self.stats[f"netmax_first_above_{th}"] = int(now)
+            share = sum(v >= 0.3 for v in cws.values()) / len(cws)
+            for th in (5, 10, 20, 30):
+                if share * 100 >= th and f"netshare_first_above_{th}" not in self.stats:
+                    self.stats[f"netshare_first_above_{th}"] = int(now)
+            self.stats["netshare_max_milli"] = max(self.stats.get("netshare_max_milli", 0),
+                                                   int(round(share * 1000)))
+            self.stats["n_signals"] = len(cws)
+        block = self.cfg.ceiling_relax_net_block
+        if block is None:
+            return False
+        st = net.setdefault("_net", {"loaded": False, "calm_since": None})
+        level = max(cws.values()) if self.cfg.ceiling_relax_net_signal == "max" else mean
+        if level >= block:
+            st["loaded"], st["calm_since"] = True, None
+        else:
+            if st["calm_since"] is None:
+                st["calm_since"] = now
+            if st["loaded"] and now - st["calm_since"] >= self.cfg.ceiling_relax_net_release_s:
+                st["loaded"] = False
+        if st["loaded"]:
+            self.stats["net_latched"] = self.stats.get("net_latched", 0) + 1
+        return bool(st["loaded"])
+
     def _update_load(self, cfg_t0: Tier0Config, ctx: JunctionContext) -> None:
         """Fold this tick's `pressure_scale` into both the fast and the
         slow EWMA -- see `AcampConfig.baseline_halflife_s` for why the
         congestion gate needs both rather than just the fast one."""
         scale = pressure_scale(cfg_t0, ctx, self.cfg)
+        if self.cfg.ceiling_relax_net_halflife_s is not None:
+            d = 0.5 ** (self.tick_s / max(1e-6, self.cfg.ceiling_relax_net_halflife_s))
+            self._load_net = d * self._load_net + (1.0 - d) * scale
         fast_half_life = max(1e-6, self.cfg.load_halflife_s)
         fast_decay = 0.5 ** (self.tick_s / fast_half_life)
         self._load_ewma = fast_decay * self._load_ewma + (1.0 - fast_decay) * scale
@@ -1564,6 +1650,8 @@ class AdaptiveCamp:
         }
         min_g = cfg_t0.min_green_s.get(current, 0.0)
         max_g = cfg_t0.max_green_s.get(current, min_g)
+        net_loaded = self._network_state() if self._network is not None and (
+            self.cfg.network_trace or self.cfg.ceiling_relax_net_block is not None) else False
         if self.cfg.ceiling_relax_factor is not None:
             cw = memory_mod.congestion_weight(
                 self._load_ewma, self.cfg.switch_scale_ref, self.cfg.switch_scale_exponent
@@ -1576,8 +1664,14 @@ class AdaptiveCamp:
             relax = not busy and (
                 self._sim_time_s - self._last_congested_s >= self.cfg.ceiling_relax_hold_s)
             if relax and self.cfg.ceiling_relax_network_max is not None and self._network:
-                share = sum(self._network.values()) / len(self._network)
-                relax = share <= self.cfg.ceiling_relax_network_max
+                flags = [v for k, v in self._network.items() if isinstance(k, int)]
+                relax = sum(flags) / len(flags) <= self.cfg.ceiling_relax_network_max
+            if relax and self._sim_time_s < self.cfg.ceiling_relax_warmup_s:
+                relax = False
+            if relax and net_loaded:
+                relax = False
+            if relax and self.cfg.ceiling_relax_net_block is not None and self._network is None:
+                relax = False  # latch configured but no shared network state: fail safe
             if relax:
                 max_g = max(min_g, max_g * self.cfg.ceiling_relax_factor)
                 self.stats["ceiling_relaxed"] = self.stats.get("ceiling_relaxed", 0) + 1
