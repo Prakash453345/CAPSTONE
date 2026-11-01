@@ -17,8 +17,8 @@ It is safe to run again: an existing account is updated to match the row
 password is not already its password -- which also signs that account out.
 The file holds passwords, so keep it out of git (`.local/` is ignored).
 
-Reads DATABASE_URL, like the API. On a server: run it inside the api
-container (deploy/README.md).
+Reads AUTH_DATABASE_URL (else DATABASE_URL), like the API. On a server: run it
+inside the api container (deploy/README.md).
 """
 
 from __future__ import annotations
@@ -147,7 +147,8 @@ def main(argv: list[str] | None = None) -> None:
             if args.dry_run:
                 conn.rollback()
     except psycopg.OperationalError as exc:
-        raise SystemExit(f"error: cannot reach the database ({auth.DATABASE_URL}): {exc}") from None
+        where = auth.redact_url(auth.DATABASE_URL)
+        raise SystemExit(f"error: cannot reach the database ({where}): {exc}") from None
 
 
 if __name__ == "__main__":

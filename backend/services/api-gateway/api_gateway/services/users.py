@@ -16,7 +16,7 @@
 
 Passwords are prompted for (never taken as an argument, which would land in
 shell history and `ps`). For scripted setup, pipe the password on stdin and
-pass --stdin. Reads DATABASE_URL, like the API.
+pass --stdin. Reads AUTH_DATABASE_URL (else DATABASE_URL), like the API.
 """
 
 from __future__ import annotations

@@ -1,7 +1,8 @@
 """Operator sign-in for the web console.
 
-Users live in PostgreSQL (`app_user`), the same instance the rest of the
-platform already uses. A successful sign-in sets a signed, HttpOnly session
+Users live in PostgreSQL (`app_user`). By default that is the same instance
+the rest of the platform uses; set AUTH_DATABASE_URL to keep accounts in a
+separate (e.g. hosted) database instead. A successful sign-in sets a signed, HttpOnly session
 cookie; the browser never sees the password hash or the signing secret, and
 JavaScript can't read the cookie.
 
@@ -51,7 +52,17 @@ from api_gateway.services import mailer
 
 log = logging.getLogger("api-service.auth")
 
-DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://itms:itms@localhost:5432/itms")
+# Sign-in accounts can live apart from the traffic data (a hosted Postgres, so
+# they survive a laptop wipe); unset, they share DATABASE_URL.
+DATABASE_URL = os.environ.get("AUTH_DATABASE_URL") or os.environ.get(
+    "DATABASE_URL", "postgresql://itms:itms@localhost:5432/itms"
+)
+
+
+def redact_url(url: str) -> str:
+    """The URL with its password hidden, for error messages and logs."""
+    return re.sub(r"(://[^:/@]*:)[^/]*@", r"\1***@", url)
+
 
 COOKIE_NAME = "itms_session"
 SESSION_HOURS = float(os.environ.get("AUTH_SESSION_HOURS", "12"))

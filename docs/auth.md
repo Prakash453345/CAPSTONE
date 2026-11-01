@@ -26,6 +26,36 @@ Other account commands: `passwd`, `disable`, `enable`, `unlock`, `list`
 (`python -m api_gateway.services.users --help`). Changing a password or disabling an
 account signs that user out everywhere. Passwords are at least 10 characters.
 
+### Accounts in a hosted database
+
+Accounts can live in their own Postgres in the cloud (Neon, Supabase, RDS, ...)
+while the road network and everything else stays in the local one: set
+`AUTH_DATABASE_URL` in `backend/.env`. Only the api-service and the account
+commands use it; unset, they use `DATABASE_URL` as before.
+
+1. Create an empty database with the provider and copy its connection string
+   (`postgresql://user:password@host/dbname?sslmode=require`). No extensions are
+   needed; the table is created on first use.
+2. Put it in `backend/.env` as `AUTH_DATABASE_URL=...` (the file is git-ignored;
+   don't paste the string on the command line, where it lands in shell history).
+3. Copy the existing accounts across, with the local Postgres still running.
+   Password hashes, roles and vehicles are copied as they are, so everyone keeps
+   their password:
+
+   ```bash
+   cd backend
+   set -a; . ./.env; set +a                                   # load AUTH_DATABASE_URL
+   .venv/bin/python -m api_gateway.services.copy_accounts --dry-run
+   .venv/bin/python -m api_gateway.services.copy_accounts
+   ```
+
+4. Restart `make dev`. Sign-in now reads the hosted database.
+
+`make dev` loads `.env` itself, but a bare `.venv/bin/python -m
+api_gateway.services.users ...` does not: run `set -a; . ./.env; set +a` in that
+shell first, or the command changes the local accounts instead of the hosted ones.
+The local `app_user` table is left as it was; drop it once you're happy.
+
 ## Roles: who sees what
 
 There is one sign-in form. The **account's role** decides where someone lands and
@@ -123,6 +153,7 @@ Rate-limit `/api/v1/auth/forgot*` per IP in the reverse proxy, like login.
 | Variable | Default | Notes |
 |---|---|---|
 | `DATABASE_URL` | `postgresql://itms:itms@localhost:5432/itms` | Use a real password in production. |
+| `AUTH_DATABASE_URL` | unset (= `DATABASE_URL`) | Accounts in a separate, e.g. hosted, Postgres. See [Accounts in a hosted database](#accounts-in-a-hosted-database). |
 | `AUTH_SECRET` | random per process | **Required in production.** At least 32 characters (`openssl rand -hex 32`). Signs session cookies. If unset, every restart signs everyone out and several workers reject each other's cookies. |
 | `AUTH_COOKIE_SECURE` | `true` | Leave on behind HTTPS. `scripts/dev.sh` sets `false` for plain-http local dev only. |
 | `AUTH_SESSION_HOURS` | `12` | Session lifetime. |
