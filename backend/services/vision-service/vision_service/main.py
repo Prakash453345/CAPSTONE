@@ -15,7 +15,8 @@ Env vars:
                      error model fitted to the adopted fine-tuned detector at
                      640 px, baselines/2026-09-27_m8_finetune_v2/; others:
                      ideal | finetuned_day | coco_pretrained | night_rain |
-                     uvh26_640 | uvh26_1280 | stock_640 | itms6_960)
+                     uvh26_640 | uvh26_1280 | stock_640 | itms6_960 |
+                     uvh26m_640 | uvh26s_640)
   VISION_FPS         processing rate per camera (default 5)
   VISION_RULES       incident-rule operating point: "quiet" (default; held-out
                      19 % of in-view incidents at ~1.7 false alarms/h for the
@@ -25,7 +26,10 @@ Env vars:
   VISION_DETECTOR    video mode: a .pt (Ultralytics) or .onnx model (default
                      data/models/itms_six_aug_640.onnx, fine-tune v3 (v2 plus
                      degradation augmentation): `make vision-model` puts it
-                     there; itms_six_fp32_640.onnx is v2; yolo11n.pt is stock)
+                     there; itms_six_fp32_640.onnx is v2; yolo11n.pt is stock;
+                     itms_uvh26_m_640.onnx is the YOLO11-M trained on the full
+                     UVH-26 set, GPU-class: score line 0.60, 14 UVH-26 classes
+                     merged to the six, baselines/2026-10-31_m8_m_coco/)
   VISION_FIRE_DETECTOR / VISION_FIRE_CLASSIFIER
                      video mode, both or neither: the v4 fire/smoke detector
                      (.pt) and the Step 2 crop classifier (.onnx, made by
