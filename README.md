@@ -43,7 +43,6 @@ API: http://localhost:8000 (interactive docs at `/docs`).
 | [docs/](docs/) | design write-ups: green corridor, hazard catalogue, dispatch, vision, incident pipeline |
 | [docs/plans/](docs/plans/) | M6 anomaly-detection plans |
 | [docs/reports/](docs/reports/), [docs/research/](docs/research/) | reports and research notes |
-| [docs/archive/](docs/archive/) | superseded tools kept for reference: the static web demo, the sim test lab |
 
 ## Where things moved (October 2026 restructure)
 
@@ -67,7 +66,7 @@ Everything used to live under `itms/`. File history follows the moves
 | `itms/docker-compose.yml`, `infra/` | `backend/infra/` |
 | `itms/docs/`, `PROGRESS.md`, `*.docx` | `docs/`, `docs/plans/` |
 | `reports/`, `research_notes/` | `docs/reports/`, `docs/research/` |
-| `itms/web/`, `testing_site/`, `astra-handoff/` | `docs/archive/` |
+| `itms/web/`, `testing_site/`, `astra-handoff/` | removed (November 2026); still in git history |
 
 Older documents and notebooks still mention the old paths; they are
 historical records and were left as written. Use the table above to translate.

@@ -330,6 +330,6 @@ backend/
 | M7 | Green corridor + dispatch | ✅ built, verified safe — re-run on post-18-Sep code (14 Oct) shows no advantage over reactive preemption; original gains did not reproduce; Contribution 1 pressure terms unproven |
 | — | Interactive emergency response (`SIM_MODE=live`) | ✅ built + tested, not benchmarked — anomaly → alert → police/ambulance dispatch → corridor → hospital; not yet fed by the M6 detector |
 | M8 | Vision on real footage | 🟡 built and gated on a digital twin (controller keeps its win on cameras; camera failure handled); wired into the live controller; real-footage smoke test; an Indian-traffic detector (IISc UVH-26) measured on Bengaluru CCTV; no Vijayawada footage yet; incident rules weak |
-| M9 | Benchmark, evaluation, site | 🟡 partial — benchmark harness, Command Center (`../frontend/`), test lab (`../docs/archive/testing_site/`); final evaluation not written |
+| M9 | Benchmark, evaluation, site | 🟡 partial — benchmark harness, Command Center (`../frontend/`); final evaluation not written |
 
 Full detail for each milestone (demo + gate) is in the build guide §7.
