@@ -1,14 +1,13 @@
 import { useEffect, useState } from "react";
 import { useMapInstance } from "@/components/map/MapContext";
-import { setBasemap } from "@/components/map/mapStyle";
-import { OSM_PREFIX, googleLookBasemap } from "@/components/map/googleLookStyle";
+import { OSM_PREFIX, setBasemap } from "@/components/map/mapStyle";
 import { hasGoogleKey } from "@/components/map/googleKey";
 import { useThemeStore } from "@/store/themeStore";
 
 /**
  * Owns the basemap: Google Maps tiles when VITE_GOOGLE_MAPS_API_KEY is set,
- * otherwise (or if Google refuses the key) OpenFreeMap vector data recoloured
- * to Google's palette. Follows the light / dark theme, and renders the
+ * otherwise (or if Google refuses the key) OpenFreeMap vector data redrawn
+ * in Apple Maps' palette (appleLookStyle.ts). Follows the light / dark theme, and renders the
  * attribution Google's terms require. The Google code loads only when a key
  * is set, so the usual OpenFreeMap path doesn't download it.
  */
@@ -22,8 +21,16 @@ export function Basemap() {
     const showOsm = () => {
       if (cancelled) return;
       setGoogleSessionId(null);
-      googleLookBasemap(theme)
-        .then((style) => !cancelled && setBasemap(map, theme, { provider: "osm", style }))
+      // The style module (palette, POI badges) loads alongside the tile
+      // style it redraws, outside each map page's first download
+      // (scripts/check-bundle-budget.mjs).
+      Promise.all([import("@/components/map/appleLookStyle"), import("@/components/map/poiBadges")])
+        .then(([look, badges]) => look.appleLookBasemap(theme).then((style) => ({ style, badges })))
+        .then(({ style, badges }) => {
+          if (cancelled) return;
+          badges.addPoiBadges(map);
+          setBasemap(map, theme, { provider: "osm", style });
+        })
         // Surface it through the map's own error event so TrafficMap shows
         // its "Some map resources are unavailable" notice; overlays still render.
         .catch((err: unknown) => !cancelled && map.fire("error", { error: err }));
@@ -54,7 +61,7 @@ export function Basemap() {
   }, [map, theme]);
 
   // OpenFreeMap's POI layers name a few icons its sprite doesn't ship (atm,
-  // office, gate…). Google hides those minor pins anyway, so stand in a blank
+  // office, gate…). The badges replace them anyway, so stand in a blank
   // image rather than log a warning per tile. Overlay icons replace-on-add
   // (mapIcons.ts), so this can't shadow them.
   useEffect(() => {

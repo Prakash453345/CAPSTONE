@@ -1,6 +1,6 @@
 import { lazy, Suspense, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { CheckCircle2, Columns2, Loader2, MapPin, Plus, TrafficCone, TriangleAlert } from "lucide-react";
+import { CheckCircle2, Loader2, MapPin, Plus, TrafficCone, TriangleAlert } from "lucide-react";
 import { needsReview, useClipStore } from "@/store/clipStore";
 import { TrafficMap } from "@/components/map/TrafficMap";
 import { WorkspaceLayout } from "@/components/console/WorkspaceLayout";
@@ -11,7 +11,6 @@ import { toneBg, toneText, type Tone } from "@/components/console/tone";
 import { anomalyWord, SOURCE_WORDS } from "@/components/console/words";
 import { useIncidentStore } from "@/store/incidentStore";
 import { useMapStore } from "@/store/mapStore";
-import { useSystemStore } from "@/store/systemStore";
 import { edgeById, roadLabel } from "@/data/network";
 import { cn } from "@/utils/cn";
 import { CommandError, postCommand } from "@/services/traffic/commands";
@@ -56,7 +55,6 @@ export function AnomaliesPage() {
   const selectAnomaly = useIncidentStore((s) => s.selectAnomaly);
   const setInteractionMode = useMapStore((s) => s.setInteractionMode);
   const creating = useMapStore((s) => s.interactionMode === "create-anomaly");
-  const setViewMode = useSystemStore((s) => s.setViewMode);
   const now = useNow(15_000);
 
   const active = anomalies.filter((a) => a.status === "active");
@@ -184,17 +182,6 @@ export function AnomaliesPage() {
                         <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-border pt-3">
                           <Button variant="ghost" size="sm" icon={MapPin} onClick={() => focusEdge(a.edgeId, 17)}>
                             Show on map
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            icon={Columns2}
-                            onClick={() => {
-                              focusEdge(a.edgeId, 16);
-                              setViewMode("split");
-                            }}
-                          >
-                            Compare traffic
                           </Button>
                           <ClearAnomalyControl anomaly={a} />
                         </div>

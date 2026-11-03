@@ -3,7 +3,9 @@
 @tailwind utilities;
 
 /*
- * TRAFFIX design tokens, modelled on Google Maps' Material palette.
+ * TRAFFIX design tokens, modelled on Apple Maps: slate-navy neutrals in dark,
+ * Apple's grouped greys in light, system blue as the one accent, and frosted
+ * glass for everything that floats over the map.
  * Light is the default; `.dark` on <html> (set by the theme store, following
  * the system unless the operator picks one) swaps every role at once.
  * Values are HSL channels (no hsl() wrapper) so Tailwind can compose them with
@@ -12,25 +14,26 @@
 :root {
   /* Quiet neutrals with a faint cool cast; one indigo-blue accent. Status
      colours are tuned so small text keeps >= 4.5:1 on their muted fills. */
-  --background: 220 20% 97.5%;
+  --background: 240 20% 96.5%;
   --surface: 0 0% 100%;
   --surface-raised: 0 0% 100%;
-  --surface-sunken: 220 18% 95.5%;
+  --surface-sunken: 240 14% 94.5%;
   /* Grouped rows and controls inside a raised card (Apple's "fill"): a
      step darker than the card in light mode, a step lighter in dark. */
-  --fill: 220 16% 95%;
+  --fill: 240 11% 93%;
 
-  --border: 220 14% 91%;
-  --input: 220 12% 85%;
-  --ring: 228 76% 56%;
+  --border: 240 9% 90%;
+  --input: 240 6% 83%;
+  --ring: 211 100% 45%;
 
   --foreground: 224 24% 12%;
   --muted: 220 18% 95.5%;
   --muted-foreground: 220 9% 40%;
 
-  --primary: 228 72% 52%;
+  /* Apple's link blue (#0066cc): system blue darkened to keep 4.5:1 on white. */
+  --primary: 211 100% 40%;
   --primary-foreground: 0 0% 100%;
-  --primary-muted: 228 90% 96%;
+  --primary-muted: 211 100% 95%;
 
   --status-ok: 152 64% 30%;
   --status-ok-muted: 150 55% 94%;
@@ -38,8 +41,8 @@
   --status-warn-muted: 42 95% 93%;
   --status-critical: 357 70% 48%;
   --status-critical-muted: 355 85% 96%;
-  --status-info: 228 72% 52%;
-  --status-info-muted: 228 90% 96%;
+  --status-info: 211 100% 40%;
+  --status-info-muted: 211 100% 95%;
 
   /* Soft, layered shadows with a hairline ring instead of a hard border. */
   --elevation-1: 0 1px 2px rgba(15, 23, 42, 0.05), 0 0 0 1px rgba(15, 23, 42, 0.05);
@@ -48,27 +51,44 @@
 
   --radius: 14px;
 
+  /* Frosted glass for chrome over the map (Apple's "regular" material):
+     a translucent fill, a hairline edge, a faint top highlight. */
+  --glass-bg: rgba(252, 252, 254, 0.76);
+  --glass-strong: rgba(252, 252, 254, 0.9);
+  --glass-edge: rgba(15, 23, 42, 0.09);
+  --glass-highlight: rgba(255, 255, 255, 0.7);
+  --glass-shadow: 0 10px 30px -12px rgba(15, 23, 42, 0.28), 0 1px 3px rgba(15, 23, 42, 0.08);
+  --glass-hover: rgba(15, 23, 42, 0.06);
+  /* Apple Maps' sidebar: lighter at the top, a breath of blue lower down. */
+  --sidebar-bg: linear-gradient(180deg, rgba(248, 248, 251, 0.8) 0%, rgba(236, 240, 248, 0.86) 100%);
+  /* The square behind each sidebar glyph. */
+  --tile: 0 0% 100%;
+  /* Apple's blue for filled accents: apple.com's button blue, which keeps
+     white labels at 4.7:1 (system blue #007aff / #0a84ff only reach 4.0 / 3.7). */
+  --system-blue: #0071e3;
+
   color-scheme: light;
 }
 
 .dark {
-  --background: 225 14% 6.5%;
-  --surface: 225 12% 9%;
-  --surface-raised: 225 11% 12%;
-  --surface-sunken: 225 14% 5%;
-  --fill: 225 9% 17%;
+  /* Sampled from Apple Maps' dark sidebar and controls (#1c212b, #2e323d). */
+  --background: 222 26% 8%;
+  --surface: 221 21% 11%;
+  --surface-raised: 220 21% 14%;
+  --surface-sunken: 222 26% 6%;
+  --fill: 223 14% 21%;
 
-  --border: 225 9% 16%;
-  --input: 225 8% 23%;
-  --ring: 228 90% 72%;
+  --border: 220 15% 19%;
+  --input: 220 12% 26%;
+  --ring: 211 100% 64%;
 
-  --foreground: 220 15% 93%;
-  --muted: 225 10% 13%;
-  --muted-foreground: 220 8% 62%;
+  --foreground: 214 40% 94%;
+  --muted: 220 17% 17%;
+  --muted-foreground: 216 12% 66%;
 
-  --primary: 228 92% 72%;
-  --primary-foreground: 228 50% 10%;
-  --primary-muted: 228 42% 17%;
+  --primary: 211 100% 64%;
+  --primary-foreground: 222 60% 8%;
+  --primary-muted: 211 55% 19%;
 
   --status-ok: 150 55% 58%;
   --status-ok-muted: 150 35% 13%;
@@ -76,12 +96,21 @@
   --status-warn-muted: 40 40% 13%;
   --status-critical: 358 85% 68%;
   --status-critical-muted: 358 40% 15%;
-  --status-info: 228 92% 72%;
-  --status-info-muted: 228 42% 17%;
+  --status-info: 211 100% 64%;
+  --status-info-muted: 211 55% 19%;
 
   --elevation-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.04);
   --elevation-2: 0 8px 20px -6px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.05);
   --elevation-3: 0 24px 56px -14px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.06);
+
+  --glass-bg: rgba(28, 33, 43, 0.74);
+  --glass-strong: rgba(28, 33, 43, 0.9);
+  --glass-edge: rgba(255, 255, 255, 0.1);
+  --glass-highlight: rgba(255, 255, 255, 0.05);
+  --glass-shadow: 0 14px 40px -12px rgba(0, 0, 0, 0.6), 0 1px 3px rgba(0, 0, 0, 0.35);
+  --glass-hover: rgba(255, 255, 255, 0.08);
+  --sidebar-bg: linear-gradient(180deg, rgba(26, 34, 45, 0.8) 0%, rgba(15, 24, 52, 0.86) 100%);
+  --tile: 223 13% 21%;
 
   color-scheme: dark;
 }
@@ -97,6 +126,50 @@
 
 * {
   border-color: hsl(var(--border));
+}
+
+@layer components {
+  /* Floating chrome over the map. In @layer so utilities still win. */
+  .glass {
+    background: var(--glass-bg);
+    -webkit-backdrop-filter: blur(28px) saturate(170%);
+    backdrop-filter: blur(28px) saturate(170%);
+    box-shadow:
+      inset 0 0 0 0.5px var(--glass-edge),
+      inset 0 1px 0 var(--glass-highlight),
+      var(--glass-shadow);
+  }
+  /* The same material, denser, for menus and popovers that hold text. */
+  .glass-strong {
+    background: var(--glass-strong);
+    -webkit-backdrop-filter: blur(36px) saturate(180%);
+    backdrop-filter: blur(36px) saturate(180%);
+    box-shadow:
+      inset 0 0 0 0.5px var(--glass-edge),
+      inset 0 1px 0 var(--glass-highlight),
+      var(--glass-shadow);
+  }
+  .glass-sidebar {
+    background: var(--sidebar-bg);
+    -webkit-backdrop-filter: blur(40px) saturate(180%);
+    backdrop-filter: blur(40px) saturate(180%);
+    box-shadow: inset -0.5px 0 0 var(--glass-edge);
+  }
+  /* Hover on a glass surface: a wash laid over the material, not a
+     replacement for it (a background-color would drop the frosting). */
+  .glass-hover:hover {
+    background-image: linear-gradient(var(--glass-hover), var(--glass-hover));
+  }
+  /* Without backdrop-filter the translucent fills would read as washed out. */
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .glass,
+    .glass-strong {
+      background: hsl(var(--surface-raised));
+    }
+    .glass-sidebar {
+      background: hsl(var(--surface));
+    }
+  }
 }
 
 html,

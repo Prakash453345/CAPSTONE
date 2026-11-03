@@ -1,11 +1,14 @@
 import type { Map as MapLibreMap, StyleSpecification } from "maplibre-gl";
 import type { ResolvedTheme } from "@/store/themeStore";
-import type { VectorBasemap } from "@/components/map/googleLookStyle";
+import type { VectorBasemap } from "@/components/map/appleLookStyle";
+
+/** Namespaced so the basemap never collides with overlay ids. */
+export const OSM_PREFIX = "osm:";
 
 /** Land colour under the tiles, matched to each basemap so pans never flash. */
 export const BACKGROUND: Record<ResolvedTheme, string> = {
-  light: "#f5f5f5",
-  dark: "#1f2124",
+  light: "#f4f2ed",
+  dark: "#33445a",
 };
 
 /**

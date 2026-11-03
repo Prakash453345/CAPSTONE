@@ -22,9 +22,12 @@ const LAYER_LABELS: Record<MapLayerId, string> = {
 export function MapControls({
   fullscreen = false,
   onExitFullscreen,
+  children,
 }: {
   fullscreen?: boolean;
   onExitFullscreen?: () => void;
+  /** Extra controls stacked under the compass (the weather chip). */
+  children?: React.ReactNode;
 }) {
   const navigate = useNavigate();
   const map = useMapInstance();
@@ -86,91 +89,93 @@ export function MapControls({
     map.easeTo({ bearing: 0, pitch: 0, duration: 700, easing: EASE_EMPHASIZED }, USER_GESTURE);
   };
 
-  // Google Maps' arrangement: one-off tools stacked above the zoom pair,
-  // bottom-right, each a 40px white card with Material elevation. The column
-  // spans the map's height (below the weather chip) so the layers menu,
-  // anchored to its bottom, can never grow past the top of the map.
+  // Apple Maps' arrangement: map tools in one glass capsule at the top right,
+  // the compass beneath it, and the zoom pair at the bottom right. The column
+  // spans the map's height, so the layers menu can never run off it.
   return (
-    <div className="pointer-events-none absolute bottom-10 right-3 top-[4.25rem] z-[2] flex flex-col items-end justify-end gap-2">
-      {showCompass && (
-        <div className="animate-sheet-in">
+    <div
+      style={{ right: "calc(12px + var(--inset-r, 0px))" }}
+      className="pointer-events-none absolute bottom-10 top-3 z-[2] flex flex-col items-end justify-between gap-2"
+    >
+      <div className="flex flex-col items-end gap-2.5">
+        <div ref={popoverRef} className="pointer-events-auto relative">
           <ControlCard>
-            <ControlBtn label="Reset to north, flat view" onClick={resetNorth}>
-              <CompassNeedle bearing={camera.bearing} />
+            <ControlBtn
+              label="Map layers"
+              active={layersOpen}
+              onClick={() => toggleSheet("layers")}
+              ariaExpanded={layersOpen}
+            >
+              <Layers />
             </ControlBtn>
+            <Divider />
+            <ControlBtn label={is3d ? "Switch to 2D" : "Switch to 3D"} active={is3d} onClick={toggle3d}>
+              <Box />
+            </ControlBtn>
+            <Divider />
+            <ControlBtn label="Recenter on corridor" onClick={recenter}>
+              <Locate />
+            </ControlBtn>
+            <Divider />
+            {fullscreen ? (
+              <ControlBtn label="Exit full screen" onClick={() => onExitFullscreen?.()}>
+                <Minimize2 />
+              </ControlBtn>
+            ) : (
+              <ControlBtn label="Full screen map" onClick={() => navigate("/console/map")}>
+                <Maximize2 />
+              </ControlBtn>
+            )}
           </ControlCard>
-        </div>
-      )}
-
-      <div ref={popoverRef} className="pointer-events-auto">
-        <ControlCard>
-          <ControlBtn
-            label="Map layers"
-            active={layersOpen}
-            onClick={() => toggleSheet("layers")}
-            ariaExpanded={layersOpen}
-          >
-            <Layers />
-          </ControlBtn>
-        </ControlCard>
-        {layersOpen && (
-          <div className="absolute bottom-0 right-12 max-h-full w-56 origin-bottom-right animate-sheet-in overflow-y-auto rounded-xl bg-surface-raised py-2 shadow-elevation-3">
-            <div className="px-4 pb-1 pt-1 text-sm font-medium text-foreground">Map details</div>
-            {(Object.keys(LAYER_LABELS) as MapLayerId[]).map((id) => {
-              const on = activeLayers.has(id);
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  role="switch"
-                  aria-checked={on}
-                  aria-label={LAYER_LABELS[id]}
-                  onClick={() => toggleLayer(id)}
-                  className="flex w-full items-center justify-between px-4 py-2 text-sm text-foreground transition-colors hover:bg-muted"
-                >
-                  <span>{LAYER_LABELS[id]}</span>
-                  <span
-                    className={cn(
-                      "flex h-5 w-9 items-center rounded-full p-0.5 transition-colors duration-200",
-                      on ? "justify-end bg-primary" : "justify-start bg-input",
-                    )}
+          {layersOpen && (
+            <div className="glass-strong absolute right-12 top-0 w-56 origin-top-right animate-sheet-in overflow-y-auto rounded-[14px] py-2">
+              <div className="px-4 pb-1 pt-1 text-[13px] font-semibold text-foreground">Map details</div>
+              {(Object.keys(LAYER_LABELS) as MapLayerId[]).map((id) => {
+                const on = activeLayers.has(id);
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    role="switch"
+                    aria-checked={on}
+                    aria-label={LAYER_LABELS[id]}
+                    onClick={() => toggleLayer(id)}
+                    className="flex w-full items-center justify-between px-4 py-2 text-sm text-foreground transition-colors hover:bg-glass-hover"
                   >
-                    <span className="size-4 rounded-full bg-white shadow-elevation-1" />
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        )}
+                    <span>{LAYER_LABELS[id]}</span>
+                    <span
+                      className={cn(
+                        "flex h-[22px] w-[38px] items-center rounded-full p-0.5 transition-colors duration-200",
+                        on ? "justify-end bg-[#34c759]" : "justify-start bg-input",
+                      )}
+                    >
+                      <span className="size-[18px] rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,0.3)]" />
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <button
+          type="button"
+          aria-label="Reset to north, flat view"
+          title="Reset to north, flat view"
+          onClick={resetNorth}
+          className="glass glass-hover pointer-events-auto grid size-10 place-items-center rounded-full"
+        >
+          <Compass bearing={camera.bearing} tilted={showCompass} />
+        </button>
+
+        {children}
       </div>
-
-      <ControlCard>
-        <ControlBtn label={is3d ? "Switch to 2D" : "Switch to 3D"} active={is3d} onClick={toggle3d}>
-          <Box />
-        </ControlBtn>
-      </ControlCard>
-
-      <ControlCard>
-        <ControlBtn label="Recenter on corridor" onClick={recenter}>
-          <Locate />
-        </ControlBtn>
-        <div className="mx-auto h-px w-7 bg-border" />
-        {fullscreen ? (
-          <ControlBtn label="Exit full screen" onClick={() => onExitFullscreen?.()}>
-            <Minimize2 />
-          </ControlBtn>
-        ) : (
-          <ControlBtn label="Full screen map" onClick={() => navigate("/console/map")}>
-            <Maximize2 />
-          </ControlBtn>
-        )}
-      </ControlCard>
 
       <ControlCard>
         <ControlBtn label="Zoom in" onClick={() => map.zoomIn(undefined, USER_GESTURE)}>
           <Plus />
         </ControlBtn>
-        <div className="mx-auto h-px w-7 bg-border" />
+        <Divider />
         <ControlBtn label="Zoom out" onClick={() => map.zoomOut(undefined, USER_GESTURE)}>
           <Minus />
         </ControlBtn>
@@ -184,19 +189,49 @@ function EASE_EMPHASIZED(t: number) {
   return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 }
 
-/** Google's compass: red north half, grey south half, turned against the map. */
-function CompassNeedle({ bearing }: { bearing: number }) {
+/** Apple's compass: an N with a red pointer on a ticked bezel, turned against the map. */
+function Compass({ bearing, tilted }: { bearing: number; tilted: boolean }) {
   return (
-    <svg viewBox="0 0 24 24" aria-hidden style={{ transform: `rotate(${-bearing}deg)` }} className="transition-transform duration-100">
-      <path d="M12 3 16 12H8Z" fill="#ea4335" />
-      <path d="M12 21 8 12h8Z" className="fill-muted-foreground" />
+    <svg
+      viewBox="0 0 40 40"
+      aria-hidden
+      style={{ transform: `rotate(${-bearing}deg)` }}
+      className="size-10 transition-transform duration-100"
+    >
+      {Array.from({ length: 12 }, (_, i) => (
+        <line
+          key={i}
+          x1="20"
+          y1="3.5"
+          x2="20"
+          y2={i % 3 === 0 ? 6.5 : 5.5}
+          transform={`rotate(${i * 30} 20 20)`}
+          className="stroke-muted-foreground"
+          strokeWidth={i % 3 === 0 ? 1.4 : 0.9}
+          strokeLinecap="round"
+          opacity={i === 0 ? 0 : 0.7}
+        />
+      ))}
+      <path d="M20 1.5 23 7h-6Z" fill="#ff3b30" />
+      <text
+        x="20"
+        y="25"
+        textAnchor="middle"
+        className={cn("fill-foreground text-[13px] font-semibold", tilted && "fill-primary")}
+      >
+        N
+      </text>
     </svg>
   );
 }
 
+function Divider() {
+  return <div className="mx-2.5 h-px bg-[var(--glass-edge)]" />;
+}
+
 function ControlCard({ children }: { children: React.ReactNode }) {
   return (
-    <div className="pointer-events-auto flex flex-col overflow-hidden rounded-lg bg-surface-raised shadow-elevation-1">
+    <div className="glass pointer-events-auto flex flex-col overflow-hidden rounded-[12px]">
       {children}
     </div>
   );
@@ -223,7 +258,7 @@ function ControlBtn({
       title={label}
       onClick={onClick}
       className={cn(
-        "grid size-10 place-items-center text-muted-foreground transition-colors duration-150 ease-out hover:bg-muted hover:text-foreground active:bg-input/60 [&_svg]:size-5 [&_svg]:stroke-[1.75]",
+        "grid size-10 place-items-center text-foreground/80 transition-colors duration-150 ease-out hover:bg-glass-hover hover:text-foreground active:bg-glass-hover [&_svg]:size-[18px] [&_svg]:stroke-[1.9]",
         active && "text-primary hover:text-primary",
       )}
     >

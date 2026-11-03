@@ -61,15 +61,15 @@ export function NotificationBell() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -6, scale: 0.98 }}
             transition={{ duration: 0.15 }}
-            className="absolute right-0 top-full z-50 mt-2 w-80 max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-lg border border-border bg-surface-raised shadow-panel"
+            className="glass-strong absolute right-0 top-full z-50 mt-2 w-72 max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-2xl"
           >
-            <div className="flex items-center justify-between border-b border-border px-3 py-2">
-              <span className="text-xs font-semibold text-foreground">Notifications</span>
+            <div className="flex items-center justify-between border-b border-[var(--glass-edge)] px-4 py-2.5">
+              <span className="text-[13px] font-semibold text-foreground">Notifications</span>
               {items.length > 0 && (
                 <button
                   type="button"
                   onClick={clear}
-                  className="text-[11px] text-muted-foreground hover:text-foreground"
+                  className="text-[12px] font-medium text-primary hover:underline"
                 >
                   Clear all
                 </button>
@@ -94,15 +94,15 @@ export function NotificationBell() {
                   return (
                     <div
                       key={ev.id}
-                      className="group flex items-start gap-2 border-b border-border/60 px-3 py-2 last:border-b-0 hover:bg-surface"
+                      className="group flex items-start gap-2.5 border-b border-[var(--glass-edge)] px-4 py-2.5 last:border-b-0 hover:bg-glass-hover"
                     >
                       <Icon className={cn("mt-0.5 size-3.5 shrink-0", meta.text)} />
                       <div className="min-w-0 flex-1">
-                        <p className="text-[11px] font-medium text-foreground">{ev.title}</p>
-                        <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
+                        <p className="text-[13px] font-medium text-foreground">{ev.title}</p>
+                        <p className="mt-0.5 text-[12px] leading-snug text-muted-foreground">
                           {ev.message}
                         </p>
-                        <p className="mt-0.5 font-mono text-[10px] text-muted-foreground/70">
+                        <p className="mt-0.5 text-[11px] text-muted-foreground/80">
                           {formatRelative(new Date(ev.atMs))}
                         </p>
                       </div>

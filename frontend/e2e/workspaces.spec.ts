@@ -214,19 +214,6 @@ test("weather chip shows live conditions, demo presets and a layer switch", asyn
   await expect(page.getByRole("button", { name: /^Weather:/ })).toHaveCount(0);
 });
 
-test("split view maps keep their own panels", async ({ page }, info) => {
-  test.skip(info.project.name === "mobile", "split view is a desktop layout");
-  await page.goto("/console/traffic");
-  await openStatus(page);
-  await page.getByRole("radio", { name: "Split", exact: true }).click();
-  await expect(page.locator(".maplibregl-map")).toHaveCount(2);
-  await page.getByRole("button", { name: /^Weather:/ }).last().click();
-  await expect(page.getByRole("dialog", { name: "Weather details" })).toHaveCount(1);
-  await page.keyboard.press("Escape");
-  await page.getByRole("button", { name: "Map legend" }).first().click();
-  await expect(page.locator('[aria-label="Map legend"][aria-expanded="true"]')).toHaveCount(1);
-});
-
 test("explore map opens full screen and back returns", async ({ page }) => {
   await page.goto("/console");
   await page.getByRole("button", { name: "Full screen map", exact: true }).click();

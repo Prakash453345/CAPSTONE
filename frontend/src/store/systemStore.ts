@@ -1,8 +1,8 @@
 import { create } from "zustand";
-import type { ConnectionStatus, DataMode, SystemSummary, ViewMode } from "@/types";
+import type { ConnectionStatus, DataMode, SystemSummary } from "@/types";
 
 /**
- * System-level state: connection, data mode, split-view mode and the headline
+ * System-level state: connection, data mode and the headline
  * system summary. Screen-agnostic — every workspace and the shell read from here.
  * `TrafficDataBridge` drives connectionStatus / summary from the active data
  * provider (live WebSocket or the in-browser mock).
@@ -17,15 +17,12 @@ interface SystemState {
   /** True once the operator picks a mode themselves, so the startup backend
    *  probe knows not to overrule them. */
   dataModeChosen: boolean;
-  viewMode: ViewMode;
   summary: SystemSummary;
 
   setConnectionStatus: (status: ConnectionStatus) => void;
   setDataMode: (mode: DataMode) => void;
   /** Upgrade to live only while the mode is still the untouched default. */
   adoptLiveIfUnchosen: () => void;
-  setViewMode: (mode: ViewMode) => void;
-  toggleViewMode: () => void;
   applySummary: (patch: Partial<SystemSummary>) => void;
 }
 
@@ -45,16 +42,12 @@ export const useSystemStore = create<SystemState>((set) => ({
   // when the startup probe finds a backend.
   dataMode: "simulation",
   dataModeChosen: false,
-  viewMode: "single",
   summary: emptySummary,
 
   setConnectionStatus: (connectionStatus) => set({ connectionStatus }),
   setDataMode: (dataMode) => set({ dataMode, dataModeChosen: true }),
   adoptLiveIfUnchosen: () =>
     set((s) => (s.dataModeChosen ? s : { dataMode: "live" })),
-  setViewMode: (viewMode) => set({ viewMode }),
-  toggleViewMode: () =>
-    set((s) => ({ viewMode: s.viewMode === "single" ? "split" : "single" })),
   applySummary: (patch) =>
     set((s) => ({ summary: { ...s.summary, ...patch } })),
 }));

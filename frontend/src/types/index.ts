@@ -229,8 +229,6 @@ export type ConnectionStatus =
 
 export type DataMode = "live" | "simulation";
 
-export type ViewMode = "single" | "split";
-
 export type WorkspaceId =
   | "overview"
   | "anomalies"

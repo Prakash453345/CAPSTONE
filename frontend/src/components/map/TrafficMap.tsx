@@ -28,6 +28,7 @@ import { cityBounds, networkBounds, nearestEdge } from "@/data/network";
 import { CityChips } from "@/components/map/CityChips";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/utils/cn";
+import { useShellInset } from "@/components/layout/mapFirst";
 
 import { CITIES_LABEL, HOME_CITY, LIVE_CITY, cityById } from "@/data/city";
 // The operator forms only appear after a click (or, for the emergency panel,
@@ -79,8 +80,12 @@ export function TrafficMap({
   className,
   fullscreen = false,
   onExitFullscreen,
+  insetRight = 0,
 }: {
   className?: string;
+  /** Width of glass panels floating over the map's right edge, in px. The
+   *  camera frames the uncovered part and the controls sit clear of them. */
+  insetRight?: number;
   /** Rendered by the full-screen map route: controls offer "Exit full screen". */
   fullscreen?: boolean;
   /** Leaves full screen: shown as the search pill's back arrow and the exit control. */
@@ -91,8 +96,13 @@ export function TrafficMap({
   const [ready, setReady] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
   const [tileError, setTileError] = useState(false);
-  // This map's own sheet/selection state, so split view's two maps are independent.
+  // This map's own sheet/selection state, independent of any other map on screen.
   const [chrome] = useState(createMapChromeStore);
+  // The sidebar floats over the map's left edge on map-first pages.
+  const insetLeft = useShellInset();
+  const padding = { left: insetLeft, right: insetRight, top: 0, bottom: 0 };
+  const paddingRef = useRef(padding);
+  paddingRef.current = padding;
 
   const activeLayers = useMapStore((s) => s.activeLayers);
   const focus = useMapStore((s) => s.focus);
@@ -130,6 +140,10 @@ export function TrafficMap({
         minZoom: 11,
         fadeDuration: 0,
       });
+        if (paddingRef.current.left || paddingRef.current.right) {
+          instance.setPadding(paddingRef.current);
+          instance.fitBounds(FIT_BOUNDS, { padding: 64, animate: false });
+        }
       } catch {
         disposed = true;
         setMapError("The map could not initialize. Enable WebGL / hardware acceleration, then reload. Road and signal lists remain available in Traffic Management.");
@@ -197,7 +211,7 @@ export function TrafficMap({
       setMap(instance);
     };
 
-    // On narrow maps (split view, phones) the attribution folds into its (i)
+    // On narrow maps (phones) the attribution folds into its (i)
     // button so it can't sit on the scale bar; tapping (i) still shows it.
     // Same class MapLibre itself drops on the first drag (_updateCompactMinimize).
     const foldAttribution = (width: number) => {
@@ -229,6 +243,14 @@ export function TrafficMap({
       queueMicrotask(() => retiringMap?.remove());
     };
   }, []);
+
+  // Keep the camera centred on the uncovered map as panels come and go.
+  useEffect(() => {
+    if (!map) return;
+    const p = map.getPadding();
+    if (p.left === insetLeft && p.right === insetRight) return;
+    map.easeTo({ padding: { left: insetLeft, right: insetRight, top: 0, bottom: 0 }, duration: 300 });
+  }, [map, insetLeft, insetRight]);
 
   // --- react to focus requests -----------------------------------------
   useEffect(() => {
@@ -328,7 +350,11 @@ export function TrafficMap({
 
   return (
     <MapChromeContext.Provider value={chrome}>
-      <div className={cn("absolute inset-0 overflow-hidden", className)}>
+      <div
+        data-map-root
+        className={cn("absolute inset-0 overflow-hidden", className)}
+        style={{ ["--inset-l" as string]: `${insetLeft}px`, ["--inset-r" as string]: `${insetRight}px` }}
+      >
         {/* Inline, not Tailwind's "absolute inset-0": maplibre-gl.css sets
             .maplibregl-map { position: relative } at equal specificity, and since
             routes are lazy it loads after Tailwind and wins, collapsing the map
@@ -361,7 +387,13 @@ export function TrafficMap({
             <Suspense fallback={null}>
               <WeatherLayer visible={activeLayers.has("weather")} />
             </Suspense>
-            <MapControls fullscreen={fullscreen} onExitFullscreen={onExitFullscreen} />
+            <MapControls fullscreen={fullscreen} onExitFullscreen={onExitFullscreen}>
+              {activeLayers.has("weather") && (
+                <Suspense fallback={null}>
+                  <WeatherChip />
+                </Suspense>
+              )}
+            </MapControls>
             <Suspense fallback={null}>
               {/* the route panel covers the map's left edge on wide maps (308px + margin) */}
               <FollowCamera
@@ -390,7 +422,7 @@ export function TrafficMap({
           </div>
 
           {tileError && ready && (
-            <div role="status" className="pointer-events-none max-w-[340px] animate-fade-in rounded-lg bg-surface-raised px-3 py-2 text-[11px] leading-snug text-status-warn shadow-elevation-1">
+            <div role="status" className="glass pointer-events-none max-w-[340px] animate-fade-in rounded-xl px-3 py-2 text-[11px] leading-snug text-status-warn">
               Some map resources are unavailable. Bundled road geometry and received telemetry remain visible.
             </div>
           )}
@@ -432,11 +464,6 @@ export function TrafficMap({
         </div>
 
         <MapLegend hidden={panelOpen} />
-        {activeLayers.has("weather") && (
-          <Suspense fallback={null}>
-            <WeatherChip />
-          </Suspense>
-        )}
       </div>
     </MapChromeContext.Provider>
   );

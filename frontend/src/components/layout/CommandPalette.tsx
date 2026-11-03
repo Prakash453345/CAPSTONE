@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Ambulance,
-  Columns2,
   CornerDownLeft,
   FlaskConical,
   Moon,
@@ -120,15 +119,6 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
         icon: theme === "dark" ? Sun : Moon,
         keywords: "theme dark light appearance",
         run: () => useThemeStore.getState().setMode(theme === "dark" ? "light" : "dark"),
-      },
-      {
-        id: "act-split",
-        group: "Actions",
-        label: "Open split view",
-        hint: "Incidents and traffic side by side",
-        icon: Columns2,
-        keywords: "split compare layout",
-        run: () => useSystemStore.getState().setViewMode("split"),
       },
     ];
     return [...go, ...actions, ...roads];

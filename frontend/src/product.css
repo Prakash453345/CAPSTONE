@@ -9,11 +9,12 @@
      padding, with room right and below for the cards' soft shadows: a
      scrolling box clips whatever overflows it, and with only a few pixels
      spare each card's shadow ended in a hard-edged grey rectangle. */
-  max-width: calc(100% - 44px);
+  max-width: calc(100% - 44px - var(--inset-r, 0px));
   max-height: calc(100% - 28px);
   overflow-x: hidden;
   overflow-y: auto;
-  padding: 12px 36px 56px 12px;
+  /* --inset-l / --inset-r: glass the page floats over the map (TrafficMap) */
+  padding: 12px 36px 56px calc(12px + var(--inset-l, 0px));
   scrollbar-width: none;
 }
 .map-action-stack::-webkit-scrollbar {
@@ -130,13 +131,17 @@ button:disabled {
   color: hsl(var(--muted-foreground));
   border-radius: 10px;
 }
+/* maplibre-gl.css loads after this file (lazy routes), hence the extra class */
+.maplibregl-map .maplibregl-ctrl-bottom-right {
+  right: var(--inset-r, 0px);
+}
 .maplibregl-ctrl-scale {
-  margin: 0 0 8px 14px !important;
+  margin: 0 0 8px calc(14px + var(--inset-l, 0px)) !important;
   border: 1.5px solid hsl(var(--foreground) / 0.6) !important;
   border-top: 0 !important;
   background: transparent !important;
   color: hsl(var(--foreground) / 0.8) !important;
-  font: 500 10px/1.3 "Google Sans Flex", Roboto, sans-serif !important;
+  font: 500 10px/1.3 theme("fontFamily.sans") !important;
   text-shadow: 0 0 2px hsl(var(--background)), 0 0 3px hsl(var(--background));
 }
 .dark .maplibregl-ctrl-attrib-button {

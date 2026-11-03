@@ -113,20 +113,16 @@ export function MapSearch({ onBack }: { onBack?: () => void }) {
   const showList = open && results.length > 0;
 
   return (
-    <div ref={rootRef} className="pointer-events-auto relative w-[min(340px,100%)] shrink-0">
+    <div ref={rootRef} className="pointer-events-auto relative w-[min(320px,100%)] shrink-0">
       {/* The list is in normal flow (not absolute) so the scrolling action
           stack around it grows to fit instead of clipping it. */}
-      <div
-        className={cn(
-          "relative z-[1] flex h-11 items-center gap-1 bg-surface-raised pl-4 pr-1.5 shadow-[0_2px_4px_rgba(0,0,0,0.2),0_-1px_0_rgba(0,0,0,0.02)] transition-[border-radius,box-shadow] duration-200 ease-out",
-          showList ? "rounded-t-[22px] shadow-elevation-2" : "rounded-full",
-          onBack && "pl-1.5",
-        )}
-      >
-        {onBack && (
+      <div className={cn("glass relative z-[1] flex h-11 items-center gap-1.5 rounded-[14px] pl-3 pr-1.5", onBack && "pl-1")}>
+        {onBack ? (
           <IconBtn label="Back" onClick={onBack}>
             <ArrowLeft />
           </IconBtn>
+        ) : (
+          <Search aria-hidden className="size-[18px] shrink-0 text-muted-foreground" strokeWidth={2.2} />
         )}
         <input
           type="text"
@@ -144,15 +140,11 @@ export function MapSearch({ onBack }: { onBack?: () => void }) {
           aria-controls={listId}
           aria-autocomplete="list"
           aria-label="Search the road network"
-          className="min-w-0 flex-1 bg-transparent text-[15px] text-foreground placeholder:text-muted-foreground focus:outline-none"
+          className="h-full min-w-0 flex-1 bg-transparent text-[15px] text-foreground placeholder:text-muted-foreground focus:outline-none"
         />
-        {query ? (
+        {query && (
           <IconBtn label="Clear search" onClick={clear}>
             <X />
-          </IconBtn>
-        ) : (
-          <IconBtn label="Search" onClick={() => setOpen(true)}>
-            <Search />
           </IconBtn>
         )}
       </div>
@@ -161,7 +153,7 @@ export function MapSearch({ onBack }: { onBack?: () => void }) {
         <ul
           id={listId}
           role="listbox"
-          className="relative max-h-72 origin-top animate-sheet-in overflow-y-auto rounded-b-[22px] border-t border-border bg-surface-raised py-2 shadow-elevation-2"
+          className="glass-strong relative mt-1.5 max-h-72 origin-top animate-sheet-in overflow-y-auto rounded-[14px] p-1.5"
         >
           {results.map((r, i) => {
             const Icon = r.kind === "road" ? MapPin : TrafficCone;
@@ -176,11 +168,11 @@ export function MapSearch({ onBack }: { onBack?: () => void }) {
                   choose(r);
                 }}
                 className={cn(
-                  "flex cursor-pointer items-center gap-3 px-4 py-2 transition-colors",
-                  i === active && "bg-muted",
+                  "flex cursor-pointer items-center gap-3 rounded-[10px] px-2.5 py-1.5 transition-colors",
+                  i === active && "bg-glass-hover",
                 )}
               >
-                <span className="grid size-8 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground [&_svg]:size-4">
+                <span className="grid size-8 shrink-0 place-items-center rounded-full bg-tile text-muted-foreground [&_svg]:size-4">
                   <Icon />
                 </span>
                 <span className="min-w-0">
@@ -203,7 +195,7 @@ function IconBtn({ label, onClick, children }: { label: string; onClick: () => v
       aria-label={label}
       title={label}
       onClick={onClick}
-      className="grid size-9 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground [&_svg]:size-5"
+      className="grid size-9 place-items-center rounded-[10px] text-muted-foreground transition-colors hover:bg-glass-hover hover:text-foreground [&_svg]:size-5"
     >
       {children}
     </button>

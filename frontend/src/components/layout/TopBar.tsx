@@ -3,13 +3,13 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { LogOut, Menu, Monitor, Moon, Search, Sun } from "lucide-react";
 import { navItemFor } from "@/app/nav";
-import { useSystemStore } from "@/store/systemStore";
 import { useAuthStore } from "@/store/authStore";
 import { useThemeStore, type ThemeMode } from "@/store/themeStore";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { StatusMenu } from "@/components/layout/StatusMenu";
 import { IconButton, Kbd } from "@/components/console/kit";
 import { EASE_OUT } from "@/components/console/motion";
+import { cn } from "@/utils/cn";
 
 /**
  * The top bar holds three things: where you are, a way to find anything, and
@@ -17,9 +17,8 @@ import { EASE_OUT } from "@/components/console/motion";
  */
 export function TopBar({ onOpenNav, onOpenSearch }: { onOpenNav: () => void; onOpenSearch: () => void }) {
   const { pathname } = useLocation();
-  const viewMode = useSystemStore((s) => s.viewMode);
   const item = navItemFor(pathname);
-  const title = viewMode === "split" ? "Split view" : (item?.label ?? "Page not found");
+  const title = item?.label ?? "Page not found";
   const mac = typeof navigator !== "undefined" && /Mac|iP(hone|ad)/.test(navigator.platform);
 
   return (
@@ -44,7 +43,7 @@ export function TopBar({ onOpenNav, onOpenSearch }: { onOpenNav: () => void; onO
       <button
         type="button"
         onClick={onOpenSearch}
-        className="hidden h-9 w-[min(34vw,340px)] items-center gap-2.5 rounded-xl bg-surface px-3 text-[13.5px] text-muted-foreground shadow-elevation-1 transition-shadow hover:shadow-elevation-2 md:flex"
+        className="hidden h-9 w-[min(34vw,340px)] items-center gap-2.5 rounded-xl bg-surface px-3 text-[13.5px] text-muted-foreground shadow-elevation-1 transition-shadow hover:shadow-elevation-2 md:flex lg:hidden"
       >
         <Search className="size-4" />
         <span className="flex-1 text-left">Search roads, pages and actions</span>
@@ -52,6 +51,7 @@ export function TopBar({ onOpenNav, onOpenSearch }: { onOpenNav: () => void; onO
         <Kbd>K</Kbd>
       </button>
       <IconButton label="Search" icon={Search} className="md:hidden" onClick={onOpenSearch} />
+      {/* lg and up: Search is the sidebar's first row, as in Apple Maps */}
 
       <div className="flex items-center gap-1">
         <StatusMenu />
@@ -60,6 +60,29 @@ export function TopBar({ onOpenNav, onOpenSearch }: { onOpenNav: () => void; onO
         <SignOutButton />
       </div>
     </header>
+  );
+}
+
+/**
+ * The top bar's status and account controls in one row, for map-first pages
+ * where the page's map runs under the whole window: the header of the page's
+ * glass sheet, or a glass capsule of its own (`floating`).
+ */
+export function FloatingBar({ floating = false }: { floating?: boolean }) {
+  return (
+    <div
+      className={cn(
+        "flex h-11 items-center gap-0.5",
+        floating ? "glass rounded-[14px] px-1" : "w-full justify-between",
+      )}
+    >
+      <StatusMenu align={floating ? "end" : "start"} />
+      <div className="flex items-center gap-0.5">
+        <NotificationBell />
+        <ThemeButton />
+        <SignOutButton />
+      </div>
+    </div>
   );
 }
 
