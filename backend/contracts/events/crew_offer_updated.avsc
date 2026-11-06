@@ -12,6 +12,7 @@
     { "name": "crew", "type": ["null", "string"], "default": null },
     { "name": "eta_s", "type": "double", "default": 0.0 },
     { "name": "expires_at_s", "type": "double", "default": 0.0 },
+    { "name": "expires_in_s", "type": "double", "default": 0.0, "doc": "Real (wall-clock) seconds the offer has left when this event was sent; 0 once it is no longer open. An open offer is re-sent every few seconds so a crew page that connects late still gets it, so count down from this, not from the offer timeout." },
     { "name": "state", "type": "string" },
     { "name": "asked", "type": { "type": "array", "items": "string" }, "default": [] }
   ]

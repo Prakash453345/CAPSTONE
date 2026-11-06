@@ -12,11 +12,12 @@ import time
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import File, Form, HTTPException, UploadFile
+from fastapi import File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from itms_common import encode_envelope
 
 from api_gateway.core.config import COMMANDS_TOPIC, EVENT_SOURCE
+from api_gateway.core.security import reviewer_actor
 from api_gateway.dependencies import BusDep, ClipsDep, SettingsDep
 from api_gateway.models.clips import Clip, ClipConfirmRequest, ClipRejectRequest
 from api_gateway.services.clip_registry import (
@@ -60,10 +61,13 @@ async def upload_clip(
     latitude: Annotated[float | None, Form()] = None,
     longitude: Annotated[float | None, Form()] = None,
     operator: Annotated[str, Form()] = "operator:console",
+    request: Request = None,  # type: ignore[assignment]  # FastAPI injects it
 ) -> dict:
     """Store a road video and queue it for analysis. The video stands in for
     a camera on `edge_id`; anything found becomes a review item, never a
     dispatch on its own."""
+    if request is not None:
+        operator = reviewer_actor(request, operator)  # the session's account, not the form's
     name = Path(file.filename or "").name
     ext = Path(name).suffix.lower()
     if ext not in ALLOWED_EXTENSIONS:
@@ -131,11 +135,13 @@ async def confirm_clip(
     body: ClipConfirmRequest,
     clips: ClipsDep,
     bus: BusDep,
+    request: Request,
 ) -> dict:
     """ADR-006's human gate for a clip finding: confirm it into a live
     anomaly. Publishes the same `AnomalyCreateRequested` the Create Anomaly
     panel sends, so the simulation (SIM_MODE=live) applies it and the
     response chain dispatches."""
+    body.actor = reviewer_actor(request, body.actor)
     try:
         clip = clips.confirm(clip_id, actor=body.actor, at_ms=int(time.time() * 1000),
                              anomaly_type=body.anomaly_type, severity=body.severity,
@@ -155,9 +161,10 @@ async def confirm_clip(
 
 
 async def reject_clip(
-    clip_id: str, body: ClipRejectRequest, clips: ClipsDep
+    clip_id: str, body: ClipRejectRequest, clips: ClipsDep, request: Request
 ) -> dict:
     """Dismiss a clip finding as a false alarm."""
+    body.actor = reviewer_actor(request, body.actor)
     try:
         clip = clips.reject(clip_id, actor=body.actor, at_ms=int(time.time() * 1000),
                             note=body.note)

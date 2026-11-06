@@ -45,15 +45,25 @@ const ANOMALY_CREATED_TONE: Record<Anomaly["severity"], NotificationTone> = {
   blocked: "critical",
 };
 
+/** How old an anomaly can be on first sight and still be news. The backend
+ *  re-publishes every active anomaly every 10 s for late joiners, so a console
+ *  that opens later sees old ones "appear"; announcing those as just reported
+ *  ("15s ago" for a 7-minute-old accident) filled the bell on every reload. */
+export const ANOMALY_NEWS_MS = 60_000;
+
 /** Fires once when an anomaly first appears active, and once when a
  *  previously-active anomaly stops being active. A repeat update that leaves
- *  `status` unchanged (e.g. a severity edit) produces nothing. */
+ *  `status` unchanged (e.g. a severity edit) produces nothing, and so does an
+ *  old one this client is only now catching up on. */
 export function classifyAnomalyEvent(
   prevStatus: AnomalyStatus | undefined,
   anomaly: Anomaly,
   atMs: number,
 ): NotificationEvent | null {
-  if (prevStatus === undefined && anomaly.status === "active") {
+  const startedMs = Date.parse(anomaly.startTime);
+  // Only a wall-clock start can be judged; a sim-clock one (1970) is let through.
+  const oldNews = Number.isFinite(startedMs) && startedMs > 1e12 && atMs - startedMs > ANOMALY_NEWS_MS;
+  if (prevStatus === undefined && anomaly.status === "active" && !oldNews) {
     return {
       id: `anomaly-created-${anomaly.id}-${atMs}`,
       kind: "anomaly-created",
@@ -92,6 +102,8 @@ export interface EmergencyTransition {
 }
 
 const AUTO_REROUTE_PREFIX = "auto-reroute — ";
+/** sim-service's incident_response.STAND_DOWN_ACTOR. */
+const STAND_DOWN_ACTOR = "system:incident-response";
 const REROUTE_HELD_PREFIX = "reroute held: ";
 
 /**
@@ -111,8 +123,20 @@ export function classifyEmergencyEvent(t: EmergencyTransition, atMs: number): No
 
   if (t.nextState === "cancelled") {
     // An operator-initiated CANCEL is their own visible action, not a failure
-    // to flag; a system cancellation means the initial routing attempt failed.
+    // to flag; a system cancellation means the initial routing attempt failed
+    // -- unless the incident itself ended and sim-service stood the unit down.
     if (isOperator) return null;
+    if (t.actor === STAND_DOWN_ACTOR) {
+      return {
+        id: `unit-stood-down-${t.requestId}-${atMs}`,
+        kind: "unit-stood-down",
+        tone: "info",
+        title: "Unit stood down",
+        message: `${who}: the incident it was going to has ended`,
+        atMs,
+        requestId: t.requestId,
+      };
+    }
     return {
       id: `route-failure-${t.requestId}-${atMs}`,
       kind: "route-failure",
@@ -213,7 +237,7 @@ export function classifyEmergencyEvent(t: EmergencyTransition, atMs: number): No
 export interface CorridorEventPayload {
   requestId: string;
   corridorId: string;
-  /** `GreenCorridorEvent`: "proposed" | "activated" | "junction_passed" | "terminated". */
+  /** `GreenCorridorEvent`: "proposed" | "activated" | "junction_passed" | "terminated" | "snapshot". */
   event: string;
   /** The passed junction's id, for a `junction_passed` event (mirrors `mapCorridor`). */
   junctionId?: string;

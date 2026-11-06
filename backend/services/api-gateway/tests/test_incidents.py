@@ -167,6 +167,45 @@ def test_replaying_a_reject_event_from_another_writer_applies_it():
     assert reg.get("inc-1").state is IncidentState.REJECTED
 
 
+def _wire(event_type: str, payload: dict) -> dict:
+    return decode_envelope(encode_envelope(event_type=event_type, source="t", payload=payload,
+                                           partition_key="J3"))
+
+
+def test_a_rejection_replayed_before_its_candidate_still_applies():
+    """After a restart the three incident topics replay on independent
+    consumers; the REJECTED update for an incident was read before its
+    candidate, dropped, and the false alarm came back as a pending candidate
+    (seen live, 2026-11-05)."""
+    env = _candidate_event()
+    candidate = IncidentRegistry().apply_event(env["event_type"], env["payload"])
+    rejected = candidate.apply(IncidentAction.REJECT, at_ms=1_725_600_200_000, actor="op",
+                               detail="false alarm")
+    reg = IncidentRegistry()
+    early = _wire("IncidentUpdated", updated_payload(rejected))
+    assert reg.apply_event(early["event_type"], early["payload"]) is None   # held, not lost
+    reg.apply_event(env["event_type"], env["payload"])
+    assert reg.get("inc-1").state is IncidentState.REJECTED
+    assert reg.get("inc-1").chain_head == rejected.chain_head
+
+
+def test_a_clear_replayed_before_its_confirmation_still_applies():
+    env = _candidate_event()
+    candidate = IncidentRegistry().apply_event(env["event_type"], env["payload"])
+    confirmed = candidate.apply(IncidentAction.CONFIRM, at_ms=1_725_600_200_000, actor="op",
+                                classification=IncidentClass.STALL)
+    cleared = confirmed.apply(IncidentAction.CLEAR, at_ms=1_725_600_300_000, actor="sim")
+    reg = IncidentRegistry()
+    reg.apply_event(env["event_type"], env["payload"])
+    clear = _wire("IncidentUpdated", updated_payload(cleared))
+    reg.apply_event(clear["event_type"], clear["payload"])      # CANDIDATE -> CLEARED: not yet
+    detected = _wire("IncidentDetected",
+                     detected_payload(confirmed, confirmed_at_ms=1_725_600_200_000))
+    reg.apply_event(detected["event_type"], detected["payload"])
+    assert reg.get("inc-1").state is IncidentState.CLEARED
+    assert reg.get("inc-1").chain_head == cleared.chain_head
+
+
 def test_incident_to_json_shape():
     reg = IncidentRegistry()
     env = _candidate_event()
@@ -180,3 +219,28 @@ def test_incident_to_json_shape():
 
 def test_candidate_topic_constant_matches_schema_topic_name():
     assert CANDIDATE_TOPIC == "incident.candidate"
+
+
+def test_the_confirm_endpoint_takes_the_classification_the_console_sends(tmp_path):
+    """The console sends the contract's symbol names ("STALL", "UNKNOWN");
+    the endpoint parsed values only, so every console confirm was a 422."""
+    from api_gateway.core.config import Settings
+    from api_gateway.main import create_app
+    from fastapi.testclient import TestClient
+
+    class Bus:
+        async def publish(self, topic, raw):
+            return "1-0"
+
+    app = create_app(Settings(api_key="k", clips_dir=tmp_path, require_sign_in=False))
+    app.state.bus = Bus()
+    for i, cls in enumerate(("STALL", "lane_block", "Unknown")):
+        env = _candidate_event(f"inc-{i}")
+        app.state.incidents.apply_event(env["event_type"], env["payload"])
+        r = TestClient(app).post(f"/v1/incidents/inc-{i}/confirm", headers={"X-API-Key": "k"},
+                                 json={"actor": "op", "classification": cls})
+        assert r.status_code == 200, (cls, r.text)
+    assert r.json()["classification"] == "unknown"
+    r = TestClient(app).post("/v1/incidents/inc-0/confirm", headers={"X-API-Key": "k"},
+                             json={"actor": "op", "classification": "ALIENS"})
+    assert r.status_code in (409, 422)

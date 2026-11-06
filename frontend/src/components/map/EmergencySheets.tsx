@@ -360,7 +360,7 @@ function PendingCallSheet({ call }: { call: PendingCall }) {
 
   const state = status?.state;
   const nobody = state === "exhausted";
-  const left = status && state === "offered" ? Math.max(0, OFFER_SECONDS - (now - status.atMs) / 1000) : 0;
+  const left = status && state === "offered" ? Math.max(0, (status.expiresAtMs - now) / 1000) : 0;
   const waitedS = (now - call.sentAtMs) / 1000;
 
   let headline: string;

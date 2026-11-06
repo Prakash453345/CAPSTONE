@@ -67,6 +67,10 @@ DEFAULT_PREFILTER_RINGS: int | None = 12
 # Planning every candidate on a large roster is wasted work -- rank the nearest
 # few by air distance first, then spend the planner on those.
 DEFAULT_MAX_PLANNED = 8
+# An open offer is re-sent this often (real seconds), so a crew page that
+# reloads, or connects, while it is out still gets the call: the stream only
+# carries what happens after a page connects, and an offer used to be sent once.
+OFFER_RESEND_EVERY_S = 3.0
 
 
 @dataclass
@@ -223,6 +227,7 @@ class CrewDispatcher:
         prefilter_rings: int | None = DEFAULT_PREFILTER_RINGS,
         max_planned: int = DEFAULT_MAX_PLANNED,
         auto_accept: bool = False,
+        real_s_per_sim_s: float = 1.0,
     ) -> None:
         # auto_accept: the nearest crew is assigned the call outright instead of
         # being asked. This is a simulation with nobody at most wheels, and a
@@ -234,6 +239,10 @@ class CrewDispatcher:
         self.graph = graph
         self.hex = hex_index
         self.on_accept = on_accept
+        # Called as (incident_id, kind, edge_id, now_s) when every crew that was
+        # asked declined or let the offer expire, so whoever raised the call
+        # can fall back instead of the call silently dying.
+        self.on_exhausted: Callable[[str, EmergencyKind, str, float], None] | None = None
         self.offer_timeout_s = offer_timeout_s
         self.prefilter_rings = prefilter_rings
         self.max_planned = max_planned
@@ -241,6 +250,10 @@ class CrewDispatcher:
         self._by_offer: dict[str, str] = {}      # offer_id -> incident_id
         self._events: list[dict] = []
         self._seq = 0
+        # Offers expire on the sim clock; a crew reads a countdown in real
+        # seconds. This converts one to the other (1 / the sim's pacing).
+        self.real_s_per_sim_s = real_s_per_sim_s
+        self._last_resend_s = 0.0
 
     # ---- events -------------------------------------------------------
 
@@ -250,6 +263,17 @@ class CrewDispatcher:
 
     def _emit(self, event_type: str, payload: dict) -> None:
         self._events.append({"event_type": event_type, "payload": payload})
+
+    def _emit_offer(self, offer: Offer, now_s: float) -> None:
+        """`CrewOfferUpdated` for one offer, with the real seconds it has left
+        (0 once it is no longer open), so a page that receives it late -- or
+        receives a re-send -- counts down from the truth, not from 25."""
+        # never 0 while open: 0 is what a producer without this field decodes to
+        left = (
+            max(0.1, (offer.expires_at_s - now_s) * self.real_s_per_sim_s)
+            if offer.state == "offered" else 0.0
+        )
+        self._emit("CrewOfferUpdated", {**offer.public(), "expires_in_s": round(left, 1)})
 
     def roster_event(self) -> dict:
         return {
@@ -358,7 +382,7 @@ class CrewDispatcher:
             pending.asked.append(unit.unit_id)
             pending.offer = offer
             self._by_offer[offer.offer_id] = pending.incident_id
-            self._emit("CrewOfferUpdated", offer.public())
+            self._emit_offer(offer, now_s)
             log.info(
                 "offered %s (%s) to %s, eta %.0fs",
                 pending.incident_id, pending.kind.value, unit.unit_id, offer.eta_s,
@@ -384,9 +408,15 @@ class CrewDispatcher:
             pending.kind.value, pending.incident_id, len(pending.asked),
         )
         self._pending.pop(pending.incident_id, None)
+        if pending.asked and self.on_exhausted is not None:
+            # Asked, and nobody took it (declined / no answer). With no one
+            # asked at all, `request` returns None and the caller handles it.
+            self.on_exhausted(pending.incident_id, pending.kind, pending.edge_id, now_s)
         return None
 
-    def respond(self, offer_id: str, *, accept: bool, now_s: float) -> Offer | None:
+    def respond(
+        self, offer_id: str, *, accept: bool, now_s: float, unit_id: str | None = None
+    ) -> Offer | None:
         """A crew answered. On accept the unit is marked busy and `on_accept`
         runs; on decline the call moves to the next nearest crew.
 
@@ -400,28 +430,40 @@ class CrewDispatcher:
         offer = pending.offer
         if offer.state != "offered":
             return None
+        if unit_id is not None and unit_id != offer.unit_id:
+            # Another crew answering this one's call (api-service stamps the
+            # answering crew's vehicle). An operator answering leaves it unset.
+            log.warning("offer %s for %s answered by %s -- ignored",
+                        offer_id, offer.unit_id, unit_id)
+            return None
         if accept:
             offer.state = "accepted"
             self.roster.set_busy(offer.unit_id, True)
-            self._emit("CrewOfferUpdated", offer.public())
+            self._emit_offer(offer, now_s)
             self._pending.pop(pending.incident_id, None)
             if self.on_accept is not None:
                 self.on_accept(offer)
             return offer
         offer.state = "declined"
-        self._emit("CrewOfferUpdated", offer.public())
+        self._emit_offer(offer, now_s)
         return self._offer_next(pending, now_s=now_s)
 
     def tick(self, now_s: float) -> None:
-        """Expire offers nobody answered and pass them on. Call every step."""
+        """Expire offers nobody answered and pass them on, and re-send the
+        ones still open. Call every step."""
         for pending in list(self._pending.values()):
             offer = pending.offer
             if offer is None or offer.state != "offered" or now_s < offer.expires_at_s:
                 continue
             offer.state = "expired"
-            self._emit("CrewOfferUpdated", offer.public())
+            self._emit_offer(offer, now_s)
             log.info("offer %s expired, trying the next crew", offer.offer_id)
             self._offer_next(pending, now_s=now_s)
+        if (now_s - self._last_resend_s) * self.real_s_per_sim_s >= OFFER_RESEND_EVERY_S:
+            self._last_resend_s = now_s
+            for offer in self.open_offers:
+                if offer.state == "offered":
+                    self._emit_offer(offer, now_s)
 
     def withdraw(self, incident_id: str, *, now_s: float) -> None:
         """The incident was cleared (a false alarm, or an operator stood it
@@ -431,7 +473,7 @@ class CrewDispatcher:
             return
         if pending.offer is not None and pending.offer.state == "offered":
             pending.offer.state = "withdrawn"
-            self._emit("CrewOfferUpdated", pending.offer.public())
+            self._emit_offer(pending.offer, now_s)
 
     def _asked_elsewhere(self, unit_id: str) -> bool:
         return any(

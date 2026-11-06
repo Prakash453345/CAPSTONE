@@ -181,6 +181,31 @@ def test_everyone_declines_ends_in_exhausted():
     assert [e["payload"]["state"] for e in d.drain_events()][-1] == "exhausted"
 
 
+def test_exhaustion_after_asking_tells_the_caller_but_not_when_nobody_was_asked():
+    """A call whose crews all declined used to end with only an event, so an
+    anomaly-driven call got no response at all; the caller is now told."""
+    r, d = make([amb("EV-1", "a")], {("a", "inc"): 10.0})
+    told: list[tuple] = []
+    d.on_exhausted = lambda *args: told.append(args)
+    o = d.request("inc-1", EmergencyKind.AMBULANCE, "inc", now_s=0.0)
+    d.respond(o.offer_id, accept=False, now_s=1.0)
+    assert told == [("inc-1", EmergencyKind.AMBULANCE, "inc", 1.0)]
+
+    told.clear()
+    assert d.request("inc-2", EmergencyKind.POLICE, "inc", now_s=2.0) is None
+    assert told == []  # nobody asked: request() returning None already says so
+
+
+def test_only_the_offered_crew_or_an_operator_can_answer():
+    r, d = make([amb("EV-1", "a"), amb("EV-2", "b")],
+                {("a", "inc"): 10.0, ("b", "inc"): 20.0})
+    o = d.request("inc-1", EmergencyKind.AMBULANCE, "inc", now_s=0.0)
+    assert o.unit_id == "EV-1"
+    assert d.respond(o.offer_id, accept=False, now_s=1.0, unit_id="EV-2") is None
+    assert o.state == "offered"                          # another crew's answer: ignored
+    assert d.respond(o.offer_id, accept=True, now_s=2.0, unit_id="EV-1").state == "accepted"
+
+
 def test_a_crew_is_never_asked_twice_for_one_incident():
     r, d = make([amb("EV-1", "a"), amb("EV-2", "b")],
                 {("a", "inc"): 10.0, ("b", "inc"): 20.0})
@@ -302,3 +327,27 @@ def test_auto_accept_assigns_the_nearest_crew_without_waiting():
     # the next call goes to the next free crew, also at once
     second = d.request("inc-2", EmergencyKind.AMBULANCE, "inc", now_s=0.0)
     assert second.unit_id == "EV-2" and second.state == "accepted"
+
+
+def test_an_open_offer_is_resent_with_the_real_time_it_has_left():
+    """An offer went out once; a crew page that reloaded (or connected) in
+    its 25 s never saw the call. Open offers are re-sent, and every send says
+    how many real seconds are left so the countdown does not restart."""
+    r, d = make([amb("EV-1", "a")], {("a", "inc"): 10.0},
+                offer_timeout_s=50.0, real_s_per_sim_s=0.5)       # sim paced 2x
+    o = d.request("inc-1", EmergencyKind.AMBULANCE, "inc", now_s=0.0)
+    (first,) = [e["payload"] for e in d.drain_events()]
+    assert first["state"] == "offered" and first["expires_in_s"] == 25.0
+
+    d.tick(now_s=4.0)                                       # 2 real s: not yet
+    assert d.drain_events() == []
+    d.tick(now_s=10.0)                                      # 5 real s since the first send
+    (again,) = [e["payload"] for e in d.drain_events()]
+    assert again["offer_id"] == o.offer_id and again["state"] == "offered"
+    assert again["expires_in_s"] == 20.0                    # 40 sim s left = 20 real s
+
+    d.respond(o.offer_id, accept=True, now_s=11.0)
+    (accepted,) = [e["payload"] for e in d.drain_events()]
+    assert accepted["state"] == "accepted" and accepted["expires_in_s"] == 0.0
+    d.tick(now_s=30.0)
+    assert d.drain_events() == []                            # answered: no more re-sends

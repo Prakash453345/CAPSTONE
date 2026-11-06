@@ -43,6 +43,8 @@ import type {
   EmergencyRequestState,
   EmergencyRouteView,
   EmergencyVehicleKind,
+  EmergencyVehicleLive,
+  GreenCorridorView,
   Incident,
   Intersection,
   NotificationEvent,
@@ -51,6 +53,7 @@ import type {
   Vehicle,
 } from "@/types";
 import { shortJunctionName, signalJunctions } from "@/data/network";
+import { LIVE_CITY } from "@/data/city";
 import type {
   ProviderStatus,
   TrafficDataProvider,
@@ -74,7 +77,7 @@ import {
   classifySignalFault,
 } from "@/services/traffic/notifications";
 import { junctionVehicleStats } from "@/services/traffic/intersectionStats";
-import { mapIncident } from "@/services/traffic/incidents";
+import { fetchIncidents, mapIncident } from "@/services/traffic/incidents";
 import { useCrewStore } from "@/store/crewStore";
 
 const SNAPSHOT_MS = 500;
@@ -148,6 +151,13 @@ export function createWebSocketProvider(): TrafficDataProvider {
   const anomalies = new Map<string, Anomaly & { _at: number }>();
   /** request_id -> latest emergency request. */
   const emergencyRequests = new Map<string, EmergencyRequest & { _at: number }>();
+  /** Corridor / live-position updates for a request this client has not seen
+   *  yet. The gateway relays every topic on its own consumer, so a request's
+   *  first GreenCorridorUpdated can arrive before its EmergencyRequestUpdated;
+   *  dropping it lost the corridor for the whole trip ("No corridor" on the
+   *  crew page while the signals were in fact held). Adopted on first sight. */
+  const earlyCorridors = new Map<string, { corridor: GreenCorridorView; at: number }>();
+  const earlyLive = new Map<string, { live: EmergencyVehicleLive; at: number }>();
   /** Notable events detected this tick, drained into each snapshot then
    *  cleared — mirrors the backend's own `drain_events()` idiom. */
   let pendingEvents: NotificationEvent[] = [];
@@ -259,27 +269,33 @@ export function createWebSocketProvider(): TrafficDataProvider {
             ? (p.alternatives.map(mapRoute).filter(Boolean) as EmergencyRouteView[])
             : [],
           // corridor + live position arrive on their own event streams; carry
-          // them across a request-state refresh
-          corridor: prev?.corridor,
-          live: prev?.live,
+          // them across a request-state refresh (or adopt ones that came first)
+          corridor: prev?.corridor ?? earlyCorridors.get(id)?.corridor,
+          live: prev?.live ?? earlyLive.get(id)?.live,
           timeline,
           detail: detail || undefined,
           updatedAt: msToIso(p.updated_at),
           _at: lastMessageAt,
         });
+        earlyCorridors.delete(id);
+        earlyLive.delete(id);
         break;
       }
       case "GreenCorridorUpdated": {
         const rid = String(p.request_id);
         const existing = emergencyRequests.get(rid);
+        const next = mapCorridor(p);
+        // A new corridor id (re-armed after a reroute) starts its own count.
+        const prior = existing ? existing.corridor : earlyCorridors.get(rid)?.corridor;
+        next.passedIntersections = mergePassed(
+          prior?.corridorId === next.corridorId ? prior.passedIntersections : [],
+          next.passedIntersections,
+        );
         if (existing) {
-          const next = mapCorridor(p);
-          next.passedIntersections = mergePassed(
-            existing.corridor?.passedIntersections,
-            next.passedIntersections,
-          );
           existing.corridor = next;
           existing._at = lastMessageAt;
+        } else {
+          earlyCorridors.set(rid, { corridor: next, at: lastMessageAt });
         }
         const event = p.event == null ? "" : String(p.event);
         const notif = classifyCorridorEvent(
@@ -301,6 +317,8 @@ export function createWebSocketProvider(): TrafficDataProvider {
         if (existing) {
           existing.live = mapVehicleLive(p);
           existing._at = lastMessageAt;
+        } else {
+          earlyLive.set(rid, { live: mapVehicleLive(p), at: lastMessageAt });
         }
         break;
       }
@@ -377,7 +395,13 @@ export function createWebSocketProvider(): TrafficDataProvider {
     for (const [id, f] of signalFaults) {
       if (now - f.at > SIGNAL_FAULT_TTL_MS) signalFaults.delete(id);
     }
+    // a request that never showed up (another session's, long gone)
+    for (const early of [earlyCorridors, earlyLive]) {
+      for (const [id, e] of early) if (now - e.at > ORPHAN_REQUEST_MS) early.delete(id);
+    }
   }
+
+  const liveSignalCount = signalJunctions.filter((j) => j.city === LIVE_CITY).length;
 
   function buildSnapshot(): TrafficSnapshot {
     const now = Date.now();
@@ -444,8 +468,11 @@ export function createWebSocketProvider(): TrafficDataProvider {
       operational: status === "online" && lastTelemetryAt > 0 && now - lastTelemetryAt < 6_000,
       vehicleCount: vehList.length,
       congestion: Number.isFinite(congestionAvg) ? congestionAvg : 0,
+      // Only the city sim-service runs can report; the other shown city's
+      // signals are drawn for their plans but never come under control, so
+      // counting them read "7 of 14" with every live signal reporting.
       signalsOnline: intersections.filter((i) => i.signalState !== "red").length,
-      signalsTotal: signalJunctions.length,
+      signalsTotal: liveSignalCount,
       lastUpdate: lastTelemetryAt > 0 ? new Date(lastTelemetryAt).toISOString() : null,
     };
 
@@ -473,6 +500,20 @@ export function createWebSocketProvider(): TrafficDataProvider {
     for (const l of snapshotListeners) l(snap);
   }
 
+  /** The stream only carries incidents raised from now on; the registry has
+   *  the ones raised before this page opened. Without this the review inbox
+   *  listed an open candidate that no counter (page header, nav badge,
+   *  "Needs your attention") knew about. Stream state wins for ids it has. */
+  function seedIncidents() {
+    fetchIncidents()
+      .then((rows) => {
+        for (const row of rows) if (!detectorIncidents.has(row.id)) detectorIncidents.set(row.id, row);
+      })
+      .catch(() => {
+        /* the inbox shows its own "registry unavailable" message */
+      });
+  }
+
   function connect() {
     if (stopped) return;
     setStatus(reconnectTries === 0 ? "connecting" : "reconnecting");
@@ -486,6 +527,7 @@ export function createWebSocketProvider(): TrafficDataProvider {
       reconnectTries = 0;
       lastMessageAt = 0;
       setStatus("online");
+      seedIncidents();
     };
     ws.onmessage = (evt) => {
       let env: Envelope;

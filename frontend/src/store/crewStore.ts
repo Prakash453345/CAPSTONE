@@ -94,6 +94,9 @@ export interface CallStatus {
   etaS: number;
   asked: string[];
   atMs: number;
+  /** When an open offer runs out (this browser's clock), from the server's
+   *  `expires_in_s`; 0 when it is not open. */
+  expiresAtMs: number;
 }
 
 const toLngLat = (lat: unknown, lon: unknown): [number, number] | null =>
@@ -181,6 +184,11 @@ export const useCrewStore = create<CrewState>((set, get) => ({
   },
 
   applyOffer: (payload) => {
+    // Open offers are re-sent every few seconds (so a page that reloads still
+    // gets the call); count down from the time the server says is left, or a
+    // re-send would restart the countdown at 25 s.
+    const leftS = Number(payload.expires_in_s);
+    const expiresAtMs = Date.now() + (Number.isFinite(leftS) && leftS > 0 ? leftS : OFFER_SECONDS) * 1000;
     const incidentId = String(payload.incident_id ?? "");
     if (incidentId) {
       set({
@@ -194,6 +202,7 @@ export const useCrewStore = create<CrewState>((set, get) => ({
             etaS: Number(payload.eta_s) || 0,
             asked: Array.isArray(payload.asked) ? payload.asked.map(String) : [],
             atMs: Date.now(),
+            expiresAtMs: String(payload.state ?? "offered") === "offered" ? expiresAtMs : 0,
           },
         },
       });
@@ -216,7 +225,7 @@ export const useCrewStore = create<CrewState>((set, get) => ({
           kind: String(payload.kind ?? ""),
           edgeId: String(payload.edge_id ?? ""),
           etaS: Number.isFinite(etaS) ? etaS : 0,
-          expiresAtMs: Date.now() + OFFER_SECONDS * 1000,
+          expiresAtMs,
         },
       },
     });

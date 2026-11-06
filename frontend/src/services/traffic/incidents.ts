@@ -51,7 +51,8 @@ export function mapIncident(
     type:
       p.classification == null
         ? (previous?.type ?? "unknown")
-        : (classificationType[String(p.classification)] ?? "unknown"),
+        : // REST rows carry the enum's value ("stall"), stream events its name ("STALL")
+          (classificationType[String(p.classification).toUpperCase()] ?? "unknown"),
     // The detector contract carries probability, not severity. Keep that distinction visible.
     severity: "low",
     severityKnown: false,

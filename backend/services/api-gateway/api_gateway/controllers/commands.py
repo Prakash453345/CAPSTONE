@@ -24,8 +24,13 @@ async def post_command(
 ) -> dict:
     if user is not None:
         check_crew_command(user, cmd)
+        # Who did it comes from the session, never from the body: a payload
+        # "operator" field used to win, so any account could act -- and be
+        # recorded in the audit trail -- as anyone ("operator:chief").
         cmd.operator = f"{user.role}:{user.username}"
-    payload = {**cmd.payload, "operator": cmd.payload.get("operator", cmd.operator)}
+        payload = {**cmd.payload, "operator": cmd.operator}
+    else:
+        payload = {**cmd.payload, "operator": cmd.payload.get("operator", cmd.operator)}
     try:
         raw = encode_envelope(event_type=cmd.event_type, source=EVENT_SOURCE, payload=payload)
     except FileNotFoundError as exc:

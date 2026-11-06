@@ -244,3 +244,37 @@ def test_a_signed_in_operator_can_review_without_the_api_key(monkeypatch, tmp_pa
     with pytest.raises(HTTPException) as ei:
         security.require_reviewer(req, "wrong")
     assert ei.value.status_code == 401
+
+
+async def test_the_relay_acks_a_message_it_cannot_handle_instead_of_leaving_it_pending():
+    """A message the relay cannot decode (e.g. written against a newer
+    contract) was left unacked; ">" reads never redeliver it, so it sat in
+    Redis's pending list forever. It is logged and acked like any other."""
+    import asyncio
+
+    from api_gateway.services.clip_registry import ClipRegistry
+    from api_gateway.services.connections import ConnectionManager
+    from api_gateway.services.event_relay import EventRelay
+    from api_gateway.services.incident_registry import IncidentRegistry
+    from itms_common.bus import Message
+
+    acked: list[str] = []
+
+    class Bus:
+        async def subscribe(self, topics, *, group, consumer, start_id):
+            yield Message(topic=topics[0], message_id="1-0", raw=b"not avro")
+            raise asyncio.CancelledError
+
+        async def ack(self, topic, group, message_id):
+            acked.append(message_id)
+
+    import tempfile
+    from pathlib import Path
+
+    relay = EventRelay(Bus(), ConnectionManager(), IncidentRegistry(),  # type: ignore[arg-type]
+                       ClipRegistry(Path(tempfile.mkdtemp())), ("traffic.updated",))
+    try:
+        await relay._consume_topic("traffic.updated", "c1")
+    except asyncio.CancelledError:
+        pass
+    assert acked == ["1-0"]

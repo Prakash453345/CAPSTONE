@@ -68,6 +68,21 @@ def require_reviewer(request: Request, x_api_key: str = Header(default="")) -> N
     raise HTTPException(status_code=401, detail="missing or invalid X-API-Key header")
 
 
+def reviewer_actor(request: Request, claimed: str) -> str:
+    """Who to record as having confirmed or rejected something. A signed-in
+    reviewer is recorded as themselves -- the body's `actor` used to be taken
+    as is, so any account could write anyone into the review record and the
+    incident's hash-chained audit trail. A script holding the API key has no
+    account, so its own `actor` stands."""
+    if request.app.state.settings.require_sign_in:
+        try:
+            user = auth_mod.current_user(request, auth_mod.get_user_store())
+        except HTTPException:
+            return claimed  # no session: require_reviewer already checked the key
+        return f"{user.role}:{user.username}"
+    return claimed
+
+
 def check_crew_command(user: auth_mod.UserRecord, cmd: CommandRequest) -> None:
     if user.role != "responder":
         return
@@ -80,6 +95,19 @@ def check_crew_command(user: auth_mod.UserRecord, cmd: CommandRequest) -> None:
     if cmd.event_type == "CrewHospitalChoice":
         # A crew chooses the hospital for its own ambulance only.
         cmd.payload["unit_id"] = user.unit_id or ""
+    elif cmd.event_type == "EmergencyCommand":
+        # A crew may re-plan its own trip only: request ids are on the live
+        # stream every crew page receives. sim-service checks the vehicle.
+        if not user.unit_id:
+            raise HTTPException(status_code=403, detail="This crew account has no vehicle.")
+        cmd.payload["unit_id"] = user.unit_id
+    elif cmd.event_type == "CrewOfferResponse":
+        # A crew answers only offers made to its own vehicle: every offer id is
+        # on the live stream every crew page receives, so without this one crew
+        # could decline (or accept) another's call. sim-service checks it.
+        if not user.unit_id:
+            raise HTTPException(status_code=403, detail="This crew account has no vehicle.")
+        cmd.payload["unit_id"] = user.unit_id
 
 
 def ws_signed_in(ws: WebSocket) -> bool:

@@ -268,3 +268,24 @@ def test_tick_republishes_active_requests_on_the_interval(patched_edges):
     c.tick(step=3, sim_time_s=12.0)
     (evt,) = c.drain_events()
     assert evt["state"] == "ROUTE_READY" and evt["actor"] == "system:monitor"
+
+
+def test_a_crew_can_replan_only_its_own_trip(patched_edges):
+    """Request ids are on the live stream every crew page receives; a crew
+    could re-plan another vehicle's trip. api-service stamps the sending
+    crew's vehicle as unit_id, and a command for someone else's trip is
+    ignored. An operator's command carries no unit_id and still works."""
+    c = EmergencyController(_diamond(), _FakeAnomalies())
+    c.handle_create(_create_payload(), step=1, sim_time_s=1.0)
+    c.drain_events()
+    recalc = {"request_id": "er-1", "action": "RECALCULATE", "requested_at": 2_000_000,
+              "reason": "crew asked"}
+
+    c.handle_command({**recalc, "unit_id": "pol-07"}, step=2, sim_time_s=2.0)
+    assert c.drain_events() == []                                  # someone else's: ignored
+
+    c.handle_command({**recalc, "unit_id": "amb-01"}, step=3, sim_time_s=3.0)
+    assert [e["detail"] for e in c.drain_events()] == ["crew asked"]   # its own: re-planned
+
+    c.handle_command({**recalc, "reason": "operator"}, step=4, sim_time_s=4.0)
+    assert [e["detail"] for e in c.drain_events()] == ["operator"]     # operator: any trip

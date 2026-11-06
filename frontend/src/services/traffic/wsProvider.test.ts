@@ -33,6 +33,49 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 describe("live snapshot integration", () => {
+  it("seeds incidents raised before the page opened from the registry", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({
+      ok: true,
+      json: async () => [{ incident_id: "old-1", intersection_id: "1880441505", state: "candidate",
+        first_seen_ms: Date.now() - 60_000, fused_probability: 0.9 }],
+    })));
+    const provider = createWebSocketProvider();
+    let snap: TrafficSnapshot | undefined;
+    provider.subscribe((s) => {
+      snap = s;
+    });
+    provider.start();
+    Socket.latest.onopen?.();
+    await vi.advanceTimersByTimeAsync(500);
+    expect(snap!.incidents.map((i) => [i.id, i.status])).toEqual([["old-1", "candidate"]]);
+    provider.stop();
+  });
+  it("keeps a corridor that arrives before its request (topics are relayed independently)", () => {
+    const provider = createWebSocketProvider();
+    let snap: TrafficSnapshot | undefined;
+    provider.subscribe((s) => {
+      snap = s;
+    });
+    provider.start();
+    Socket.latest.onopen?.();
+    const corridor = (event: string, detail = "") => ({
+      corridor_id: "gc-0003", request_id: "r1", vehicle_id: "EV-AMB-1", event, status: "ACTIVE",
+      route_edges: ["a", "b"], peak_concurrency: 1, detail,
+      reservations: [{ intersection_id: "J1", movements: ["L0"], open_at_ms: 0, close_at_ms: 1, order: 0 }],
+    });
+    Socket.latest.sendEvent("GreenCorridorUpdated", corridor("activated"));
+    Socket.latest.sendEvent("GreenCorridorUpdated", corridor("junction_passed", "J1"));
+    Socket.latest.sendEvent("EmergencyRequestUpdated", {
+      request_id: "r1", vehicle_id: "EV-AMB-1", vehicle_kind: "AMBULANCE",
+      state: "GREEN_CORRIDOR_ACTIVE", source_edge: "a", destination_edge: "b",
+    });
+    vi.advanceTimersByTime(500);
+    const req = snap!.emergencyRequests.find((r) => r.id === "r1");
+    expect(req?.corridor?.corridorId).toBe("gc-0003");
+    expect(req?.corridor?.reservations).toHaveLength(1);
+    expect(req?.corridor?.passedIntersections).toEqual(["J1"]);
+    provider.stop();
+  });
   it("does not report socket-open or timer ticks as fresh traffic", () => {
     const provider = createWebSocketProvider();
     let snap: TrafficSnapshot | undefined;

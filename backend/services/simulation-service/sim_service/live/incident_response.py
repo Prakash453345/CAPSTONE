@@ -71,6 +71,9 @@ DEPOTS_PATH = _SCEN / "responder_depots.json"
 
 _KIND_BY_NAME = {k.name: k for k in EmergencyKind}
 
+STAND_DOWN_ACTOR = "system:incident-response"
+"""Who cancels a trip whose incident ended (the console words it as a stand-down)."""
+
 _RESPONDING_SEVERITIES = frozenset(
     {AnomalySeverity.MEDIUM, AnomalySeverity.HIGH, AnomalySeverity.BLOCKED}
 )
@@ -249,6 +252,7 @@ class IncidentResponseOrchestrator:
             u.vehicle_id: u for units in self._units.values() for u in units
         }
         self._seen_anomalies: set[str] = set()
+        self._ended: set[str] = set()  # seen anomalies already handled as ended
         self._waiting: dict[tuple[str, EmergencyKind], _Call] = {}
         self._call_of_request: dict[str, _Call] = {}  # incident request -> what it serves
         self._suggestions: dict[str, dict] = {}       # open reassignment suggestions
@@ -257,6 +261,8 @@ class IncidentResponseOrchestrator:
         self._pending_hospital: set[str] = set()  # vehicle_id awaiting a chained hospital leg
         self._events: list[dict] = []
         emergency.on_arrival = self._on_emergency_arrival
+        if crew_dispatcher is not None:
+            crew_dispatcher.on_exhausted = self._on_crew_exhausted
 
     def _unit(self, vehicle_id: str, kind: EmergencyKind, depot: _Depot) -> _Unit:
         crew = Crew(
@@ -298,6 +304,7 @@ class IncidentResponseOrchestrator:
     # ---- per-tick --------------------------------------------------
 
     def tick(self, step: int, sim_time_s: float) -> None:
+        self._stand_down_ended(step=step, sim_time_s=sim_time_s)
         self._free_idle_crews()
         new = []
         for anomaly in self.anomalies.active_anomalies():
@@ -317,6 +324,38 @@ class IncidentResponseOrchestrator:
     def drain_events(self) -> list[dict]:
         out, self._events = self._events, []
         return out
+
+    def _stand_down_ended(self, *, step: int, sim_time_s: float) -> None:
+        """Stand down units still driving to an incident that has ended
+        (cleared by an operator, or its duration ran out). They used to carry
+        on -- green corridor and all -- to a scene that no longer existed;
+        the spec is "no emergency, no corridor". A hospital leg is left alone:
+        that ambulance has a patient on board whatever happened to the road.
+        Offers still open for the incident are taken back too (an expired
+        anomaly never got the withdraw an operator's clear does)."""
+        active = {a.anomaly_id for a in self.anomalies.active_anomalies()}
+        ended = self._seen_anomalies - active - self._ended
+        if not ended:
+            return
+        self._ended |= ended
+        for aid in ended:
+            if self.crew_dispatcher is not None:
+                for kind in EmergencyKind:
+                    self.crew_dispatcher.withdraw(f"resp-{aid}-{kind.value}", now_s=sim_time_s)
+            for req in self.emergency.active_requests():
+                rid = req.request_id
+                if not rid.startswith(f"resp-{aid}-") or "-hospital" in rid:
+                    continue
+                self.emergency.handle_command(
+                    {"request_id": rid, "action": "CANCEL", "operator": STAND_DOWN_ACTOR,
+                     "reason": "incident ended -- unit stood down"},
+                    step=step, sim_time_s=sim_time_s,
+                )
+                self._pending_hospital.discard(req.vehicle_id)
+                if (self.crew_dispatcher is not None
+                        and self.crew_dispatcher.roster.get(req.vehicle_id) is not None):
+                    self.crew_dispatcher.release(req.vehicle_id)
+                log.info("incident %s ended: %s stood down (%s)", aid, req.vehicle_id, rid)
 
     def _free_idle_crews(self) -> None:
         """A request can end without the vehicle arriving (an operator cancels it,
@@ -680,6 +719,33 @@ class IncidentResponseOrchestrator:
             "offered anomaly %s (%s) to %s", anomaly.anomaly_id, kind.value, offer.unit_id
         )
         return True
+
+    def _on_crew_exhausted(
+        self, incident_id: str, kind: EmergencyKind, edge_id: str, now_s: float
+    ) -> None:
+        """Every crew asked about one of this orchestrator's calls declined or
+        did not answer. Treat it like "no crew free" at dispatch time: queue
+        the call for a depot unit (`_serve_queue` sends one next tick, or when
+        one frees), instead of leaving an accident with no response at all."""
+        prefix, suffix = "resp-", f"-{kind.value}"
+        if not (incident_id.startswith(prefix) and incident_id.endswith(suffix)):
+            return  # not an anomaly call (an operator's own dispatch retries in the console)
+        anomaly_id = incident_id[len(prefix):-len(suffix)]
+        anomaly = next(
+            (a for a in self.anomalies.active_anomalies() if a.anomaly_id == anomaly_id), None
+        )
+        if anomaly is None or (anomaly_id, kind) in self._waiting or not self._units.get(kind):
+            return
+        try:
+            lat, lon = edge_latlon(edge_id)
+        except Exception:  # noqa: BLE001 -- TraCI down / edge has no lanes
+            lat, lon = None, None
+        self._waiting[(anomaly_id, kind)] = _Call(
+            anomaly_id=anomaly_id, anomaly_type=anomaly.anomaly_type.value,
+            severity=anomaly.severity, kind=kind, edge_id=edge_id, since_s=now_s,
+            lat=lat, lon=lon,
+        )
+        log.info("no %s crew took %s: queued for a depot unit", kind.value, anomaly_id)
 
     def _nearest_available(
         self, kind: EmergencyKind, lat: float | None, lon: float | None, dest_edge: str,

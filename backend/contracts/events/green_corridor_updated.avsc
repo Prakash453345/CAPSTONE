@@ -2,12 +2,12 @@
   "type": "record",
   "name": "GreenCorridorUpdated",
   "namespace": "itms.contracts",
-  "doc": "Lifecycle of one green corridor along an emergency vehicle's route, on `emergency.corridor-updated`. Emitted by sim-service's CorridorController: `proposed`/`activated` when it is armed, `junction_passed` as the EV clears each junction, `terminated` when the EV has cleared them all or the request is cancelled. The reservations are the time-boxed movement holds the Signal Controller turns into `SignalPlan(source=\"corridor_preemption\")` proposals — this event never commands a signal, it reports intent.",
+  "doc": "Lifecycle of one green corridor along an emergency vehicle's route, on `emergency.corridor-updated`. Emitted by sim-service's CorridorController: `proposed`/`activated` when it is armed, `junction_passed` as the EV clears each junction, `terminated` when the EV has cleared them all or the request is cancelled, and `snapshot` every 10 s of sim time while active (no change, the current state with `passed` filled in) so a console opened mid-trip learns the corridor and its progress. The reservations are the time-boxed movement holds the Signal Controller turns into `SignalPlan(source=\"corridor_preemption\")` proposals — this event never commands a signal, it reports intent.",
   "fields": [
     { "name": "corridor_id", "type": "string" },
     { "name": "request_id", "type": "string" },
     { "name": "vehicle_id", "type": "string" },
-    { "name": "event", "type": { "type": "enum", "name": "GreenCorridorEvent", "symbols": ["proposed", "activated", "junction_passed", "terminated"] } },
+    { "name": "event", "type": { "type": "enum", "name": "GreenCorridorEvent", "symbols": ["proposed", "activated", "junction_passed", "terminated", "snapshot"] } },
     { "name": "status", "type": { "type": "enum", "name": "GreenCorridorStatus", "symbols": ["PROPOSED", "ACTIVE", "RESTORING", "COMPLETED", "CANCELLED"] } },
     { "name": "route_edges", "type": { "type": "array", "items": "string" }, "default": [] },
     {
@@ -30,6 +30,7 @@
     },
     { "name": "peak_concurrency", "type": "int", "default": 0 },
     { "name": "detail", "type": "string", "default": "" },
+    { "name": "passed", "type": { "type": "array", "items": "string" }, "default": [], "doc": "Junctions the vehicle has already cleared, in route order. Filled on every event, so a client that missed the `junction_passed` events still shows the right progress." },
     { "name": "sim_tick", "type": ["null", "long"], "default": null },
     { "name": "updated_at", "type": { "type": "long", "logicalType": "timestamp-millis" } }
   ]

@@ -237,3 +237,38 @@ def test_a_blockage_the_route_is_forced_through_is_not_retried(patched_edges):
     for t in (80.0, 120.0, 160.0, 200.0):                   # several cooldowns later
         c.tick(step=int(t), sim_time_s=t)
     assert _reroute_count(c) == first
+
+
+def test_a_forced_reroute_onto_the_same_roads_says_held_not_rerouted(patched_edges, monkeypatch):
+    """A blockage with no way round, on a vehicle already driving: the replan
+    keeps the same roads. The update used to read "auto-reroute -- road
+    blocked ahead", which the console shows as "Automatic reroute" (live,
+    2026-11-05) while the vehicle drives on into the blockage."""
+    veh_state = {"edge": "S", "pos": 50.0, "speed": 8.0}
+    fake = type("V", (), {
+        "getIDList": lambda self: ["amb-1"],
+        "getRoadID": lambda self, v: veh_state["edge"],
+        "getLanePosition": lambda self, v: veh_state["pos"],
+        "getSpeed": lambda self, v: veh_state["speed"],
+        "getPosition": lambda self, v: (0.0, 0.0),
+        "setRoute": lambda self, v, e: None,
+        "add": lambda self, *a, **k: None,
+        "setColor": lambda self, *a: None,
+        "remove": lambda self, v: None,
+    })()
+    monkeypatch.setattr(ec.traci, "vehicle", fake)
+    monkeypatch.setattr(ec.traci.route, "add", lambda rid, edges: None)
+    monkeypatch.setattr(ec.traci.simulation, "convertGeo", lambda x, y: (80.6, 16.5))
+    anoms = _Anoms()
+    c = _controller(anoms)
+    _create(c)
+    c.handle_command(dict(request_id="er-1", action="ACTIVATE_CORRIDOR", operator="op",
+                          requested_at=2000), step=2, sim_time_s=2.0)
+    c.tick(step=3, sim_time_s=3.0)                         # departs
+    anoms.items = [_blocked("A"), _blocked("B", aid="an-2")]   # no way round
+    c.drain_events()
+    c.tick(step=40, sim_time_s=40.0)
+    details = [e["detail"] for e in c.drain_events() if e.get("detail")]
+    assert details, "the monitor reacted to the blockage"
+    assert not any(d.startswith("auto-reroute") for d in details)
+    assert any(d.startswith("reroute held: road blocked ahead") for d in details)

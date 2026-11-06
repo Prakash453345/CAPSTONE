@@ -82,6 +82,7 @@ class _FakeVehicles:
     def __init__(self):
         self.state: dict[str, dict] = {}
         self.added: list[tuple] = []
+        self.add_kwargs: dict[str, dict] = {}
         self.removed: list[str] = []
         self.routes_set: list[tuple[str, tuple[str, ...]]] = []
 
@@ -91,8 +92,9 @@ class _FakeVehicles:
     def setRoute(self, veh_id, edges):  # noqa: N802
         self.routes_set.append((veh_id, tuple(edges)))
 
-    def add(self, veh_id, route_id, typeID="", departSpeed=""):  # noqa: N803
+    def add(self, veh_id, route_id, typeID="", departSpeed="", **kw):  # noqa: N803
         self.added.append((veh_id, route_id))
+        self.add_kwargs[veh_id] = kw
         self.state[veh_id] = {"edge": "S", "pos": 0.0, "speed": 0.0, "xy": (0.0, 0.0)}
 
     def remove(self, veh_id):

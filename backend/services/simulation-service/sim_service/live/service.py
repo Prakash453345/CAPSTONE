@@ -116,6 +116,7 @@ def run_live(
         # (CREW_AUTO_ACCEPT=false: the crew page shows Accept / Decline).
         auto_accept=os.environ.get("CREW_AUTO_ACCEPT", "true").strip().lower()
         not in {"0", "false", "no", "off"},
+        real_s_per_sim_s=1.0 / realtime_factor if realtime_factor > 0 else 1.0,
     )
     # The accept callback fires inside the tick, so it needs the tick's clock;
     # the alternative, dispatching an emergency at sim time 0, makes every
@@ -391,6 +392,7 @@ def _build_dispatch(
                     str(payload.get("offer_id", "")),
                     accept=bool(payload.get("accept")),
                     now_s=sim_time,
+                    unit_id=str(payload.get("unit_id") or "") or None,
                 )
         else:
             log.info("no live handler for command %s (step %d) -- ignored", etype, step)

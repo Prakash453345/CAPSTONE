@@ -178,6 +178,11 @@ class _ActiveCorridor:
     # progress-based "the EV has cleared this one" detection
     dist_by_order: dict[int, float]
     passed: set[int] = field(default_factory=set)  # reservation orders cleared
+    last_emit_ms: int = 0  # when this corridor last went out on the bus
+
+
+SNAPSHOT_INTERVAL_S = 10.0
+"""An active corridor quiet for this long (sim seconds) is re-published as a `snapshot`."""
 
 
 class CorridorController:
@@ -305,6 +310,12 @@ class CorridorController:
                     )
             if active.passed >= set(tl_by_order):
                 self.deactivate(request_id, reason="all junctions cleared", step=step)
+        # Every other event fires once, on a change; a console that connects
+        # mid-trip (or reloads) never learnt the corridor or how far along it
+        # the vehicle is. Re-state each active one now and then.
+        for active in list(self._active.values()):
+            if self._now_ms - active.last_emit_ms >= SNAPSHOT_INTERVAL_S * 1000:
+                self._emit(active.corridor, event="snapshot", step=step)
 
     # ---- the arbiter hook -------------------------------------
 
@@ -463,9 +474,15 @@ class CorridorController:
         detail: str = "",
         step: int | None = None,
     ) -> None:
+        active = self._active.get(corridor.request_id)
+        passed: list[str] = []
+        if active is not None and active.corridor.corridor_id == corridor.corridor_id:
+            active.last_emit_ms = self._now_ms
+            in_order = sorted(corridor.reservations, key=lambda r: r.order)
+            passed = [r.intersection_id for r in in_order if r.order in active.passed]
         self._events.append(green_corridor_payload(
             corridor, event=event, detail=detail, step=step,
-            updated_at_ms=self._now_ms or None,
+            updated_at_ms=self._now_ms or None, passed=passed,
         ))
 
 
@@ -481,6 +498,7 @@ def green_corridor_payload(
     detail: str = "",
     step: int | None = None,
     updated_at_ms: int | None = None,
+    passed: list[str] | None = None,
 ) -> dict:
     return {
         "corridor_id": corridor.corridor_id,
@@ -501,6 +519,7 @@ def green_corridor_payload(
         ],
         "peak_concurrency": corridor.peak_concurrency(),
         "detail": detail,
+        "passed": list(passed or []),
         "sim_tick": step,
         "updated_at": updated_at_ms if updated_at_ms is not None else corridor.created_at_ms,
     }

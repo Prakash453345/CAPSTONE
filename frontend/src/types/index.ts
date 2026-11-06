@@ -268,6 +268,7 @@ export type NotificationKind =
   | "junction-passed"
   | "emergency-vehicle-arrived"
   | "route-failure"
+  | "unit-stood-down"
   | "signal-fault"
   | "connection-lost"
   | "connection-restored"

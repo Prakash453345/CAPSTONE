@@ -119,8 +119,13 @@ export function mapCorridor(p: Record<string, unknown>): GreenCorridorView {
       order: Number(o.order ?? 0),
     };
   });
-  const passed =
-    p.event === "junction_passed" && typeof p.detail === "string" ? [p.detail] : [];
+  // `passed` (every event since the snapshot event was added) is the whole
+  // list so far; a junction_passed's `detail` names the one just cleared.
+  const listed = Array.isArray(p.passed) ? (p.passed as unknown[]).map(String) : [];
+  const passed = mergePassed(
+    listed,
+    p.event === "junction_passed" && typeof p.detail === "string" ? [p.detail] : [],
+  );
   return {
     corridorId: String(p.corridor_id ?? ""),
     status: String(p.status ?? "proposed").toLowerCase() as GreenCorridorStatus,

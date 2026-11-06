@@ -8,6 +8,8 @@ the wiring between them."""
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 from itms_domain import Anomaly, AnomalySeverity, AnomalySource, AnomalyType, EmergencyKind
 from sim_service.control.dispatch import Facility, FacilityIndex
@@ -64,6 +66,7 @@ class _FakeVehicles:
     def __init__(self) -> None:
         self.state: dict[str, dict] = {}
         self.added: list[tuple] = []
+        self.add_kwargs: dict[str, dict] = {}
         self.removed: list[str] = []
 
     def getIDList(self):  # noqa: N802
@@ -72,8 +75,9 @@ class _FakeVehicles:
     def setRoute(self, veh_id, edges):  # noqa: N802
         pass
 
-    def add(self, veh_id, route_id, typeID="", departSpeed=""):  # noqa: N803
+    def add(self, veh_id, route_id, typeID="", departSpeed="", **kw):  # noqa: N803
         self.added.append((veh_id, route_id))
+        self.add_kwargs[veh_id] = kw
         self.state[veh_id] = {"edge": "S", "pos": 0.0, "speed": 0.0, "xy": (0.0, 0.0)}
 
     def remove(self, veh_id):
@@ -193,6 +197,39 @@ def test_high_severity_accident_dispatches_police_and_ambulance(wired):
     assert alert["undispatched_kinds"] == ["fire_truck"]  # no depot data for it
 
 
+class _AskingCrews:
+    """A crew dispatcher that offers every call to a crew, who then declines."""
+
+    def __init__(self) -> None:
+        self.on_exhausted = None
+
+    def request(self, incident_id, kind, edge_id, *, now_s):
+        return SimpleNamespace(unit_id="EV-POL-1")  # an offer went out
+
+
+def test_a_call_every_crew_declined_falls_back_to_a_depot_unit(wired):
+    """Ask-first mode (CREW_AUTO_ACCEPT=false): the one police crew declines.
+    The call used to die there -- an accident with no police at all -- while
+    "no crew free" at dispatch time did fall back to a depot unit."""
+    _, emergency, anomalies, _ = wired
+    crews = _AskingCrews()
+    orch = IncidentResponseOrchestrator(
+        anomalies, emergency, facility_index=FacilityIndex([_hospital()]),
+        police_depots=[_Depot(depot_id="police-1", name="Central PS", edge="S",
+                              lat=16.49, lon=80.60)],
+        crew_dispatcher=crews,
+    )
+    anomalies.items = [_accident()]
+    orch.tick(step=1, sim_time_s=1.0)
+    assert emergency.active_requests() == []  # offered to crews, nobody sent yet
+
+    crews.on_exhausted("resp-an-1-police", EmergencyKind.POLICE, "T", 2.0)
+    crews.on_exhausted("operator-call-7", EmergencyKind.POLICE, "T", 2.0)  # not ours: ignored
+    orch.tick(step=3, sim_time_s=3.0)
+
+    assert [r.vehicle_id for r in emergency.active_requests()] == ["unit-police-0"]
+
+
 def test_low_severity_anomaly_is_not_dispatched(wired):
     orch, emergency, anomalies, veh = wired
     anomalies.items = [_accident(severity=AnomalySeverity.LOW)]
@@ -256,6 +293,45 @@ def test_ambulance_arrival_chains_to_the_nearest_hospital(wired):
     assert chained.state.name == "IN_TRANSIT"          # T-H, no signal
     assert chained.destination_edge == "H"
     assert orch._unit_by_vehicle_id["unit-ambulance-0"].busy is True  # departing again
+
+
+def test_responders_stop_at_the_scene_and_leave_from_it(wired):
+    """The anomaly slows its whole road, so a responder routed to the road's
+    end crawled past the scene at incident speed (minutes over its ETA, live,
+    2026-11-05). It must stop where the incident is -- the middle of the road
+    when no position is given, as the console draws it -- and the ambulance's
+    hospital leg must start from there, not back at the road's beginning."""
+    orch, emergency, anomalies, veh = wired
+    anomalies.items = [_accident()]                      # on T, 100 m long
+    orch.tick(step=1, sim_time_s=1.0)
+    orch.drain_events()
+
+    assert veh.add_kwargs["unit-police-0"]["arrivalPos"] == "50.00"
+    assert veh.add_kwargs["unit-ambulance-0"]["arrivalPos"] == "50.00"
+
+    _arrive(emergency, veh, "unit-ambulance-0", edge="T")
+
+    assert veh.add_kwargs["unit-ambulance-0"]["departPos"] == "50.0"
+    assert "arrivalPos" not in veh.add_kwargs["unit-ambulance-0"]  # hospital road: run to its end
+
+
+def test_units_still_driving_to_an_incident_that_ended_are_stood_down(wired):
+    """Cleared (or expired) incidents used to keep their responders driving
+    there, green corridor and all (seen live, 2026-11-05). A hospital leg is
+    a patient on board and must go on."""
+    orch, emergency, anomalies, veh = wired
+    anomalies.items = [_accident()]
+    orch.tick(step=1, sim_time_s=1.0)
+    _arrive(emergency, veh, "unit-ambulance-0", edge="T")        # now on its hospital leg
+    assert {r.vehicle_id for r in emergency.active_requests()} == {"unit-police-0",
+                                                                   "unit-ambulance-0"}
+    anomalies.items = []                                          # operator cleared it
+    orch.tick(step=20, sim_time_s=20.0)
+
+    police = emergency.get_request("resp-an-1-police")
+    assert police.state.name == "CANCELLED"
+    assert [r.request_id for r in emergency.active_requests()] == ["resp-an-1-ambulance-hospital"]
+    assert orch._unit_by_vehicle_id["unit-police-0"].busy is False
 
 
 def test_police_arrival_releases_with_no_chained_corridor(wired):

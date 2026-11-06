@@ -7,6 +7,7 @@
     { "name": "offer_id", "type": "string", "doc": "From the CrewOfferUpdated event on `crew.offer`." },
     { "name": "accept", "type": "boolean" },
     { "name": "reason", "type": "string", "default": "", "doc": "Optional, for a decline: free text the operator can see." },
+    { "name": "unit_id", "type": "string", "default": "", "doc": "The answering crew's own vehicle, stamped by api-service from the signed-in crew account (never trusted from the client). sim-service ignores an answer whose unit_id is set and is not the unit the offer was made to, so one crew cannot accept or decline another's call. Empty for an operator answering on a crew's behalf." },
     { "name": "requested_at", "type": { "type": "long", "logicalType": "timestamp-millis" } }
   ]
 }

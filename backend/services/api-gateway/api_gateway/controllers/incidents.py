@@ -10,9 +10,10 @@ from __future__ import annotations
 
 import time
 
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 from itms_domain.incident import IllegalTransition, IncidentClass
 
+from api_gateway.core.security import reviewer_actor
 from api_gateway.dependencies import BusDep, IncidentsDep
 from api_gateway.models.incidents import ConfirmRequest, RejectRequest
 from api_gateway.services.incident_registry import (
@@ -20,6 +21,19 @@ from api_gateway.services.incident_registry import (
     publish_detected,
     publish_updated,
 )
+
+
+def _classification(raw: str) -> IncidentClass | None:
+    """The enum by value ("stall") or by name ("STALL"), in any case. The
+    console sends names -- the wire contract's symbols -- and this used to
+    accept only values, so every confirm from the console failed with 422."""
+    text = (raw or "").strip()
+    for candidate in (text.lower(), text.upper()):
+        try:
+            return IncidentClass(candidate) if candidate.islower() else IncidentClass[candidate]
+        except (ValueError, KeyError):
+            continue
+    return None
 
 
 async def list_incidents(incidents: IncidentsDep) -> list[dict]:
@@ -43,14 +57,15 @@ async def confirm_incident(
     body: ConfirmRequest,
     incidents: IncidentsDep,
     bus: BusDep,
+    request: Request,
 ) -> dict:
     """Turn a raised CANDIDATE into a real, dispatch-worthy incident."""
-    try:
-        classification = IncidentClass(body.classification)
-    except ValueError:
+    body.actor = reviewer_actor(request, body.actor)
+    classification = _classification(body.classification)
+    if classification is None:
         raise HTTPException(
             status_code=422, detail=f"unknown classification {body.classification!r}"
-        ) from None
+        )
     at_ms = int(time.time() * 1000)
     try:
         inc = incidents.confirm(incident_id, at_ms=at_ms, actor=body.actor,
@@ -68,10 +83,12 @@ async def reject_incident(
     body: RejectRequest,
     incidents: IncidentsDep,
     bus: BusDep,
+    request: Request,
 ) -> dict:
     """Dismiss a raised CANDIDATE as a false alarm -- plan 4.4's feedback
     signal for the conformal calibrator, once something consumes
     `incident.updated` to fold it back in (not yet wired)."""
+    body.actor = reviewer_actor(request, body.actor)
     at_ms = int(time.time() * 1000)
     try:
         inc = incidents.reject(incident_id, at_ms=at_ms, actor=body.actor, detail=body.detail)

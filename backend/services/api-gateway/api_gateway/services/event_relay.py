@@ -91,10 +91,12 @@ class EventRelay:
                     try:
                         await self.handle(decode_envelope(msg.raw))
                     except Exception:
-                        log.exception("failed to handle message %s on %s",
+                        # Acked all the same: XREADGROUP ">" never redelivers it,
+                        # so an unacked poison message (say, one written against
+                        # a newer contract) only sat in the pending list forever.
+                        log.exception("failed to handle message %s on %s -- skipping",
                                       msg.message_id, msg.topic)
-                    else:
-                        await self.bus.ack(msg.topic, group, msg.message_id)
+                    await self.bus.ack(msg.topic, group, msg.message_id)
             except asyncio.CancelledError:
                 raise
             except Exception:

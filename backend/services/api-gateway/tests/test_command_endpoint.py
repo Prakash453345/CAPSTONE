@@ -105,6 +105,53 @@ def test_a_crew_may_answer_and_choose_its_own_hospital_but_not_run_the_city():
     _check_crew_command(_user("operator"), CommandRequest(event_type="AnomalyCreateRequested"))
 
 
+def test_a_crew_answers_only_as_its_own_vehicle():
+    """Offer ids go out on the live stream to every crew page; the answer is
+    stamped with the answering crew's vehicle so sim-service can ignore one
+    crew declining another's call (seen live, 2026-11-05)."""
+    from api_gateway.core.security import check_crew_command as _check_crew_command
+
+    answer = CommandRequest(event_type="CrewOfferResponse",
+                            payload={"offer_id": "off-1", "accept": False, "unit_id": "EV-POL-1"})
+    _check_crew_command(_user("responder", "EV-AMB-1"), answer)
+    assert answer.payload["unit_id"] == "EV-AMB-1"
+    with pytest.raises(HTTPException) as ei:
+        _check_crew_command(_user("responder", None),
+                            CommandRequest(event_type="CrewOfferResponse",
+                                           payload={"offer_id": "off-1", "accept": True}))
+    assert ei.value.status_code == 403
+
+
+def test_a_crew_replans_only_as_its_own_vehicle():
+    from api_gateway.core.security import check_crew_command as _check_crew_command
+
+    recalc = CommandRequest(event_type="EmergencyCommand",
+                            payload={"request_id": "r1", "action": "RECALCULATE",
+                                     "unit_id": "EV-POL-1"})
+    _check_crew_command(_user("responder", "EV-AMB-1"), recalc)
+    assert recalc.payload["unit_id"] == "EV-AMB-1"          # whatever the client sent
+    with pytest.raises(HTTPException) as ei:
+        _check_crew_command(_user("responder", None),
+                            CommandRequest(event_type="EmergencyCommand",
+                                           payload={"request_id": "r1", "action": "RECALCULATE"}))
+    assert ei.value.status_code == 403
+    op = CommandRequest(event_type="EmergencyCommand",
+                        payload={"request_id": "r1", "action": "CANCEL"})
+    _check_crew_command(_user("operator"), op)
+    assert "unit_id" not in op.payload                       # operators act on any trip
+
+
+async def test_the_recorded_operator_is_the_signed_in_account_not_the_body():
+    """A payload "operator" used to win over the session, so any account could
+    act -- and be written into the audit trail -- as anyone."""
+    bus = _FakeBus()
+    cmd = CommandRequest(event_type="AnomalyClearRequested", payload={
+        "anomaly_id": "a1", "resolution": "CANCELLED", "reason": "",
+        "operator": "operator:chief", "requested_at": 1})
+    await post_command(cmd, bus, user=_user("operator"))
+    assert decode_envelope(bus.published[0][1])["payload"]["operator"] == "operator:operator1"
+
+
 def test_commands_need_a_session_when_sign_in_is_required(tmp_path):
     from api_gateway.core.config import Settings
     from api_gateway.core.security import session_user
