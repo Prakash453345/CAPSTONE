@@ -36,6 +36,7 @@ from api_gateway.services import crew_roster
 from api_gateway.services.auth import router as auth_router
 from api_gateway.services.clip_registry import ClipRegistry
 from api_gateway.services.connections import ConnectionManager
+from api_gateway.services.crew_ownership import CrewOwnership
 from api_gateway.services.event_relay import EventRelay
 from api_gateway.services.incident_registry import IncidentRegistry
 
@@ -48,7 +49,7 @@ async def _lifespan(app: FastAPI):
     bus = RedisStreamsBus(settings.redis_url)
     app.state.bus = bus
     relay = EventRelay(bus, app.state.connections, app.state.incidents, app.state.clips,
-                       settings.topics)
+                       settings.topics, crew_ownership=app.state.crew_ownership)
     relay_task = asyncio.create_task(relay.run_forever())
     # The gateway owns the accounts database, so it is the one that can say
     # which crews exist; sim-service does the matching and should not hold
@@ -70,11 +71,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     """Build the app with its own state. Tests pass their own `Settings` and
     set `app.state.bus` to a fake instead of starting the lifespan."""
     settings = settings or Settings.from_env()
-    app = FastAPI(title="ITMS api-gateway", lifespan=_lifespan)
+    docs = settings.api_docs
+    app = FastAPI(title="ITMS api-gateway", lifespan=_lifespan,
+                  docs_url="/docs" if docs else None, redoc_url="/redoc" if docs else None,
+                  openapi_url="/openapi.json" if docs else None)
     app.state.settings = settings
     app.state.connections = ConnectionManager()
     app.state.incidents = IncidentRegistry()
     app.state.clips = ClipRegistry(settings.clips_dir)
+    app.state.crew_ownership = CrewOwnership()
     app.add_middleware(
         CORSMiddleware,
         allow_origins=list(settings.cors_origins),

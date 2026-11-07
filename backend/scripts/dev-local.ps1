@@ -45,7 +45,9 @@ function Start-BackendProcess($name, [string[]] $arguments) {
 }
 
 Write-Host "Starting redis-server..."
-Start-Process -FilePath $redisExe -ArgumentList "--port 6379" -WorkingDirectory $run -WindowStyle Hidden
+# --bind 127.0.0.1: this Redis has no password, and anything that can write to
+# the bus can drive the simulation without signing in.
+Start-Process -FilePath $redisExe -ArgumentList "--port 6379 --bind 127.0.0.1" -WorkingDirectory $run -WindowStyle Hidden
 Start-Sleep -Seconds 2
 
 Write-Host "Starting api-gateway on :8000..."

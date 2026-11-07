@@ -38,9 +38,19 @@ COPY backend/data/scenarios ./data/scenarios
 COPY --from=web /src/frontend/dist /app/web
 COPY backend/deploy/entrypoint.sh /usr/local/bin/itms
 RUN chmod 755 /usr/local/bin/itms
-ENV PYTHONPATH=/app/backend/libs/common:/app/backend/libs/domain:/app/backend/services/api-gateway:/app/backend/services/simulation-service \
+# Run as an ordinary user, not root: a bug in the API or in a video decoder
+# then can't rewrite the code in the image or anything else root owns. The
+# app writes only under var/ (uploaded clips), so that alone is its own.
+RUN useradd --system --uid 10001 --home-dir /nonexistent --shell /usr/sbin/nologin itms \
+ && mkdir -p /app/backend/var \
+ && chown itms /app/backend/var
+# The image has no pyproject.toml for itms_domain.paths to find the backend
+# root by, so name it.
+ENV ITMS_BACKEND_ROOT=/app/backend \
+    PYTHONPATH=/app/backend/libs/common:/app/backend/libs/domain:/app/backend/services/api-gateway:/app/backend/services/simulation-service \
     PYTHONUNBUFFERED=1 \
     WEB_DIST=/app/web
+USER itms
 EXPOSE 8000
 ENTRYPOINT ["itms"]
 CMD ["api"]

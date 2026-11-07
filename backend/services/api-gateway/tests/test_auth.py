@@ -537,3 +537,15 @@ def test_a_session_idle_too_long_is_signed_out_and_me_keeps_an_active_one_alive(
     monkeypatch.setattr(auth, "_REFRESH_AFTER_S", 0)
     r = client.get("/v1/auth/me")
     assert r.status_code == 200 and auth.COOKIE_NAME in r.headers.get("set-cookie", "")
+
+
+def test_an_account_gets_a_limited_number_of_reset_codes_a_day(client, mailable, sent):
+    # Each code allows a few guesses; asking for a new one every minute must
+    # not turn that into thousands of guesses a day at the 6-digit code.
+    for _ in range(auth.RESET_CODES_PER_DAY):
+        assert forgot(client).status_code == 202
+        mailable.users["operator"].reset_sent_at -= auth.RESET_RESEND_AFTER
+    assert len(sent) == auth.RESET_CODES_PER_DAY
+    capped = forgot(client)
+    assert capped.status_code == 429
+    assert len(sent) == auth.RESET_CODES_PER_DAY
