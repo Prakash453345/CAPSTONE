@@ -11,8 +11,11 @@ services:
       POSTGRES_USER: itms
       POSTGRES_PASSWORD: itms
       POSTGRES_DB: itms
+    # 127.0.0.1 only: the dev passwords below are public (they're in git), so
+    # a published port on all interfaces would hand the database -- including
+    # every sign-in account -- to anyone on the same Wi-Fi.
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - itms-postgres-data:/home/postgres/pgdata/data
       - ./postgres/init:/docker-entrypoint-initdb.d:ro
@@ -26,8 +29,10 @@ services:
     image: redis:7-alpine
     container_name: itms-redis
     restart: unless-stopped
+    # 127.0.0.1 only: Redis has no password, and whoever can write to the bus
+    # can command the simulation without signing in.
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - itms-redis-data:/data
     healthcheck:
@@ -49,8 +54,8 @@ services:
       MINIO_ROOT_USER: itms
       MINIO_ROOT_PASSWORD: itms12345
     ports:
-      - "9000:9000"   # S3 API
-      - "9001:9001"   # console
+      - "127.0.0.1:9000:9000"   # S3 API (this machine only: default credentials)
+      - "127.0.0.1:9001:9001"   # console
     volumes:
       - itms-minio-data:/data
     healthcheck:

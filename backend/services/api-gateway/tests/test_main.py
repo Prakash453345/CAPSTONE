@@ -186,7 +186,7 @@ def _sign_in_app(tmp_path, **settings):
 def _request(app):
     from types import SimpleNamespace
 
-    return SimpleNamespace(cookies={}, app=app)
+    return SimpleNamespace(cookies={}, app=app, state=SimpleNamespace())
 
 
 def test_read_endpoints_need_a_session_when_sign_in_is_required(tmp_path):
@@ -216,11 +216,13 @@ def test_crew_accounts_cannot_read_clips_or_incidents(monkeypatch, tmp_path):
     from fastapi import HTTPException
 
     request = _request(_sign_in_app(tmp_path))
-    monkeypatch.setattr(security, "session_user", lambda request: SimpleNamespace(role="responder"))
+    monkeypatch.setattr(security, "session_user",
+                        lambda request: SimpleNamespace(role="responder", username="crew1"))
     with pytest.raises(HTTPException) as ei:
         security.operator_only(request)
     assert ei.value.status_code == 403
-    monkeypatch.setattr(security, "session_user", lambda request: SimpleNamespace(role="operator"))
+    monkeypatch.setattr(security, "session_user",
+                        lambda request: SimpleNamespace(role="operator", username="op1"))
     security.operator_only(request)
 
 
@@ -233,9 +235,9 @@ def test_a_signed_in_operator_can_review_without_the_api_key(monkeypatch, tmp_pa
 
     req = _request(_sign_in_app(tmp_path))
     monkeypatch.setattr(security.auth_mod, "get_user_store", lambda: None)
-    monkeypatch.setattr(security.auth_mod, "current_user", lambda r, s: SimpleNamespace(role="operator"))  # noqa: E501
+    monkeypatch.setattr(security.auth_mod, "current_user", lambda r, s: SimpleNamespace(role="operator", username="op1"))  # noqa: E501
     security.require_reviewer(req, "")                                  # operator session
-    monkeypatch.setattr(security.auth_mod, "current_user", lambda r, s: SimpleNamespace(role="responder"))  # noqa: E501
+    monkeypatch.setattr(security.auth_mod, "current_user", lambda r, s: SimpleNamespace(role="responder", username="crew1"))  # noqa: E501
     with pytest.raises(HTTPException) as ei:
         security.require_reviewer(req, "")
     assert ei.value.status_code == 403
@@ -278,3 +280,34 @@ async def test_the_relay_acks_a_message_it_cannot_handle_instead_of_leaving_it_p
     except asyncio.CancelledError:
         pass
     assert acked == ["1-0"]
+def test_the_stream_refuses_a_browser_on_another_website(tmp_path):
+    from starlette.websockets import WebSocketDisconnect
+
+    # CORS does not cover WebSockets and the browser sends the session cookie
+    # whatever page opens the socket, so the gateway checks Origin itself.
+    client = TestClient(create_app(
+        Settings(api_key=API_KEY, clips_dir=tmp_path, require_sign_in=False)))
+    with pytest.raises(WebSocketDisconnect) as ei, client.websocket_connect(
+            "/v1/stream", headers={"origin": "https://evil.example"}):
+        pass
+    assert ei.value.code == 1008
+    for origin in ("http://localhost:5173", "http://testserver", None):  # dev, same host, script
+        headers = {"origin": origin} if origin else {}
+        with client.websocket_connect("/v1/stream", headers=headers) as ws:
+            ws.send_text("ping")
+
+
+def test_a_review_is_recorded_under_the_signed_in_account(monkeypatch, tmp_path):
+    from types import SimpleNamespace
+
+    from api_gateway.core import security
+
+    req = _request(_sign_in_app(tmp_path))
+    monkeypatch.setattr(security.auth_mod, "get_user_store", lambda: None)
+    monkeypatch.setattr(security.auth_mod, "current_user",
+                        lambda r, s: SimpleNamespace(role="operator", username="alice"))
+    security.require_reviewer(req, "")
+    assert security.acting_as(req, "operator:bob") == "operator:alice"  # not who the body claims
+    script = _request(_sign_in_app(tmp_path))
+    security.require_reviewer(script, API_KEY)
+    assert security.acting_as(script, "camera:cam-7") == "camera:cam-7"  # a key holder names itself

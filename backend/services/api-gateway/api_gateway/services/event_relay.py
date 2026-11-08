@@ -21,6 +21,7 @@ from itms_common import RedisStreamsBus, decode_envelope
 from api_gateway.core.config import CONSUMER_GROUP
 from api_gateway.services.clip_registry import ClipRegistry
 from api_gateway.services.connections import ConnectionManager
+from api_gateway.services.crew_ownership import CrewOwnership
 from api_gateway.services.incident_registry import IncidentRegistry
 
 log = logging.getLogger("api-service.relay")
@@ -52,16 +53,20 @@ class EventRelay:
         incidents: IncidentRegistry,
         clips: ClipRegistry,
         topics: tuple[str, ...],
+        crew_ownership: CrewOwnership | None = None,
     ) -> None:
         self.bus = bus
         self.connections = connections
         self.incidents = incidents
         self.clips = clips
         self.topics = topics
+        self.crew_ownership = crew_ownership
 
     async def handle(self, envelope: dict) -> None:
         """Fold one decoded event into the read models, then broadcast it."""
         event_type = envelope["event_type"]
+        if self.crew_ownership is not None:
+            self.crew_ownership.apply_event(event_type, envelope["payload"])
         if event_type == "ClipAnalysed":
             self.clips.apply_analysed(envelope["payload"])
         if event_type in INCIDENT_EVENT_TYPES:

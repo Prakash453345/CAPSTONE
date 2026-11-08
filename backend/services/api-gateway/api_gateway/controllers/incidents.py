@@ -13,7 +13,7 @@ import time
 from fastapi import HTTPException, Request
 from itms_domain.incident import IllegalTransition, IncidentClass
 
-from api_gateway.core.security import reviewer_actor
+from api_gateway.core.security import acting_as
 from api_gateway.dependencies import BusDep, IncidentsDep
 from api_gateway.models.incidents import ConfirmRequest, RejectRequest
 from api_gateway.services.incident_registry import (
@@ -60,7 +60,7 @@ async def confirm_incident(
     request: Request,
 ) -> dict:
     """Turn a raised CANDIDATE into a real, dispatch-worthy incident."""
-    body.actor = reviewer_actor(request, body.actor)
+    body.actor = acting_as(request, body.actor)
     classification = _classification(body.classification)
     if classification is None:
         raise HTTPException(
@@ -88,7 +88,7 @@ async def reject_incident(
     """Dismiss a raised CANDIDATE as a false alarm -- plan 4.4's feedback
     signal for the conformal calibrator, once something consumes
     `incident.updated` to fold it back in (not yet wired)."""
-    body.actor = reviewer_actor(request, body.actor)
+    body.actor = acting_as(request, body.actor)
     at_ms = int(time.time() * 1000)
     try:
         inc = incidents.reject(incident_id, at_ms=at_ms, actor=body.actor, detail=body.detail)

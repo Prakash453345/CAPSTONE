@@ -130,6 +130,10 @@ LOCKOUT = dt.timedelta(minutes=15)
 RESET_CODE_MINUTES = 10
 RESET_MAX_ATTEMPTS = 5
 RESET_RESEND_AFTER = dt.timedelta(seconds=60)
+# Codes one account may be sent per day. Each code allows RESET_MAX_ATTEMPTS
+# guesses, so without a cap someone could ask for a fresh code every minute
+# and make ~7,000 guesses a day at a 1-in-a-million code. With it: 50 a day.
+RESET_CODES_PER_DAY = 10
 MIN_PASSWORD_LENGTH = 10
 MAX_USERNAME_LENGTH = 64
 # Long enough for any passphrase, short enough that hashing one is not a DoS.
@@ -775,6 +779,24 @@ class ResetRequest(CodeRequest):
     new_password: str = Field(min_length=1, max_length=MAX_PASSWORD_LENGTH)
 
 
+_reset_sends: dict[str, list[dt.datetime]] = {}
+_reset_sends_lock = threading.Lock()
+
+
+def _take_reset_send(username: str, now: dt.datetime) -> bool:
+    """Count one code sent to `username`; False when today's allowance is used.
+    In memory, per process: it only ever holds real accounts' names (callers
+    check the account exists first), and a restart forgetting it is harmless."""
+    with _reset_sends_lock:
+        recent = [t for t in _reset_sends.get(username, []) if now - t < dt.timedelta(days=1)]
+        if len(recent) >= RESET_CODES_PER_DAY:
+            _reset_sends[username] = recent
+            return False
+        recent.append(now)
+        _reset_sends[username] = recent
+        return True
+
+
 def _code_digest(username: str, code: str) -> str:
     # Keyed, so a leaked database row can't be brute-forced offline without the secret.
     return hmac.new(AUTH_SECRET, f"reset:{username}:{code}".encode(), hashlib.sha256).hexdigest()
@@ -827,6 +849,13 @@ def forgot(body: ForgotRequest, response: Response, store: StoreDep) -> dict[str
             record.reset_sent_at is not None and now - record.reset_sent_at < RESET_RESEND_AFTER
         )
         if not cooling:
+            if not _take_reset_send(username, now):
+                raise HTTPException(
+                    status_code=429,
+                    detail="Too many reset codes requested for this account. Try again "
+                    "tomorrow, or ask an administrator.",
+                    headers={"Cache-Control": "no-store"},
+                )
             code = f"{secrets.randbelow(10**6):06d}"
             # Send first and store only if it went out, so a failed send neither
             # claims success nor starts the resend cooldown.

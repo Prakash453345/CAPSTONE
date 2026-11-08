@@ -10,6 +10,11 @@ on:
       - "backend/**"
       - ".github/workflows/backend.yml"
 
+# Read-only token: these jobs only check out and test the code, so a
+# compromised dependency or action can't push, tag or edit releases.
+permissions:
+  contents: read
+
 defaults:
   run:
     working-directory: backend

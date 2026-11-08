@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Annotated
 
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Request
 from itms_common import encode_envelope
 
 from api_gateway.core.config import COMMANDS_TOPIC, EVENT_SOURCE
@@ -20,13 +20,13 @@ log = logging.getLogger("api-service.commands")
 async def post_command(
     cmd: CommandRequest,
     bus: BusDep,
+    request: Request = None,  # type: ignore[assignment]  # FastAPI fills it; unit tests may not
     user: Annotated[UserRecord | None, Depends(session_user)] = None,
 ) -> dict:
     if user is not None:
-        check_crew_command(user, cmd)
-        # Who did it comes from the session, never from the body: a payload
-        # "operator" field used to win, so any account could act -- and be
-        # recorded in the audit trail -- as anyone ("operator:chief").
+        check_crew_command(user, cmd, request.app.state.crew_ownership)
+        # A signed-in account is recorded as itself: a payload naming someone
+        # else must not reach the audit trail (or the crew roster) as them.
         cmd.operator = f"{user.role}:{user.username}"
         payload = {**cmd.payload, "operator": cmd.operator}
     else:

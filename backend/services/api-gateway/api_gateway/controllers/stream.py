@@ -4,10 +4,13 @@ from __future__ import annotations
 
 from fastapi import WebSocket, WebSocketDisconnect
 
-from api_gateway.core.security import ws_signed_in
+from api_gateway.core.security import ws_origin_allowed, ws_signed_in
 
 
 async def stream(ws: WebSocket) -> None:
+    if not ws_origin_allowed(ws):
+        await ws.close(code=1008)
+        return
     if ws.app.state.settings.require_sign_in and not ws_signed_in(ws):
         # 1008 = policy violation: the browser shows the stream as offline and
         # the page's own sign-in check sends the person to /login.

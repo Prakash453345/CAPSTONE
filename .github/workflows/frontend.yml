@@ -12,6 +12,11 @@ on:
       - "backend/data/scenarios/networks/**/*.geojson"
       - ".github/workflows/frontend.yml"
 
+# Read-only token: these jobs only check out and test the code, so a
+# compromised dependency or action can't push, tag or edit releases.
+permissions:
+  contents: read
+
 defaults:
   run:
     working-directory: frontend
