@@ -28,7 +28,11 @@ echo "3/4  building the SUMO network ..."
 # Regenerate this list (junction degree) if the arterial/bbox changes.
 TLS_IDS="cluster_1880441740_4393296791,cluster_1880441532_4393295467_6357870905_6357870906,cluster_11608007559_1880441514_4393295460_6354264758,cluster_1880441541_4393295474,7871074777,2833253632,1880441505"
 
+# --lefthand: India drives on the left. Without it SUMO defaults to right-hand
+# traffic, which puts undivided two-way streets on the wrong side and mirrors
+# which turn is the free one.
 netconvert --osm-files filtered_corridor.osm.xml -o vijayawada_corridor.net.xml \
+  --lefthand \
   --geometry.remove --geometry.remove.min-length 5 \
   --type-files "$SUMO_HOME/data/typemap/osmNetconvert.typ.xml" \
   --junctions.join --junctions.join-dist 25 \
