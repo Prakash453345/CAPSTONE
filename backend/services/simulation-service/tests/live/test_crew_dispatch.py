@@ -351,3 +351,25 @@ def test_an_open_offer_is_resent_with_the_real_time_it_has_left():
     assert accepted["state"] == "accepted" and accepted["expires_in_s"] == 0.0
     d.tick(now_s=30.0)
     assert d.drain_events() == []                            # answered: no more re-sends
+
+
+def test_equally_close_crews_share_calls_longest_idle_first() -> None:
+    from sim_service.live.crew_dispatch import CrewDispatcher, CrewRoster, CrewUnit
+
+    class _Same:
+        def plan(self, *a, **k):
+            class R:
+                eta_s = 100.0
+            return [R()]
+
+    roster = CrewRoster()
+    for uid in ("AMB-1", "AMB-2", "AMB-3"):
+        roster.upsert(CrewUnit(uid, EmergencyKind.AMBULANCE, "depot", crew_username=uid,
+                               on_duty=True))
+    d = CrewDispatcher(roster, _Same(), None)
+    first = d.rank(EmergencyKind.AMBULANCE, "scene")[0][0]
+    assert first == "AMB-1"  # nobody has worked yet: roster order
+    roster.set_busy(first, True)
+    roster.set_busy(first, False)  # AMB-1 finishes and is idle again, most recently
+    order = [u for u, _ in d.rank(EmergencyKind.AMBULANCE, "scene")]
+    assert order == ["AMB-2", "AMB-3", "AMB-1"]

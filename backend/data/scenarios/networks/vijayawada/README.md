@@ -92,11 +92,30 @@ for j in root.findall("junction"):
 The corridor above is deliberately one arterial, so between most pairs of
 roads there is exactly one way to drive, and the emergency router can't show
 a choice. The district network keeps the whole arterial grid around it from
-the same OSM extract (trunk down to unclassified roads): **314 roads, every
-road reachable from every other, 17 signals** (the corridor's signalised
+the same OSM extract (trunk down to unclassified roads): **362 roads, every
+road reachable from every other, 28 signals** (the corridor's signalised
 crossings plus the other crossings where two named arterials meet with at
-least three ways in and out). The corridor files and every gate measured on
+least three ways in and out, plus the other junctions that make up the same
+crossing: OSM splits one real crossing into several junctions a few metres
+apart, and a light on only one of them left traffic on the rest unsignalised). The corridor files and every gate measured on
 them are untouched; the district is a separate network for the live console.
+
+The district also follows the busy routes that connect to it, but only while
+there is a signal on them. `district_busy.osm.xml` (an Overpass download of the
+larger area) holds the trunk, primary and secondary roads out to 3 km;
+`filter_district.py --extend` clips them to the box and `build_district.sh` adds
+them when the file is there. `select_district.py` then keeps an extension road only
+if a signal follows within 1.2 km of the district or of the previous signal
+(`MAX_GAP_M`); a longer stretch of road with none, and every spur and loop, is
+dropped. A street with three or more signals on it is a signalised arterial and
+is kept from signal to signal up to 3 km apart (`ARTERIAL_GAP_M`): that is Karl
+Marx Road, along the district's north edge, with seven. Outside the district a crossing of busy roads with three ways in and out
+gets a signal whatever the street names (the extension keeps no side streets, and
+many of its roads are unnamed). OpenStreetMap tags only 24 signal nodes in this
+whole area, mostly pedestrian crossings on the barrage, so the tags are no guide.
+That leaves the original 313 roads plus 49 on the routes that reach a signal.
+Step 4 of the build passes `--tls.rebuild`, so a junction that lost roads gets a
+signal program that matches what is left.
 
 Build (needs SUMO, run from this directory):
 

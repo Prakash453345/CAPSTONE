@@ -794,6 +794,7 @@ def run_controlled_scenario(
                     receiving_occupancy: Mapping[str, float] = {}
                     receiving_queue_pcu: Mapping[str, float] = {}
                     approaching_pcu: Mapping[str, float] = {}
+                    imminent_pcu: Mapping[str, float] = {}
                     blocked_by: Mapping[str, str] = {}
                     yield_waiting_pcu: Mapping[str, float] = {}
                     if js.queue_sampler is not None:
@@ -807,6 +808,7 @@ def run_controlled_scenario(
                             receiving_occupancy = sample.receiving_occupancy
                             receiving_queue_pcu = sample.receiving_queue_pcu
                             approaching_pcu = sample.approaching_pcu
+                            imminent_pcu = sample.imminent_pcu
                             blocked_by = sample.blocked_by
                             yield_waiting_pcu = sample.yield_waiting_pcu
                         else:
@@ -821,6 +823,7 @@ def run_controlled_scenario(
                         receiving_occupancy=receiving_occupancy,
                         receiving_queue_pcu=receiving_queue_pcu,
                         approaching_pcu=approaching_pcu,
+                        imminent_pcu=imminent_pcu,
                         blocked_by=blocked_by,
                         yield_waiting_pcu=yield_waiting_pcu,
                         preempt_seconds_last_hour=js.ctx.preempt_seconds_last_hour,

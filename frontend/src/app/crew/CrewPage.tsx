@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, MotionConfig, motion } from "framer-motion";
 import { WifiOff } from "lucide-react";
 import { CrewMap } from "@/components/crew/CrewMap";
@@ -11,7 +11,9 @@ import { ArrivalCard, BriefingCard, DirectionsCard, NoVehicleCard, StandbyCard }
 import { unitName } from "@/components/console/words";
 import { HOME_CITY } from "@/data/city";
 import { useGuidanceVoice } from "@/crew/useGuidanceVoice";
-import { useMission } from "@/crew/useMission";
+import { autoSelectUnit, useMission } from "@/crew/useMission";
+import { canAskCorridor } from "@/crew/corridorAsk";
+import { CorridorAskCard } from "@/components/crew/CorridorAskCard";
 import { useNewCallAlert } from "@/crew/useNewCallAlert";
 import { useWakeLock } from "@/crew/useWakeLock";
 import { TrafficDataBridge } from "@/services/traffic/TrafficDataBridge";
@@ -43,6 +45,7 @@ export function CrewPage() {
   const voice = useCrewStore((s) => s.voice);
   const setVoice = useCrewStore((s) => s.setVoice);
   const { request, mission, units } = useMission(unitId);
+  const unitKind = useCrewStore((s) => s.fleet.find((u) => u.unitId === unitId)?.kind);
   // Dispatch offering this crew a call. It is keyed on the unit the account is
   // bound to, so a driver only ever sees their own calls.
   const offer = useMyOffer(unitId);
@@ -78,13 +81,20 @@ export function CrewPage() {
     return () => window.clearInterval(t);
   }, []);
 
-  // Nobody has chosen a vehicle yet: follow the first one that has a call.
+  // An operator lands on the interesting vehicle without clicking: once, when
+  // the units first load, pick the most recent one on a corridor (else a
+  // dispatched one). After that, or once they choose themselves, leave it alone.
+  const autoPicked = useRef(false);
   useEffect(() => {
-    if (!locked && !unitId) {
-      const busy = units.find((u) => u.active);
-      if (busy) setUnit(busy.id);
-    }
+    if (locked || autoPicked.current || !units.length) return;
+    autoPicked.current = true;
+    const pick = autoSelectUnit(units);
+    if (pick && pick !== unitId) setUnit(pick);
   }, [locked, unitId, units, setUnit]);
+  const chooseUnit = (id: string) => {
+    autoPicked.current = true;
+    setUnit(id);
+  };
 
   // The map's emergency layer draws the selected request's vehicle larger.
   useEffect(() => {
@@ -112,7 +122,12 @@ export function CrewPage() {
     body = <NoVehicleCard />;
   } else if (!mission || (finished && !showArrival)) {
     view = "standby";
-    body = <StandbyCard unitName={name} weatherAdvice={weather ? trafficAdvice(weather) : null} />;
+    body = (
+      <div className="space-y-3">
+        <StandbyCard unitName={name} available={units.find((u) => u.id === unitId)?.status !== "dispatched"} weatherAdvice={weather ? trafficAdvice(weather) : null} />
+        {canAskCorridor(unitKind) && <CorridorAskCard className="pointer-events-auto" />}
+      </div>
+    );
   } else if (showArrival) {
     view = "arrival";
     body = <ArrivalCard mission={mission} onDone={() => setDismissed(mission.request.id)} />;
@@ -182,7 +197,7 @@ export function CrewPage() {
         )}
 
         <div className="pointer-events-none absolute inset-0 z-10 flex flex-col gap-3 p-3 pb-[176px] lg:pointer-events-auto lg:static lg:col-start-1 lg:row-start-1 lg:min-h-0 lg:overflow-y-auto lg:p-4 lg:pr-3">
-          <CrewHeader units={withCurrent(units, unitId, name)} unitId={unitId} onUnit={setUnit} locked={locked} kind={locked ? (user?.unitKind ?? null) : null} />
+          <CrewHeader units={withCurrent(units, unitId, name)} unitId={unitId} onUnit={chooseUnit} locked={locked} kind={locked ? (user?.unitKind ?? null) : null} />
           {locked && <AlertsPrompt />}
           <AnimatePresence initial={false}>
             {showBanner && mission?.next && (
@@ -227,5 +242,5 @@ export function CrewPage() {
 
 /** The picker must always be able to show the unit that is currently chosen. */
 function withCurrent(units: ReturnType<typeof useMission>["units"], unitId: string | null, name: string | null) {
-  return unitId && !units.some((u) => u.id === unitId) ? [...units, { id: unitId, name: name ?? unitId, active: false }] : units;
+  return unitId && !units.some((u) => u.id === unitId) ? [...units, { id: unitId, name: name ?? unitId, active: false, status: "available" as const, signalsAhead: 0, updatedAt: "" }] : units;
 }

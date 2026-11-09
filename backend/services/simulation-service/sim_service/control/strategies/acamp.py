@@ -799,6 +799,17 @@ class AcampConfig:
     shared `network` dict). No effect on control."""
 
     gap_out_grace_s: float = 3.0
+    imminent_extension: bool = False
+    """Delay-based extension before a pressure switch (2026-11-06, baselines/2026-11-06_heavy).
+    Vehicles that reach the stop line within about one passage time (`ctx.imminent_pcu`, 3 s)
+    are cheap to serve and expensive to stop: switching now makes each wait roughly a full
+    red (clearance + the next phase's minimum green), while extending costs the queues on red
+    the passage time. Extend when n_imminent * red_estimate > red_queue * passage time
+    (Miller 1963's extension test, the decision MOVA makes; FHWA Signal Timing Manual ch. 5).
+    Never past the green ceiling, and only where the forced-switch envelope has not fired."""
+    imminent_passage_s: float = 3.0
+    imminent_only_loaded: bool = False
+    """Apply the extension only while the network latch is engaged (heavy demand)."""
     """Seconds a phase may sit with no queue and no approaching vehicle before
     it yields to a phase that has one. `0.0` yields the instant it reads empty;
     a negative value disables the rule.
@@ -1234,6 +1245,7 @@ class AdaptiveCamp:
         weight this tick. Read only by `ceiling_relax_network_max`."""
         self._last_congested_s = -1e9
         self._load_net = 0.0
+        self._net_loaded_now = False
         self.nominal_cycle_s = nominal_cycle_s
         self.tick_s = tick_s
         self.memory = demand_memory
@@ -1652,6 +1664,7 @@ class AdaptiveCamp:
         max_g = cfg_t0.max_green_s.get(current, min_g)
         net_loaded = self._network_state() if self._network is not None and (
             self.cfg.network_trace or self.cfg.ceiling_relax_net_block is not None) else False
+        self._net_loaded_now = net_loaded
         if self.cfg.ceiling_relax_factor is not None:
             cw = memory_mod.congestion_weight(
                 self._load_ewma, self.cfg.switch_scale_ref, self.cfg.switch_scale_exponent
@@ -1847,6 +1860,24 @@ class AdaptiveCamp:
                     steps=(PlanStep(phase_id=current, green_s=self.tick_s),),
                     source="acamp",
                 )
+            if cfg.imminent_extension and elapsed < max_g and (
+                not cfg.imminent_only_loaded or self._net_loaded_now
+            ):
+                served = cfg_t0.phases[current].green_movements
+                n_imm = sum(ctx.imminent_pcu.get(m, 0.0) for m in served)
+                if n_imm > 0.0:
+                    nxt = max(pressures, key=pressures.get)
+                    red_s = lost_time_s + cfg_t0.min_green_s.get(nxt, 0.0)
+                    q_red = sum(
+                        v for m, v in ctx.queue_pcu.items() if m not in served
+                    )
+                    if n_imm * red_s > q_red * cfg.imminent_passage_s:
+                        self.stats["extend_imminent"] = self.stats.get("extend_imminent", 0) + 1
+                        return SignalPlan(
+                            intersection_id=cfg_t0.intersection_id,
+                            steps=(PlanStep(phase_id=current, green_s=self.tick_s),),
+                            source="acamp",
+                        )
             self.stats["switch_pressure"] += 1
         elif not current_faulted:
             if cfg.rest_in_green and all(

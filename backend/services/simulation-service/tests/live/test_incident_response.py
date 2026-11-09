@@ -147,7 +147,7 @@ def wired(monkeypatch):
     facility_index = FacilityIndex([_hospital()])
     police_depot = _Depot(depot_id="police-1", name="Central PS", edge="S", lat=16.49, lon=80.60)
     orch = IncidentResponseOrchestrator(
-        anomalies, emergency, facility_index=facility_index, police_depots=[police_depot],
+        anomalies, emergency, facility_index=facility_index, police_depots=[police_depot], fire_depots=[],
     )
     return orch, emergency, anomalies, veh
 
@@ -217,6 +217,7 @@ def test_a_call_every_crew_declined_falls_back_to_a_depot_unit(wired):
         anomalies, emergency, facility_index=FacilityIndex([_hospital()]),
         police_depots=[_Depot(depot_id="police-1", name="Central PS", edge="S",
                               lat=16.49, lon=80.60)],
+        fire_depots=[],
         crew_dispatcher=crews,
     )
     anomalies.items = [_accident()]
@@ -357,7 +358,7 @@ def _two_police_orch(monkeypatch, wired_parts):
     near = _Depot(depot_id="police-near", name="Near PS", edge="S", lat=16.499, lon=80.631)
     return IncidentResponseOrchestrator(
         anomalies, emergency, facility_index=FacilityIndex([_hospital()]),
-        police_depots=[far, near],
+        police_depots=[far, near], fire_depots=[],
     )
 
 
@@ -542,3 +543,11 @@ def test_equal_severity_never_suggests_a_reassignment(wired):
     orch.tick(step=1, sim_time_s=1.0)
     orch.tick(step=2, sim_time_s=2.0)
     assert not [e for e in orch.drain_events() if e.get("reassign_suggestions")]
+
+
+def test_cyber_crime_is_not_a_police_depot():
+    from sim_service.live.incident_response import load_police_depots
+
+    names = {d.name for d in load_police_depots()}
+    assert "Cyber Crime" not in names
+    assert {"Police Control Room", "Vijayawada city Police"} <= names

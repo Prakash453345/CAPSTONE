@@ -82,16 +82,16 @@ instead of one uniform triangle. Non-GUI runs keep using
 
 `build_district.sh` builds light / medium / heavy demand for the district
 network the same way: randomTrips with seed 42, trips of at least 300 m,
-then `assign_vtypes.py` for the vehicle mix. The district has ten times the
+then `assign_vtypes.py` for the vehicle mix. The district (362 roads with its busy routes) has more than ten times the
 corridor's roads, so the periods are shorter: 2.0 s / 1.0 s / 0.5 s
 (900 / 1800 / 3600 vehicles over 30 minutes). Headless check of each level
 (`sumo -c vijayawada_district*.sumocfg`):
 
 | level  | inserted   | teleports | mean time loss |
 |--------|------------|-----------|----------------|
-| light  | 895 / 900  | 12        | 83 s           |
-| medium | 1777 / 1800| 25        | 111 s          |
-| heavy  | 3397 / 3600| 97        | 169 s          |
+| light  | 900 / 900  | 8         | 89 s           |
+| medium | 1794 / 1800| 8         | 127 s          |
+| heavy  | 3501 / 3600| 71        | 177 s          |
 
 Not calibrated demand, as with the corridor: enough to load every signal and
 give the emergency router real traffic to weigh.

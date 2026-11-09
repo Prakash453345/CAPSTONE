@@ -14,6 +14,7 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/utils/cn";
+import { isCorridorAsk } from "@/crew/corridorAsk";
 import { CommandError, postCommand } from "@/services/traffic/commands";
 import {
   CREW_TYPES,
@@ -508,10 +509,15 @@ function RoutePreview({ request }: { request: EmergencyRequest }) {
       footer={
         terminal ? undefined : (
           <div className="space-y-2">
+            {isCorridorAsk(request) && (
+              <p role="status" className="rounded-2xl bg-primary-muted px-3 py-2.5 text-[13px] text-primary">
+                {request.detail}
+              </p>
+            )}
             {active && request.state === "route_ready" && (
               <PrimaryButton onClick={() => send("ACTIVATE_CORRIDOR", "corridor")} disabled={busy != null}>
                 {busy === "corridor" ? <Loader2 className="animate-spin" /> : <RouteIcon />}
-                Start with green corridor
+                {isCorridorAsk(request) ? "Approve green corridor" : "Start with green corridor"}
               </PrimaryButton>
             )}
             <div className="flex gap-2">
@@ -522,7 +528,7 @@ function RoutePreview({ request }: { request: EmergencyRequest }) {
                 </SecondaryButton>
               )}
               <SecondaryButton tone="critical" onClick={() => send("CANCEL", "cancel")} disabled={busy != null}>
-                {busy === "cancel" ? "Cancelling…" : "Stand down"}
+                {busy === "cancel" ? "Cancelling…" : isCorridorAsk(request) ? "Refuse" : "Stand down"}
               </SecondaryButton>
             </div>
           </div>

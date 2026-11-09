@@ -134,3 +134,125 @@ def test_a_hospital_nobody_chooses_is_chosen_for_them():
     assert legs == []
     missions.tick(131.0)
     assert legs[-1][0] == "r1-hospital-1" and legs[-1][3] == "h1"  # the fastest
+
+
+def _with_return():
+    roster = CrewRoster()
+    roster.upsert(_unit("POL-1", EmergencyKind.POLICE, "police1", "Police 1"))
+    roster.upsert(_unit("AMB-1", EmergencyKind.AMBULANCE, "ambulance1", "Ambulance 1"))
+    returns: list[tuple] = []
+    cancelled: list[str] = []
+    missions = CrewMissions(
+        CrewDispatcher(roster, _Planner(), None),
+        facility_index=FacilityIndex([]),
+        home_edges={EmergencyKind.POLICE: ["far", "near"]},
+        create_leg=lambda *a: True,
+        cancel=cancelled.append,
+        vehicle_edges=lambda: {},
+        edge_latlon=lambda e: (16.5, 80.6),
+        route_fn=lambda a, b: ((a, b), {"far": 500.0, "near": 90.0}[b]),
+        create_return=lambda *a: returns.append(a) or True,
+    )
+    return roster, missions, returns, cancelled
+
+
+def test_police_head_back_to_the_nearest_station_and_are_free_on_the_way() -> None:
+    roster, missions, returns, _ = _with_return()
+    roster.set_busy("POL-1", True)
+    missions.on_arrival("req-1", "POL-1", "scene")
+    assert not roster.get("POL-1").busy
+    assert returns == [("req-1-return", "POL-1", "scene", "near", EmergencyKind.POLICE)]
+    # reaching the station ends the trip and is not mistaken for a new scene
+    missions.on_arrival("req-1-return", "POL-1", "near")
+    assert roster.get("POL-1").edge_id == "near" and not roster.get("POL-1").busy
+    assert missions._returning == {}
+
+
+def test_a_unit_already_at_a_station_does_not_drive_anywhere() -> None:
+    _, missions, returns, _ = _with_return()
+    missions.on_arrival("req-1", "POL-1", "near")
+    assert returns == []
+
+
+def test_a_call_accepted_on_the_way_home_ends_the_trip_home() -> None:
+    _, missions, _, cancelled = _with_return()
+    missions.on_arrival("req-1", "POL-1", "scene")
+    missions.stop_return("POL-1")
+    assert cancelled == ["req-1-return"]
+    missions.stop_return("POL-1")  # nothing left to stop
+    assert cancelled == ["req-1-return"]
+
+
+def _asking(vehicles=None, ok=True):
+    roster = CrewRoster()
+    roster.upsert(_unit("POL-1", EmergencyKind.POLICE, "police1", "Police 1"))
+    roster.upsert(_unit("AMB-1", EmergencyKind.AMBULANCE, "ambulance1", "Ambulance 1"))
+    roster.set_position("POL-1", "here")
+    roster.set_position("AMB-1", "here")
+    asks: list[tuple] = []
+    notes: list[tuple] = []
+    cancelled: list[str] = []
+    drivers = vehicles if vehicles is not None else {}
+    missions = CrewMissions(
+        CrewDispatcher(roster, _Planner(), None),
+        facility_index=FacilityIndex([]),
+        home_edges={},
+        create_leg=lambda *a: True,
+        cancel=cancelled.append,
+        vehicle_edges=lambda: drivers,
+        edge_latlon=lambda e: (16.5, 80.6),
+        route_fn=lambda a, b: None,
+        create_ask=lambda *a: asks.append(a) or ok,
+        annotate=lambda *a: notes.append(a),
+    )
+    return roster, missions, asks, notes, cancelled, drivers
+
+
+def test_a_police_crew_can_ask_for_a_corridor_and_waits_for_an_operator() -> None:
+    roster, missions, asks, notes, cancelled, _ = _asking()
+    rid = missions.ask_corridor("POL-1", "far", "pursuit", now_s=10.0, step=1)
+    assert rid == "crewreq-POL-1-10000"
+    assert asks == [(rid, "POL-1", "here", "far", EmergencyKind.POLICE, "crew:POL-1")]
+    assert roster.get("POL-1").busy  # no other call is offered meanwhile
+    assert "pursuit" in notes[0][2] and notes[0][1] == "crew:POL-1"
+    assert cancelled == []
+
+
+def test_only_police_ask_and_only_one_ask_at_a_time() -> None:
+    roster, missions, asks, *_ = _asking()
+    roster.upsert(_unit("FIRE-1", EmergencyKind.FIRE_TRUCK, "fire1", "Fire 1"))
+    roster.set_position("FIRE-1", "here")
+    assert missions.ask_corridor("FIRE-1", "far", "", now_s=1.0, step=1) is None
+    assert missions.ask_corridor("AMB-1", "far", "", now_s=1.0, step=1) is None
+    assert missions.ask_corridor("NOPE", "far", "", now_s=1.0, step=1) is None
+    assert missions.ask_corridor("POL-1", "far", "", now_s=1.0, step=1) is not None
+    assert missions.ask_corridor("POL-1", "far2", "", now_s=2.0, step=1) is None
+    assert len(asks) == 1
+
+
+def test_a_unit_on_a_call_cannot_ask() -> None:
+    roster, missions, asks, *_ = _asking()
+    roster.set_busy("POL-1", True)
+    assert missions.ask_corridor("POL-1", "far", "", now_s=1.0, step=1) is None
+    assert asks == []
+
+
+def test_an_ask_with_no_route_frees_the_unit() -> None:
+    roster, missions, *_ = _asking(ok=False)
+    assert missions.ask_corridor("POL-1", "far", "", now_s=1.0, step=1) is None
+    assert not roster.get("POL-1").busy
+
+
+def test_an_unanswered_ask_is_stood_down_and_an_approved_one_is_kept() -> None:
+    roster, missions, _, _, cancelled, drivers = _asking()
+    rid = missions.ask_corridor("POL-1", "far", "", now_s=0.0, step=1)
+    missions.tick(60.0)
+    assert cancelled == []
+    missions.tick(130.0)
+    assert cancelled == [rid] and not roster.get("POL-1").busy
+
+    roster.set_busy("POL-1", False)
+    rid2 = missions.ask_corridor("POL-1", "far", "", now_s=200.0, step=2)
+    drivers["POL-1"] = "road9"  # an operator approved: the vehicle is on the road
+    missions.tick(400.0)
+    assert cancelled == [rid] and roster.get("POL-1").busy and rid2

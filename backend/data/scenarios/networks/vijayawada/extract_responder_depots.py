@@ -41,6 +41,10 @@ _HERE = Path(__file__).resolve().parent
 NET_PATH = _HERE / "vijayawada_corridor.net.xml"
 OSM_PATH = _HERE / "vijayawada_corridor_bbox.osm.xml"
 OUT_PATH = _HERE / "responder_depots.json"
+# Police entries that are not patrol bases: kept in the file, never parked at.
+NON_DISPATCH = {"Cyber Crime"}
+# NOTE: re-running this rewrites the file and drops the hand-added fire station
+# (Agni Mapaka Kendram, an amenity=fire_station node outside this extract).
 
 SNAP_RADIUS_M = 400.0
 """Same generous radius `extract_facilities.py` uses, and for the same
@@ -108,6 +112,8 @@ def extract(net_path: Path = NET_PATH, osm_path: Path = OSM_PATH) -> list[dict]:
             "edge": edge.getID(),
             "edge_offset_m": round(edge.getLength() / 2.0, 1),
             "snap_distance_m": round(distance, 1),
+            # an investigative unit, not a base for patrol cars
+            **({"dispatch": False} if name in NON_DISPATCH else {}),
         })
 
     return sorted(depots, key=lambda d: (d["kind"], d["name"]))

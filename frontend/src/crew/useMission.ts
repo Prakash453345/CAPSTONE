@@ -24,6 +24,41 @@ export interface UnitOption {
   kind?: EmergencyVehicleKind;
   /** Has a mission that is still on the road. */
   active: boolean;
+  /** On a green corridor, dispatched without one yet, or free. */
+  status: UnitStatus;
+  /** Signals still to be held green on its corridor (corridor status only). */
+  signalsAhead: number;
+  /** When its latest request last changed (ISO), to find the most recent. */
+  updatedAt: string;
+}
+
+export type UnitStatus = "corridor" | "dispatched" | "available";
+
+const KINDS = new Set<string>(["ambulance", "fire_truck", "police"]);
+
+const STATUS_RANK: Record<UnitStatus, number> = { corridor: 0, dispatched: 1, available: 2 };
+
+function statusOf(r: EmergencyRequest): { status: UnitStatus; signalsAhead: number } {
+  if (isTerminalRequest(r)) return { status: "available", signalsAhead: 0 };
+  const c = r.corridor;
+  if (r.state === "green_corridor_active" || c?.status === "active") {
+    const passed = new Set(c?.passedIntersections ?? []);
+    return { status: "corridor", signalsAhead: (c?.reservations ?? []).filter((x) => !passed.has(x.intersectionId)).length };
+  }
+  return { status: "dispatched", signalsAhead: 0 };
+}
+
+/** "Ambulance 2 · corridor, 3 signals ahead" -- the tag shown beside a name. */
+export function statusTag(u: Pick<UnitOption, "status" | "signalsAhead">): string {
+  if (u.status === "corridor") return u.signalsAhead ? `corridor, ${u.signalsAhead} signal${u.signalsAhead === 1 ? "" : "s"} ahead` : "corridor";
+  return u.status === "dispatched" ? "dispatched" : "available";
+}
+
+/** The unit to land on when the page opens: the most recently updated one on a corridor. */
+export function autoSelectUnit(units: readonly UnitOption[]): string | null {
+  const onCorridor = units.filter((u) => u.status === "corridor");
+  const pool = onCorridor.length ? onCorridor : units.filter((u) => u.status === "dispatched");
+  return [...pool].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0]?.id ?? null;
 }
 
 /** One route the system offers for a call, with its drawable plan. */
@@ -61,21 +96,26 @@ export interface Mission {
  *  kind), so there is no fixed list beyond the fleet itself. */
 export function unitOptions(
   requests: readonly EmergencyRequest[],
-  fleet: readonly { unitId: string; callSign: string }[] = [],
+  fleet: readonly { unitId: string; callSign: string; kind?: string }[] = [],
 ): UnitOption[] {
   const byId = new Map<string, UnitOption>();
-  for (const u of fleet) byId.set(u.unitId, { id: u.unitId, name: u.callSign || unitName(u.unitId), active: false });
+  for (const u of fleet) byId.set(u.unitId, { id: u.unitId, name: u.callSign || unitName(u.unitId), kind: KINDS.has(u.kind ?? "") ? (u.kind as EmergencyVehicleKind) : undefined, active: false, status: "available", signalsAhead: 0, updatedAt: "" });
   for (const r of requests) {
     const known = byId.get(r.vehicleId);
     const active = !isTerminalRequest(r);
+    const { status, signalsAhead } = statusOf(r);
+    // A unit may have several requests; the live one (best status) wins, then the newest.
+    const prev = byId.get(r.vehicleId);
+    const better = !prev?.updatedAt || STATUS_RANK[status] < STATUS_RANK[prev.status] || (status === prev.status && r.updatedAt > prev.updatedAt);
     byId.set(r.vehicleId, {
       id: r.vehicleId,
       name: unitName(r.vehicleId),
       kind: r.vehicleKind,
       active: active || !!known?.active,
+      ...(better ? { status, signalsAhead, updatedAt: r.updatedAt } : { status: prev!.status, signalsAhead: prev!.signalsAhead, updatedAt: prev!.updatedAt }),
     });
   }
-  return [...byId.values()].sort((a, b) => Number(b.active) - Number(a.active) || a.name.localeCompare(b.name));
+  return [...byId.values()].sort((a, b) => STATUS_RANK[a.status] - STATUS_RANK[b.status] || a.name.localeCompare(b.name));
 }
 
 /** The request a unit should be following: its live one, else its latest finished one. */
