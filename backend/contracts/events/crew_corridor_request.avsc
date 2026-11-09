@@ -1,0 +1,12 @@
+{
+  "type": "record",
+  "name": "CrewCorridorRequest",
+  "namespace": "itms.contracts",
+  "doc": "A police crew, on `commands.operator`: I need a green corridor to this road (a pursuit, an escort, a call that did not come through dispatch). sim-service plans the route from where the unit is and holds it at ROUTE_READY for an operator, who approves it with ACTIVATE_CORRIDOR or refuses it with CANCEL. Nothing is preempted until then.",
+  "fields": [
+    { "name": "unit_id", "type": "string" },
+    { "name": "destination_edge", "type": "string" },
+    { "name": "reason", "type": "string", "default": "" },
+    { "name": "requested_at", "type": { "type": "long", "logicalType": "timestamp-millis" } }
+  ]
+}

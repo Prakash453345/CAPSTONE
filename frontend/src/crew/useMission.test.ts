@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { EmergencyRequest } from "@/types";
-import { requestForUnit, unitOptions } from "./useMission";
+import { autoSelectUnit, requestForUnit, statusTag, unitOptions } from "./useMission";
 
 const req = (over: Partial<EmergencyRequest>): EmergencyRequest => ({
   id: "r",
@@ -65,5 +65,38 @@ describe("requestForUnit", () => {
     const older = req({ id: "older", state: "completed", updatedAt: "2026-10-17T08:00:00Z" });
     const newer = req({ id: "newer", state: "cancelled", updatedAt: "2026-10-17T09:00:00Z" });
     expect(requestForUnit([older, newer], "EV-001")!.id).toBe("newer");
+  });
+});
+
+describe("status and auto-select", () => {
+  const corridor = (id: string, at: string, passed: string[] = []) =>
+    req({
+      id,
+      vehicleId: id,
+      state: "green_corridor_active",
+      updatedAt: at,
+      corridor: {
+        corridorId: id,
+        status: "active",
+        passedIntersections: passed,
+        peakConcurrency: 1,
+        reservations: ["i1", "i2", "i3"].map((intersectionId) => ({ intersectionId })) as never,
+      },
+    });
+
+  it("groups corridor, then dispatched, then available, and tags signals ahead", () => {
+    const options = unitOptions(
+      [req({ id: "d", vehicleId: "unit-fire-1", state: "route_ready" }), corridor("unit-ambulance-2", "2026-10-17T10:00:00Z", ["i1"])],
+      [{ unitId: "unit-police-1", callSign: "Police 1" }],
+    );
+    expect(options.map((u) => u.status)).toEqual(["corridor", "dispatched", "available"]);
+    expect(statusTag(options[0])).toBe("corridor, 2 signals ahead");
+  });
+
+  it("lands on the most recent corridor, else a dispatched unit, else nothing", () => {
+    const options = unitOptions([corridor("a", "2026-10-17T10:00:00Z"), corridor("b", "2026-10-17T11:00:00Z"), req({ id: "c", vehicleId: "c", state: "created" })]);
+    expect(autoSelectUnit(options)).toBe("b");
+    expect(autoSelectUnit(unitOptions([req({ id: "c", vehicleId: "c", state: "created" })]))).toBe("c");
+    expect(autoSelectUnit(unitOptions([], [{ unitId: "x", callSign: "X" }]))).toBeNull();
   });
 });

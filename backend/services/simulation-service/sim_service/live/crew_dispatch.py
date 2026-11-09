@@ -67,6 +67,8 @@ DEFAULT_PREFILTER_RINGS: int | None = 12
 # Planning every candidate on a large roster is wasted work -- rank the nearest
 # few by air distance first, then spend the planner on those.
 DEFAULT_MAX_PLANNED = 8
+# ETAs this close (seconds) count as a tie when ranking crews.
+TIE_WINDOW_S = 5.0
 # An open offer is re-sent this often (real seconds), so a crew page that
 # reloads, or connects, while it is out still gets the call: the stream only
 # carries what happens after a page connects, and an offer used to be sent once.
@@ -90,6 +92,9 @@ class CrewUnit:
     on_duty: bool = False
     busy: bool = False
     call_sign: str = ""
+    # Order in which units became free (0 = never been on a call): lower has
+    # been idle longer. Breaks ties between equally close crews.
+    freed_seq: int = 0
 
     @property
     def available(self) -> bool:
@@ -159,6 +164,7 @@ class CrewRoster:
 
     def __init__(self, units: Iterable[CrewUnit] = ()) -> None:
         self._units: dict[str, CrewUnit] = {u.unit_id: u for u in units}
+        self._free_counter = 0
 
     def __len__(self) -> int:
         return len(self._units)
@@ -181,7 +187,10 @@ class CrewRoster:
         # not rewind live state (where the unit is, whether it is on a call).
         self._units[unit.unit_id] = (
             unit if existing is None
-            else replace(unit, edge_id=existing.edge_id, busy=existing.busy)
+            else replace(
+                unit, edge_id=existing.edge_id, busy=existing.busy,
+                freed_seq=existing.freed_seq,
+            )
         )
 
     def remove(self, unit_id: str) -> None:
@@ -195,6 +204,9 @@ class CrewRoster:
     def set_busy(self, unit_id: str, busy: bool) -> None:
         u = self._units.get(unit_id)
         if u is not None:
+            if u.busy and not busy:
+                self._free_counter += 1
+                u.freed_seq = self._free_counter  # most recently freed = idle least
             u.busy = busy
 
     def set_duty(self, unit_id: str, on_duty: bool) -> None:
@@ -328,7 +340,11 @@ class CrewDispatcher:
                 continue
             if routes:
                 out.append((u.unit_id, float(routes[0].eta_s)))
-        out.sort(key=lambda t: t[1])
+        # Crews within TIE_WINDOW_S of each other are equally good: the one
+        # idle longest goes first, so a station's crews share the calls instead
+        # of the first on the roster taking every one.
+        idle = {u.unit_id: u.freed_seq for u in units}
+        out.sort(key=lambda t: (int(t[1] // TIE_WINDOW_S), idle.get(t[0], 0), t[0]))
         return out
 
     def _air_m(self, a: str, b: str) -> float:

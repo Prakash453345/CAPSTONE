@@ -1,7 +1,12 @@
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import { fileURLToPath, URL } from "node:url";
 import { itmsNetwork, networkAlias } from "./network.config";
+
+// Vite reads .env.local only after this file is evaluated, and network.config
+// reads process.env, so a VITE_ITMS_NETWORK set in .env.local was ignored and the
+// console silently stayed on the corridor. A shell value still wins.
+process.env.VITE_ITMS_NETWORK ??= loadEnv(process.env.NODE_ENV === "production" ? "production" : "development", process.cwd(), "VITE_").VITE_ITMS_NETWORK;
 import { cspPlugin } from "./csp.config";
 
 // Response headers for the dev and preview servers. A meta-tag CSP (see

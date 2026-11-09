@@ -18,6 +18,15 @@ if [ -z "${SUMO_HOME:-}" ]; then
 fi
 PY="${PYTHON:-python3}"
 RAW="${1:-raw_osm.xml}"
+# Busy routes beyond the district: trunk, primary and secondary roads from this larger
+# extract (district_busy.osm.xml, from the Overpass API) are added out to MARGIN
+# degrees (0.03 is about 3 km) past BOX, the district's own extent. Without
+# the file the district is exactly what RAW holds.
+BUSY="${BUSY:-district_busy.osm.xml}"
+BOX="${BOX:-80.610982,16.485617,80.674690,16.520437}"
+MARGIN="${MARGIN:-0.03}"
+EXTEND=()
+[ -f "$BUSY" ] && EXTEND=(--extend "$BUSY" --box "$BOX" --margin "$MARGIN")
 
 # No --tls.join (the corridor build uses it): it can merge two nearby crossings
 # into one signal program spanning two junctions, and the Tier-0 extractor and
@@ -36,11 +45,11 @@ osm_opts=(
 )
 
 echo "1/6  filtering $RAW to the arterial grid ..."
-"$PY" filter_district.py "$RAW" filtered_district.osm.xml
+"$PY" filter_district.py "$RAW" filtered_district.osm.xml "${EXTEND[@]}"
 
 echo "2/6  survey build: find the connected core and the arterial crossings ..."
 netconvert --osm-files filtered_district.osm.xml -o district_survey.net.xml "${osm_opts[@]}"
-"$PY" select_district.py district_survey.net.xml district_keep_edges.txt district_tls.txt
+"$PY" select_district.py ${EXTEND[@]+--extension filtered_district.osm.xml.extension} district_survey.net.xml district_keep_edges.txt district_tls.txt
 
 echo "3/6  build with the crossings signalised ..."
 # --tls.set applies before --junctions.join, so a joined junction
@@ -52,7 +61,7 @@ netconvert --osm-files filtered_district.osm.xml -o district_signalised.net.xml 
 echo "4/6  trimming to the strongly connected core ..."
 # On a finished network the edge ids are final, so the core list (taken from
 # the survey build, which merges geometry the same way) matches exactly.
-netconvert --sumo-net-file district_signalised.net.xml -o vijayawada_district.net.xml --lefthand \
+netconvert --sumo-net-file district_signalised.net.xml -o vijayawada_district.net.xml --lefthand --tls.rebuild \
   --keep-edges.input-file district_keep_edges.txt --output.street-names
 
 # A few joined crossings are not addressable by their OSM nodes on the OSM

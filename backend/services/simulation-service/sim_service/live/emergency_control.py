@@ -139,6 +139,8 @@ class EmergencyController:
         # vehicle -> (road, metres along it) where its last trip ended, so its
         # next leg (an ambulance leaving the scene for hospital) starts there
         self._stopped_at: dict[str, tuple[str, float]] = {}
+        # Trips back to a station: ordinary driving, so no signals are preempted.
+        self._no_corridor: set[str] = set()
 
     # ---- command handling --------------------------------------------
 
@@ -172,6 +174,8 @@ class EmergencyController:
             active_request_id=request_id,
         )
         self._requests[request_id] = req
+        if payload.get("return_to_station"):
+            self._no_corridor.add(request_id)
         stopped = self._stopped_at.pop(vehicle_id, None)
         if payload.get("depart_pos_m") is not None:
             # a unit sent on from where it is (a reassignment): start where it
@@ -269,12 +273,16 @@ class EmergencyController:
                 request_id, req.state.value, req.route is not None,
             )
             return
-        corridor_id = self.corridor.activate(
-            request_id=request_id,
-            vehicle_id=req.vehicle_id,
-            route_edges=req.route.edges,
-            now_ms=int(sim_time_s * 1000),  # corridor windows live in sim time
-            step=step,
+        corridor_id = (
+            None
+            if request_id in self._no_corridor
+            else self.corridor.activate(
+                request_id=request_id,
+                vehicle_id=req.vehicle_id,
+                route_edges=req.route.edges,
+                now_ms=int(sim_time_s * 1000),  # corridor windows live in sim time
+                step=step,
+            )
         )
         if corridor_id is None:
             # No junction to preempt, but the vehicle still needs to actually
@@ -292,7 +300,7 @@ class EmergencyController:
             self._spawn_ev(request_id)
             self._queue(
                 request_id, step=step, actor=actor,
-                detail="route crosses no signal-controlled junction -- no corridor needed",
+                detail="no corridor needed (no signal on the route, or a trip back to station)",
             )
             log.info("emergency request %s -> IN_TRANSIT (no corridor needed)", request_id)
             return
@@ -665,7 +673,7 @@ class EmergencyController:
             req_now = self._requests[request_id]
             # arm a corridor for the new route even if the old route had none
             # (it crossed no signal); a signal on the new route still needs one
-            if self.corridor is not None:
+            if self.corridor is not None and request_id not in self._no_corridor:
                 new_corridor_id = self.corridor.activate(
                     request_id=request_id, vehicle_id=req_now.vehicle_id,
                     route_edges=edges, now_ms=int(sim_time_s * 1000), step=step,
@@ -894,6 +902,11 @@ class EmergencyController:
         v = self._vehicles.get(vehicle_id)
         if v is not None:
             self._vehicles[vehicle_id] = v.released()
+
+    def annotate(self, request_id: str, *, step: int, actor: str, detail: str) -> None:
+        """Publish the request again with a note (who asked for what)."""
+        if request_id in self._requests:
+            self._queue(request_id, step=step, actor=actor, detail=detail)
 
     def _queue(self, request_id: str, *, step: int, actor: str, detail: str = "") -> None:
         req = self._requests[request_id]

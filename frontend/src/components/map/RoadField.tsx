@@ -36,12 +36,15 @@ export function RoadField({
   onPickOnMap,
   onChange,
   placeholder = "Search roads",
+  hideMap = false,
 }: {
   value: PickedRoad | null;
   picking: boolean;
   onPickOnMap: () => void;
   onChange: (road: PickedRoad | null) => void;
   placeholder?: string;
+  /** No "pick on the map" button (where there is no map to pick on). */
+  hideMap?: boolean;
 }) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
@@ -130,7 +133,7 @@ export function RoadField({
             className="h-full min-w-0 flex-1 bg-transparent text-[15px] text-foreground outline-none placeholder:text-muted-foreground focus-visible:outline-none"
           />
         </label>
-        <button
+        {!hideMap && <button
           type="button"
           onClick={onPickOnMap}
           aria-pressed={picking}
@@ -142,7 +145,7 @@ export function RoadField({
         >
           <Crosshair />
           Map
-        </button>
+        </button>}
       </div>
       {picking && (
         <p className="mt-1.5 px-1 text-[12px] text-primary">Click the road on the map…</p>

@@ -34,6 +34,11 @@ log = logging.getLogger(__name__)
 
 # How often (simulated seconds) the live fleet is republished for the maps.
 ROSTER_EVERY_S = 5.0
+# How long an operator has to answer a crew's corridor request (simulated s).
+CORRIDOR_ASK_TTL_S = 120.0
+# Who may ask: police only. Ambulances and fire trucks are sent by dispatch,
+# which already gives them a corridor.
+CORRIDOR_ASK_KINDS = (EmergencyKind.POLICE,)
 # How many hospitals the crew is offered, and how many are routed to rank them.
 HOSPITAL_CHOICES = 4
 HOSPITAL_SHORTLIST = 8
@@ -75,7 +80,18 @@ class CrewMissions:
         edge_latlon: Callable[[str], tuple[float, float]],
         route_fn: Callable[[str, str], tuple[list[str], float] | None],
         auto_choose_after_s: float | None = None,
+        create_return: Callable[[str, str, str, str, EmergencyKind], bool] | None = None,
+        create_ask: Callable[[str, str, str, str, EmergencyKind, str], bool] | None = None,
+        annotate: Callable[[str, str, str], None] | None = None,
     ) -> None:
+        # Plans a route and holds it for an operator (no corridor yet).
+        self._create_ask = create_ask
+        self._annotate = annotate
+        self._asks: dict[str, tuple[str, float]] = {}  # request id -> (unit_id, expires_at_s)
+        # Starts a trip back to a station (no green corridor). None = units
+        # simply stay where they finished.
+        self._create_return = create_return
+        self._returning: dict[str, str] = {}  # unit_id -> its return trip's request id
         # Nobody chose a hospital this long after reaching the scene: take the
         # fastest one, so an ambulance with no one at the crew page still
         # delivers its patient instead of standing at the scene forever.
@@ -122,7 +138,16 @@ class CrewMissions:
             ):
                 log.info("no hospital chosen for %s: taking the fastest", mission.unit_id)
                 self.choose_hospital(mission.unit_id, "")
-        for vehicle_id, edge in self._vehicle_edges().items():
+        driving = self._vehicle_edges()
+        for rid, (unit_id, expires_s) in list(self._asks.items()):
+            if unit_id in driving:
+                del self._asks[rid]  # approved: the unit is on its way
+            elif sim_time_s >= expires_s:
+                log.info("corridor request %s from %s unanswered: stood down", rid, unit_id)
+                del self._asks[rid]
+                self._cancel(rid)
+                self.dispatcher.release(unit_id)
+        for vehicle_id, edge in driving.items():
             if edge and self.roster.get(vehicle_id) is not None:
                 self.roster.set_position(vehicle_id, edge)
         if sim_time_s >= self._next_roster_s:
@@ -158,6 +183,9 @@ class CrewMissions:
         if unit is None:
             return
         self.roster.set_position(vehicle_id, destination_edge)
+        if self._returning.get(vehicle_id) == request_id:
+            del self._returning[vehicle_id]  # back at its station
+            return
         mission = self._missions.get(vehicle_id)
         if mission is not None and request_id != mission.leg_request_id:
             return  # a leg that was replaced by a later choice: not the one that counts
@@ -184,6 +212,89 @@ class CrewMissions:
             self._publish(mission)
             return
         self.dispatcher.release(vehicle_id)
+        self._head_home(unit, destination_edge, request_id)
+
+    def _head_home(self, unit, from_edge: str, request_id: str) -> None:
+        """Police and fire units drive back to the nearest station by road.
+        They are free the whole way: a new call is matched from wherever they
+        are (their position follows the vehicle) and `stop_return` ends the
+        trip when one is accepted."""
+        homes = self.home_edges.get(unit.kind) or []
+        if self._create_return is None or not homes or from_edge in homes:
+            return
+        timed = []
+        for h in homes:
+            try:
+                routed = self._route_fn(from_edge, h)
+            except Exception:  # noqa: BLE001
+                routed = None
+            if routed is not None:
+                timed.append((routed[1], h))
+        if not timed:
+            return
+        rid = f"{request_id}-return"
+        if self._create_return(rid, unit.unit_id, from_edge, min(timed)[1], unit.kind):
+            self._returning[unit.unit_id] = rid
+            log.info("%s heading back to its station (%s)", unit.unit_id, min(timed)[1])
+
+    def is_returning(self, unit_id: str) -> bool:
+        return unit_id in self._returning
+
+    def ask_corridor(
+        self, unit_id: str, dest_edge: str, reason: str, *, now_s: float, step: int
+    ) -> str | None:
+        """A police crew asks for a green corridor to `dest_edge`.
+
+        The route is planned from where the unit is and held at ROUTE_READY: an
+        operator approves it (ACTIVATE_CORRIDOR, which also sends the unit) or
+        refuses it (CANCEL), and an unanswered ask is stood down after
+        `CORRIDOR_ASK_TTL_S`. Returns the request id, or None if refused."""
+        unit = self.roster.get(unit_id)
+        if unit is None or self._create_ask is None:
+            log.warning("corridor request from unknown unit %r -- ignored", unit_id)
+            return None
+        if unit.kind not in CORRIDOR_ASK_KINDS:
+            log.warning("corridor request from %s (%s) -- only police ask", unit_id,
+                        unit.kind.value)
+            return None
+        if not unit.edge_id or not dest_edge:
+            return None
+        if any(u == unit_id for u, _ in self._asks.values()):
+            log.info("%s already has a corridor request open -- ignored", unit_id)
+            return None
+        returning = self.is_returning(unit_id)
+        if unit.busy and not returning:
+            log.info("%s is on a call -- corridor request ignored", unit_id)
+            return None
+        rid = f"crewreq-{unit_id}-{int(now_s * 1000)}"
+        source = unit.edge_id
+        if returning:
+            self.stop_return(unit_id)  # the trip home is replaced by this one
+        self.roster.set_busy(unit_id, True)
+        if not self._create_ask(rid, unit_id, source, dest_edge, unit.kind, f"crew:{unit_id}"):
+            log.info("corridor request %s: no route from %s to %s", rid, source, dest_edge)
+            self.dispatcher.release(unit_id)
+            return None
+        self._asks[rid] = (unit_id, now_s + CORRIDOR_ASK_TTL_S)
+        if self._annotate is not None:
+            note = f" Reason: {reason}." if reason else ""
+            self._annotate(
+                rid, f"crew:{unit_id}",
+                f"Crew asked for a green corridor.{note} Approve to send them with the "
+                "corridor, or stand down to refuse.",
+            )
+        log.info("%s asked for a green corridor to %s (%s)", unit_id, dest_edge, rid)
+        return rid
+
+    def forget_ask(self, request_id: str) -> None:
+        self._asks.pop(request_id, None)
+
+    def stop_return(self, unit_id: str) -> None:
+        """A unit on its way home was given a call: end the trip home. Its
+        position is where it had got to, so the call starts from there."""
+        rid = self._returning.pop(unit_id, None)
+        if rid is not None:
+            self._cancel(rid)
 
     def hospital_options(self, from_edge: str) -> list[dict]:
         """Hospitals reachable from `from_edge`, fastest first by live travel time."""

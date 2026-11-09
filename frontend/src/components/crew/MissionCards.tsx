@@ -21,7 +21,7 @@ function Fact({ label, value }: { label: string; value: string }) {
 }
 
 /** No mission yet: the unit is available and the road is quiet or busy. */
-export function StandbyCard({ unitName, weatherAdvice }: { unitName: string | null; weatherAdvice: string | null }) {
+export function StandbyCard({ unitName, available = true, weatherAdvice }: { unitName: string | null; available?: boolean; weatherAdvice: string | null }) {
   const congestion = useSystemStore((s) => (s.summary.lastUpdate ? s.summary.congestion : null));
   const anomalies = useIncidentStore((s) => s.anomalies.filter((a) => a.status === "active").length);
   const mood = networkMood(congestion);
@@ -33,10 +33,10 @@ export function StandbyCard({ unitName, weatherAdvice }: { unitName: string | nu
         </span>
         <div className="min-w-0">
           <h2 id="standby-title" className="truncate text-[16px] font-semibold tracking-[-0.01em]">
-            {unitName ? `${unitName} is standing by` : "Choose your vehicle"}
+            {unitName ? (available ? `${unitName} is available` : `${unitName} is standing by`) : "Choose your vehicle"}
           </h2>
           <p className="mt-0.5 text-[13px] leading-snug text-muted-foreground">
-            {unitName ? "Your route appears here when dispatch sends a call." : "Pick the unit you are driving to follow its calls."}
+            {unitName ? (available ? "Available at the depot. No active corridor." : "Your route appears here when dispatch sends a call.") : "Pick the unit you are driving to follow its calls."}
           </p>
         </div>
       </div>

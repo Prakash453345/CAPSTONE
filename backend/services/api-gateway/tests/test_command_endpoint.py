@@ -188,3 +188,16 @@ def test_commands_need_a_session_when_sign_in_is_required(tmp_path):
     off = SimpleNamespace(
         cookies={}, app=create_app(Settings(clips_dir=tmp_path, require_sign_in=False)))
     assert session_user(off) is None
+
+
+def test_a_crew_may_ask_for_a_corridor_for_itself_but_never_approve_one():
+    own = _ownership()
+    crew = _user("responder", "POL-02")
+    ask = CommandRequest(event_type="CrewCorridorRequest",
+                         payload={"unit_id": "POL-99", "destination_edge": "e1",
+                                  "reason": "pursuit"})
+    assert _status(crew, ask, own) == 200
+    assert ask.payload["unit_id"] == "POL-02"  # its own car, whatever it sent
+    approve = CommandRequest(event_type="EmergencyCommand",
+                             payload={"action": "ACTIVATE_CORRIDOR", "request_id": "req-1"})
+    assert _status(crew, approve, own) == 403

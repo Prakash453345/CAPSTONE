@@ -58,6 +58,17 @@ export DATABASE_URL="${DATABASE_URL:-postgresql://itms:itms@localhost:5432/itms}
 # "Calculate route" posted a command nothing consumed and the request never
 # appeared (2026-10-18). Set SIM_MODE=sumo here to get the plain M1 loop back.
 export SIM_MODE="${SIM_MODE:-live}"
+# The sim must run the network the console map was built from, or every road the
+# operator picks is "unknown" to the router and responders stand down
+# (2026-11-09: console on district, sim on the default corridor). Unless
+# SIM_NETWORK / ITMS_SCENARIO is set, follow the console's VITE_ITMS_NETWORK.
+if [ -z "${SIM_NETWORK:-}" ] && [ -z "${ITMS_SCENARIO:-}" ] && [ -f ../frontend/.env.local ]; then
+  _net="$(sed -n 's/^VITE_ITMS_NETWORK=//p' ../frontend/.env.local | tail -1 | tr -d "\"' \r")"
+  if [ -n "$_net" ]; then
+    export SIM_NETWORK="$_net"
+    echo "sim network: $_net (from frontend/.env.local)"
+  fi
+fi
 export SIM_DEMAND="${SIM_DEMAND:-light}"
 export SIM_REALTIME_FACTOR="${SIM_REALTIME_FACTOR:-1.0}"
 

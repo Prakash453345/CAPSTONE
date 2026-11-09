@@ -22,8 +22,8 @@ describe("SUMO network adapter", () => {
     },
   );
   it.runIf(networkKind === "district")("loads the district grid", () => {
-    expect(roadEdges).toHaveLength(313); // left-hand rebuild drops one two-way stub
-    expect(signalJunctions).toHaveLength(17);
+    expect(roadEdges).toHaveLength(362); // 313 in the district plus the busy routes that reach a signal
+    expect(signalJunctions).toHaveLength(28);
     expect(roadEdges.filter((e) => e.name === "MG Road").length).toBeGreaterThan(5);
   });
   it("every road has real geometry and ids are unique", () => {

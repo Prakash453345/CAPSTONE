@@ -190,7 +190,24 @@ def load_police_depots(path: Path = DEPOTS_PATH) -> list[_Depot]:
     return [
         _Depot(depot_id=d["id"], name=d["name"], edge=d["edge"], lat=d["lat"], lon=d["lon"])
         for d in raw["depots"]
-        if d["kind"] == "police"
+        # `dispatch: false` marks a station that is not a base for patrol cars
+        # (the Cyber Crime unit): it stays in the data but crews are not parked there.
+        if d["kind"] == "police" and d.get("dispatch", True)
+    ]
+
+
+def load_fire_depots(path: Path = DEPOTS_PATH) -> list[_Depot]:
+    """Fire stations (`amenity=fire_station`). Only one is mapped near the
+    district, 1.4 km off its eastern edge -- see responder_depots.json."""
+    import json
+
+    if not path.exists():
+        return []
+    raw = json.loads(path.read_text())
+    return [
+        _Depot(depot_id=d["id"], name=d["name"], edge=d["edge"], lat=d["lat"], lon=d["lon"])
+        for d in raw["depots"]
+        if d["kind"] == "fire_station"
     ]
 
 
@@ -216,6 +233,7 @@ class IncidentResponseOrchestrator:
         *,
         facility_index: FacilityIndex | None = None,
         police_depots: list[_Depot] | None = None,
+        fire_depots: list[_Depot] | None = None,
         crew_dispatcher=None,
     ):
         self.anomalies = anomalies
@@ -246,7 +264,12 @@ class IncidentResponseOrchestrator:
                 self._unit(f"unit-ambulance-{i}", EmergencyKind.AMBULANCE, d)
                 for i, d in enumerate(load_hospital_depots(self._facility_index))
             ],
-            EmergencyKind.FIRE_TRUCK: [],  # no real depot data yet
+            EmergencyKind.FIRE_TRUCK: [
+                self._unit(f"unit-fire-{i}", EmergencyKind.FIRE_TRUCK, d)
+                for i, d in enumerate(
+                    fire_depots if fire_depots is not None else load_fire_depots()
+                )
+            ],
         }
         self._unit_by_vehicle_id: dict[str, _Unit] = {
             u.vehicle_id: u for units in self._units.values() for u in units
@@ -905,6 +928,48 @@ class IncidentResponseOrchestrator:
             chained = self._chain_to_hospital(request, step=step, sim_time_s=sim_time_s)
         if unit is not None and not chained:
             unit.busy = False  # back to normal (idle at its depot) -- spec #4/#6
+
+    def start_return_leg(
+        self, *, request_id: str, vehicle_id: str, kind: EmergencyKind,
+        source_edge: str, dest_edge: str, step: int, sim_time_s: float,
+    ) -> bool:
+        """Drive a finished unit back to its station: ordinary driving, no
+        green corridor. Returns whether it is on its way."""
+        self.emergency.handle_create(
+            {
+                "request_id": request_id, "vehicle_id": vehicle_id,
+                "vehicle_kind": kind.name, "source_edge": source_edge,
+                "destination_edge": dest_edge, "operator": "system:return-to-station",
+                "return_to_station": True,
+            },
+            step=step, sim_time_s=sim_time_s,
+        )
+        req = self.emergency.get_request(request_id)
+        if req is None or req.state is not EmergencyRequestState.ROUTE_READY:
+            return False
+        self.emergency.handle_command(
+            {"request_id": request_id, "action": "ACTIVATE_CORRIDOR",
+             "operator": "system:return-to-station"},
+            step=step, sim_time_s=sim_time_s,
+        )
+        return True
+
+    def create_pending_request(
+        self, *, request_id: str, vehicle_id: str, kind: EmergencyKind,
+        source_edge: str, dest_edge: str, requester: str, step: int, sim_time_s: float,
+    ) -> bool:
+        """Plan a route and hold it at ROUTE_READY: no vehicle, no corridor,
+        until an operator activates it. Returns whether a route was found."""
+        self.emergency.handle_create(
+            {
+                "request_id": request_id, "vehicle_id": vehicle_id,
+                "vehicle_kind": kind.name, "source_edge": source_edge,
+                "destination_edge": dest_edge, "operator": requester,
+            },
+            step=step, sim_time_s=sim_time_s,
+        )
+        req = self.emergency.get_request(request_id)
+        return req is not None and req.state is EmergencyRequestState.ROUTE_READY
 
     def _chain_to_hospital(
         self, request: EmergencyRequest, *, step: int, sim_time_s: float

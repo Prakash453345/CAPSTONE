@@ -99,6 +99,9 @@ _BLOCK_GAP_M = 3.0
 # that green ends. Tier-1 (tunable, and in fact tuned -- `tuning.py`
 # treats it as a learnable parameter), not a Tier-0 safety constant.
 _ARRIVAL_HORIZON_S = 8.0
+_IMMINENT_HORIZON_S = 3.0
+"""Time-to-stopline of `imminent_pcu` (2026-11-06): vehicles that cross within about one
+actuated passage time (FHWA Signal Timing Manual, 2nd ed., ch. 5: passage time 2-3 s)."""
 
 
 @dataclass(frozen=True)
@@ -114,6 +117,7 @@ class QueueSample:
     receiving_occupancy: dict[str, float] = field(default_factory=dict)
     receiving_queue_pcu: dict[str, float] = field(default_factory=dict)
     approaching_pcu: dict[str, float] = field(default_factory=dict)
+    imminent_pcu: dict[str, float] = field(default_factory=dict)
     blocked_by: dict[str, str] = field(default_factory=dict)
     yield_waiting_pcu: dict[str, float] = field(default_factory=dict)
 
@@ -154,6 +158,7 @@ class QueueStateSampler:
         *,
         halting_speed_mps: float = _HALTING_SPEED_MPS,
         arrival_horizon_s: float = _ARRIVAL_HORIZON_S,
+        imminent_horizon_s: float = _IMMINENT_HORIZON_S,
         lane_cache=None,
         upstream: Mapping[str, Chain] | None = None,
         downstream: Mapping[str, Chain] | None = None,
@@ -176,6 +181,7 @@ class QueueStateSampler:
         self._pcu_by_vtype = pcu_by_vtype
         self._halting_speed_mps = halting_speed_mps
         self._arrival_horizon_s = arrival_horizon_s
+        self._imminent_horizon_s = imminent_horizon_s
         # Optional so every existing caller and test keeps working
         # unchanged; when present, lane reads are shared with every other
         # sampler on the same tick instead of repeated. See
@@ -220,10 +226,10 @@ class QueueStateSampler:
             total += sum(share * self._halting_pcu(x) for x, share in self._vias.get(lane_id, ()))
         return total
 
-    def _approaching(self, lane_id: str) -> float:
-        total = self._approaching_pcu(lane_id)
+    def _approaching(self, lane_id: str, horizon_s: float | None = None) -> float:
+        total = self._approaching_pcu(lane_id, 0.0, horizon_s)
         for x, share, offset_m in self._upstream.get(lane_id, ()):
-            total += share * self._approaching_pcu(x, offset_m)
+            total += share * self._approaching_pcu(x, offset_m, horizon_s)
         return total
 
     def _occupancy(self, lane_id: str) -> float:
@@ -241,7 +247,8 @@ class QueueStateSampler:
             total += lx
         return covered / total if total > 0 else occ
 
-    def _approaching_pcu(self, lane_id: str, offset_m: float = 0.0) -> float:
+    def _approaching_pcu(self, lane_id: str, offset_m: float = 0.0,
+                         horizon_s: float | None = None) -> float:
         """PCU-weighted count of vehicles still *moving* on `lane_id` whose
         time-to-stopline is inside `arrival_horizon_s`.
 
@@ -269,12 +276,13 @@ class QueueStateSampler:
         augmented `q̂_l = q_l + ...` does). The halting threshold is thus
         the single partition between the two measurements, not two
         independently-chosen cutoffs that could overlap or leave a gap."""
+        horizon = self._arrival_horizon_s if horizon_s is None else horizon_s
         total = 0.0
         if self._cache is not None:
             for distance_m, speed, pcu in self._cache.state(lane_id).values():
                 if speed < self._halting_speed_mps:
                     continue  # already counted as queue -- see docstring
-                if (distance_m + offset_m) / speed <= self._arrival_horizon_s:
+                if (distance_m + offset_m) / speed <= horizon:
                     total += pcu
             return total
         length_m = self._length_of(lane_id)
@@ -283,7 +291,7 @@ class QueueStateSampler:
             if speed < self._halting_speed_mps:
                 continue  # already counted as queue -- see docstring
             distance_m = max(0.0, length_m - traci.vehicle.getLanePosition(veh_id))
-            if (distance_m + offset_m) / speed <= self._arrival_horizon_s:
+            if (distance_m + offset_m) / speed <= horizon:
                 vtype_id = traci.vehicle.getTypeID(veh_id)
                 total += self._pcu_by_vtype.get(vtype_id, _DEFAULT_PCU)
         return total
@@ -406,9 +414,11 @@ class QueueStateSampler:
         under test actually consumes."""
         queue_pcu: dict[str, float] = {}
         approaching_pcu: dict[str, float] = {}
+        imminent_pcu: dict[str, float] = {}
         for link_id, lane_id in self._approach_lanes.items():
             queue_pcu[link_id] = self._queue(lane_id, self._upstream)
             approaching_pcu[link_id] = self._approaching(lane_id)
+            imminent_pcu[link_id] = self._approaching(lane_id, self._imminent_horizon_s)
 
         receiving_occupancy: dict[str, float] = {}
         receiving_queue_pcu: dict[str, float] = {}
@@ -421,6 +431,7 @@ class QueueStateSampler:
             receiving_occupancy=receiving_occupancy,
             receiving_queue_pcu=receiving_queue_pcu,
             approaching_pcu=approaching_pcu,
+            imminent_pcu=imminent_pcu,
             blocked_by=self._blocked_by(),
             yield_waiting_pcu={
                 link_id: sum(self._halting_pcu(x) for x in lanes)

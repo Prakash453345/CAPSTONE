@@ -190,6 +190,10 @@ class JunctionContext:
     confidence: Mapping[str, float] = field(default_factory=dict)
     receiving_queue_pcu: Mapping[str, float] = field(default_factory=dict)
     approaching_pcu: Mapping[str, float] = field(default_factory=dict)
+    imminent_pcu: Mapping[str, float] = field(default_factory=dict)
+    """`{movement: PCU of moving vehicles that reach the stop line within about one
+    passage time (3 s)}` (`queue_state._IMMINENT_HORIZON_S`). Empty when nothing measures
+    it. Only `AcampConfig.imminent_extension` reads it."""
     yield_waiting_pcu: Mapping[str, float] = field(default_factory=dict)
     """`{movement: PCU halted on the lanes that give way to the movement's exit
     road}` (`signal_controller/yield_lanes.py`). Empty when nothing measures it.

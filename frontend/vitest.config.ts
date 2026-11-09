@@ -17,6 +17,7 @@ export default defineConfig({
     environment: "node",
     include: ["src/**/*.test.{ts,tsx}"],
     // the network tests check the Vijayawada corridor's own fixtures
-    env: { VITE_CITY: "vijayawada" },
+    // a shell VITE_ITMS_NETWORK still picks the network; .env.local must not
+    env: { VITE_CITY: "vijayawada", VITE_ITMS_NETWORK: process.env.VITE_ITMS_NETWORK ?? "corridor" },
   },
 });

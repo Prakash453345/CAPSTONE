@@ -30,11 +30,13 @@ from __future__ import annotations
 import logging
 import os
 from collections.abc import Callable
+from dataclasses import replace
 
 from itms_common.bus import RedisStreamsSyncBus, RedisStreamsSyncConsumer
 from itms_common.events import decode_envelope, encode_envelope
 from itms_domain import EmergencyKind
 
+from sim_service.control.dispatch.facilities import FacilityIndex
 from sim_service.control.runner import run_controlled_scenario
 from sim_service.live.anomaly_control import OperatorAnomalyController
 from sim_service.live.corridor import load_corridor, network_path
@@ -47,9 +49,15 @@ from sim_service.live.crew_dispatch import (
 from sim_service.live.crew_missions import CrewMissions
 from sim_service.live.emergency_control import EmergencyController
 from sim_service.live.green_corridor import CorridorController
-from sim_service.live.incident_response import IncidentResponseOrchestrator
+from sim_service.live.incident_response import (
+    FACILITIES_PATH,
+    IncidentResponseOrchestrator,
+    load_fire_depots,
+    load_police_depots,
+)
 from sim_service.routing import RoadGraph
 from sim_service.routing.hexgrid import HexIndex
+from sim_service.routing.snap import EdgeSnapper
 from sim_service.signal_controller.ev_routing import edge_latlon, traci_route_fn
 
 log = logging.getLogger("sim-service.live")
@@ -129,6 +137,7 @@ def run_live(
         (the crew accepting *is* the go-ahead; nobody else has to press
         dispatch)."""
         unit = roster.get(offer.unit_id)
+        missions.stop_return(offer.unit_id)  # on its way home: take the call from here
         ok = incident_response._create_and_activate(  # noqa: SLF001
             request_id=offer.incident_id, vehicle_id=offer.unit_id, kind=offer.kind,
             source_edge=unit.edge_id if unit and unit.edge_id else offer.edge_id,
@@ -144,7 +153,16 @@ def run_live(
     except Exception:  # noqa: BLE001 -- only a fallback; routing works without it
         log.exception("could not read road midpoints from %s", network_path(network))
     crew.on_accept = _on_crew_accept
-    incident_response = IncidentResponseOrchestrator(anomalies, emergency, crew_dispatcher=crew)
+    # Depots and hospitals on roads this network does not have (the data was
+    # snapped to the corridor) are moved onto the nearest road it does.
+    snapper = EdgeSnapper(network_path(network), graph)
+    facility_index = _snapped_facilities(snapper)
+    incident_response = IncidentResponseOrchestrator(
+        anomalies, emergency, crew_dispatcher=crew,
+        facility_index=facility_index,
+        police_depots=_snapped_depots(snapper, load_police_depots()),
+        fire_depots=_snapped_depots(snapper, load_fire_depots()),
+    )
     # Where crew units live while idle: ambulances at hospitals, police at
     # police stations, fire trucks at police stations too (this OSM extract
     # has no fire stations).
@@ -177,6 +195,17 @@ def run_live(
             step=clock["step"], sim_time_s=clock["sim_time"],  # type: ignore[arg-type]
         ),
         vehicle_edges=emergency.vehicle_edges,
+        create_ask=lambda rid, uid, src, dst, kind, who: incident_response.create_pending_request(  # noqa: SLF001
+            request_id=rid, vehicle_id=uid, kind=kind, source_edge=src, dest_edge=dst,
+            requester=who, step=clock["step"], sim_time_s=clock["sim_time"],  # type: ignore[arg-type]
+        ),
+        annotate=lambda rid, who, note: emergency.annotate(
+            rid, step=clock["step"], actor=who, detail=note,
+        ),
+        create_return=lambda rid, uid, src, dst, kind: incident_response.start_return_leg(  # noqa: SLF001
+            request_id=rid, vehicle_id=uid, kind=kind, source_edge=src, dest_edge=dst,
+            step=clock["step"], sim_time_s=clock["sim_time"],  # type: ignore[arg-type]
+        ),
         edge_latlon=edge_latlon,
         route_fn=_route_from_scene(traci_route_fn()),
         # 45 s of real time for the crew to choose, then the fastest hospital.
@@ -376,9 +405,18 @@ def _build_dispatch(
             # stood down before anyone accepted takes the offer back.
             if crew is not None and str(payload.get("action")) == "CANCEL":
                 crew.withdraw(str(payload.get("request_id", "")), now_s=sim_time)
+                if missions is not None:
+                    missions.forget_ask(str(payload.get("request_id", "")))  # refused
                 req = emergency.get_request(str(payload.get("request_id", "")))
                 if req is not None and crew.roster.get(req.vehicle_id) is not None:
                     crew.release(req.vehicle_id)
+        elif etype == "CrewCorridorRequest":
+            # A police crew asks an operator for a green corridor.
+            if missions is not None:
+                missions.ask_corridor(
+                    str(payload.get("unit_id", "")), str(payload.get("destination_edge", "")),
+                    str(payload.get("reason", "")), now_s=sim_time, step=step,
+                )
         elif etype == "CrewHospitalChoice":
             # An ambulance crew at the scene: patient on board, go here.
             if missions is not None:
@@ -398,6 +436,23 @@ def _build_dispatch(
             log.info("no live handler for command %s (step %d) -- ignored", etype, step)
 
     return dispatch
+
+
+def _snapped_facilities(snapper: EdgeSnapper) -> FacilityIndex:
+    if not FACILITIES_PATH.exists():
+        return FacilityIndex([])
+    index = FacilityIndex.from_json(FACILITIES_PATH)
+    moved = [
+        replace(f, edge=snapper.snap(f.edge, f.lat, f.lon)) for f in index.all
+    ]
+    n = sum(a.edge != b.edge for a, b in zip(index.all, moved, strict=True))
+    if n:
+        log.info("re-snapped %d of %d facilities onto this network's roads", n, len(moved))
+    return FacilityIndex(moved)
+
+
+def _snapped_depots(snapper: EdgeSnapper, depots):
+    return [replace(d, edge=snapper.snap(d.edge, d.lat, d.lon)) for d in depots]
 
 
 def _edge_points(net_path) -> dict[str, tuple[float, float]]:
