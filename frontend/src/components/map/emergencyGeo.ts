@@ -310,6 +310,10 @@ export function buildCorridorFeatures(
 export interface VehicleFrame {
   lng: number;
   lat: number;
+  /** Road the vehicle is on, when known. */
+  lane?: string;
+  /** Road-following route from the previous snapshot (set by the layer). */
+  path?: [number, number][];
   progress: number;
   kind: string;
   color: string;
@@ -330,6 +334,7 @@ export function buildVehicleFrames(
     out.set(req.id, {
       lng: live.lon,
       lat: live.lat,
+      lane: live.edgeId,
       progress: live.routeProgress,
       kind: req.vehicleKind,
       color: colorForRequest(req.id),

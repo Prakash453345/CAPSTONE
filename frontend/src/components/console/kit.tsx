@@ -1,4 +1,5 @@
 import {
+  useContext,
   useEffect,
   useRef,
   type ReactNode,
@@ -9,6 +10,7 @@ import type { LucideIcon } from "lucide-react";
 import { cn } from "@/utils/cn";
 import { EASE_OUT } from "@/components/console/motion";
 import { useDismiss, useIndicator } from "@/components/console/hooks";
+import { PanelPlainContext } from "@/components/console/panelContext";
 import { TONE_BG, TONE_DOT, TONE_TEXT, type Tone } from "@/components/console/tone";
 
 
@@ -30,8 +32,9 @@ export function Panel({
   className?: string;
   as?: "section" | "div" | "aside" | "article";
 } & React.HTMLAttributes<HTMLElement>) {
+  const plain = useContext(PanelPlainContext);
   return (
-    <Tag className={cn("rounded-2xl bg-surface shadow-elevation-1", className)} {...rest}>
+    <Tag className={cn(!plain && "rounded-2xl bg-surface shadow-elevation-1", className)} {...rest}>
       {children}
     </Tag>
   );
@@ -283,7 +286,7 @@ export function Popover({
           exit={{ opacity: 0, y: -4, scale: 0.98 }}
           transition={{ duration: 0.18, ease: EASE_OUT }}
           className={cn(
-            "absolute top-[calc(100%+8px)] z-50 origin-top rounded-2xl bg-surface-raised p-2 shadow-elevation-3",
+            "glass-strong absolute top-[calc(100%+8px)] z-50 origin-top rounded-2xl p-2",
             align === "end" ? "right-0 origin-top-right" : "left-0 origin-top-left",
             className,
           )}

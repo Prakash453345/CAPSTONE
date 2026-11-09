@@ -55,10 +55,10 @@ def net_links(net_path: str | Path
         if e.get("id") not in used:
             continue
         lane = e.find("lane")
-        pts = [tuple(map(float, p.split(","))) for p in (lane.get("shape") or "").split()]
+        pts = [tuple(map(float, p.split(","))) for p in (lane.get("shape") or "").split()]  # type: ignore[union-attr]
         if len(pts) >= 2:
             (x0, y0), (x1, y1) = pts[-2], pts[-1]
-            heading[e.get("id")] = math.degrees(math.atan2(y1 - y0, x1 - x0)) % 360.0
+            heading[e.get("id")] = math.degrees(math.atan2(y1 - y0, x1 - x0)) % 360.0  # type: ignore[index]
     return links, heading, root.get("lefthand") == "true"
 
 

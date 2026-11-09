@@ -1,0 +1,150 @@
+{
+ "name": "vijayawada_district_sublane",
+ "net": "vijayawada_district.net.xml",
+ "mix": "india",
+ "levels": {
+  "light": {
+   "sumocfg": "vijayawada_district_light.sumocfg",
+   "route": "vijayawada_district_light.rou.xml",
+   "target_ds": 0.25,
+   "achieved_ds": 0.2529,
+   "busiest_tls": "cluster_11608007559_12725299500_1880441514_4393295460_#1more",
+   "period_s": 3.3928,
+   "iterations": [
+    [
+     4.0,
+     0.2121
+    ],
+    [
+     3.3928,
+     0.2529
+    ]
+   ]
+  },
+  "medium": {
+   "sumocfg": "vijayawada_district_medium.sumocfg",
+   "route": "vijayawada_district_medium.rou.xml",
+   "target_ds": 0.5,
+   "achieved_ds": 0.5074,
+   "busiest_tls": "cluster_11608007559_12725299500_1880441514_4393295460_#1more",
+   "period_s": 1.6964,
+   "iterations": [
+    [
+     4.0,
+     0.2121
+    ],
+    [
+     1.6964,
+     0.5074
+    ]
+   ]
+  },
+  "heavy": {
+   "sumocfg": "vijayawada_district_heavy.sumocfg",
+   "route": "vijayawada_district_heavy.rou.xml",
+   "target_ds": 1.0,
+   "achieved_ds": 0.9969,
+   "busiest_tls": "cluster_11608007559_12725299500_1880441514_4393295460_#1more",
+   "period_s": 0.9063,
+   "iterations": [
+    [
+     4.0,
+     0.2121
+    ],
+    [
+     0.8482,
+     1.0685
+    ],
+    [
+     0.9063,
+     0.9969
+    ]
+   ]
+  }
+ },
+ "demand": "randomTrips --fringe-factor 5, 0-1800 s, routed by duarouter",
+ "source_net": "/home/claude/capstone/itms/scenarios/generated/vijayawada_district/osm/vijayawada_district.net.xml",
+ "signalised_junctions": 37,
+ "map_center": "16.501242,80.642793",
+ "phases_per_junction": [
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  3,
+  3,
+  3,
+  3,
+  4
+ ],
+ "osm": {
+  "bbox": null,
+  "file": "/home/claude/capstone/itms/vijayawada_corridor_bbox.osm.xml",
+  "crop": "80.6131,16.4972,80.6586,16.5113",
+  "netconvert": "--osm-files vijayawada_corridor_bbox.osm.xml -o vijayawada_district_osm.net.xml --type-files osmNetconvert.typ.xml --geometry.remove --geometry.remove.min-length 5 --junctions.join --junctions.join-dist 25 --tls.guess-signals --tls.discard-simple --tls.join --roundabouts.guess --ramps.guess --keep-edges.by-vclass passenger --remove-edges.isolated --keep-edges.in-geo-boundary 80.6131,16.4972,80.6586,16.5113 --lefthand",
+  "signal_rule": "OSM signal tags, plus junctions where >= 3 entering roads are tertiary or above",
+  "signals_added": 37,
+  "max_speed_mps": 13.89,
+  "lanes_capped": 1995
+ },
+ "sublane": {
+  "lateral_resolution_m": 0.8,
+  "classes": {
+   "motorcycle": {
+    "latAlignment": "arbitrary",
+    "minGapLat": "0.3",
+    "maxSpeedLat": "1.5",
+    "lcSublane": "5",
+    "lcPushy": "0.6",
+    "width": "0.8"
+   },
+   "taxi": {
+    "latAlignment": "arbitrary",
+    "minGapLat": "0.4",
+    "maxSpeedLat": "1.0",
+    "lcSublane": "3",
+    "lcPushy": "0.4",
+    "width": "1.4"
+   },
+   "passenger": {
+    "latAlignment": "center",
+    "minGapLat": "0.5",
+    "maxSpeedLat": "1.0",
+    "lcSublane": "1"
+   },
+   "bus": {
+    "latAlignment": "center",
+    "minGapLat": "0.6",
+    "maxSpeedLat": "0.6"
+   }
+  }
+ }
+}

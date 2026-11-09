@@ -1,0 +1,55 @@
+{
+ "scenario": "vijayawada",
+ "seed": 1,
+ "units": 2,
+ "end_s": 3600.0,
+ "fleet": {
+  "POLICE": [
+   "unit-police-0",
+   "unit-police-1"
+  ],
+  "AMBULANCE": [
+   "unit-ambulance-0",
+   "unit-ambulance-1"
+  ],
+  "FIRE_TRUCK": []
+ },
+ "stats": {
+  "anomaly_LANE_BLOCKAGE_BLOCKED": 9,
+  "dispatches": 25,
+  "anomaly_ACCIDENT_MEDIUM": 8,
+  "suggestions": 6,
+  "ticks_suggestable": 2134,
+  "served_from_queue": 17,
+  "anomaly_ACCIDENT_HIGH": 6,
+  "reassigned": 3,
+  "blocks_ahead": 4,
+  "operator_cancels": 3,
+  "cleared_early": 7,
+  "anomaly_ACCIDENT_LOW": 7,
+  "trips": 29,
+  "completed": 19,
+  "reroutes": 16,
+  "still_waiting": 8
+ },
+ "violations_by_rule": {
+  "R11": 3
+ },
+ "violations": [
+  {
+   "rule": "R11",
+   "t": 810.0,
+   "msg": "suggestion reassign-1 is stale but still open (blocks new suggestions for unit-police-0)"
+  },
+  {
+   "rule": "R11",
+   "t": 2509.0,
+   "msg": "suggestion reassign-16 is stale but still open (blocks new suggestions for unit-police-1)"
+  },
+  {
+   "rule": "R11",
+   "t": 3489.0,
+   "msg": "suggestion reassign-25 is stale but still open (blocks new suggestions for unit-ambulance-0)"
+  }
+ ]
+}

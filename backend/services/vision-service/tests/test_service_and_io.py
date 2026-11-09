@@ -269,7 +269,7 @@ def test_closed_loop_wrapper_swaps_exactly_the_queue_fields() -> None:
 def test_closed_loop_wrapper_takes_blocked_lanes_from_the_cameras_only() -> None:
     """What the simulator knows about a blocked lane never reaches a
     camera-fed controller; what the overview camera saw does."""
-    qs = {"queue_pcu": {}, "approaching_pcu": {}, "receiving_occupancy": {},
+    qs: dict[str, dict] = {"queue_pcu": {}, "approaching_pcu": {}, "receiving_occupancy": {},
           "receiving_queue_pcu": {}, "confidence": {}}
     seen = {}
 

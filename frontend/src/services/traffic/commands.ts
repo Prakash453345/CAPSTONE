@@ -5,7 +5,9 @@
  *
  * Kept separate from the data provider on purpose: reading traffic state and
  * issuing commands are different concerns. Mutations target the real backend
- * only in connected Live mode; the browser Demo must never issue commands.
+ * only in connected Live mode. In Demo the commands never leave the browser:
+ * the active mock provider registers a handler (`setDemoCommandHandler`) that
+ * answers them from its own simulation.
  */
 
 import { useSystemStore } from "@/store/systemStore";
@@ -37,9 +39,20 @@ export class CommandError extends Error {
   }
 }
 
+type DemoHandler = (cmd: OperatorCommand) => CommandResult;
+let demoHandler: DemoHandler | null = null;
+
+/** Registered by the Demo provider while it runs; `null` when it stops. */
+export function setDemoCommandHandler(handler: DemoHandler | null): void {
+  demoHandler = handler;
+}
+
 export async function postCommand(cmd: OperatorCommand): Promise<CommandResult> {
   const system = useSystemStore.getState();
-  if (system.dataMode !== "live") throw new CommandError(409, "Demo is read-only. Switch to Live to issue simulation commands.");
+  if (system.dataMode !== "live") {
+    if (!demoHandler) throw new CommandError(409, "The demo simulation is not running yet.");
+    return demoHandler(cmd);
+  }
   if (system.connectionStatus !== "online") throw new CommandError(409, "Live stream is not connected. Reconnect before issuing commands.");
   let res: Response;
   try {

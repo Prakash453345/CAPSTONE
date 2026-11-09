@@ -5,7 +5,7 @@ import { Ambulance, Plus, TriangleAlert, X } from "lucide-react";
 import { MAP_CHIP, MAP_CHIP_ACTIVE } from "@/components/map/mapChrome";
 import { EASE_OUT } from "@/components/console/motion";
 import { useDismiss } from "@/components/console/hooks";
-import { PRESET_UNITS, selectSelectedRequest, useEmergencyStore } from "@/store/emergencyStore";
+import { CREW_TYPES, selectSelectedRequest, useEmergencyStore } from "@/store/emergencyStore";
 import { useMapStore } from "@/store/mapStore";
 import { cn } from "@/utils/cn";
 
@@ -53,9 +53,9 @@ export function MapNewMenu({ onCancelAnomaly }: { onCancelAnomaly: () => void })
     },
     {
       label: "Dispatch a unit",
-      hint: "Route an ambulance with a green corridor",
+      hint: "Send the nearest ambulance, police or fire crew",
       icon: Ambulance,
-      run: () => startDraft(PRESET_UNITS[0]!),
+      run: () => startDraft(CREW_TYPES[0]!),
     },
   ];
 
@@ -82,7 +82,7 @@ export function MapNewMenu({ onCancelAnomaly }: { onCancelAnomaly: () => void })
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -4, scale: 0.98 }}
             transition={{ duration: 0.16, ease: EASE_OUT }}
-            className="fixed z-[45] w-[272px] origin-top-left rounded-2xl bg-surface-raised p-1.5 shadow-elevation-3"
+            className="glass-strong fixed z-[45] w-[272px] origin-top-left rounded-2xl p-1.5"
           >
             {items.map((it) => (
               <button
@@ -93,9 +93,9 @@ export function MapNewMenu({ onCancelAnomaly }: { onCancelAnomaly: () => void })
                   setOpen(false);
                   it.run();
                 }}
-                className="flex w-full items-center gap-3 rounded-xl px-2.5 py-2 text-left transition-colors hover:bg-muted"
+                className="flex w-full items-center gap-3 rounded-xl px-2.5 py-2 text-left transition-colors hover:bg-glass-hover"
               >
-                <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground">
+                <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-tile text-muted-foreground">
                   <it.icon className="size-4" strokeWidth={1.9} />
                 </span>
                 <span className="min-w-0">

@@ -1,0 +1,118 @@
+{
+ "name": "arterial_lh_sublane",
+ "net": "arterial_lh.net.xml",
+ "mix": "india",
+ "levels": {
+  "light": {
+   "sumocfg": "arterial_lh_light.sumocfg",
+   "route": "arterial_lh_light.rou.xml",
+   "target_ds": 0.25,
+   "achieved_ds": 0.2501,
+   "busiest_tls": "D0",
+   "period_s": 4.9457,
+   "iterations": [
+    [
+     4.0,
+     0.3091
+    ],
+    [
+     4.9457,
+     0.2501
+    ]
+   ]
+  },
+  "medium": {
+   "sumocfg": "arterial_lh_medium.sumocfg",
+   "route": "arterial_lh_medium.rou.xml",
+   "target_ds": 0.5,
+   "achieved_ds": 0.499,
+   "busiest_tls": "D0",
+   "period_s": 2.4029,
+   "iterations": [
+    [
+     4.0,
+     0.3091
+    ],
+    [
+     2.4729,
+     0.4859
+    ],
+    [
+     2.4029,
+     0.499
+    ]
+   ]
+  },
+  "heavy": {
+   "sumocfg": "arterial_lh_heavy.sumocfg",
+   "route": "arterial_lh_heavy.rou.xml",
+   "target_ds": 1.0,
+   "achieved_ds": 0.9985,
+   "busiest_tls": "D0",
+   "period_s": 1.2364,
+   "iterations": [
+    [
+     4.0,
+     0.3091
+    ],
+    [
+     1.2364,
+     0.9985
+    ]
+   ]
+  }
+ },
+ "demand": "randomTrips --fringe-factor 5, 0-1800 s, routed by duarouter",
+ "generated": {
+  "spec": "grid:6x1,300,3,200",
+  "lefthand": true,
+  "turn_lanes": 0,
+  "speed_mps": 13.89,
+  "tls_layout": "incoming",
+  "netgenerate": "netgenerate -o arterial_lh.net.xml --default-junction-type traffic_light --default.speed 13.89 --no-turnarounds true --tls.layout incoming --grid --grid.x-number 6 --grid.y-number 1 --grid.length 300 --default.lanenumber 3 --grid.attach-length 200 --lefthand"
+ },
+ "signalised_junctions": 6,
+ "phases_per_junction": [
+  4,
+  4,
+  4,
+  4,
+  4,
+  4
+ ],
+ "cameras": 24,
+ "cameras_file": "cameras.json",
+ "map_center": null,
+ "sublane": {
+  "lateral_resolution_m": 0.8,
+  "classes": {
+   "motorcycle": {
+    "latAlignment": "arbitrary",
+    "minGapLat": "0.3",
+    "maxSpeedLat": "1.5",
+    "lcSublane": "5",
+    "lcPushy": "0.6",
+    "width": "0.8"
+   },
+   "taxi": {
+    "latAlignment": "arbitrary",
+    "minGapLat": "0.4",
+    "maxSpeedLat": "1.0",
+    "lcSublane": "3",
+    "lcPushy": "0.4",
+    "width": "1.4"
+   },
+   "passenger": {
+    "latAlignment": "center",
+    "minGapLat": "0.5",
+    "maxSpeedLat": "1.0",
+    "lcSublane": "1"
+   },
+   "bus": {
+    "latAlignment": "center",
+    "minGapLat": "0.6",
+    "maxSpeedLat": "0.6"
+   }
+  }
+ }
+}

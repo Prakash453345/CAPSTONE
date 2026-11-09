@@ -31,7 +31,7 @@ _NET = (
 
 def test_graph_has_one_node_per_controlled_link_in_stable_order():
     g = AnomalyGraph.from_network(_NET)
-    assert g.num_nodes == 73  # 7 signal-controlled junctions on this corridor
+    assert g.num_nodes == 71  # 7 signal-controlled junctions on this (left-hand) corridor
     # node order is deterministic: junctions sorted, links numeric within
     assert g.node_ids == AnomalyGraph.from_network(_NET).node_ids
     # every node id round-trips through index_of
@@ -52,7 +52,7 @@ def test_links_sort_numerically_not_lexically():
 def test_downstream_edges_match_receiving_lane_topology():
     g = AnomalyGraph.from_network(_NET, intra_junction_edges=False, self_loops=False)
     assert all(t == "downstream" for t in g.edge_type)
-    assert g.num_edges == 71  # measured directly from link_to_receiving_lane_map
+    assert g.num_edges == 66  # measured directly from link_to_receiving_lane_map (left-hand build)
     # every downstream edge connects a node whose receiving lane is the
     # destination node's approach lane
     for (src, dst), etype in zip(g.edge_index, g.edge_type, strict=True):

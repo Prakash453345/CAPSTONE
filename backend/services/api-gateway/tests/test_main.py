@@ -31,7 +31,7 @@ API_KEY = "test-key"
 
 @pytest.fixture
 def client(tmp_path):
-    app = create_app(Settings(api_key=API_KEY, clips_dir=tmp_path))
+    app = create_app(Settings(api_key=API_KEY, clips_dir=tmp_path, require_sign_in=False))
     app.state.bus = _FakeBus()
     return TestClient(app)
 
@@ -176,3 +176,138 @@ def test_reject_with_correct_api_key_succeeds_and_publishes(client):
     env = decode_envelope(raw)
     assert env["event_type"] == "IncidentUpdated"
     assert env["payload"]["new_state"] == "REJECTED"
+
+
+def _sign_in_app(tmp_path, **settings):
+    return create_app(
+        Settings(api_key=API_KEY, clips_dir=tmp_path, require_sign_in=True, **settings))
+
+
+def _request(app):
+    from types import SimpleNamespace
+
+    return SimpleNamespace(cookies={}, app=app, state=SimpleNamespace())
+
+
+def test_read_endpoints_need_a_session_when_sign_in_is_required(tmp_path):
+    client = TestClient(_sign_in_app(tmp_path))
+    for path in ("/v1/incidents", "/v1/incidents/x", "/v1/clips", "/v1/clips/x",
+                 "/v1/clips/x/video", "/v1/clips/x/snapshot"):
+        assert client.get(path).status_code == 401, path
+    assert client.post("/v1/clips", files={"file": ("a.mp4", b"x")},
+                       data={"edge_id": "e"}).status_code == 401
+
+
+def test_the_live_stream_refuses_a_visitor_without_a_session(tmp_path):
+    import pytest
+    from starlette.websockets import WebSocketDisconnect
+
+    client = TestClient(_sign_in_app(tmp_path))
+    with pytest.raises(WebSocketDisconnect) as ei, client.websocket_connect("/v1/stream"):
+        pass
+    assert ei.value.code == 1008
+
+
+def test_crew_accounts_cannot_read_clips_or_incidents(monkeypatch, tmp_path):
+    from types import SimpleNamespace
+
+    import pytest
+    from api_gateway.core import security
+    from fastapi import HTTPException
+
+    request = _request(_sign_in_app(tmp_path))
+    monkeypatch.setattr(security, "session_user",
+                        lambda request: SimpleNamespace(role="responder", username="crew1"))
+    with pytest.raises(HTTPException) as ei:
+        security.operator_only(request)
+    assert ei.value.status_code == 403
+    monkeypatch.setattr(security, "session_user",
+                        lambda request: SimpleNamespace(role="operator", username="op1"))
+    security.operator_only(request)
+
+
+def test_a_signed_in_operator_can_review_without_the_api_key(monkeypatch, tmp_path):
+    from types import SimpleNamespace
+
+    import pytest
+    from api_gateway.core import security
+    from fastapi import HTTPException
+
+    req = _request(_sign_in_app(tmp_path))
+    monkeypatch.setattr(security.auth_mod, "get_user_store", lambda: None)
+    monkeypatch.setattr(security.auth_mod, "current_user", lambda r, s: SimpleNamespace(role="operator", username="op1"))  # noqa: E501
+    security.require_reviewer(req, "")                                  # operator session
+    monkeypatch.setattr(security.auth_mod, "current_user", lambda r, s: SimpleNamespace(role="responder", username="crew1"))  # noqa: E501
+    with pytest.raises(HTTPException) as ei:
+        security.require_reviewer(req, "")
+    assert ei.value.status_code == 403
+    security.require_reviewer(req, API_KEY)                             # a script with the key
+    req = _request(create_app(Settings(api_key=API_KEY, clips_dir=tmp_path, require_sign_in=False)))
+    with pytest.raises(HTTPException) as ei:
+        security.require_reviewer(req, "wrong")
+    assert ei.value.status_code == 401
+
+
+async def test_the_relay_acks_a_message_it_cannot_handle_instead_of_leaving_it_pending():
+    """A message the relay cannot decode (e.g. written against a newer
+    contract) was left unacked; ">" reads never redeliver it, so it sat in
+    Redis's pending list forever. It is logged and acked like any other."""
+    import asyncio
+
+    from api_gateway.services.clip_registry import ClipRegistry
+    from api_gateway.services.connections import ConnectionManager
+    from api_gateway.services.event_relay import EventRelay
+    from api_gateway.services.incident_registry import IncidentRegistry
+    from itms_common.bus import Message
+
+    acked: list[str] = []
+
+    class Bus:
+        async def subscribe(self, topics, *, group, consumer, start_id):
+            yield Message(topic=topics[0], message_id="1-0", raw=b"not avro")
+            raise asyncio.CancelledError
+
+        async def ack(self, topic, group, message_id):
+            acked.append(message_id)
+
+    import tempfile
+    from pathlib import Path
+
+    relay = EventRelay(Bus(), ConnectionManager(), IncidentRegistry(),  # type: ignore[arg-type]
+                       ClipRegistry(Path(tempfile.mkdtemp())), ("traffic.updated",))
+    try:
+        await relay._consume_topic("traffic.updated", "c1")
+    except asyncio.CancelledError:
+        pass
+    assert acked == ["1-0"]
+def test_the_stream_refuses_a_browser_on_another_website(tmp_path):
+    from starlette.websockets import WebSocketDisconnect
+
+    # CORS does not cover WebSockets and the browser sends the session cookie
+    # whatever page opens the socket, so the gateway checks Origin itself.
+    client = TestClient(create_app(
+        Settings(api_key=API_KEY, clips_dir=tmp_path, require_sign_in=False)))
+    with pytest.raises(WebSocketDisconnect) as ei, client.websocket_connect(
+            "/v1/stream", headers={"origin": "https://evil.example"}):
+        pass
+    assert ei.value.code == 1008
+    for origin in ("http://localhost:5173", "http://testserver", None):  # dev, same host, script
+        headers = {"origin": origin} if origin else {}
+        with client.websocket_connect("/v1/stream", headers=headers) as ws:
+            ws.send_text("ping")
+
+
+def test_a_review_is_recorded_under_the_signed_in_account(monkeypatch, tmp_path):
+    from types import SimpleNamespace
+
+    from api_gateway.core import security
+
+    req = _request(_sign_in_app(tmp_path))
+    monkeypatch.setattr(security.auth_mod, "get_user_store", lambda: None)
+    monkeypatch.setattr(security.auth_mod, "current_user",
+                        lambda r, s: SimpleNamespace(role="operator", username="alice"))
+    security.require_reviewer(req, "")
+    assert security.acting_as(req, "operator:bob") == "operator:alice"  # not who the body claims
+    script = _request(_sign_in_app(tmp_path))
+    security.require_reviewer(script, API_KEY)
+    assert security.acting_as(script, "camera:cam-7") == "camera:cam-7"  # a key holder names itself

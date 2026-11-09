@@ -54,6 +54,10 @@ export function TrafficDataBridge() {
     useMapStore.getState().setSelectedVehicle(null);
     useMapStore.getState().setInteractionMode("idle");
     useAnalyticsStore.getState().reset();
+    // The demo engine raises its own toasts ("Ambulance 1 has a route ready",
+    // "Green corridor activated") in the second or two before the backend
+    // probe answers; they describe nothing that happened in the live session.
+    useNotificationStore.getState().clear();
     applySummary({ operational: false, vehicleCount: 0, congestion: 0,
       signalsOnline: 0, signalsTotal: 0, lastUpdate: null });
 

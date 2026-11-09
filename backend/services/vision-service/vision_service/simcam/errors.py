@@ -214,11 +214,11 @@ PRESETS["itms6_960"] = replace(
                _B: {_T: 0.076}, _C: {_A: 0.005, _B: 0.005, _T: 0.002},
                _T: {_A: 0.034, _B: 0.02, _C: 0.034}},
 )
-# Fine-tune v3 (`baselines/2026-10-04_m8_finetune_v3/`): v2's recipe plus degradation augmentation, the video-mode
-# default detector. Fitted the same way on the same 250 daylight frames (`simcam_fit.json`): it differs from
-# `itms6_640` by at most 0.03 in any class's recall (bus and bicycle have under 100 boxes), so this daytime error
-# model is practically unchanged. It does NOT represent v3's gains at night, in glare or with sensor noise: the
-# labelled frames are daylight. The default preset stays `itms6_640` so earlier baselines stay comparable.
+# Fine-tune v3 (`baselines/2026-10-04_m8_finetune_v3/`): v2's recipe plus degradation augmentation, the video-mode  # noqa: E501
+# default detector. Fitted the same way on the same 250 daylight frames (`simcam_fit.json`): it differs from  # noqa: E501
+# `itms6_640` by at most 0.03 in any class's recall (bus and bicycle have under 100 boxes), so this daytime error  # noqa: E501
+# model is practically unchanged. It does NOT represent v3's gains at night, in glare or with sensor noise: the  # noqa: E501
+# labelled frames are daylight. The default preset stays `itms6_640` so earlier baselines stay comparable.  # noqa: E501
 PRESETS["itms6aug_640"] = replace(
     PRESETS["finetuned_day"],
     name="itms6aug_640",
@@ -227,6 +227,35 @@ PRESETS["itms6aug_640"] = replace(
     size_h50_by_class={_C: 44.75, _A: 40.5, _M: 47.0, _B: 46.25, _T: 73.5, _BI: 46.25},
     confusion={_A: {_C: 0.01, _M: 0.002, _T: 0.014}, _BI: {_M: 0.381}, _B: {_T: 0.063},
                _C: {_A: 0.002, _B: 0.005}, _T: {_A: 0.036, _B: 0.031, _C: 0.026}},
+)
+# The detectors trained on the full UVH-26 training set (`baselines/2026-10-30_m8_s_coco/`,
+# `baselines/2026-10-31_m8_m_coco/`), fitted the same way but on the 4,797 UNTOUCHED full-val frames
+# (57,269 labelled boxes, 1,500 per class sampled for the fit; `m8_simcam_fit_fullval.py`) at the score
+# line each was adopted at (0.60), 640 px input. Bigger sample and a different frame set than the 250
+# daylight frames behind the presets above, and scored on the detector's own camera views (val shares
+# cameras with training): not directly comparable with them, and the labels' missing boxes do not
+# touch recall. Bursts, false positives and person recall are inherited as for every measured preset.
+# YOLO11-M from COCO weights: 2.7x IISc's CPU time (a GPU-class model)
+PRESETS["uvh26m_640"] = replace(
+    PRESETS["finetuned_day"],
+    name="uvh26m_640",
+    base_recall={_C: 0.926, _A: 0.90, _M: 0.808, _B: 0.90, _T: 0.82, _BI: 0.802, _P: 0.85},
+    size_h50_px=58.0,
+    size_h50_by_class={_C: 55.0, _A: 45.0, _M: 47.0, _B: 85.0, _T: 81.0, _BI: 98.0},
+    confusion={_A: {_B: 0.001, _C: 0.003, _M: 0.002, _T: 0.011}, _BI: {_M: 0.087},
+               _B: {_A: 0.001, _C: 0.01, _T: 0.033}, _C: {_A: 0.002, _B: 0.002, _T: 0.003},
+               _M: {_BI: 0.002}, _T: {_A: 0.014, _B: 0.011, _C: 0.006}},
+)
+# YOLO11-S from COCO weights, same recipe: about IISc's CPU time (1.07x)
+PRESETS["uvh26s_640"] = replace(
+    PRESETS["finetuned_day"],
+    name="uvh26s_640",
+    base_recall={_C: 0.938, _A: 0.884, _M: 0.806, _B: 0.894, _T: 0.832, _BI: 0.822, _P: 0.85},
+    size_h50_px=64.0,
+    size_h50_by_class={_C: 60.0, _A: 49.0, _M: 52.0, _B: 90.0, _T: 88.0, _BI: 112.0},
+    confusion={_A: {_B: 0.001, _C: 0.004, _M: 0.001, _T: 0.01}, _BI: {_M: 0.115},
+               _B: {_A: 0.001, _C: 0.016, _T: 0.032}, _C: {_A: 0.002, _B: 0.002, _M: 0.001, _T: 0.002},
+               _M: {_BI: 0.001}, _T: {_A: 0.015, _B: 0.012, _C: 0.011}},
 )
 # stock COCO YOLO11-S, 640 px: no auto-rickshaw class, so an auto it finds is always another type
 PRESETS["stock_640"] = replace(

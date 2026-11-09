@@ -205,3 +205,11 @@ describe("pushTimelineEntry", () => {
     expect(log[log.length - 1].detail).toBe("d24");
   });
 });
+
+describe("corridor snapshot", () => {
+  it("takes the passed list from a snapshot, so a late joiner shows real progress", () => {
+    const view = mapCorridor({ corridor_id: "gc-1", event: "snapshot", status: "ACTIVE",
+      reservations: [], passed: ["J1", "J2"] });
+    expect(view.passedIntersections).toEqual(["J1", "J2"]);
+  });
+});

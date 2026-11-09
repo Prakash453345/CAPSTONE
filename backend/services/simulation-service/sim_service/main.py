@@ -169,11 +169,15 @@ def _run_sumo() -> None:
 
     # One AdaptiveCamp per junction, cold-started (no warmed memory/
     # calibration profile) -- see this module's docstring for why.
+    # One dict shared by every junction of the run: the adaptive ceiling's network
+    # latch reads it (baselines/2026-10-31_gridlock); without it the ceiling never relaxes.
+    network: dict = {}
     strategy = {
         tls_id: acamp.AdaptiveCamp(
             nominal_cycle_s=webster.compute_timing(cfg, flows.get(tls_id, {})).cycle_s,
             tick_s=step_length,
             cfg=acamp.AcampConfig(rest_in_green=True) if offpeak else None,
+            network=network,
         )
         for tls_id, cfg in configs.items()
     }

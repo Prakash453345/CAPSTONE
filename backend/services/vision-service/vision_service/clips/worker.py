@@ -40,6 +40,8 @@ SNAPSHOT_FILE = "snapshot.jpg"
 PROGRESS_EVERY_S = 1.0
 
 DEFAULT_ACCIDENT_MODEL = MODELS_DIR / "itms_accident_224.onnx"
+# The model the app keeps (`PROCEDURE_VIDEO_V9_ALL_DATA_LOCKED.md`): VideoMAE V4.
+DEFAULT_ACCIDENT_VIDEO_MODEL = MODELS_DIR / "itms_accident_v4.pt"
 
 
 # ---------------------------------------------------------------- detectors
@@ -82,17 +84,24 @@ def build_detectors() -> ClipDetectors:
     else:
         log.warning("fire: off -- no fire models in data/models (or VISION_FIRE=0)")
 
-    accident = Path(os.environ.get("VISION_ACCIDENT_MODEL", DEFAULT_ACCIDENT_MODEL))
+    explicit = os.environ.get("VISION_ACCIDENT_MODEL")
+    accident = Path(explicit) if explicit else (
+        DEFAULT_ACCIDENT_MODEL if DEFAULT_ACCIDENT_MODEL.exists() else DEFAULT_ACCIDENT_VIDEO_MODEL)
     if accident.exists():
         try:
-            from vision_service.clips.accident import AccidentModel  # noqa: PLC0415
+            if accident.suffix == ".pt":
+                from vision_service.clips.accident_videomae import VideoMaeAccident  # noqa: PLC0415
 
-            dets.accident = AccidentModel(accident)
+                dets.accident = VideoMaeAccident(accident)
+            else:
+                from vision_service.clips.accident import AccidentModel  # noqa: PLC0415
+
+                dets.accident = AccidentModel(accident)
             log.info("accident: %s (thr %.2f, %d of %d%s)", accident, dets.accident.rule.thr,
                      dets.accident.rule.k, dets.accident.rule.n,
                      "" if dets.accident.rule.validated else ", NOT validated")
         except ImportError as e:
-            log.warning("accident: off -- %s is there but onnxruntime is missing (%s)", accident, e)
+            log.warning("accident: off -- %s is there but a package is missing (%s) -- onnxruntime, or torch and transformers for .pt", accident, e)  # noqa: E501
     else:
         log.warning("accident: off -- no model at %s (train it with "
                     "ml/notebooks/m8_accident_step1_train.ipynb)", accident)

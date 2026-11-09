@@ -15,7 +15,8 @@ Env vars:
                      error model fitted to the adopted fine-tuned detector at
                      640 px, baselines/2026-09-27_m8_finetune_v2/; others:
                      ideal | finetuned_day | coco_pretrained | night_rain |
-                     uvh26_640 | uvh26_1280 | stock_640 | itms6_960)
+                     uvh26_640 | uvh26_1280 | stock_640 | itms6_960 |
+                     uvh26m_640 | uvh26s_640)
   VISION_FPS         processing rate per camera (default 5)
   VISION_RULES       incident-rule operating point: "quiet" (default; held-out
                      19 % of in-view incidents at ~1.7 false alarms/h for the
@@ -25,7 +26,10 @@ Env vars:
   VISION_DETECTOR    video mode: a .pt (Ultralytics) or .onnx model (default
                      data/models/itms_six_aug_640.onnx, fine-tune v3 (v2 plus
                      degradation augmentation): `make vision-model` puts it
-                     there; itms_six_fp32_640.onnx is v2; yolo11n.pt is stock)
+                     there; itms_six_fp32_640.onnx is v2; yolo11n.pt is stock;
+                     itms_uvh26_m_640.onnx is the YOLO11-M trained on the full
+                     UVH-26 set, GPU-class: score line 0.60, 14 UVH-26 classes
+                     merged to the six, baselines/2026-10-31_m8_m_coco/)
   VISION_FIRE_DETECTOR / VISION_FIRE_CLASSIFIER
                      video mode, both or neither: the v4 fire/smoke detector
                      (.pt) and the Step 2 crop classifier (.onnx, made by
@@ -152,8 +156,19 @@ def build_service(mode: str):
         fire = FireMonitorConfig()
     model = f"vision-m8/simcam:{preset}" if mode == "simcam" else \
         f"vision-m8/{Path(detector_path()).name}"
+    review_url = os.environ.get("VISION_REVIEW_URL", "")
+    review_sink = None
+    if review_url:
+        from vision_service.review import make_review_sink  # noqa: PLC0415
+
+        key = os.environ.get("API_KEY", "")
+        if not key:
+            raise SystemExit("VISION_REVIEW_URL is set but API_KEY is not: set the same API_KEY "
+                             "api-service runs with, so camera flags can reach the review inbox")
+        review_sink = make_review_sink(review_url, key)
+        log.info("camera flags go to the review inbox at %s", review_url)
     return VisionService(rig, approach, receiving, publish, preset=preset, fps=fps, model=model,
-                         evidence=evidence,
+                         evidence=evidence, review_sink=review_sink,
                          rules=os.environ.get("VISION_RULES", DEFAULT_OPERATING_POINT),
                          lane_chains=chains if (chains[0] or chains[1]) else None,
                          fire=fire), specs
@@ -212,7 +227,7 @@ def _run_video(service, specs) -> None:
             fire_scorer = FireScorer(*fire_cfg)
         except ImportError as e:
             raise SystemExit(f"fire detection is on but its packages are missing ({e}): "
-                             "pip install -e 'services/vision-service[fire]', or set VISION_FIRE=0") from e
+                             "pip install -e 'services/vision-service[fire]', or set VISION_FIRE=0") from e  # noqa: E501
         log.info("fire detection on: %s", fire_scorer.name)
     last_fire: dict[str, float] = {}
     latest = LatestFrames()

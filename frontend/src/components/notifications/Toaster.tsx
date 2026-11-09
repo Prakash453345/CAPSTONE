@@ -22,6 +22,11 @@ export function Toaster() {
   const timers = useRef(new Map<string, number>());
 
   useEffect(() => {
+    // A toast whose notification left the store (cleared when the data mode
+    // switches, or dismissed from the bell) leaves the stack with it; without
+    // this the demo's toasts stayed on screen over the live session.
+    const present = new Set(items.map((i) => i.id));
+    setVisible((v) => (v.every((e) => present.has(e.id)) ? v : v.filter((e) => present.has(e.id))));
     const fresh = items.filter((i) => !seen.current.has(i.id));
     if (!fresh.length) return;
     for (const ev of fresh) seen.current.add(ev.id);

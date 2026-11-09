@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { mapClip, reviewClip } from "./clips";
+import { CLIP_MAX_BYTES, clipFileProblem, mapClip, reviewClip } from "./clips";
 import { useSystemStore } from "@/store/systemStore";
 
 const done = {
@@ -97,5 +97,19 @@ describe("clip review", () => {
       status: 409,
       detail: "this clip was already rejected",
     });
+  });
+});
+
+describe("clipFileProblem", () => {
+  it("accepts the gateway's video types, in any case", () => {
+    expect(clipFileProblem({ name: "crash.MP4", size: 5_000_000 })).toBeNull();
+    expect(clipFileProblem({ name: "cam07.webm", size: 1 })).toBeNull();
+  });
+  it("refuses other files, empty files and anything over the limit", () => {
+    expect(clipFileProblem({ name: "notes.pdf", size: 10 })).toMatch(/isn.t a video/);
+    expect(clipFileProblem({ name: "video", size: 10 })).toMatch(/isn.t a video/);
+    expect(clipFileProblem({ name: "mp4", size: 10 })).toMatch(/isn.t a video/);
+    expect(clipFileProblem({ name: "a.mp4", size: 0 })).toMatch(/empty/);
+    expect(clipFileProblem({ name: "a.mp4", size: CLIP_MAX_BYTES + 1 })).toMatch(/300 MB/);
   });
 });

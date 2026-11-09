@@ -67,15 +67,18 @@ export function WeatherChip() {
   const toggle = useMapChromeStore((s) => s.toggle);
   const close = useMapChromeStore((s) => s.close);
   const rootRef = useRef<HTMLDivElement | null>(null);
-  // The panel opens to the chip's left; on narrow maps (split view, about
-  // 210 px) cap it to the space there so it isn't clipped by the map edge.
+  // The panel opens to the chip's left; on narrow maps (phones) cap it to the space there so it isn't clipped by the map edge.
   const [maxWidth, setMaxWidth] = useState<number | undefined>(undefined);
   useEffect(() => {
     if (!open) return;
-    const chip = rootRef.current?.getBoundingClientRect();
-    const mapBox = rootRef.current?.parentElement?.getBoundingClientRect();
-    // Panel's right edge sits 8 px left of the chip; keep 8 px from the map's edge.
-    if (chip && mapBox) setMaxWidth(Math.max(140, chip.left - mapBox.left - 16));
+    const root = rootRef.current;
+    const mapEl = root?.closest<HTMLElement>("[data-map-root]");
+    if (!root || !mapEl) return;
+    const chip = root.getBoundingClientRect();
+    // Room left of the chip, inside whatever glass covers the map's left edge.
+    const left = mapEl.getBoundingClientRect().left + (parseFloat(getComputedStyle(mapEl).getPropertyValue("--inset-l")) || 0);
+    // Panel's right edge sits 8 px left of the chip; keep 8 px from that edge.
+    setMaxWidth(Math.max(140, chip.left - left - 16));
   }, [open]);
 
   useEffect(() => {
@@ -99,7 +102,7 @@ export function WeatherChip() {
   const advice = trafficAdvice(weather);
 
   return (
-    <div ref={rootRef} className="pointer-events-auto absolute right-3 top-3 z-[25]">
+    <div ref={rootRef} className="pointer-events-auto relative z-[25]">
       <button
         type="button"
         onClick={() => toggle("weather")}
@@ -107,7 +110,7 @@ export function WeatherChip() {
         aria-label={`Weather: ${label}, ${temp}${demo ? " (demo)" : ""}. Show details`}
         title={`${label} · ${temp}`}
         className={cn(
-          "flex h-12 w-10 flex-col items-center justify-center gap-0.5 rounded-lg bg-surface-raised shadow-elevation-1 transition-colors hover:bg-muted",
+          "glass flex h-12 w-10 flex-col items-center justify-center gap-0.5 glass-hover rounded-[12px] transition-colors",
           demo && "ring-2 ring-primary/60",
         )}
       >
@@ -120,7 +123,7 @@ export function WeatherChip() {
           role="dialog"
           aria-label="Weather details"
           style={{ maxWidth }}
-          className="absolute right-12 top-0 max-h-[70vh] w-72 origin-top-right animate-sheet-in overflow-y-auto rounded-xl bg-surface-raised shadow-elevation-3"
+          className="glass-strong absolute right-12 top-0 max-h-[70vh] w-72 origin-top-right animate-sheet-in overflow-y-auto rounded-[14px]"
         >
           <div className="flex items-center gap-3 px-4 pb-3 pt-4">
             <Icon className="size-8 text-muted-foreground" aria-hidden />
@@ -189,7 +192,7 @@ export function WeatherChip() {
 
           <p className="px-4 pb-3 text-[11px] text-muted-foreground">
             Weather data by{" "}
-            <a href="https://open-meteo.com/" target="_blank" rel="noreferrer" className="underline">
+            <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer" className="underline">
               Open-Meteo.com
             </a>{" "}
             (CC BY 4.0)

@@ -45,7 +45,9 @@ def test_run_controlled_scenario_publishes_real_signal_changed_events():
     configs = load_configs(_NET_PATH)
 
     raw_redis = redis_sync.from_url(url)
-    before_len = raw_redis.xlen(_TOPIC) if raw_redis.exists(_TOPIC) else 0
+    # By entry id, not length: a capped stream stops growing once it is full.
+    last = raw_redis.xrevrange(_TOPIC, count=1)
+    last_id = last[0][0].decode() if last else "0-0"
 
     bus = RedisStreamsSyncBus(url)
     try:
@@ -62,8 +64,7 @@ def test_run_controlled_scenario_publishes_real_signal_changed_events():
 
     assert result["interlock_violations"] == 0
 
-    entries = raw_redis.xrange(_TOPIC, min="-", max="+")
-    new_entries = entries[before_len:]
+    new_entries = raw_redis.xrange(_TOPIC, min=f"({last_id}", max="+")
     assert new_entries, "run_controlled_scenario's bus parameter published nothing"
 
     _, fields = new_entries[0]

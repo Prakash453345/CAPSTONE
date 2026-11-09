@@ -18,6 +18,8 @@ import math
 import random
 from collections import deque
 
+import itertools
+
 import pytest
 from itms_domain import EmergencyRoutingConfig
 from itms_domain.paths import DATA_DIR
@@ -165,14 +167,20 @@ def test_when_every_way_in_is_blocked_each_route_says_so(graph: RoadGraph) -> No
     pytest.fail("no suitable source/destination pair found")
 
 
-def test_blocked_source_or_destination_is_refused(graph: RoadGraph) -> None:
-    source, dest = sorted(graph.edges)[:2]
-    planner = RoutePlanner(graph)
+def test_a_blocked_source_or_destination_is_still_routable(graph: RoadGraph) -> None:
+    """A closed road is exactly where responders are sent, and a vehicle on one
+    must be able to drive off it: the two ends of a trip are never avoided."""
     blocked = EdgeConditions(anomaly_severity="blocked", anomaly_impact=1.0)
-    with pytest.raises(NoRouteError, match="current road is blocked"):
-        planner.plan(source, dest, {source: blocked})
-    with pytest.raises(NoRouteError, match="destination road is blocked"):
-        planner.plan(source, dest, {dest: blocked})
+    planner = RoutePlanner(graph)
+    for source, dest in itertools.permutations(sorted(graph.edges)[:6], 2):
+        try:
+            planner.plan(source, dest)
+        except NoRouteError:
+            continue
+        assert planner.plan(source, dest, {source: blocked})[0].edges[0] == source
+        assert planner.plan(source, dest, {dest: blocked})[0].edges[-1] == dest
+        return
+    pytest.fail("no routable pair found")
 
 
 def test_unknown_roads_and_invalid_config_are_refused(graph: RoadGraph) -> None:

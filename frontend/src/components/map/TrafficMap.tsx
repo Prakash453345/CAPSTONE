@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import maplibregl, { Map as MapLibreMap, type MapMouseEvent } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { initialStyle } from "@/components/map/mapStyle";
@@ -9,9 +9,6 @@ import { MapControls } from "@/components/map/MapControls";
 import { MapLegend } from "@/components/map/MapLegend";
 import { MapSearch } from "@/components/map/MapSearch";
 import { RoadHighlight } from "@/components/map/RoadHighlight";
-import { RoadPlaceCard } from "@/components/map/RoadPlaceCard";
-import { WeatherLayer } from "@/components/map/WeatherLayer";
-import { WeatherChip } from "@/components/map/WeatherChip";
 import { MapChromeContext, createMapChromeStore } from "@/store/mapChromeStore";
 import { useStore } from "zustand";
 import { MapNewMenu } from "@/components/map/MapNewMenu";
@@ -22,35 +19,73 @@ import { IncidentLayer } from "@/components/map/layers/IncidentLayer";
 import { AnomalyLayer } from "@/components/map/layers/AnomalyLayer";
 import { EmergencyRouteLayer } from "@/components/map/layers/EmergencyRouteLayer";
 import { EmergencyVehicleLayer } from "@/components/map/layers/EmergencyVehicleLayer";
-import {
-  CreateAnomalyPanel,
-  type AnomalyTarget,
-} from "@/components/map/CreateAnomalyPanel";
-import { EmergencyPanel } from "@/components/map/EmergencyPanel";
-import { UploadClipPanel } from "@/components/map/UploadClipPanel";
-import { FollowCamera } from "@/components/map/FollowCamera";
+import type { AnomalyTarget } from "@/components/map/CreateAnomalyPanel";
 import { useMapStore } from "@/store/mapStore";
 import { useTransitionStore } from "@/store/transitionStore";
 import { useIncidentStore } from "@/store/incidentStore";
 import { selectSelectedRequest, useEmergencyStore } from "@/store/emergencyStore";
-import { networkBounds, nearestEdge } from "@/data/network";
+import { cityBounds, networkBounds, nearestEdge } from "@/data/network";
+import { CityChips } from "@/components/map/CityChips";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/utils/cn";
-import { CITIES_LABEL } from "@/data/city";
+import { useShellInset } from "@/components/layout/mapFirst";
 
+import { CITIES_LABEL, HOME_CITY, LIVE_CITY, cityById } from "@/data/city";
+// The operator forms only appear after a click (or, for the emergency panel,
+// once a dispatch is under way), so they load just after the map instead of
+// in every map page's first download (scripts/check-bundle-budget.mjs).
+const CreateAnomalyPanel = lazy(() =>
+  import("@/components/map/CreateAnomalyPanel").then((m) => ({ default: m.CreateAnomalyPanel })),
+);
+const EmergencyPanel = lazy(() =>
+  import("@/components/map/EmergencyPanel").then((m) => ({ default: m.EmergencyPanel })),
+);
+
+/** A notched mouse wheel (zoom) as opposed to a trackpad's smooth two-finger slide (pan). */
+function isMouseWheel(e: WheelEvent): boolean {
+  if (e.deltaMode !== 0) return true; // line/page units only come from wheels
+  const w = (e as WheelEvent & { wheelDeltaY?: number }).wheelDeltaY;
+  return e.deltaX === 0 && typeof w === "number" && w !== 0 && w % 120 === 0;
+}
+const UploadClipPanel = lazy(() =>
+  import("@/components/map/UploadClipPanel").then((m) => ({ default: m.UploadClipPanel })),
+);
+// The weather overlay, the follow-camera chips and the road card (shown only
+// once a road is clicked) sit on top of a working map: they can arrive a moment
+// after it, outside the first download (scripts/check-bundle-budget.mjs).
+const RoadPlaceCard = lazy(() =>
+  import("@/components/map/RoadPlaceCard").then((m) => ({ default: m.RoadPlaceCard })),
+);
+const WeatherLayer = lazy(() =>
+  import("@/components/map/WeatherLayer").then((m) => ({ default: m.WeatherLayer })),
+);
+const WeatherChip = lazy(() =>
+  import("@/components/map/WeatherChip").then((m) => ({ default: m.WeatherChip })),
+);
+const FollowCamera = lazy(() =>
+  import("@/components/map/FollowCamera").then((m) => ({ default: m.FollowCamera })),
+);
+
+// Open on the home city: with both cities in one frame, 25 km apart, each
+// was a smudge in a corner. The city chips move between them.
+const HOME_BOUNDS = cityBounds.get(HOME_CITY.id) ?? networkBounds;
 const FIT_BOUNDS: [number, number, number, number] = [
-  networkBounds.minLng,
-  networkBounds.minLat,
-  networkBounds.maxLng,
-  networkBounds.maxLat,
+  HOME_BOUNDS.minLng,
+  HOME_BOUNDS.minLat,
+  HOME_BOUNDS.maxLng,
+  HOME_BOUNDS.maxLat,
 ];
 
 export function TrafficMap({
   className,
   fullscreen = false,
   onExitFullscreen,
+  insetRight = 0,
 }: {
   className?: string;
+  /** Width of glass panels floating over the map's right edge, in px. The
+   *  camera frames the uncovered part and the controls sit clear of them. */
+  insetRight?: number;
   /** Rendered by the full-screen map route: controls offer "Exit full screen". */
   fullscreen?: boolean;
   /** Leaves full screen: shown as the search pill's back arrow and the exit control. */
@@ -61,8 +96,13 @@ export function TrafficMap({
   const [ready, setReady] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
   const [tileError, setTileError] = useState(false);
-  // This map's own sheet/selection state, so split view's two maps are independent.
+  // This map's own sheet/selection state, independent of any other map on screen.
   const [chrome] = useState(createMapChromeStore);
+  // The sidebar floats over the map's left edge on map-first pages.
+  const insetLeft = useShellInset();
+  const padding = { left: insetLeft, right: insetRight, top: 0, bottom: 0 };
+  const paddingRef = useRef(padding);
+  paddingRef.current = padding;
 
   const activeLayers = useMapStore((s) => s.activeLayers);
   const focus = useMapStore((s) => s.focus);
@@ -84,6 +124,7 @@ export function TrafficMap({
     if (!el) return;
     let disposed = false;
     let instance: MapLibreMap | null = null;
+    let cleanupWheel = () => undefined as void;
 
     const create = () => {
       if (disposed || instance) return;
@@ -99,6 +140,10 @@ export function TrafficMap({
         minZoom: 11,
         fadeDuration: 0,
       });
+        if (paddingRef.current.left || paddingRef.current.right) {
+          instance.setPadding(paddingRef.current);
+          instance.fitBounds(FIT_BOUNDS, { padding: 64, animate: false });
+        }
       } catch {
         disposed = true;
         setMapError("The map could not initialize. Enable WebGL / hardware acceleration, then reload. Road and signal lists remain available in Traffic Management.");
@@ -114,6 +159,19 @@ export function TrafficMap({
       };
       created.on("sourcedata", foldWhenCompact);
       instance.addControl(new maplibregl.ScaleControl({ maxWidth: 88, unit: "metric" }), "bottom-left");
+      // A two-finger slide on a trackpad pans the map; a pinch (ctrl+wheel) and
+      // a mouse wheel still zoom. MapLibre treats every wheel event as a zoom,
+      // so trackpad slides are taken here first, before it sees them.
+      const panned = instance;
+      const onWheel = (e: WheelEvent) => {
+        if (e.ctrlKey || e.metaKey || isMouseWheel(e)) return;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        panned.stop();
+        panned.panBy([e.deltaX, e.deltaY], { animate: false });
+      };
+      el.addEventListener("wheel", onWheel, { capture: true, passive: false });
+      cleanupWheel = () => el.removeEventListener("wheel", onWheel, { capture: true });
       instance.on("error", (e) => {
         if (disposed) return;
         console.warn("Map resource error:", e.error?.message ?? e);
@@ -153,7 +211,7 @@ export function TrafficMap({
       setMap(instance);
     };
 
-    // On narrow maps (split view, phones) the attribution folds into its (i)
+    // On narrow maps (phones) the attribution folds into its (i)
     // button so it can't sit on the scale bar; tapping (i) still shows it.
     // Same class MapLibre itself drops on the first drag (_updateCompactMinimize).
     const foldAttribution = (width: number) => {
@@ -176,6 +234,7 @@ export function TrafficMap({
 
     return () => {
       disposed = true;
+      cleanupWheel();
       ro.disconnect();
       // React runs parent passive cleanup before descendant layer cleanup.
       // Keep the style alive until those children have removed sources, listeners
@@ -184,6 +243,14 @@ export function TrafficMap({
       queueMicrotask(() => retiringMap?.remove());
     };
   }, []);
+
+  // Keep the camera centred on the uncovered map as panels come and go.
+  useEffect(() => {
+    if (!map) return;
+    const p = map.getPadding();
+    if (p.left === insetLeft && p.right === insetRight) return;
+    map.easeTo({ padding: { left: insetLeft, right: insetRight, top: 0, bottom: 0 }, duration: 300 });
+  }, [map, insetLeft, insetRight]);
 
   // --- react to focus requests -----------------------------------------
   useEffect(() => {
@@ -215,6 +282,13 @@ export function TrafficMap({
       if (!hit) {
         setPickHint("Click directly on a road");
         window.setTimeout(() => setPickHint(null), 1600);
+        return;
+      }
+      if (hit.edge.city !== LIVE_CITY) {
+        // Only the live city's roads exist in the simulation; anything placed
+        // elsewhere would be accepted here and then silently go nowhere.
+        setPickHint(`The live simulation runs ${cityById.get(LIVE_CITY)?.name ?? LIVE_CITY} only. Pick a road there`);
+        window.setTimeout(() => setPickHint(null), 2600);
         return;
       }
       setPickHint(null);
@@ -276,7 +350,11 @@ export function TrafficMap({
 
   return (
     <MapChromeContext.Provider value={chrome}>
-      <div className={cn("absolute inset-0 overflow-hidden", className)}>
+      <div
+        data-map-root
+        className={cn("absolute inset-0 overflow-hidden", className)}
+        style={{ ["--inset-l" as string]: `${insetLeft}px`, ["--inset-r" as string]: `${insetRight}px` }}
+      >
         {/* Inline, not Tailwind's "absolute inset-0": maplibre-gl.css sets
             .maplibregl-map { position: relative } at equal specificity, and since
             routes are lazy it loads after Tailwind and wins, collapsing the map
@@ -306,17 +384,27 @@ export function TrafficMap({
             <IncidentLayer visible={activeLayers.has("incidents")} />
             <AnomalyLayer visible={activeLayers.has("anomalies")} />
             <VehicleLayer visible={activeLayers.has("vehicles")} />
-            <WeatherLayer visible={activeLayers.has("weather")} />
-            <MapControls fullscreen={fullscreen} onExitFullscreen={onExitFullscreen} />
-            {/* the route panel covers the map's left edge on wide maps (308px + margin) */}
-            <FollowCamera
-              leftInset={operatorPanelOpen && (containerRef.current?.clientWidth ?? 0) >= 720 ? 336 : 0}
-            />
+            <Suspense fallback={null}>
+              <WeatherLayer visible={activeLayers.has("weather")} />
+            </Suspense>
+            <MapControls fullscreen={fullscreen} onExitFullscreen={onExitFullscreen}>
+              {activeLayers.has("weather") && (
+                <Suspense fallback={null}>
+                  <WeatherChip />
+                </Suspense>
+              )}
+            </MapControls>
+            <Suspense fallback={null}>
+              {/* the route panel covers the map's left edge on wide maps (308px + margin) */}
+              <FollowCamera
+                leftInset={operatorPanelOpen && (containerRef.current?.clientWidth ?? 0) >= 720 ? 336 : 0}
+              />
+            </Suspense>
           </MapContext.Provider>
         )}
 
         {/* Google-style search row (search pill + chips), panels open below it */}
-        <div className="map-action-stack pointer-events-none absolute left-3 top-3 flex flex-col items-start gap-2">
+        <div className="map-action-stack pointer-events-none absolute left-0 top-0 flex flex-col items-start gap-2">
           <div className="flex max-w-full flex-wrap items-start gap-2">
             {map && ready && (
               <MapContext.Provider value={map}>
@@ -325,48 +413,57 @@ export function TrafficMap({
             )}
             <div className="map-chip-row flex h-11 max-w-full items-center gap-2">
               <MapNewMenu onCancelAnomaly={exitCreate} />
+              {map && ready && (
+                <MapContext.Provider value={map}>
+                  <CityChips />
+                </MapContext.Provider>
+              )}
             </div>
           </div>
 
           {tileError && ready && (
-            <div role="status" className="pointer-events-none max-w-[340px] animate-fade-in rounded-lg bg-surface-raised px-3 py-2 text-[11px] leading-snug text-status-warn shadow-elevation-1">
+            <div role="status" className="glass pointer-events-none max-w-[340px] animate-fade-in rounded-xl px-3 py-2 text-[11px] leading-snug text-status-warn">
               Some map resources are unavailable. Bundled road geometry and received telemetry remain visible.
             </div>
           )}
 
-          {creatingAnomaly && !pendingTarget && (
+          {((creatingAnomaly && !pendingTarget) || interactionMode === "pick-destination") && (
             <div className="pointer-events-none animate-fade-in rounded-full bg-foreground/85 px-3.5 py-1.5 text-xs text-background shadow-elevation-1">
-              {pickHint ?? "Click a road to place the anomaly"}
+              {pickHint ??
+                (creatingAnomaly ? "Click a road to place the anomaly" : "Click the road where help is needed")}
             </div>
           )}
 
-          {pendingTarget && (
-            <CreateAnomalyPanel
-              target={pendingTarget}
-              onClose={exitCreate}
-              onCreated={(id) => {
-                selectAnomaly(id);
-                exitCreate();
-              }}
-            />
-          )}
+          <Suspense fallback={null}>
+            {pendingTarget && (
+              <CreateAnomalyPanel
+                target={pendingTarget}
+                onClose={exitCreate}
+                onCreated={(id) => {
+                  selectAnomaly(id);
+                  exitCreate();
+                }}
+              />
+            )}
 
-          <EmergencyPanel part="panel" />
+            <EmergencyPanel part="panel" />
 
-          {clipTarget && !creatingAnomaly && (
-            <UploadClipPanel target={clipTarget} onClose={() => setClipTarget(null)} />
-          )}
+            {clipTarget && !creatingAnomaly && (
+              <UploadClipPanel target={clipTarget} onClose={() => setClipTarget(null)} />
+            )}
+          </Suspense>
 
           {!operatorPanelOpen && (
-            <RoadPlaceCard
-              onCreateAnomaly={(target) => setPendingTarget(target)}
-              onUploadClip={(target) => setClipTarget(target)}
-            />
+            <Suspense fallback={null}>
+              <RoadPlaceCard
+                onCreateAnomaly={(target) => setPendingTarget(target)}
+                onUploadClip={(target) => setClipTarget(target)}
+              />
+            </Suspense>
           )}
         </div>
 
         <MapLegend hidden={panelOpen} />
-        {activeLayers.has("weather") && <WeatherChip />}
       </div>
     </MapChromeContext.Provider>
   );

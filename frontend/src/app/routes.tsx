@@ -2,11 +2,18 @@ import { lazy, Suspense } from "react";
 import { createBrowserRouter } from "react-router-dom";
 import { RootLayout } from "@/app/RootLayout";
 import { AppShell } from "@/components/layout/AppShell";
+import { RequireAuth } from "@/components/auth/RequireAuth";
 import { RouteError } from "@/app/RouteError";
 import { ConsoleFallback } from "@/app/ConsoleFallback";
 
 const LandingPage = lazy(() =>
   import("@/app/landing/LandingPage").then((m) => ({ default: m.LandingPage })),
+);
+const LoginPage = lazy(() =>
+  import("@/app/login/LoginPage").then((m) => ({ default: m.LoginPage })),
+);
+const CrewPage = lazy(() =>
+  import("@/app/crew/CrewPage").then((m) => ({ default: m.CrewPage })),
 );
 const DashboardPage = lazy(() =>
   import("@/app/dashboard/DashboardPage").then((m) => ({ default: m.DashboardPage })),
@@ -31,13 +38,15 @@ const SettingsPage = lazy(() =>
 );
 
 /**
- * "/" is the landing page (branding, product pitch, "Try the live demo");
+ * "/" is the landing page (branding, product pitch, "Log in");
  * the actual operator workspace — sidebar/topbar shell + every workspace
  * page — lives under "/console" so the two are cleanly separated: launching
  * the app always lands you on the landing page first, never straight into
- * live traffic data. Both sit under RootLayout, which stays mounted across
- * that navigation so the cinematic globe transition it hosts isn't torn
- * down mid-flight.
+ * live traffic data. "/login" sits between them, and "/console" is gated by
+ * RequireAuth, which sends signed-out visitors there. "/crew" is the same
+ * data for the crew driving an emergency vehicle, gated the same way. All sit under
+ * RootLayout, which stays mounted across that navigation so the cinematic
+ * globe transition it hosts isn't torn down mid-flight.
  */
 export const router = createBrowserRouter(
   [
@@ -54,8 +63,30 @@ export const router = createBrowserRouter(
           ),
         },
         {
+          path: "login",
+          element: (
+            <Suspense fallback={null}>
+              <LoginPage />
+            </Suspense>
+          ),
+        },
+        {
+          path: "crew",
+          element: (
+            <RequireAuth roles={["operator", "responder"]}>
+              <Suspense fallback={<ConsoleFallback />}>
+                <CrewPage />
+              </Suspense>
+            </RequireAuth>
+          ),
+        },
+        {
           path: "console",
-          element: <AppShell />,
+          element: (
+            <RequireAuth roles={["operator"]}>
+              <AppShell />
+            </RequireAuth>
+          ),
           children: [
             {
               index: true,

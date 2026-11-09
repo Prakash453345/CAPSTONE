@@ -4,6 +4,8 @@ lifespan; the envelope it builds is decoded back to prove the wire shape."""
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 from api_gateway.controllers.commands import post_command
 from api_gateway.core.config import COMMANDS_TOPIC
@@ -72,3 +74,117 @@ async def test_payload_not_matching_schema_is_a_422():
         await post_command(cmd, bus)
     assert ei.value.status_code == 422
     assert not bus.published
+
+
+# ---- who may send what ---------------------------------------------------
+
+
+def _user(role: str, unit: str | None = None):
+    from api_gateway.services.auth import UserRecord
+
+    return UserRecord(username=f"{role}1", display_name="x", password_hash="x",
+                      role=role, unit_id=unit)
+
+
+def _ownership():
+    from api_gateway.services.crew_ownership import CrewOwnership
+
+    own = CrewOwnership()
+    own.apply_event("CrewOfferUpdated", {"offer_id": "off-1", "unit_id": "AMB-03"})
+    own.apply_event("CrewOfferUpdated", {"offer_id": "off-2", "unit_id": "AMB-07"})
+    own.apply_event("EmergencyRequestUpdated", {"request_id": "req-1", "vehicle_id": "AMB-03"})
+    own.apply_event("EmergencyVehicleUpdated", {"request_id": "req-2", "vehicle_id": "AMB-07"})
+    return own
+
+
+def _status(user, cmd, own):
+    from api_gateway.core.security import check_crew_command
+
+    try:
+        check_crew_command(user, cmd, own)
+    except HTTPException as exc:
+        return exc.status_code
+    return 200
+
+
+def test_a_crew_may_answer_and_choose_its_own_hospital_but_not_run_the_city():
+    own = _ownership()
+    crew = _user("responder", "AMB-03")
+    choice = CommandRequest(event_type="CrewHospitalChoice",
+                            payload={"unit_id": "AMB-99", "facility_id": "h1"})
+    assert _status(crew, choice, own) == 200
+    assert choice.payload["unit_id"] == "AMB-03"  # its own ambulance, whatever it sent
+    recalc = CommandRequest(event_type="EmergencyCommand",
+                            payload={"action": "RECALCULATE", "request_id": "req-1"})
+    assert _status(crew, recalc, own) == 200
+    for event_type, payload in [("AnomalyCreateRequested", {}),
+                                ("EmergencyCommand", {"action": "CANCEL", "request_id": "req-1"})]:
+        assert _status(crew, CommandRequest(event_type=event_type, payload=payload), own) == 403
+    # operators are not limited
+    assert _status(_user("operator"), CommandRequest(event_type="AnomalyCreateRequested"),
+                   own) == 200
+
+
+def test_a_crew_cannot_answer_or_reroute_another_crews_call():
+    own = _ownership()
+    crew = _user("responder", "AMB-03")
+
+    def answer(offer_id):
+        return CommandRequest(event_type="CrewOfferResponse",
+                              payload={"offer_id": offer_id, "accept": True})
+
+    def reroute(request_id):
+        return CommandRequest(event_type="EmergencyCommand",
+                              payload={"action": "RECALCULATE", "request_id": request_id})
+
+    assert _status(crew, answer("off-1"), own) == 200       # its own call
+    assert _status(crew, answer("off-2"), own) == 403       # AMB-07's call
+    assert _status(crew, answer("nope"), own) == 409        # unknown: refused, not guessed
+    assert _status(crew, reroute("req-1"), own) == 200
+    assert _status(crew, reroute("req-2"), own) == 403      # learned from a vehicle update
+    assert _status(crew, reroute("nope"), own) == 409
+    # a crew account with no vehicle can't act on any call
+    assert _status(_user("responder"), answer("off-1"), own) == 403
+
+
+async def test_a_signed_in_account_is_recorded_as_itself():
+    from api_gateway.services.crew_ownership import CrewOwnership
+
+    bus = _FakeBus()
+    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(
+        crew_ownership=CrewOwnership())))
+    cmd = CommandRequest(event_type="EmergencyCommand",
+                         payload={"request_id": "r1", "action": "CANCEL",
+                                  "operator": "operator:someone-else", "reason": "",
+                                  "requested_at": 0})
+    await post_command(cmd, bus, request, user=_user("operator"))
+    env = decode_envelope(bus.published[0][1])
+    assert env["payload"]["operator"] == "operator:operator1"
+
+
+async def test_the_recorded_operator_is_the_signed_in_account_not_the_body():
+    """A payload "operator" used to win over the session, so any account could
+    act -- and be written into the audit trail -- as anyone."""
+    bus = _FakeBus()
+    cmd = CommandRequest(event_type="AnomalyClearRequested", payload={
+        "anomaly_id": "a1", "resolution": "CANCELLED", "reason": "",
+        "operator": "operator:chief", "requested_at": 1})
+    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(
+        crew_ownership=_ownership())))
+    await post_command(cmd, bus, request, user=_user("operator"))
+    assert decode_envelope(bus.published[0][1])["payload"]["operator"] == "operator:operator1"
+
+
+def test_commands_need_a_session_when_sign_in_is_required(tmp_path):
+    from api_gateway.core.config import Settings
+    from api_gateway.core.security import session_user
+    from api_gateway.main import create_app
+
+    on = SimpleNamespace(
+        cookies={}, app=create_app(Settings(clips_dir=tmp_path, require_sign_in=True)))
+    with pytest.raises(HTTPException) as ei:
+        session_user(on)
+    assert ei.value.status_code == 401
+    off = SimpleNamespace(
+        cookies={}, app=create_app(Settings(clips_dir=tmp_path, require_sign_in=False)))
+    assert session_user(off) is None

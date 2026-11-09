@@ -1,19 +1,20 @@
 import { useRef, useState } from "react";
-import { ChevronDown, Columns2, FlaskConical, Radio, Square } from "lucide-react";
+import { ChevronDown, FlaskConical, Radio } from "lucide-react";
 import { useSystemStore, selectIsStale } from "@/store/systemStore";
 import { networkName, roadEdges, signalJunctions } from "@/data/network";
 import { Dot, Popover, Segmented } from "@/components/console/kit";
 import { ago, useNow } from "@/components/console/hooks";
 import { type Tone } from "@/components/console/tone";
 import { cn } from "@/utils/cn";
-import type { DataMode, ViewMode } from "@/types";
+import type { DataMode } from "@/types";
 
 /**
  * One chip that answers "can I trust what I'm seeing?", replacing a row of
  * separate mode, connection, clock and layout controls. The popover holds the
  * detail and the switches.
  */
-export function StatusMenu() {
+/** `align="start"` opens the panel to the right, for a menu at the left of its row. */
+export function StatusMenu({ align = "end" }: { align?: "start" | "end" }) {
   const now = useNow();
   const anchor = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
@@ -22,8 +23,6 @@ export function StatusMenu() {
   const status = useSystemStore((s) => s.connectionStatus);
   const lastUpdate = useSystemStore((s) => s.summary.lastUpdate);
   const stale = useSystemStore((s) => selectIsStale(s, now));
-  const viewMode = useSystemStore((s) => s.viewMode);
-  const setViewMode = useSystemStore((s) => s.setViewMode);
 
   const demo = dataMode === "simulation";
   const state: { label: string; tone: Tone; detail: string } = demo
@@ -58,7 +57,7 @@ export function StatusMenu() {
         <ChevronDown className={cn("size-3.5 text-muted-foreground transition-transform duration-200", open && "rotate-180")} />
       </button>
 
-      <Popover open={open} onClose={() => setOpen(false)} anchor={anchor} label="Data and connection" className="w-[340px]">
+      <Popover open={open} onClose={() => setOpen(false)} anchor={anchor} label="Data and connection" align={align} className="w-[340px]">
         <div className="px-3 pb-3 pt-2">
           <div className="flex items-center gap-2.5">
             <Dot tone={state.tone} pulse={state.tone === "ok"} />
@@ -69,7 +68,7 @@ export function StatusMenu() {
           </div>
           {demo && (
             <p className="mt-3 rounded-xl bg-status-warn-muted px-3 py-2.5 text-[12.5px] leading-relaxed text-status-warn">
-              Demo environment. Illustrative browser simulation, not live city traffic. Commands are disabled.
+              Demo environment. Illustrative browser simulation, not live city traffic. Reports and dispatches work, but nothing leaves this browser.
             </p>
           )}
           {!demo && status !== "online" && (
@@ -89,21 +88,6 @@ export function StatusMenu() {
               options={[
                 { value: "live", label: "Live", icon: Radio },
                 { value: "simulation", label: "Demo", icon: FlaskConical },
-              ]}
-            />
-          </Row>
-          <Row label="Layout">
-            <Segmented<ViewMode>
-              size="sm"
-              value={viewMode}
-              onChange={(v) => {
-                setViewMode(v);
-                setOpen(false);
-              }}
-              ariaLabel="Layout"
-              options={[
-                { value: "single", label: "Single", icon: Square },
-                { value: "split", label: "Split", icon: Columns2 },
               ]}
             />
           </Row>

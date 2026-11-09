@@ -1,8 +1,6 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { CheckCircle2, Columns2, Loader2, MapPin, Plus, TrafficCone, TriangleAlert } from "lucide-react";
-import { IncidentInbox } from "@/components/panels/IncidentInbox";
-import { ClipReview } from "@/components/panels/ClipReview";
+import { CheckCircle2, Loader2, MapPin, Plus, TrafficCone, TriangleAlert } from "lucide-react";
 import { needsReview, useClipStore } from "@/store/clipStore";
 import { TrafficMap } from "@/components/map/TrafficMap";
 import { WorkspaceLayout } from "@/components/console/WorkspaceLayout";
@@ -13,11 +11,20 @@ import { toneBg, toneText, type Tone } from "@/components/console/tone";
 import { anomalyWord, SOURCE_WORDS } from "@/components/console/words";
 import { useIncidentStore } from "@/store/incidentStore";
 import { useMapStore } from "@/store/mapStore";
-import { useSystemStore } from "@/store/systemStore";
 import { edgeById, roadLabel } from "@/data/network";
 import { cn } from "@/utils/cn";
 import { CommandError, postCommand } from "@/services/traffic/commands";
 import type { Anomaly } from "@/types";
+
+// The review inbox fetches its items after it mounts anyway, so its code can
+// load alongside them instead of in the page's first download, next to the map
+// (scripts/check-bundle-budget.mjs).
+const ClipReview = lazy(() =>
+  import("@/components/panels/ClipReview").then((m) => ({ default: m.ClipReview })),
+);
+const IncidentInbox = lazy(() =>
+  import("@/components/panels/IncidentInbox").then((m) => ({ default: m.IncidentInbox })),
+);
 
 type Tab = "review" | "active" | "resolved";
 
@@ -48,7 +55,6 @@ export function AnomaliesPage() {
   const selectAnomaly = useIncidentStore((s) => s.selectAnomaly);
   const setInteractionMode = useMapStore((s) => s.setInteractionMode);
   const creating = useMapStore((s) => s.interactionMode === "create-anomaly");
-  const setViewMode = useSystemStore((s) => s.setViewMode);
   const now = useNow(15_000);
 
   const active = anomalies.filter((a) => a.status === "active");
@@ -107,10 +113,16 @@ export function AnomaliesPage() {
         <AnimatePresence mode="wait" initial={false}>
           <motion.div key={tab} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.2, ease: EASE_OUT }}>
             {tab === "review" ? (
-              <>
+              <Suspense
+                fallback={
+                  <div className="flex justify-center py-8 text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" aria-label="Loading" />
+                  </div>
+                }
+              >
                 <ClipReview />
                 <IncidentInbox />
-              </>
+              </Suspense>
             ) : list.length === 0 ? (
               tab === "active" ? (
                 <EmptyState
@@ -170,17 +182,6 @@ export function AnomaliesPage() {
                         <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-border pt-3">
                           <Button variant="ghost" size="sm" icon={MapPin} onClick={() => focusEdge(a.edgeId, 17)}>
                             Show on map
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            icon={Columns2}
-                            onClick={() => {
-                              focusEdge(a.edgeId, 16);
-                              setViewMode("split");
-                            }}
-                          >
-                            Compare traffic
                           </Button>
                           <ClearAnomalyControl anomaly={a} />
                         </div>

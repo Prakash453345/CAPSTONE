@@ -178,9 +178,11 @@ def build_acamp(
     slow EWMA -- each junction's `AdaptiveCamp` is seeded from
     `load_baseline.get(tls_id)` (0.0, unchanged, when `load_baseline` is
     `None`) instead of always starting cold."""
+    network: dict = {}  # shared by this run's junctions (AcampConfig.ceiling_relax_network_max)
     return {
         tls_id: acamp.AdaptiveCamp(
             acamp_cfg,
+            network=network,
             nominal_cycle_s=webster.compute_timing(cfg, flows.get(tls_id, {})).cycle_s,
             demand_memory=demand_memory,
             calibration=calibration,

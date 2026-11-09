@@ -8,7 +8,7 @@ export function Reveal({
   children,
   delay = 0,
   className,
-  y = 28,
+  y = 20,
 }: {
   children: ReactNode;
   delay?: number;
@@ -21,7 +21,7 @@ export function Reveal({
       initial={{ opacity: 0, y }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: "0px 0px -12% 0px" }}
-      transition={{ duration: 1.1, delay, ease: EASE }}
+      transition={{ duration: 0.8, delay, ease: EASE }}
     >
       {children}
     </motion.div>
@@ -31,7 +31,7 @@ export function Reveal({
 /** Masked line-by-line headline reveal. Each entry of `lines` is one line. */
 export function Lines({
   lines,
-  as: Tag = "h2",
+  as = "h2",
   className,
   play,
 }: {
@@ -41,20 +41,25 @@ export function Lines({
   /** Controlled mode (hero): reveal when true instead of on scroll. */
   play?: boolean;
 }) {
-  const MotionSpan = motion.span;
+  // The heading itself is what's watched: each line starts clipped out of
+  // view by its mask, so watching the lines would never see them arrive.
+  const Tag = motion[as];
   return (
-    <Tag className={className}>
+    <Tag
+      className={className}
+      initial="hide"
+      {...(play === undefined
+        ? { whileInView: "show", viewport: { once: true, margin: "0px 0px -8% 0px" } }
+        : { animate: play ? "show" : "hide" })}
+    >
       {lines.map((line, i) => (
         <span className="reveal-line" key={i}>
-          <MotionSpan
-            initial={{ y: "115%", rotate: 2 }}
-            {...(play === undefined
-              ? { whileInView: { y: "0%", rotate: 0 }, viewport: { once: true, margin: "0px 0px -8% 0px" } }
-              : { animate: play ? { y: "0%", rotate: 0 } : { y: "115%", rotate: 2 } })}
-            transition={{ duration: 1.25, delay: 0.08 * i, ease: EASE }}
+          <motion.span
+            variants={{ hide: { y: "110%" }, show: { y: "0%" } }}
+            transition={{ duration: 0.9, delay: 0.06 * i, ease: EASE }}
           >
             {line}
-          </MotionSpan>
+          </motion.span>
         </span>
       ))}
     </Tag>
@@ -81,8 +86,9 @@ export function ScrubWord({
   );
 }
 
-export const ArrowIcon = ({ color = "#2bf59a" }: { color?: string }) => (
-  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-    <path d="M2 7h10M8 3l4 4-4 4" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+/** The "›" after a text link, as on most product pages. */
+export const ChevronIcon = () => (
+  <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+    <path d="M3.5 1.5L7 5l-3.5 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
   </svg>
 );

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { prefersReducedMotion } from "@/utils/motion";
 import type { ExpressionSpecification, GeoJSONSource } from "maplibre-gl";
 import type { Feature, FeatureCollection, Point } from "geojson";
@@ -14,6 +14,7 @@ import {
   makeEmergencyIcon,
   upsertMapImage,
 } from "@/components/map/mapIcons";
+import { pathBetween, sampleAlong } from "@/components/map/layers/vehiclePath";
 import { angleDelta, bearingDeg } from "@/utils/geo";
 import { renderedVehicles } from "@/components/map/renderedVehicles";
 import type { EmergencyVehicleKind } from "@/types";
@@ -32,9 +33,22 @@ const SELECTED_BOOST: ExpressionSpecification = ["case", [">", ["to-number", ["g
  * vehicle keeps its mission's colour (shared with `EmergencyRouteLayer`) and a
  * bigger, brighter halo while its request is the selected one.
  */
-export function EmergencyVehicleLayer({ visible }: { visible: boolean }) {
+export function EmergencyVehicleLayer({
+  visible,
+  onlyRequestId,
+}: {
+  visible: boolean;
+  /** Draw just this request's vehicle (`null`: none). Left out, every active vehicle
+   *  is drawn, which is what the operator console wants. A crew must see only
+   *  its own vehicle; other crews' missions are not its business. */
+  onlyRequestId?: string | null;
+}) {
   const map = useMapInstance();
-  const requests = useEmergencyStore((s) => s.requests);
+  const allRequests = useEmergencyStore((s) => s.requests);
+  const requests = useMemo(
+    () => (onlyRequestId === undefined ? allRequests : allRequests.filter((r) => r.id === onlyRequestId)),
+    [allRequests, onlyRequestId],
+  );
   const selectedRequestId = useEmergencyStore((s) => s.selectedRequestId);
 
   const prev = useRef(new Map<string, VehicleFrame>());
@@ -154,11 +168,14 @@ export function EmergencyVehicleLayer({ visible }: { visible: boolean }) {
         for (const id of renderedVehicles.keys()) if (!target.current.has(id)) renderedVehicles.delete(id);
         for (const [id, t] of target.current) {
           const p = prev.current.get(id) ?? t;
-          const lng = p.lng + (t.lng - p.lng) * f;
-          const lat = p.lat + (t.lat - p.lat) * f;
+          const along = !reduced && t.path ? sampleAlong(t.path, f) : null;
+          const lng = along ? along[0] : p.lng + (t.lng - p.lng) * f;
+          const lat = along ? along[1] : p.lat + (t.lat - p.lat) * f;
           const moved = Math.hypot(t.lng - p.lng, t.lat - p.lat) > 1e-7;
           const targetHeading = moved
-            ? bearingDeg([p.lng, p.lat], [t.lng, t.lat])
+            ? t.path && !reduced
+              ? bearingDeg(sampleAlong(t.path, Math.max(0, f - 0.05)), sampleAlong(t.path, Math.min(1, f + 0.05)))
+              : bearingDeg([p.lng, p.lat], [t.lng, t.lat])
             : (heading.current.get(id) ?? 0);
           const fromHeading = heading.current.get(id) ?? targetHeading;
           const hdg = fromHeading + angleDelta(fromHeading, targetHeading) * (reduced ? 1 : f);
@@ -239,8 +256,15 @@ export function EmergencyVehicleLayer({ visible }: { visible: boolean }) {
     interval.current = Math.min(2500, Math.max(250, now - updatedAt.current));
     updatedAt.current = now;
     prev.current = new Map(target.current);
-    target.current = buildVehicleFrames(requests, selectedRequestId);
-  }, [requests, selectedRequestId]);
+    const shown =
+      onlyRequestId === undefined ? requests : requests.filter((r) => r.id === onlyRequestId);
+    const frames = buildVehicleFrames(shown, selectedRequestId);
+    for (const [id, frame] of frames) {
+      const before = prev.current.get(id);
+      if (before) frame.path = pathBetween(before, frame);
+    }
+    target.current = frames;
+  }, [requests, selectedRequestId, onlyRequestId]);
 
   return null;
 }

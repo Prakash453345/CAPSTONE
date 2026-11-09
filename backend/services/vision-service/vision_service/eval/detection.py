@@ -139,8 +139,8 @@ class DetectionEval:
             self._size_hit[b] += j in found
             self._size_cls[tcls[j]][b][0] += j in found
             self._size_cls[tcls[j]][b][1] += 1
-            self.per_box.append((tcls[j].value, round(float(h), 1), j in found, j in right))
-        pcu_t = sum(self.classes.pcu(c) for c in tcls)
+            self.per_box.append((tcls[j].value, round(float(h), 1), j in found, j in right))  # type: ignore[union-attr]
+        pcu_t = sum(self.classes.pcu(c) for c in tcls)  # type: ignore[arg-type,misc]
         pcu_f = sum(self.classes.pcu(pred_cls[k]) for k in op)
         self.pcu_truth.append(pcu_t)
         self.pcu_found.append(pcu_f)

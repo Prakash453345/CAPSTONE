@@ -45,11 +45,16 @@ function Start-BackendProcess($name, [string[]] $arguments) {
 }
 
 Write-Host "Starting redis-server..."
-Start-Process -FilePath $redisExe -ArgumentList "--port 6379" -WorkingDirectory $run -WindowStyle Hidden
+# --bind 127.0.0.1: this Redis has no password, and anything that can write to
+# the bus can drive the simulation without signing in.
+Start-Process -FilePath $redisExe -ArgumentList "--port 6379 --bind 127.0.0.1" -WorkingDirectory $run -WindowStyle Hidden
 Start-Sleep -Seconds 2
 
 Write-Host "Starting api-gateway on :8000..."
-Start-BackendProcess "api-gateway" @("-m", "uvicorn", "api_gateway.main:app", "--host", "0.0.0.0", "--port", "8000")
+# 127.0.0.1, not 0.0.0.0: commands and video uploads need no API key, so the
+# gateway must not be reachable from the rest of the network (campus Wi-Fi, a
+# demo room). The console reaches it through Vite's proxy on this machine.
+Start-BackendProcess "api-gateway" @("-m", "uvicorn", "api_gateway.main:app", "--host", "127.0.0.1", "--port", "8000")
 
 Write-Host "Starting simulation-service (SUMO, $SimMode mode)..."
 $env:SUMO_BINARY = Join-Path $root ".venv\Scripts\sumo.exe"

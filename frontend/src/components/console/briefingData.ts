@@ -60,7 +60,7 @@ export function useAttentionItems(): AttentionItem[] {
         id: `i-${i.id}`,
         icon: ScanEye,
         tone: "warn",
-        title: `Possible ${incidentWord(i.type)} at ${shortJunctionName(i.affectedIntersection ?? "")}`,
+        title: `Possible ${incidentWord(i.type)}, ${shortJunctionName(i.affectedIntersection ?? "")}`,
         detail: `${Math.round(i.confidence * 100)}% confidence · ${ago(Date.parse(i.detectedAt), now)}`,
         action: "Review",
         run: () => {
@@ -90,7 +90,7 @@ export function useAttentionItems(): AttentionItem[] {
         id: `s-${j.id}`,
         icon: Radio,
         tone: "critical",
-        title: `Signal fault at ${shortJunctionName(j.id)}`,
+        title: `Signal fault, ${shortJunctionName(j.id)}`,
         detail: j.fault!.detail || j.fault!.faultType.replace(/_/g, " "),
         action: "Locate",
         run: () => {

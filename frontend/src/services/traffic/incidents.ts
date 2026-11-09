@@ -51,7 +51,8 @@ export function mapIncident(
     type:
       p.classification == null
         ? (previous?.type ?? "unknown")
-        : (classificationType[String(p.classification)] ?? "unknown"),
+        : // REST rows carry the enum's value ("stall"), stream events its name ("STALL")
+          (classificationType[String(p.classification).toUpperCase()] ?? "unknown"),
     // The detector contract carries probability, not severity. Keep that distinction visible.
     severity: "low",
     severityKnown: false,
@@ -101,7 +102,7 @@ export async function reviewIncident(
     `${API_BASE}/v1/incidents/${encodeURIComponent(id)}/${action}`,
     {
       method: "POST",
-      headers: { "content-type": "application/json", "X-API-Key": key },
+      headers: { "content-type": "application/json", ...(key ? { "X-API-Key": key } : {}) },
       body: JSON.stringify({ actor, classification, detail }),
       signal: AbortSignal.timeout(10_000),
     },

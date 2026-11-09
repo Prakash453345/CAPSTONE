@@ -1,6 +1,7 @@
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import { GlobeTransition } from "@/components/transition/GlobeTransition";
+import { useAuthStore } from "@/store/authStore";
 import { useTransitionStore } from "@/store/transitionStore";
 
 /**
@@ -19,6 +20,7 @@ import { useTransitionStore } from "@/store/transitionStore";
  * reveal.
  */
 export function RootLayout() {
+  useSessionCheck();
   return (
     <div className="h-full">
       <Cover>
@@ -42,3 +44,45 @@ function Cover({ children }: { children: ReactNode }) {
     </div>
   );
 }
+
+/** Asks the server who is signed in once at start, and again whenever the tab
+ * comes back to the foreground, so a session that expired (or was ended from
+ * another tab or by an administrator) while the page sat idle is noticed
+ * before the operator acts on stale data. A failed re-check never signs
+ * anyone out; only the server's "not signed in" does. */
+function useSessionCheck() {
+  useEffect(() => {
+    const check = () => void useAuthStore.getState().check();
+    const onVisible = () => document.visibilityState === "visible" && check();
+    check();
+    document.addEventListener("visibilitychange", onVisible);
+
+    // Sliding session: real use (not just a tab sitting open) keeps it alive.
+    // The server signs out after AUTH_IDLE_MINUTES (30 by default); this does
+    // the same on the page so a screen left unattended is signed out too.
+    let lastInput = Date.now();
+    let lastBeat = Date.now();
+    const onInput = () => {
+      lastInput = Date.now();
+      if (lastInput - lastBeat > HEARTBEAT_MS) {
+        lastBeat = lastInput;
+        check();
+      }
+    };
+    const events = ["pointerdown", "keydown", "wheel", "touchstart"] as const;
+    events.forEach((e) => window.addEventListener(e, onInput, { passive: true }));
+    const idle = window.setInterval(() => {
+      const { status, signOut } = useAuthStore.getState();
+      if (status === "authed" && Date.now() - lastInput > IDLE_SIGN_OUT_MS) void signOut().catch(() => undefined);
+    }, 30_000);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      events.forEach((e) => window.removeEventListener(e, onInput));
+      window.clearInterval(idle);
+    };
+  }, []);
+}
+
+const HEARTBEAT_MS = 60_000;
+/** Matches the server's default AUTH_IDLE_MINUTES. */
+const IDLE_SIGN_OUT_MS = 30 * 60_000;

@@ -439,6 +439,7 @@ def run_scenario(
         "wait_overruns": result.get("wait_overruns"),
         "unfinished_at_cap": result.get("unfinished_at_cap"),
         "person_delay_s": m.person_delay_s,
+        "n_trips_total": m.n_trips_total, "n_trips_scored": m.n_trips_scored,
         "entry_delay_s": m.entry_delay_person_s,
         "person_throughput_per_hour": m.person_throughput_per_hour,
         "stops_per_vehicle": m.stops_per_vehicle,

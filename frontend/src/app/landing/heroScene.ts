@@ -331,7 +331,14 @@ export class HeroScene {
     private host: HTMLElement,
     private opts: { reducedMotion: boolean; mobile: boolean },
   ) {
-    this.renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance", alpha: false });
+    this.renderer = new THREE.WebGLRenderer({
+      antialias: false,
+      powerPreference: "high-performance",
+      alpha: false,
+      // On software rendering the scene runs at ~1 fps and freezes every
+      // click on the page; refusing it falls back to the static hero.
+      failIfMajorPerformanceCaveat: true,
+    });
     this.renderer.setClearColor(FOG, 1);
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.05;

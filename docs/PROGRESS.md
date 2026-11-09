@@ -6131,3 +6131,120 @@ Not committed. `baselines/2026-10-14_m7_heavy/` (README, TARGETS, `summarise.py`
   EV travel time +3.6 s [-30.8, +38.0] (H1 failed), stops +1.5 (n.s.), person-delay -2.0 % (n.s.),
   zero violations; medium +5.6 s [-1.6, +12.8].
 - M7 stands as safe preemption plus dispatch; no advantage over reactive preemption is claimed.
+
+## M7 routing: time-based cost, rerouting rule, hex band (2026-10-17, not committed)
+`baselines/2026-10-17_m7_routing/` (TARGETS written first, held-out seeds 300-329, 720 runs on
+random_lh / amaravati_plan / vijayawada_district, medium). New `EtaCostModel` + rule vs current
+weighted router: -4.6 % [-7.9, -0.2] EV time with an incident (H1 target -5 %: FAIL, narrowly),
+-6.4 % [-8.9, -3.8] without. vs fixed shortest route: -19.0 % with incident, -2.1 % [-4.8, +1.1]
+without. Current router is +5.6 % worse than the shortest route when nothing happens. Hex band:
+same routes, 2.4x fewer edges sampled, plan 60 vs 93 ms on Vijayawada. Opt in:
+`ITMS_ROUTE_COST=eta`; default unchanged. Vijayawada ran without the bluelight device (SUMO crash).
+
+## Crew dispatch, patient leg and console redesign (2026-10-19, not committed)
+Live mode (`SIM_MODE=live`), Vijayawada corridor.
+- Console "Send help": pick ambulance / police / fire and only the destination (no source, no
+  "nearest crew" label). The call is offered to the nearest free crew by live ETA (Ambulance 1/2,
+  Police 1/2, Fire 1 = the crew accounts); the sheet shows who is being asked, refusals and
+  "nobody took it" with Try again.
+- Simulated GPS: idle units park at depots of their kind (ambulances at hospitals, police/fire at
+  police stations); while driving their position is their SUMO vehicle's road (`CrewRosterUpdated`
+  every 5 s). New `live/crew_missions.py`.
+- Ambulance at the scene: hospitals offered fastest first by live traffic, first one picked; the crew
+  confirms or changes it, also while driving (`CrewHospitalOptions` / `CrewHospitalChoice`). Police
+  and fire are free on arrival, ambulances after the hospital.
+- Crew page: route coloured by live traffic and a traffic bar with "slow traffic in 400 m".
+- Bugs fixed (found by testing every one of the 33 corridor roads x anomaly types): no responder
+  could reach a BLOCKED road; units stuck forever at a blocked scene; units parked on dead-end or
+  entry roads could not start/arrive; a cut-off road was unreachable; hospital routing always failed
+  in live mode (unknown vType); one crew could be offered two calls at once; offers expired in 8 s at
+  3x pace; cleared incidents kept their offers; crew roster events were undecodable. After the fixes:
+  33/33 roads dispatch and free their crews; BLOCKED accident -> scene -> hospital completes.
+- Redesign (Apple/Google Maps style): shared sheet style, road search instead of the id dropdown,
+  city chips, opens on Vijayawada, card shadows no longer clipped, status pill off the search on
+  phones, theme-aware fills for dark mode. Map pages back under the bundle budget (sheets load on demand).
+
+## Crews without sign-in, call alerts, accounts file, Docker server setup (2026-10-19, not committed)
+
+- Simulation dispatch no longer needs a crew to be signed in (`CREW_REQUIRE_SIGN_IN=false` default),
+  and the nearest free crew is assigned at once (`CREW_AUTO_ACCEPT=true`); `false` brings back
+  Accept/Decline. An ambulance whose crew does not pick a hospital gets the fastest one after 45 s.
+- Crew page: browser notifications, sound and vibration for a new call, an offer or a hospital list
+  ("Turn on call alerts" card). They need HTTPS (or localhost) and a one-time permission.
+- Commands and the live stream need a signed-in account (`API_REQUIRE_SIGN_IN=true`); crew accounts
+  may only answer offers, choose a hospital for their own vehicle and ask for a new route.
+- Depots on roads cut off from the network (AMB-4 on 679017002) are no longer used for parking.
+- Accounts: `make seed-accounts` creates/updates every row of `.local/accounts.csv` (git-ignored);
+  5 new drivers added (passwords in `.local/console_credentials.txt`). Settings: `.env` (from
+  `.env.example`), loaded by `scripts/dev.sh`.
+- Server: `deploy/` (Dockerfile, docker-compose with Postgres, Redis, API+site on one address, sim,
+  Cloudflare quick tunnel or Caddy HTTPS). See deploy/README.md. Image built and run here with
+  stand-in base images (registries blocked in the workspace); not yet built on the Mac.
+- Tests: sim live 100 passed; api 84 passed, 4 skipped; web vitest 270 passed, tsc and eslint clean.
+
+## 2026-10-20 — production-readiness pass
+
+**What changed.** Read endpoints for incidents and clips now need a sign-in and
+are operator-only; CORS is an allow-list (`API_CORS_ORIGINS`); signed-in users
+can change their password (`POST /v1/auth/password`, Settings page); the
+Python CI workflow now lives in `.github/workflows/python.yml` (it sat in
+`itms/ci.yml` where GitHub never ran it).
+
+**Accident detection is now runnable in the app.** `clips/accident_videomae.py`
+runs the V4 VideoMAE model (`data/models/itms_accident_v4.pt`, rule thr 0.9,
+2-of-3) once per second on motion-proposed crops. Before this, the clip worker
+looked only for an EfficientNet ONNX that did not exist, so accident detection
+was off. Checked: strict weight load; probabilities within ~0.015 (mean) of the
+research script on the same video; end-to-end upload -> worker -> result. Not
+checked: any accident-positive clip (none on disk). Accuracy on Indian cameras
+remains unmeasured; V4's held-out numbers are in `baselines/2026-10-05_m8_accident_model/`.
+
+**Verified live (Docker + SUMO):** login, forgot/reset (real SMTP exchange
+against a local server), session revocation, lockout, anomaly -> police /
+ambulance / fire-truck dispatch -> green corridors -> hospital hand-off,
+the `deploy/` image (built and run), 101 browser tests, 1100+ Python tests.
+
+**Later the same day:** `mypy packages services` is clean and now blocks CI. It
+found one real bug: `control/runner.py` rebound `log` to a list inside the run
+loop, so the first controller note, fault warning or step-overrun warning after
+that point would have raised `AttributeError`. A 6-junction green corridor was
+run to the end live (armed, all junctions cleared, vehicle arrived, no errors).
+
+**Still open:** real Gmail STARTTLS untested (no credentials); no real
+Vijayawada footage; no accident-positive clip to test the V4 runtime on.
+
+**2026-10-20 (evening): review workflow and console fixes.** Sessions now also
+expire after 30 idle minutes (`AUTH_IDLE_MINUTES`). Confirm/reject of clips and
+incidents uses the operator's own session (no API key or typed identity; the
+key still works for scripts). A live camera's flag (fire, stalled/blocked lane)
+uploads its redacted evidence clip to the review inbox when `VISION_REVIEW_URL`
+and `API_KEY` are set, so a person watches it and decides before anything is
+dispatched. Map: trackpad two-finger slide pans, pinch and mouse wheel zoom;
+vehicle markers follow the road between snapshots instead of cutting corners;
+the report panel's submit button no longer falls below the window. Known gap:
+M6 graph-detector incidents confirmed in the inbox are recorded but nothing
+consumes `IncidentDetected` to dispatch (the live sim does not run that
+detector); the clip and camera paths do dispatch.
+
+## M7 + signal research round, 17-27 Oct 2026 (not committed)
+`baselines/2026-10-27_m7_signal_research/README.md`.
+- **Applied:** the time-based emergency router is now the default in `live/emergency_control.py` (`ITMS_ROUTE_COST=weighted` for the old one); held-out evidence in `baselines/2026-10-17_m7_routing`. Optional ITE all-red per junction (`SIGNAL_ALL_RED=ite`, off by default) in `extract_tier0_config.py`. Test fakes updated; 818 passed + 1 new test.
+- **Tried, not adopted (training seeds):** learned router constants, stall-triggered reroute, gap-acceptance junction cost, junction hold for EVs, green waves (neighbour outflow exchange). Upper-bound tests put remaining EV routing headroom at about 0-1 %, and green waves at about 5 % of person-delay at most; none of the variants gained.
+- **Safety finding:** flat 2.0 s all-red is shorter than ITE at 27-100 % of junctions. Switching costs +10.2 % (light) / +12.9 % (medium) person-delay over six networks, and produced 4 interlock violations (0 with 2.0 s) that are not yet explained.
+
+## Dispatch queue, reassignment, faster reroute (2026-10-27, not committed)
+`baselines/2026-10-27_dispatch_queue/README.md`. Calls with no free unit now wait in a severity-and-age priority queue instead of being dropped. A unit heading to a lower-severity call can be moved to a more severe one (suggested on the `EmergencyDispatched` stream; operator confirms with an `EmergencyCommand` action `REASSIGN`; no console button yet). A newly blocked road ahead is rerouted without waiting out the 30 s cooldown (once per anomaly), and a blockage the route is forced through no longer re-triggers. Contracts extended with defaults. Tests 826 + api 92 pass. SUMO check with one ambulance: all three accidents served, highest severity first; reroute 1 s after the block.
+
+## Dispatch stress test and bug fixes (2026-10-28, not committed)
+`baselines/2026-10-27_dispatch_stress/README.md`. A randomised real-SUMO stress test (`scripts/m7_dispatch_stress.py`: overloaded fleet, blocks ahead of moving vehicles, operator clears, cancels and reassignments, 13 rules checked every second; random_lh, amaravati_v2, Vijayawada) plus code review and probes found 9 bugs in the dispatch queue, reassignment and reroute logic:
+- priority inversion when a unit frees up;
+- new calls in one tick not ordered by severity;
+- stale suggestions blocking a unit for good (all 10 old-code runs);
+- duplicate suggestions per call;
+- unreachable calls retried every second;
+- free units beyond about 10 km never sent;
+- a stale hospital-leg flag after a cancel;
+- no corridor after rerouting onto a signalised road;
+- severe-anomaly reroute shared across trips and fired for already-known anomalies.
+
+All fixed, along with 3 issues from the fact-check and 1 from the final run. 14 new tests, each failing without its fix; repo 1111 passed, 12 skipped. Final code: 0 rule violations in 10 runs (old code: 20 in 10). Open design questions: operator cancel drops the call; unreachable calls dropped for good; units return to base instantly.

@@ -8,14 +8,14 @@ import {
   Siren,
   TrafficCone,
 } from "lucide-react";
-import { networkName, roadLabel } from "@/data/network";
+import { networkName, routeLabel } from "@/data/network";
 import { useSystemStore } from "@/store/systemStore";
 import { useAnalyticsStore } from "@/store/analyticsStore";
 import { useNotificationStore } from "@/store/notificationStore";
 import { useEmergencyStore } from "@/store/emergencyStore";
 import { AnimatedNumber, Button, Dot, EmptyState, Meter, Panel, PanelHeader, Pill } from "@/components/console/kit";
 import { listMotion } from "@/components/console/motion";
-import { ago, useNow } from "@/components/console/hooks";
+import { ago, useNow, useSteadyOrder } from "@/components/console/hooks";
 import { toneBg, toneText, type Tone } from "@/components/console/tone";
 import {
   congestionTone,
@@ -110,11 +110,15 @@ function Stat({
     tone = up === goodWhenUp ? "ok" : "warn";
   }
   const Arrow = trend && trend.delta < 0 ? ArrowDownRight : ArrowUpRight;
+  // "1%" sits tight like a number; "40.6 km/h" keeps its space. A change in a
+  // percentage is in points, so "0.9 pts in 1 min", never a bare "0.9".
+  const pct = unit === "%";
+  const trendUnit = pct ? " pts" : unit === "km/h" ? " km/h" : "";
   return (
     <div className={cn("px-5 py-4", className)}>
       <dt className="text-[12.5px] text-muted-foreground">{label}</dt>
       <dd>
-        <span className="mt-1 flex items-baseline gap-1.5">
+        <span className={cn("mt-1 flex items-baseline", pct ? "gap-0" : "gap-1.5")}>
           <AnimatedNumber value={value} format={format} className="text-[22px] font-semibold tracking-[-0.02em] text-foreground" />
           {unit && <span className="text-[13px] text-muted-foreground">{unit}</span>}
         </span>
@@ -122,7 +126,8 @@ function Stat({
           {trend && Math.abs(trend.delta) >= 0.05 ? (
             <span className={cn("inline-flex items-center gap-0.5", toneText(tone))}>
               <Arrow className="size-3.5" />
-              {Math.abs(trend.delta) >= 10 ? Math.round(Math.abs(trend.delta)) : Math.abs(trend.delta).toFixed(1)} in {trend.minutes} min
+              {Math.abs(trend.delta) >= 10 ? Math.round(Math.abs(trend.delta)) : Math.abs(trend.delta).toFixed(1)}
+              {trendUnit} in {trend.minutes} min
             </span>
           ) : (
             <span className="text-muted-foreground">Steady</span>
@@ -210,7 +215,7 @@ export function MissionCard({ request, onOpen, compact = false }: { request: Eme
             </Pill>
           </div>
           <p className="mt-0.5 truncate text-[13px] text-muted-foreground">
-            {roadLabel(request.sourceEdge)} to {roadLabel(request.destinationEdge)}
+            {routeLabel(request.sourceEdge, request.destinationEdge)}
           </p>
         </div>
       </div>
@@ -269,7 +274,10 @@ export function ActiveMissions({ requests }: { requests: EmergencyRequest[] }) {
 // ------------------------------------------------------------ roads
 
 export function BusiestRoads() {
-  const roads = useBusiestRoads(5);
+  const all = useBusiestRoads(Infinity);
+  const { order, hold } = useSteadyOrder(all.map((r) => r.name));
+  const byName = new Map(all.map((r) => [r.name, r]));
+  const roads = order.slice(0, 5).map((name) => byName.get(name)!);
   const navigate = useNavigate();
   return (
     <Panel>
@@ -284,7 +292,7 @@ export function BusiestRoads() {
       {roads.length === 0 ? (
         <EmptyState icon={TrafficCone} title="No road readings yet" className="py-6" />
       ) : (
-        <ul className="px-2 pb-2">
+        <ul className="px-2 pb-2" {...hold}>
           {roads.map((r) => {
             const tone = congestionTone(r.value);
             return (

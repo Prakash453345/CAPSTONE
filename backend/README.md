@@ -6,6 +6,10 @@ Capstone implementation, built milestone by milestone against `ITMS Build Guide`
 repo is the build. Where this README and the docs disagree, the docs win — fix the
 README.
 
+> **Console sign-in.** `/console` requires an account (PostgreSQL `app_user`
+> table). Create the first one with `python -m api_gateway.services.users create <name>`;
+> setup, env vars and the deployment checklist are in [`docs/auth.md`](docs/auth.md).
+
 ## Current milestone
 
 *Updated 24 September 2026. `PROGRESS.md` has every number, every negative
@@ -208,7 +212,7 @@ make down        # stop the stack
 Then the **Command Center** (`../frontend/`):
 
 ```bash
-cd ../frontend && npm install && npm run dev   # http://localhost:5173 -- landing page at /, console at /console
+cd ../frontend && npm install && npm run dev   # http://localhost:5173 -- landing page at /, console at /console, crew page at /crew
 ```
 
 It opens on in-browser simulated data, probes the api-gateway's `/health`
@@ -326,6 +330,6 @@ backend/
 | M7 | Green corridor + dispatch | ✅ built, verified safe — re-run on post-18-Sep code (14 Oct) shows no advantage over reactive preemption; original gains did not reproduce; Contribution 1 pressure terms unproven |
 | — | Interactive emergency response (`SIM_MODE=live`) | ✅ built + tested, not benchmarked — anomaly → alert → police/ambulance dispatch → corridor → hospital; not yet fed by the M6 detector |
 | M8 | Vision on real footage | 🟡 built and gated on a digital twin (controller keeps its win on cameras; camera failure handled); wired into the live controller; real-footage smoke test; an Indian-traffic detector (IISc UVH-26) measured on Bengaluru CCTV; no Vijayawada footage yet; incident rules weak |
-| M9 | Benchmark, evaluation, site | 🟡 partial — benchmark harness, Command Center (`../frontend/`), test lab (`../docs/archive/testing_site/`); final evaluation not written |
+| M9 | Benchmark, evaluation, site | 🟡 partial — benchmark harness, Command Center (`../frontend/`); final evaluation not written |
 
 Full detail for each milestone (demo + gate) is in the build guide §7.

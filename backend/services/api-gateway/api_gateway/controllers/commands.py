@@ -3,19 +3,34 @@
 from __future__ import annotations
 
 import logging
+from typing import Annotated
 
-from fastapi import HTTPException
+from fastapi import Depends, HTTPException, Request
 from itms_common import encode_envelope
 
 from api_gateway.core.config import COMMANDS_TOPIC, EVENT_SOURCE
+from api_gateway.core.security import check_crew_command, session_user
 from api_gateway.dependencies import BusDep
 from api_gateway.models.commands import CommandRequest
+from api_gateway.services.auth import UserRecord
 
 log = logging.getLogger("api-service.commands")
 
 
-async def post_command(cmd: CommandRequest, bus: BusDep) -> dict:
-    payload = {**cmd.payload, "operator": cmd.payload.get("operator", cmd.operator)}
+async def post_command(
+    cmd: CommandRequest,
+    bus: BusDep,
+    request: Request = None,  # type: ignore[assignment]  # FastAPI fills it; unit tests may not
+    user: Annotated[UserRecord | None, Depends(session_user)] = None,
+) -> dict:
+    if user is not None:
+        check_crew_command(user, cmd, request.app.state.crew_ownership)
+        # A signed-in account is recorded as itself: a payload naming someone
+        # else must not reach the audit trail (or the crew roster) as them.
+        cmd.operator = f"{user.role}:{user.username}"
+        payload = {**cmd.payload, "operator": cmd.operator}
+    else:
+        payload = {**cmd.payload, "operator": cmd.payload.get("operator", cmd.operator)}
     try:
         raw = encode_envelope(event_type=cmd.event_type, source=EVENT_SOURCE, payload=payload)
     except FileNotFoundError as exc:

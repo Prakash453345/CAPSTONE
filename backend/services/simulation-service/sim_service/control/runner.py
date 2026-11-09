@@ -770,10 +770,10 @@ def run_controlled_scenario(
                         longest_wait_excess_s = max(longest_wait_excess_s,
                                                     waited_s - js.cfg.max_wait_s)
                         waits_over_bound += waited_s > js.cfg.max_wait_s
-                        log = phase_log.setdefault(tls_id, [])
-                        if not log or log[-1][1] != js.ctx.current_phase_id:
-                            log.append((traci.simulation.getTime(), js.ctx.current_phase_id))
-                            del log[:-8]
+                        recent = phase_log.setdefault(tls_id, [])
+                        if not recent or recent[-1][1] != js.ctx.current_phase_id:
+                            recent.append((traci.simulation.getTime(), js.ctx.current_phase_id))
+                            del recent[:-8]
                         if waited_s > js.cfg.max_wait_s:
                             waiter = getattr(js.detector, "longest_waiter", None)
                             who = waiter(traci.simulation.getTime())[0] if waiter else None
@@ -785,7 +785,7 @@ def run_controlled_scenario(
                                     "tls": tls_id, "who": who,
                                     "t": traci.simulation.getTime(),
                                     "excess_s": round(waited_s - js.cfg.max_wait_s, 1),
-                                    "phases": list(log)})
+                                    "phases": list(recent)})
                         served_movements = js.cfg.phases[js.ctx.current_phase_id].shown_movements
                         has_demand, wait_times_s = js.detector.sample(
                             traci.simulation.getTime(), served_movements

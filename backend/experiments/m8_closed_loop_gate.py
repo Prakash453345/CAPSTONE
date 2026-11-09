@@ -92,6 +92,8 @@ def _with_fault(factory, kind: str = "offline"):
 def _job(args) -> dict:
     arm, level, seed, fps = args
     t0 = time.time()
+    if "ync" not in arm.split(":"):
+        os.environ.pop("SIGNAL_YELLOW", None)
     if arm == "webster":
         rec = M.run_scenario("webster", level, seed, inputs=H.scenario_inputs(level), tag=arm)
     elif arm == "webster:pair":
@@ -100,6 +102,16 @@ def _job(args) -> dict:
         inputs = M._scenario_inputs(level, layout="pair")  # noqa: SLF001
         rec = M.run_scenario("webster", level, seed, inputs=inputs,
                              strategy=H.build_webster(inputs[0], inputs[1]), tag="webster_pair")
+    elif arm == "maxpressure" or arm.startswith("maxpressure:s"):
+        # plain Varaiya max-pressure (paper-A baseline, scripts/paper_a_baselines.py)
+        import paper_a_baselines as PB  # noqa: PLC0415
+        slot = float(arm.split(":s")[1]) if ":s" in arm else 10.0
+        rec = PB.run_maxpressure(level, seed, slot_s=slot, tag=arm.replace(":", "_"))
+    elif arm == "actuated" or arm.startswith("actuated:"):
+        # SUMO's built-in actuated control on the same phases and clearances
+        import paper_a_baselines as PB  # noqa: PLC0415
+        mx = float(arm.split(":")[1]) if ":" in arm else PB.ACTUATED_MAX_DUR_S
+        rec = PB.run_actuated(level, seed, max_dur=mx, tag=arm.replace(":", "_"))
     elif arm == "truth":
         rec = M.run_scenario("ccacamp", level, seed, tag=arm)
     elif arm.startswith("truth:"):
@@ -115,10 +127,15 @@ def _job(args) -> dict:
         unknown = [t for t in mods
                    if t not in ("rest", "restf", "nov", "via", "vian", "via2",
                                 "ovl", "ovl2", "ovl3", "ovl4", "noovl", "restq", "restd", "restx",
-                                "pair", "pairt", "nopair", "minph")
+                                "pair", "pairt", "nopair", "minph", "ync")
                    and t[:1] not in ("c", "f") and not t.startswith(("restm", "restc", "s.", "hz"))]
         if unknown:
             raise SystemExit(f"arm {arm!r}: unknown modifier(s) {unknown}")
+        # ync: the yellow netconvert guessed instead of the kinematic rule (paper-A ablation)
+        if "ync" in mods:
+            os.environ["SIGNAL_YELLOW"] = "netconvert"
+        else:
+            os.environ.pop("SIGNAL_YELLOW", None)
         factor = next((float(t[1:]) for t in mods if t[:1] == "c"), None)
         floor = next((float(t[1:]) for t in mods if t[:1] == "f"), None)
         if floor is None:
@@ -142,14 +159,20 @@ def _job(args) -> dict:
         strategy = None
         if "ovl2" in mods and "rest" not in mods:
             strategy = H.build_acamp(timing[0], timing[1], acamp_cfg=M._ARMS["ccacamp"])  # noqa: SLF001
-        # s.<field>=<value>: any AcampConfig field (numbers; true/false)
+        # s.<field>=<value>: any AcampConfig field (numbers; true/false; none)
         overrides = {}
         for t in mods:
             if t.startswith("s."):
                 k, v = t[2:].split("=", 1)
+                if v.lower() == "none":
+                    overrides[k] = None  # e.g. s.ceiling_relax_factor=none: paper A's controller
+                    continue
                 overrides[k] = {"true": True, "false": False}.get(v.lower(), None)
                 if overrides[k] is None:
-                    overrides[k] = float(v)
+                    try:
+                        overrides[k] = float(v)
+                    except ValueError:
+                        overrides[k] = v  # a string field, e.g. ceiling_relax_net_signal=max
         if "rest" in mods:
             # restm<s>: rest at most s seconds past the ceiling; restf: rest only
             # while nothing stands halted on the running phase's movements; restc<x>: rest only
@@ -166,7 +189,7 @@ def _job(args) -> dict:
             strategy = H.build_acamp(timing[0], timing[1], acamp_cfg=replace(
                 M._ARMS["ccacamp"], **overrides))  # noqa: SLF001
         rec = M.run_scenario("ccacamp", level, seed, inputs=inputs, strategy=strategy,
-                             tag=arm.replace(":", "_"),
+                             tag=(arm.replace(":", "_") if len(arm) <= 80 else "arm" + __import__("hashlib").md5(arm.encode()).hexdigest()[:12]),
                              vias="nov" not in mods,
                              detector_upstream="vian" not in mods,
                              vias_short_m=None if {"via", "vian"} & set(mods)

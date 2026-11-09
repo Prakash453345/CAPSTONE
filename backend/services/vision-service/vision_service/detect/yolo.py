@@ -214,7 +214,7 @@ class UltralyticsDetector:
         self.name = f"ultralytics:{weights}"
         self._raw = merge_matrix(self.class_map, len(self.model.names)) is not None
         if self._raw:
-            self._net = self.model.model.float().eval()
+            self._net = self.model.model.float().eval()  # type: ignore[union-attr]
             if device:
                 self._net.to(device)
             self._stride = int(max(self._net.stride))
@@ -233,12 +233,12 @@ class UltralyticsDetector:
     def detect(self, frame: np.ndarray) -> list[Detection]:
         if self._raw:
             return self._detect_raw(frame)
-        res = self.model.predict(frame, conf=self.conf, iou=self.iou, imgsz=self.imgsz,
+        res = self.model.predict(frame, conf=self.conf, iou=self.iou, imgsz=self.imgsz,  # type: ignore[index]
                                  device=self.device, verbose=False)[0]
         boxes = res.boxes
-        xyxy = boxes.xyxy.cpu().numpy()
-        scores = boxes.conf.cpu().numpy()
-        cls = boxes.cls.cpu().numpy().astype(int)
+        xyxy = boxes.xyxy.cpu().numpy()  # type: ignore[union-attr]
+        scores = boxes.conf.cpu().numpy()  # type: ignore[union-attr]
+        cls = boxes.cls.cpu().numpy().astype(int)  # type: ignore[union-attr]
         out = []
         for b, s, c in zip(xyxy, scores, cls, strict=True):
             vc = self.class_map.get(int(c))

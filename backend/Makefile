@@ -1,4 +1,4 @@
-.PHONY: dev setup infra-up infra-down test test-fast test-anomaly test-all lint bench down clean \
+.PHONY: dev dev-amaravati seed-accounts setup infra-up infra-up-all infra-down test test-fast test-anomaly test-all lint bench down clean \
 	vision-dev vision-model test-vision m8-cameras m8-perception m8-incidents m8-closed-loop \
 	m8-video m8-live \
 	m6-graph m6-data m6-train m6-gate
@@ -20,12 +20,36 @@ setup: $(VENV)/bin/activate
 	$(PIP) install -e libs/geo -q
 	$(PIP) install -e services/vision-service -q
 
+# Postgres (console accounts, road network) and Redis (the service bus) are all
+# `make dev` needs. MinIO only stores vision evidence clips, and only when
+# vision-service runs with MINIO_ENDPOINT/VISION_EVIDENCE set -- it used to be
+# started here too, so an unavailable MinIO image failed the whole stack and
+# left the console with no backend (2026-10-18). Use `infra-up-all` for it.
 infra-up:
+	docker compose -f infra/docker-compose.yml up -d postgres redis
+	./scripts/wait-for-healthy.sh itms-postgres itms-redis
+
+# Everything, including MinIO: needed only for vision evidence storage.
+infra-up-all:
 	docker compose -f infra/docker-compose.yml up -d postgres redis minio
-	./scripts/wait-for-healthy.sh
+	./scripts/wait-for-healthy.sh itms-postgres itms-redis itms-minio
 
 dev: setup infra-up
 	./scripts/dev.sh
+
+# The same stack on the Amaravati capital complex instead of the Vijayawada
+# corridor. Built the same way the corridor was (data/scenarios/generated/
+# amaravati_capital/build.sh): one named arterial, its real cross streets,
+# seven signals -- 86 edges, so it runs at 31x real time light / 13.5x heavy,
+# against the corridor's 44x. Vijayawada stays the default; this is opt-in.
+# Run the web app with VITE_CITY=amaravati so its road pickers match.
+dev-amaravati: setup infra-up
+	ITMS_SCENARIO=data/scenarios/generated/amaravati_capital ./scripts/dev.sh
+
+# Create or update every account listed in a CSV (default .local/accounts.csv,
+# git-ignored: it holds passwords). Safe to repeat. Format: api_gateway/services/seed_accounts.py.
+seed-accounts: setup
+	$(PY) -m api_gateway.services.seed_accounts $${ACCOUNTS:-.local/accounts.csv}
 
 # Default: everything except the M6 anomaly-detector tests, which need the
 # optional `[anomaly]` extra (numpy/torch, ~1GB, not installed by `setup`).

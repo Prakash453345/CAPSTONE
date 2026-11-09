@@ -31,7 +31,8 @@ API_KEY = "test-key"
 def make_api(tmp_path):
     """An isolated app over a temporary clips directory; no lifespan, so no Redis."""
     def make(**settings):
-        app = create_app(Settings(api_key=API_KEY, clips_dir=tmp_path.resolve(), **settings))
+        app = create_app(Settings(api_key=API_KEY, clips_dir=tmp_path.resolve(),
+                                  require_sign_in=False, **settings))
         bus = FakeBus()
         app.state.bus = bus
         return TestClient(app), bus, app.state.clips
@@ -253,3 +254,28 @@ def test_a_result_the_worker_wrote_while_the_api_was_down_is_picked_up(api, tmp_
         "analysed_at": 1_760_000_000_000}))
     clip = ClipRegistry(tmp_path).get(clip_id)
     assert clip is not None and clip.status == "DONE" and clip.review == "PENDING"
+
+
+def test_a_signed_in_reviewer_is_recorded_as_themselves_not_as_the_body_says(tmp_path, monkeypatch):
+    """`actor` came straight from the request body, so any account could write
+    anyone into the review record (and, for incidents, the hash-chained audit
+    trail). A session's own account is recorded; only key-holding scripts,
+    which have no account, name themselves."""
+    from api_gateway.services import auth
+
+    store = auth.MemoryUserStore()
+    store.add("asha", "a-long-test-password")
+    monkeypatch.setattr(auth, "_store", store)
+    monkeypatch.setattr(auth, "COOKIE_SECURE", False)  # the test client speaks plain http
+    app = create_app(Settings(api_key=API_KEY, clips_dir=tmp_path.resolve(), require_sign_in=True))
+    bus = FakeBus()
+    app.state.bus = bus
+    client = TestClient(app)
+    login = {"username": "asha", "password": "a-long-test-password"}
+    assert client.post("/v1/auth/login", json=login).status_code == 200
+    clip = upload(client).json()
+    assert clip["operator"] == "operator:asha"
+    analysed(clip["clip_id"], app.state.clips, tmp_path)
+    r = client.post(f"/v1/clips/{clip['clip_id']}/confirm", json={"actor": "operator:chief"})
+    assert r.status_code == 200 and r.json()["reviewed_by"] == "operator:asha"
+    assert bus.published[-1][1]["payload"]["operator"] == "operator:asha"

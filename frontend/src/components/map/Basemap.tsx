@@ -1,21 +1,15 @@
 import { useEffect, useState } from "react";
 import { useMapInstance } from "@/components/map/MapContext";
-import { setBasemap } from "@/components/map/mapStyle";
-import { OSM_PREFIX, googleLookBasemap } from "@/components/map/googleLookStyle";
-import {
-  forgetGoogleSession,
-  googleCopyright,
-  googleSession,
-  googleTileUrl,
-  hasGoogleKey,
-} from "@/components/map/googleTiles";
+import { OSM_PREFIX, setBasemap } from "@/components/map/mapStyle";
+import { hasGoogleKey } from "@/components/map/googleKey";
 import { useThemeStore } from "@/store/themeStore";
 
 /**
  * Owns the basemap: Google Maps tiles when VITE_GOOGLE_MAPS_API_KEY is set,
- * otherwise (or if Google refuses the key) OpenFreeMap vector data recoloured
- * to Google's palette. Follows the light / dark theme, and renders the
- * attribution Google's terms require.
+ * otherwise (or if Google refuses the key) OpenFreeMap vector data redrawn
+ * in Apple Maps' palette (appleLookStyle.ts). Follows the light / dark theme, and renders the
+ * attribution Google's terms require. The Google code loads only when a key
+ * is set, so the usual OpenFreeMap path doesn't download it.
  */
 export function Basemap() {
   const map = useMapInstance();
@@ -27,8 +21,16 @@ export function Basemap() {
     const showOsm = () => {
       if (cancelled) return;
       setGoogleSessionId(null);
-      googleLookBasemap(theme)
-        .then((style) => !cancelled && setBasemap(map, theme, { provider: "osm", style }))
+      // The style module (palette, POI badges) loads alongside the tile
+      // style it redraws, outside each map page's first download
+      // (scripts/check-bundle-budget.mjs).
+      Promise.all([import("@/components/map/appleLookStyle"), import("@/components/map/poiBadges")])
+        .then(([look, badges]) => look.appleLookBasemap(theme).then((style) => ({ style, badges })))
+        .then(({ style, badges }) => {
+          if (cancelled) return;
+          badges.addPoiBadges(map);
+          setBasemap(map, theme, { provider: "osm", style });
+        })
         // Surface it through the map's own error event so TrafficMap shows
         // its "Some map resources are unavailable" notice; overlays still render.
         .catch((err: unknown) => !cancelled && map.fire("error", { error: err }));
@@ -39,16 +41,18 @@ export function Basemap() {
         cancelled = true;
       };
     }
-    googleSession(theme)
-      .then(({ session }) => {
+    const google = import("@/components/map/googleTiles");
+    google
+      .then((g) => g.googleSession(theme).then(({ session }) => ({ g, session })))
+      .then(({ g, session }) => {
         if (cancelled) return;
         setGoogleSessionId(session);
         // Attribution is rendered by <GoogleAttribution>, per Google's terms.
-        setBasemap(map, theme, { provider: "google", tiles: [googleTileUrl(session)] });
+        setBasemap(map, theme, { provider: "google", tiles: [g.googleTileUrl(session)] });
       })
       .catch((err: unknown) => {
         console.warn("Google Map Tiles unavailable, using the OpenFreeMap basemap.", err);
-        forgetGoogleSession(theme);
+        void google.then((g) => g.forgetGoogleSession(theme)).catch(() => undefined);
         showOsm();
       });
     return () => {
@@ -57,7 +61,7 @@ export function Basemap() {
   }, [map, theme]);
 
   // OpenFreeMap's POI layers name a few icons its sprite doesn't ship (atm,
-  // office, gate…). Google hides those minor pins anyway, so stand in a blank
+  // office, gate…). The badges replace them anyway, so stand in a blank
   // image rather than log a warning per tile. Overlay icons replace-on-add
   // (mapIcons.ts), so this can't shadow them.
   useEffect(() => {
@@ -102,12 +106,15 @@ function GoogleAttribution({ session }: { session: string }) {
       window.clearTimeout(timer);
       timer = window.setTimeout(() => {
         const b = map.getBounds();
-        googleCopyright(session, map.getZoom(), {
-          north: b.getNorth(),
-          south: b.getSouth(),
-          east: b.getEast(),
-          west: b.getWest(),
-        })
+        import("@/components/map/googleTiles")
+          .then((g) =>
+            g.googleCopyright(session, map.getZoom(), {
+              north: b.getNorth(),
+              south: b.getSouth(),
+              east: b.getEast(),
+              west: b.getWest(),
+            }),
+          )
           .then((c) => !cancelled && setCopyright(c))
           .catch(() => undefined);
       }, 800);

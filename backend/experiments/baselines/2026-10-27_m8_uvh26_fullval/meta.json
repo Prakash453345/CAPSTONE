@@ -1,0 +1,72 @@
+{
+ "labels": "data/UVH-26-MV-Val.json",
+ "labels_sha256": "9d279f48589e653d7749b9636c945a8763b457c067f23ea79def3fa70c8e8ab4",
+ "frames": 5297,
+ "shard": 250,
+ "models": {
+  "iisc": {
+   "path": "models/iisc.onnx",
+   "sha256": "b25158aa3b0c43bea18f3bcee5ef19c467b24780b0e8a0c8349ce79e61961e63",
+   "providers": [
+    "CPUExecutionProvider"
+   ]
+  },
+  "iisc_bnfix": {
+   "path": "models/iisc_bnfix.onnx",
+   "sha256": "f57e0d9fdc637083d3729960b722bee346299449239c5f715e4df1c92a07105a",
+   "providers": [
+    "CPUExecutionProvider"
+   ]
+  },
+  "ft_v2": {
+   "path": "models/ft_v2.onnx",
+   "sha256": "f5541971b8293ab8ad827e5efc03c5e94b5519bdce6bdc17fc798ee28cb2bcac",
+   "providers": [
+    "CPUExecutionProvider"
+   ]
+  },
+  "ft_v3": {
+   "path": "models/ft_v3.onnx",
+   "sha256": "b465ec95c745092baa60b4d6805f5ff43b4d6a66025101cb537172cc4b823dce",
+   "providers": [
+    "CPUExecutionProvider"
+   ]
+  }
+ },
+ "model14": [
+  "iisc",
+  "iisc_bnfix"
+ ],
+ "leakage": {
+  "data/dataset_manifest.json": {
+   "training_frames": 3300,
+   "shared_with_validation": 0
+  }
+ },
+ "settings": {
+  "floor6": 0.05,
+  "iou6": 0.6,
+  "op": 0.5,
+  "conf14": 0.001,
+  "iou14": 0.7,
+  "maxdet14": 300,
+  "imgsz": 640
+ },
+ "versions": {
+  "onnxruntime": "1.31.1",
+  "numpy": "2.1.3",
+  "opencv": "4.14.0",
+  "python": "3.13.15"
+ },
+ "classes": [
+  "motorcycle",
+  "car",
+  "auto_rickshaw",
+  "bus",
+  "truck",
+  "bicycle",
+  "person"
+ ],
+ "started": "2026-10-27 18:33:46",
+ "finished": "2026-10-27 19:17:36"
+}

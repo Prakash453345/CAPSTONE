@@ -40,7 +40,7 @@ export function WeatherLayer({ visible }: { visible: boolean }) {
     map.addSource(ATTRIB_SRC, {
       type: "geojson",
       data: { type: "FeatureCollection", features: [] },
-      attribution: 'Weather <a href="https://open-meteo.com/" target="_blank">Open-Meteo.com</a> (CC BY 4.0)',
+      attribution: 'Weather <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo.com</a> (CC BY 4.0)',
     });
     return () => {
       if (map.getSource(ATTRIB_SRC)) map.removeSource(ATTRIB_SRC);

@@ -432,7 +432,7 @@ def test_the_emulated_stop_bar_loop_on_a_lane_shorter_than_its_zone_is_empty_whe
                              estimator=SimpleNamespace(approach_links={
                                  "J": {"L0": "bay_0", "L1": "in_1"}}))
     loop = VisionLoop.__new__(VisionLoop)
-    loop.system, loop._front, loop._front_t = system, {}, None  # noqa: SLF001
+    loop.system, loop._front, loop._front_t = system, {}, None  # type: ignore[assignment]  # noqa: SLF001
 
     def at(t, lane_ids, positions):
         loop._prev = SimpleNamespace(t=t, lane_id=lane_ids, lane_pos=positions)  # noqa: SLF001

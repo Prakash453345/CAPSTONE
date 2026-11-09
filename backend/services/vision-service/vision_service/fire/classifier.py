@@ -85,7 +85,7 @@ class CropClassifier:
         import torch  # noqa: PLC0415
 
         with torch.no_grad():
-            return self._torch(torch.from_numpy(x)).numpy()
+            return self._torch(torch.from_numpy(x)).numpy()  # type: ignore[misc]
 
     def probs(self, crops: np.ndarray) -> np.ndarray:
         if len(crops) == 0:

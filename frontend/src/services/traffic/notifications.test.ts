@@ -44,6 +44,17 @@ describe("classifyAnomalyEvent", () => {
     expect(n?.anomalyId).toBe("an-1");
   });
 
+  it("does not announce an old anomaly a late-joining console is only now catching up on", () => {
+    const now = Date.parse("2026-11-05T10:07:00Z");
+    const old = anomaly({ startTime: "2026-11-05T10:00:00Z" });
+    expect(classifyAnomalyEvent(undefined, old, now)).toBeNull();
+    const fresh = anomaly({ startTime: "2026-11-05T10:06:30Z" });
+    expect(classifyAnomalyEvent(undefined, fresh, now)?.kind).toBe("anomaly-created");
+    // a sim-clock start (1970) cannot be judged, so it still announces
+    expect(classifyAnomalyEvent(undefined, anomaly({ startTime: "1970-01-01T00:03:00Z" }), now)?.kind)
+      .toBe("anomaly-created");
+  });
+
   it("scales tone with severity", () => {
     expect(classifyAnomalyEvent(undefined, anomaly({ severity: "low" }), 1)?.tone).toBe("info");
     expect(classifyAnomalyEvent(undefined, anomaly({ severity: "medium" }), 1)?.tone).toBe("warn");
@@ -287,5 +298,20 @@ describe("classifyConnectionEvent", () => {
 
   it("does not fire when status is unchanged", () => {
     expect(classifyConnectionEvent("online", "online", true, 1)).toBeNull();
+  });
+});
+
+describe("stand-down", () => {
+  it("words a cancellation by the incident layer as a stand-down, not a routing failure", () => {
+    const n = classifyEmergencyEvent(
+      transition({ prevState: "in_transit", nextState: "cancelled", actor: "system:incident-response",
+        detail: "incident ended -- unit stood down" }),
+      5,
+    );
+    expect(n?.kind).toBe("unit-stood-down");
+    expect(n?.tone).toBe("info");
+    const failed = classifyEmergencyEvent(transition({ prevState: "routing", nextState: "cancelled",
+      actor: "system:router", detail: "no route" }), 6);
+    expect(failed?.kind).toBe("route-failure");
   });
 });

@@ -40,7 +40,7 @@ def _graph() -> RoadGraph:
     }
     return RoadGraph(
         edges=edges,
-        adjacency=adjacency,
+        adjacency=adjacency,  # type: ignore[arg-type]
         signalised_junctions=frozenset({"J1", "J2"}),
         link_movements=link_movements,
     )
@@ -153,6 +153,25 @@ def test_tick_marks_passed_junctions_and_completes_when_all_cleared():
     kinds = [e["event"] for e in c.drain_events()]
     assert "junction_passed" in kinds and "terminated" in kinds
     assert c.active_corridor_ids() == []
+
+
+def test_a_quiet_corridor_is_restated_with_its_progress_for_late_joiners():
+    """Every other corridor event fires once; a console that connected (or
+    reloaded) mid-trip never learnt the corridor or how far along it the
+    vehicle was ("0 of 2 signals cleared" after one had been)."""
+    c = CorridorController(_graph())
+    c.activate(request_id="er-1", vehicle_id="amb", route_edges=ROUTE, now_ms=0)
+    c.drain_events()
+    c.tick(step=32, sim_time_s=32.0, progress_by_request={"er-1": 320.0})  # past J1
+    (passed,) = c.drain_events()
+    assert passed["event"] == "junction_passed" and passed["passed"] == ["J1"]
+    c.tick(step=38, sim_time_s=38.0, progress_by_request={"er-1": 380.0})
+    assert c.drain_events() == []                       # quiet for under 10 s
+    c.tick(step=43, sim_time_s=43.0, progress_by_request={"er-1": 400.0})
+    (snap,) = c.drain_events()
+    assert snap["event"] == "snapshot" and snap["status"] == "ACTIVE"
+    assert snap["passed"] == ["J1"] and len(snap["reservations"]) == 2
+    decode_envelope(encode_envelope("GreenCorridorUpdated", "sim-service", snap))  # on the wire
 
 
 # ---- controller: the arbiter hook -----------------------------------

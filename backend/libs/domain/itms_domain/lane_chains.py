@@ -204,7 +204,7 @@ def vias_from_sumo_net(net_path: str | Path, upstream: Mapping[str, Chain] | Non
         if found:
             out[approach] = sorted(found.items())
     if short_m is not None:
-        length = {lane.get("id"): float(lane.get("length"))
+        length = {lane.get("id"): float(lane.get("length"))  # type: ignore[arg-type]
                   for e in root.findall("edge") for lane in e.findall("lane")}
         into: dict[str, set[str]] = {}
         signalled: set[str] = set()

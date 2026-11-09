@@ -52,6 +52,16 @@ _ACTION_FOR_NEW_STATE: dict[IncidentState, IncidentAction] = {
 }
 
 
+# the payload field that dates each event type, for ordering held transitions
+_EVENT_TIME = {
+    "IncidentCandidate": "detected_at",
+    "IncidentDetected": "confirmed_at",
+    "IncidentUpdated": "updated_at",
+}
+_MAX_HELD_INCIDENTS = 1000
+_MAX_HELD_PER_INCIDENT = 16
+
+
 def _ms(value) -> int:
     """`decode_envelope` turns a timestamp-millis field into a `datetime`;
     convert back to the integer milliseconds `Incident` fields are in."""
@@ -68,6 +78,12 @@ class IncidentRegistry:
 
     def __init__(self) -> None:
         self._incidents: dict[str, Incident] = {}
+        # incident_id -> transitions that arrived before the state they apply
+        # to (time, event_type, payload). The three incident topics are relayed
+        # -- and, after a restart, replayed -- on independent consumers, so a
+        # REJECTED update could be read before its candidate: it was dropped
+        # and the false alarm came back as a pending candidate on every restart.
+        self._early: dict[str, list[tuple[int, str, dict]]] = {}
 
     def __len__(self) -> int:
         return len(self._incidents)
@@ -85,13 +101,45 @@ class IncidentRegistry:
         the resulting `Incident`, or None if the event was ignored (an
         unknown incident_id for a non-candidate event, an out-of-order
         transition, or one already applied)."""
+        if event_type not in _EVENT_TIME:
+            return None
+        result = self._apply_one(event_type, payload)
+        if result is None and event_type != "IncidentCandidate":
+            self._hold(event_type, payload)
+        elif result is not None:
+            self._apply_held(result.incident_id)
+        return result
+
+    def _apply_one(self, event_type: str, payload: dict) -> Incident | None:
         if event_type == "IncidentCandidate":
             return self._on_candidate(payload)
         if event_type == "IncidentDetected":
             return self._on_detected(payload)
-        if event_type == "IncidentUpdated":
-            return self._on_updated(payload)
-        return None
+        return self._on_updated(payload)
+
+    def _hold(self, event_type: str, payload: dict) -> None:
+        """Keep a transition that cannot apply yet (unknown incident, or one
+        not yet in the state it moves from) until the event it follows arrives."""
+        if len(self._early) >= _MAX_HELD_INCIDENTS and payload["incident_id"] not in self._early:
+            self._early.pop(next(iter(self._early)))   # bounded: drop the oldest
+        held = self._early.setdefault(payload["incident_id"], [])
+        if len(held) < _MAX_HELD_PER_INCIDENT:
+            held.append((_ms(payload[_EVENT_TIME[event_type]]), event_type, payload))
+
+    def _apply_held(self, incident_id: str) -> None:
+        """Apply held transitions for `incident_id` in event-time order, as
+        long as each next one now fits."""
+        held = self._early.get(incident_id)
+        while held:
+            held.sort(key=lambda item: item[0])
+            for item in held:
+                if self._apply_one(item[1], item[2]) is not None:
+                    held.remove(item)
+                    break
+            else:
+                break   # none fits yet
+        if not held:
+            self._early.pop(incident_id, None)
 
     def _on_candidate(self, payload: dict) -> Incident:
         inc = Incident.raise_candidate(

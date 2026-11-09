@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { postCommand } from "./commands";
+import { postCommand, setDemoCommandHandler } from "./commands";
 import { useSystemStore } from "@/store/systemStore";
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -10,6 +10,7 @@ afterEach(() => {
 });
 describe("operator command boundary", () => {
   it("never posts demo or disconnected commands to the real backend", async () => {
+    setDemoCommandHandler(null);
     const fetch = vi.fn();
     vi.stubGlobal("fetch", fetch);
     useSystemStore.setState({
@@ -18,7 +19,13 @@ describe("operator command boundary", () => {
     });
     await expect(
       postCommand({ event_type: "EmergencyCommand", payload: {} }),
-    ).rejects.toThrow("Demo is read-only");
+    ).rejects.toThrow("demo simulation is not running");
+
+    const handler = vi.fn(() => ({ published: true, topic: "demo", message_id: "m" }));
+    setDemoCommandHandler(handler);
+    await expect(postCommand({ event_type: "EmergencyCommand", payload: {} })).resolves.toMatchObject({ message_id: "m" });
+    expect(handler).toHaveBeenCalledTimes(1);
+    setDemoCommandHandler(null);
     useSystemStore.setState({
       dataMode: "live",
       connectionStatus: "reconnecting",

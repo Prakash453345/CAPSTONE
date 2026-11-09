@@ -98,10 +98,10 @@ export const NAV_ITEMS: NavItem[] = [
 
 export const NAV_BY_PATH = new Map(NAV_ITEMS.map((item) => [item.path, item]));
 
-/** The nav item whose section contains `pathname`. */
-export function navItemFor(pathname: string): NavItem {
-  return (
-    NAV_ITEMS.filter((i) => i.path !== "/console").find((i) => pathname.startsWith(i.path)) ??
-    NAV_ITEMS[0]!
-  );
+/** The nav item whose section contains `pathname`, or null for an address
+ *  the console doesn't have (its 404 page), so nothing claims to be current. */
+export function navItemFor(pathname: string): NavItem | null {
+  const path = pathname.replace(/\/+$/, "") || "/";
+  if (path === "/console") return NAV_ITEMS[0]!;
+  return NAV_ITEMS.find((i) => i.path !== "/console" && (path === i.path || path.startsWith(`${i.path}/`))) ?? null;
 }

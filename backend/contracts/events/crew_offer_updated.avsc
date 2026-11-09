@@ -1,0 +1,19 @@
+{
+  "type": "record",
+  "name": "CrewOfferUpdated",
+  "namespace": "itms.contracts",
+  "doc": "A call offered to a crew and what became of it, on `crew.offer` (sim-service `live/crew_dispatch.py`). state: offered | accepted | declined | expired | withdrawn | exhausted. `exhausted` means every available crew of the kind was asked and none took it; it carries no offer_id or unit_id and lists who was asked.",
+  "fields": [
+    { "name": "offer_id", "type": "string", "default": "" },
+    { "name": "incident_id", "type": "string" },
+    { "name": "kind", "type": "string" },
+    { "name": "edge_id", "type": "string", "doc": "Where the incident is." },
+    { "name": "unit_id", "type": "string", "default": "" },
+    { "name": "crew", "type": ["null", "string"], "default": null },
+    { "name": "eta_s", "type": "double", "default": 0.0 },
+    { "name": "expires_at_s", "type": "double", "default": 0.0 },
+    { "name": "expires_in_s", "type": "double", "default": 0.0, "doc": "Real (wall-clock) seconds the offer has left when this event was sent; 0 once it is no longer open. An open offer is re-sent every few seconds so a crew page that connects late still gets it, so count down from this, not from the offer timeout." },
+    { "name": "state", "type": "string" },
+    { "name": "asked", "type": { "type": "array", "items": "string" }, "default": [] }
+  ]
+}

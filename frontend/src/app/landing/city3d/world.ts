@@ -294,7 +294,13 @@ export class CityWorld {
     private opts: WorldOptions,
   ) {
     this.rnd = rng(opts.seed ?? 7);
-    const r = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
+    const r = new THREE.WebGLRenderer({
+      canvas,
+      antialias: true,
+      powerPreference: "high-performance",
+      // without a usable GPU the panel stays still instead of stalling the page
+      failIfMajorPerformanceCaveat: true,
+    });
     r.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
     r.toneMapping = THREE.ACESFilmicToneMapping;
     r.toneMappingExposure = 1.0;

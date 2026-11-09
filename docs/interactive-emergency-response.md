@@ -442,7 +442,7 @@ python -m sim_service.main
 ### API service
 
 ```bash
-uvicorn api_service.main:app --port 8000
+uvicorn api_gateway.main:app --port 8000
 ```
 
 `POST /v1/commands` `{ "event_type": "...", "payload": { ... } }` publishes an
@@ -466,7 +466,7 @@ for the self-contained in-browser mock (no backend needed).
 End-to-end, matching the closed loop:
 
 1. **Start** Redis, then `SIM_MODE=live SIM_DEMAND=light python -m sim_service.main`,
-   then `uvicorn api_service.main:app --port 8000`, then `npm run dev` in `web-app`.
+   then `uvicorn api_gateway.main:app --port 8000`, then `npm run dev` in `frontend`.
    Open the Command Center, set Data → **Live**. Vehicles move on the corridor.
 2. **Create an anomaly.** "Create anomaly" → click a road → choose
    *Lane Blockage*, severity *High*, a duration → Create. Traffic slows on that
@@ -525,7 +525,7 @@ New unit coverage for this layer:
 | arbiter rung-3 preemption is checked / rejected / falls back | `tests/signal_controller/test_arbiter_preemption.py` |
 | corridor arm + EV spawn + in-flight reroute + no-viable-reroute holds | `tests/live/test_emergency_corridor.py` |
 | continuous-monitoring triggers + cooldown + interval + hysteresis | `tests/live/test_emergency_monitoring.py` |
-| frontend payload mappers + timeline accumulation + store reducers | `web-app/src/**/*.test.ts` |
+| frontend payload mappers + timeline accumulation + store reducers | `frontend/src/**/*.test.ts` |
 
 The M6 anomaly-detection suite and the SUMO / arbiter / interlock property tests
 are unchanged and still pass.

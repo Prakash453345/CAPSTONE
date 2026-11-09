@@ -1,0 +1,33 @@
+{
+  "type": "record",
+  "name": "CrewHospitalOptions",
+  "namespace": "itms.contracts",
+  "doc": "For an ambulance crew at the scene, on `crew.offer`: the hospitals it can take the patient to, fastest first by live travel time, and the one the system picks (`recommended_id`, the first). The crew confirms or changes it with CrewHospitalChoice. Republished with `chosen_id` once a hospital leg is under way, and with state `done` when the patient is delivered.",
+  "fields": [
+    { "name": "unit_id", "type": "string" },
+    { "name": "request_id", "type": "string", "doc": "The scene leg this follows." },
+    { "name": "scene_edge", "type": "string" },
+    { "name": "state", "type": "string", "default": "at_scene", "doc": "at_scene | to_hospital | done." },
+    { "name": "recommended_id", "type": "string", "default": "" },
+    { "name": "chosen_id", "type": "string", "default": "" },
+    {
+      "name": "options",
+      "type": {
+        "type": "array",
+        "items": {
+          "type": "record",
+          "name": "HospitalOption",
+          "fields": [
+            { "name": "facility_id", "type": "string" },
+            { "name": "name", "type": "string" },
+            { "name": "edge_id", "type": "string" },
+            { "name": "eta_s", "type": "double" },
+            { "name": "lat", "type": ["null", "double"], "default": null },
+            { "name": "lon", "type": ["null", "double"], "default": null }
+          ]
+        }
+      },
+      "default": []
+    }
+  ]
+}

@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from "react";
+import { useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { TrafficMap } from "@/components/map/TrafficMap";
 
@@ -11,14 +11,6 @@ import { TrafficMap } from "@/components/map/TrafficMap";
 export function MapPage() {
   const navigate = useNavigate();
   const location = useLocation();
-
-  useEffect(() => {
-    const previous = document.title;
-    document.title = "Map · TRAFFIX";
-    return () => {
-      document.title = previous;
-    };
-  }, []);
 
   const back = useCallback(() => {
     if (location.key !== "default") navigate(-1);

@@ -19,28 +19,30 @@ export function WorkspaceLayout({
   panelWidth?: number;
 }) {
   return (
-    <div
-      className="operational-workspace grid h-full grid-cols-1 gap-4 px-4 pb-4 sm:px-6 sm:pb-6 lg:grid-cols-[var(--panel-w)_minmax(0,1fr)]"
-      style={{ ["--panel-w" as string]: `${panelWidth}px` }}
-    >
-      <motion.aside
-        aria-label={label}
-        initial={{ opacity: 0, x: -12 }}
-        animate={{ opacity: 1, x: 0 }}
-        transition={{ duration: 0.45, ease: EASE_OUT }}
-        className="flex min-h-[320px] flex-col overflow-hidden rounded-2xl bg-surface shadow-elevation-1 lg:min-h-0"
+    <div className="workspace-host px-4 pb-4 sm:px-6 sm:pb-6">
+      <div
+        className="operational-workspace"
+        style={{ ["--panel-w" as string]: `${panelWidth}px` }}
       >
-        {panel}
-      </motion.aside>
-      <motion.section
-        aria-label="Live map"
-        initial={{ opacity: 0, scale: 0.99 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.5, ease: EASE_OUT }}
-        className="relative min-h-[460px] overflow-hidden rounded-2xl bg-surface shadow-elevation-1 lg:h-full"
-      >
-        {map}
-      </motion.section>
+        <motion.aside
+          aria-label={label}
+          initial={{ opacity: 0, x: -12 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.45, ease: EASE_OUT }}
+          className="flex flex-col overflow-hidden rounded-2xl bg-surface shadow-elevation-1"
+        >
+          {panel}
+        </motion.aside>
+        <motion.section
+          aria-label="Live map"
+          initial={{ opacity: 0, scale: 0.99 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.5, ease: EASE_OUT }}
+          className="relative overflow-hidden rounded-2xl bg-surface shadow-elevation-1"
+        >
+          {map}
+        </motion.section>
+      </div>
     </div>
   );
 }

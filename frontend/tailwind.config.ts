@@ -3,7 +3,7 @@ import animate from "tailwindcss-animate";
 
 /**
  * TRAFFIX design tokens.
- * Google Maps-style Material palette, light and dark. Every colour is an HSL triple exposed as a
+ * Apple Maps-style palette and glass materials, light and dark. Every colour is an HSL triple exposed as a
  * CSS variable in src/index.css, so components reference semantic roles
  * (surface, border, primary, status-*) and never raw hex.
  */
@@ -17,20 +17,21 @@ export default {
     },
     extend: {
       fontFamily: {
+        // Apple's system face (SF Pro) where the platform has it, as Apple
+        // Maps uses; Inter, its closest open relative, everywhere else.
         sans: [
-          "Google Sans Flex",
-          "Google Sans",
-          "Roboto",
-          "ui-sans-serif",
-          "system-ui",
           "-apple-system",
+          "BlinkMacSystemFont",
+          "SF Pro Text",
+          "Inter",
+          "system-ui",
           "Segoe UI",
           "Roboto",
           "sans-serif",
         ],
         mono: [
-          "Google Sans Code",
           "ui-monospace",
+          "SF Mono",
           "SFMono-Regular",
           "Menlo",
           "monospace",
@@ -43,8 +44,12 @@ export default {
           DEFAULT: "hsl(var(--surface))",
           raised: "hsl(var(--surface-raised))",
           sunken: "hsl(var(--surface-sunken))",
+          fill: "hsl(var(--fill))",
         },
         border: "hsl(var(--border))",
+        tile: "hsl(var(--tile))",
+        "glass-hover": "var(--glass-hover)",
+        "system-blue": "var(--system-blue)",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
         foreground: "hsl(var(--foreground))",

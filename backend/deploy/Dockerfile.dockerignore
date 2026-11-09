@@ -1,0 +1,23 @@
+# Keep the server image build small and secret-free (backend/deploy/Dockerfile
+# copies only what it needs; this stops the rest being uploaded to Docker at all).
+# The build context is the repository root.
+**/node_modules
+**/.venv
+**/__pycache__
+**/*.pyc
+.env
+**/.env
+**/.local
+backend/var
+backend/data/models
+backend/data/uvh26
+backend/data/m8_fusion
+backend/experiments
+backend/ml
+docs
+frontend/dist
+frontend/test-results
+frontend/playwright-report
+backend/data/scenarios/**/raw_osm.xml
+*.docx
+*.osm.xml

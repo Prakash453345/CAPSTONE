@@ -13,10 +13,11 @@ import type { ResolvedTheme } from "@/store/themeStore";
  * "Map Tiles API" turned on.
  */
 
-const KEY: string | undefined = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+import { GOOGLE_MAPS_KEY as KEY } from "@/components/map/googleKey";
+
 const API = "https://tile.googleapis.com";
 
-export const hasGoogleKey = Boolean(KEY && KEY !== "your_api_key_here");
+export { hasGoogleKey } from "@/components/map/googleKey";
 
 /** Google Maps' night palette: neutral greys, dark navy water, muted parks. */
 const DARK_STYLES = [

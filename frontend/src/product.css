@@ -5,12 +5,20 @@
 /* The map's top-left stack: search, the New menu, and the sheets below them. */
 .map-action-stack {
   z-index: 20;
-  max-width: calc(100% - 68px);
-  max-height: calc(100% - 96px);
+  /* The stack sits flush with the map's corner and carries the 12px inset as
+     padding, with room right and below for the cards' soft shadows: a
+     scrolling box clips whatever overflows it, and with only a few pixels
+     spare each card's shadow ended in a hard-edged grey rectangle. */
+  max-width: calc(100% - 44px - var(--inset-r, 0px));
+  max-height: calc(100% - 28px);
   overflow-x: hidden;
   overflow-y: auto;
-  /* Room for the card shadows, which overflow-x would otherwise clip. */
-  padding: 0 4px 6px 0;
+  /* --inset-l / --inset-r: glass the page floats over the map (TrafficMap) */
+  padding: 12px 36px 56px calc(12px + var(--inset-l, 0px));
+  scrollbar-width: none;
+}
+.map-action-stack::-webkit-scrollbar {
+  display: none;
 }
 .map-chip-row {
   scrollbar-width: none;
@@ -123,13 +131,17 @@ button:disabled {
   color: hsl(var(--muted-foreground));
   border-radius: 10px;
 }
+/* maplibre-gl.css loads after this file (lazy routes), hence the extra class */
+.maplibregl-map .maplibregl-ctrl-bottom-right {
+  right: var(--inset-r, 0px);
+}
 .maplibregl-ctrl-scale {
-  margin: 0 0 8px 14px !important;
+  margin: 0 0 8px calc(14px + var(--inset-l, 0px)) !important;
   border: 1.5px solid hsl(var(--foreground) / 0.6) !important;
   border-top: 0 !important;
   background: transparent !important;
   color: hsl(var(--foreground) / 0.8) !important;
-  font: 500 10px/1.3 "Google Sans Flex", Roboto, sans-serif !important;
+  font: 500 10px/1.3 theme("fontFamily.sans") !important;
   text-shadow: 0 0 2px hsl(var(--background)), 0 0 3px hsl(var(--background));
 }
 .dark .maplibregl-ctrl-attrib-button {
@@ -160,4 +172,15 @@ button:disabled {
     transition: none !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* Sign-in page: a faint city grid fading out from a soft wash of the accent,
+   so the page reads as the same world as the map without competing with the form. */
+.login-backdrop {
+  background:
+    radial-gradient(60% 45% at 50% 0%, hsl(var(--primary) / 0.12), transparent 70%),
+    linear-gradient(hsl(var(--border) / 0.6) 1px, transparent 1px) 0 0 / 56px 56px,
+    linear-gradient(90deg, hsl(var(--border) / 0.6) 1px, transparent 1px) 0 0 / 56px 56px;
+  -webkit-mask-image: radial-gradient(ellipse at 50% 40%, #000 25%, transparent 75%);
+  mask-image: radial-gradient(ellipse at 50% 40%, #000 25%, transparent 75%);
 }

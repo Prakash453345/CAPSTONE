@@ -1,0 +1,13 @@
+{
+  "type": "record",
+  "name": "CrewOfferResponse",
+  "namespace": "itms.contracts",
+  "doc": "A crew answering a call dispatch offered them, on `commands.operator`. Dispatch offers an incident to the nearest available crew of the kind it needs (`live/crew_dispatch.py`) and waits: accept turns the offer into an EmergencyRequest from wherever that crew is, decline passes it straight to the next nearest crew. Declining is a normal answer, not an error -- a driver who is away from the vehicle should decline rather than let the offer time out, which costs the next crew those seconds. The offer id is single-use: answering one that has expired, been withdrawn, or already been answered is ignored by sim-service, so a double tap on a flaky connection cannot dispatch twice.",
+  "fields": [
+    { "name": "offer_id", "type": "string", "doc": "From the CrewOfferUpdated event on `crew.offer`." },
+    { "name": "accept", "type": "boolean" },
+    { "name": "reason", "type": "string", "default": "", "doc": "Optional, for a decline: free text the operator can see." },
+    { "name": "unit_id", "type": "string", "default": "", "doc": "The answering crew's own vehicle, stamped by api-service from the signed-in crew account (never trusted from the client). sim-service ignores an answer whose unit_id is set and is not the unit the offer was made to, so one crew cannot accept or decline another's call. Empty for an operator answering on a crew's behalf." },
+    { "name": "requested_at", "type": { "type": "long", "logicalType": "timestamp-millis" } }
+  ]
+}

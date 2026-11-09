@@ -67,7 +67,9 @@ def test_link_maps_match_the_project_link_lanes_module(net) -> None:
     approach, receiving = net.link_lane_maps()
     assert approach == link_to_lane_map(_NET)
     assert receiving == link_to_receiving_lane_map(_NET)
-    assert sum(len(v) for v in approach.values()) == 73
+    # 71 since the corridor is built left-hand (India): two signals lose one
+    # mirrored movement each (73 on the old right-hand build)
+    assert sum(len(v) for v in approach.values()) == 71
 
 
 def test_every_link_lane_exists_with_geometry(net) -> None:

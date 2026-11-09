@@ -8,6 +8,8 @@ the wiring between them."""
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 from itms_domain import Anomaly, AnomalySeverity, AnomalySource, AnomalyType, EmergencyKind
 from sim_service.control.dispatch import Facility, FacilityIndex
@@ -47,7 +49,7 @@ def _graph() -> RoadGraph:
         "J2": {("B", "T"): frozenset({"L0"})},
     }
     return RoadGraph(
-        edges=edges, adjacency=adjacency,
+        edges=edges, adjacency=adjacency,  # type: ignore[arg-type]
         signalised_junctions=frozenset({"J1", "J2"}), link_movements=link_movements,
     )
 
@@ -64,6 +66,7 @@ class _FakeVehicles:
     def __init__(self) -> None:
         self.state: dict[str, dict] = {}
         self.added: list[tuple] = []
+        self.add_kwargs: dict[str, dict] = {}
         self.removed: list[str] = []
 
     def getIDList(self):  # noqa: N802
@@ -72,8 +75,9 @@ class _FakeVehicles:
     def setRoute(self, veh_id, edges):  # noqa: N802
         pass
 
-    def add(self, veh_id, route_id, typeID="", departSpeed=""):  # noqa: N803
+    def add(self, veh_id, route_id, typeID="", departSpeed="", **kw):  # noqa: N803
         self.added.append((veh_id, route_id))
+        self.add_kwargs[veh_id] = kw
         self.state[veh_id] = {"edge": "S", "pos": 0.0, "speed": 0.0, "xy": (0.0, 0.0)}
 
     def remove(self, veh_id):
@@ -126,6 +130,7 @@ def wired(monkeypatch):
     veh = _FakeVehicles()
     monkeypatch.setattr(ec.traci.edge, "getLastStepOccupancy", lambda e: 0.0)
     monkeypatch.setattr(ec.traci.edge, "getLastStepMeanSpeed", lambda e: -1.0)
+    monkeypatch.setattr(ec.traci.edge, "getLastStepHaltingNumber", lambda e: 0)
     monkeypatch.setattr(ec.traci, "vehicle", veh)
     monkeypatch.setattr(ec.traci.route, "add", lambda rid, edges: None)
     monkeypatch.setattr(ec.traci.simulation, "convertGeo", lambda x, y: (80.6, 16.5))
@@ -165,7 +170,7 @@ def test_heavy_congestion_pages_nobody():
 
 
 def test_fire_pages_fire_truck_and_police():
-    """Default policy for the M8 fire candidate once an operator confirms it; change here if the policy changes."""
+    """Default policy for the M8 fire candidate once an operator confirms it; change here if the policy changes."""  # noqa: E501
     assert set(_RESPONSE_MAP[AnomalyType.FIRE]) == {EmergencyKind.FIRE_TRUCK, EmergencyKind.POLICE}
 
 
@@ -190,6 +195,39 @@ def test_high_severity_accident_dispatches_police_and_ambulance(wired):
     dispatched_kinds = {d["vehicle_kind"] for d in alert["dispatched"]}
     assert dispatched_kinds == {"POLICE", "AMBULANCE"}
     assert alert["undispatched_kinds"] == ["fire_truck"]  # no depot data for it
+
+
+class _AskingCrews:
+    """A crew dispatcher that offers every call to a crew, who then declines."""
+
+    def __init__(self) -> None:
+        self.on_exhausted = None
+
+    def request(self, incident_id, kind, edge_id, *, now_s):
+        return SimpleNamespace(unit_id="EV-POL-1")  # an offer went out
+
+
+def test_a_call_every_crew_declined_falls_back_to_a_depot_unit(wired):
+    """Ask-first mode (CREW_AUTO_ACCEPT=false): the one police crew declines.
+    The call used to die there -- an accident with no police at all -- while
+    "no crew free" at dispatch time did fall back to a depot unit."""
+    _, emergency, anomalies, _ = wired
+    crews = _AskingCrews()
+    orch = IncidentResponseOrchestrator(
+        anomalies, emergency, facility_index=FacilityIndex([_hospital()]),
+        police_depots=[_Depot(depot_id="police-1", name="Central PS", edge="S",
+                              lat=16.49, lon=80.60)],
+        crew_dispatcher=crews,
+    )
+    anomalies.items = [_accident()]
+    orch.tick(step=1, sim_time_s=1.0)
+    assert emergency.active_requests() == []  # offered to crews, nobody sent yet
+
+    crews.on_exhausted("resp-an-1-police", EmergencyKind.POLICE, "T", 2.0)
+    crews.on_exhausted("operator-call-7", EmergencyKind.POLICE, "T", 2.0)  # not ours: ignored
+    orch.tick(step=3, sim_time_s=3.0)
+
+    assert [r.vehicle_id for r in emergency.active_requests()] == ["unit-police-0"]
 
 
 def test_low_severity_anomaly_is_not_dispatched(wired):
@@ -257,6 +295,45 @@ def test_ambulance_arrival_chains_to_the_nearest_hospital(wired):
     assert orch._unit_by_vehicle_id["unit-ambulance-0"].busy is True  # departing again
 
 
+def test_responders_stop_at_the_scene_and_leave_from_it(wired):
+    """The anomaly slows its whole road, so a responder routed to the road's
+    end crawled past the scene at incident speed (minutes over its ETA, live,
+    2026-11-05). It must stop where the incident is -- the middle of the road
+    when no position is given, as the console draws it -- and the ambulance's
+    hospital leg must start from there, not back at the road's beginning."""
+    orch, emergency, anomalies, veh = wired
+    anomalies.items = [_accident()]                      # on T, 100 m long
+    orch.tick(step=1, sim_time_s=1.0)
+    orch.drain_events()
+
+    assert veh.add_kwargs["unit-police-0"]["arrivalPos"] == "50.00"
+    assert veh.add_kwargs["unit-ambulance-0"]["arrivalPos"] == "50.00"
+
+    _arrive(emergency, veh, "unit-ambulance-0", edge="T")
+
+    assert veh.add_kwargs["unit-ambulance-0"]["departPos"] == "50.0"
+    assert "arrivalPos" not in veh.add_kwargs["unit-ambulance-0"]  # hospital road: run to its end
+
+
+def test_units_still_driving_to_an_incident_that_ended_are_stood_down(wired):
+    """Cleared (or expired) incidents used to keep their responders driving
+    there, green corridor and all (seen live, 2026-11-05). A hospital leg is
+    a patient on board and must go on."""
+    orch, emergency, anomalies, veh = wired
+    anomalies.items = [_accident()]
+    orch.tick(step=1, sim_time_s=1.0)
+    _arrive(emergency, veh, "unit-ambulance-0", edge="T")        # now on its hospital leg
+    assert {r.vehicle_id for r in emergency.active_requests()} == {"unit-police-0",
+                                                                   "unit-ambulance-0"}
+    anomalies.items = []                                          # operator cleared it
+    orch.tick(step=20, sim_time_s=20.0)
+
+    police = emergency.get_request("resp-an-1-police")
+    assert police.state.name == "CANCELLED"
+    assert [r.request_id for r in emergency.active_requests()] == ["resp-an-1-ambulance-hospital"]
+    assert orch._unit_by_vehicle_id["unit-police-0"].busy is False
+
+
 def test_police_arrival_releases_with_no_chained_corridor(wired):
     orch, emergency, anomalies, veh = wired
     anomalies.items = [_accident()]
@@ -267,3 +344,201 @@ def test_police_arrival_releases_with_no_chained_corridor(wired):
 
     assert emergency.get_request("resp-an-1-police-hospital") is None
     assert orch._unit_by_vehicle_id["unit-police-0"].busy is False
+
+
+# ---- nearest crew via the hex index --------------------------------------
+
+
+def _two_police_orch(monkeypatch, wired_parts):
+    """Same fixture world, but with a far police depot listed first so
+    "first free" and "nearest" give different answers."""
+    _, emergency, anomalies, _ = wired_parts
+    far = _Depot(depot_id="police-far", name="Far PS", edge="S", lat=16.54, lon=80.67)
+    near = _Depot(depot_id="police-near", name="Near PS", edge="S", lat=16.499, lon=80.631)
+    return IncidentResponseOrchestrator(
+        anomalies, emergency, facility_index=FacilityIndex([_hospital()]),
+        police_depots=[far, near],
+    )
+
+
+def test_nearest_police_depot_is_sent_not_the_first_listed(wired, monkeypatch):
+    _, emergency, anomalies, _ = wired
+    orch = _two_police_orch(monkeypatch, wired)
+    anomalies.items = [_accident()]
+    orch.tick(step=1, sim_time_s=1.0)
+
+    (alert,) = orch.drain_events()
+    police = [d for d in alert["dispatched"] if d["vehicle_kind"] == "POLICE"]
+    assert police[0]["vehicle_id"] == "unit-police-1"  # the Near PS, listed second
+    notified = [n for n in alert["notified"] if n["vehicle_kind"] == "POLICE"]
+    assert {n["vehicle_id"] for n in notified} == {"unit-police-0", "unit-police-1"}
+    assert [n["vehicle_id"] for n in notified if n["selected"]] == ["unit-police-1"]
+    assert all(n["cell"] for n in notified)
+
+
+def test_alert_event_validates_against_the_wire_schema(wired):
+    from itms_common import encode_envelope
+
+    orch, _, anomalies, _ = wired
+    anomalies.items = [_accident()]
+    orch.tick(step=1, sim_time_s=1.0)
+    (alert,) = orch.drain_events()
+    assert alert["notified"], "the shortlist should be on the event"
+    encode_envelope(event_type="EmergencyDispatched", source="test", payload=alert)
+
+
+def test_cancelled_request_frees_the_crew(wired):
+    orch, emergency, anomalies, _ = wired
+    anomalies.items = [_accident()]
+    orch.tick(step=1, sim_time_s=1.0)
+    request = next(r for r in emergency.active_requests() if r.vehicle_id == "unit-police-0")
+    emergency.handle_command(
+        {"request_id": request.request_id, "action": "CANCEL"}, step=2, sim_time_s=2.0
+    )
+    assert orch._unit_by_vehicle_id["unit-police-0"].busy is True
+    orch.tick(step=3, sim_time_s=3.0)
+    assert orch._unit_by_vehicle_id["unit-police-0"].busy is False
+
+
+def test_operator_request_for_nearest_crew(wired):
+    orch, emergency, _, veh = wired
+    orch.handle_nearest_request(
+        {"request_id": "op-1", "vehicle_id": "", "vehicle_kind": "POLICE",
+         "source_edge": "", "destination_edge": "T"},
+        step=1, sim_time_s=1.0, create=emergency.handle_create,
+    )
+    request = emergency.get_request("op-1")
+    assert request is not None and request.vehicle_id == "unit-police-0"
+    assert request.source_edge == "S"  # the crew's base, not what the operator sent
+    assert orch._unit_by_vehicle_id["unit-police-0"].busy is True
+    (alert,) = orch.drain_events()
+    assert alert["anomaly_type"] == "operator_request"
+    assert alert["dispatched"][0]["request_id"] == "op-1"
+
+
+def test_operator_request_with_no_free_crew_raises_an_alert(wired):
+    orch, emergency, _, _ = wired
+    orch.handle_nearest_request(
+        {"request_id": "op-2", "vehicle_id": "", "vehicle_kind": "FIRE_TRUCK",
+         "source_edge": "", "destination_edge": "T"},
+        step=1, sim_time_s=1.0, create=emergency.handle_create,
+    )
+    assert emergency.get_request("op-2") is None
+    (alert,) = orch.drain_events()
+    assert alert["undispatched_kinds"] == ["fire_truck"]
+
+
+def test_a_registered_crew_can_be_dispatched(wired):
+    orch, emergency, anomalies, _ = wired
+    orch.register_crew("fire-1", EmergencyKind.FIRE_TRUCK, lat=16.50, lon=80.63, edge="H",
+                       name="Fire Station 1")
+    anomalies.items = [_accident()]
+    orch.tick(step=1, sim_time_s=1.0)
+    (alert,) = orch.drain_events()
+    assert "fire_truck" not in alert["undispatched_kinds"]
+    assert {d["vehicle_id"] for d in alert["dispatched"]} >= {"fire-1"}
+
+
+# ---- waiting queue and reassignment (2026-10-27) ------------------------
+
+
+def _anomaly(aid: str, edge: str, severity: AnomalySeverity) -> Anomaly:
+    return Anomaly.create(
+        anomaly_id=aid, source=AnomalySource.OPERATOR, anomaly_type=AnomalyType.ACCIDENT,
+        severity=severity, edge_id=edge, at_ms=1, estimated_impact=0.8,
+    )
+
+
+def _police_request(emergency: EmergencyController):
+    return next(r for r in emergency.active_requests() if r.vehicle_id == "unit-police-0")
+
+
+def test_waiting_call_is_served_when_the_unit_frees(wired):
+    from itms_common import encode_envelope
+
+    orch, emergency, anomalies, veh = wired
+    anomalies.items = [_anomaly("an-1", "T", AnomalySeverity.HIGH),
+                       _anomaly("an-2", "H", AnomalySeverity.HIGH)]
+    orch.tick(step=1, sim_time_s=1.0)
+    first = {a["anomaly_id"]: a for a in orch.drain_events()}
+    assert "police" in first["an-2"]["queued_kinds"]       # waits, not forgotten
+    assert [w["anomaly_id"] for w in orch.waiting if w["kind"] == "police"] == ["an-2"]
+
+    _arrive(emergency, veh, "unit-police-0", edge="T")     # police done at an-1
+    orch.tick(step=12, sim_time_s=12.0)
+
+    served = [a for a in orch.drain_events() if a["anomaly_id"] == "an-2" and a["dispatched"]]
+    assert served and served[0]["dispatched"][0]["vehicle_id"] == "unit-police-0"
+    assert served[0]["waited_s"] == 11.0
+    assert not [w for w in orch.waiting if w["kind"] == "police"]
+    encode_envelope(event_type="EmergencyDispatched", source="test", payload=served[0])
+
+
+def test_higher_severity_waiting_call_is_served_first(wired):
+    orch, emergency, anomalies, veh = wired
+    anomalies.items = [_anomaly("an-1", "T", AnomalySeverity.HIGH)]
+    orch.tick(step=1, sim_time_s=1.0)
+    anomalies.items.append(_anomaly("an-2", "H", AnomalySeverity.MEDIUM))
+    orch.tick(step=2, sim_time_s=2.0)                       # medium waits first ...
+    anomalies.items.append(_anomaly("an-3", "H", AnomalySeverity.HIGH))
+    orch.tick(step=3, sim_time_s=3.0)                       # ... a high one arrives later
+    orch.drain_events()
+
+    _arrive(emergency, veh, "unit-police-0", edge="T")
+    orch.tick(step=12, sim_time_s=12.0)
+    served = [a["anomaly_id"] for a in orch.drain_events()
+              if any(d["vehicle_kind"] == "POLICE" for d in a["dispatched"])]
+    assert served == ["an-3"]
+
+
+def test_resolved_anomaly_leaves_the_queue(wired):
+    orch, emergency, anomalies, veh = wired
+    anomalies.items = [_anomaly("an-1", "T", AnomalySeverity.HIGH),
+                       _anomaly("an-2", "H", AnomalySeverity.HIGH)]
+    orch.tick(step=1, sim_time_s=1.0)
+    anomalies.items = [anomalies.items[0]]                  # an-2 cleared meanwhile
+    _arrive(emergency, veh, "unit-police-0", edge="T")
+    orch.drain_events()
+    orch.tick(step=12, sim_time_s=12.0)
+    assert not [w for w in orch.waiting if w["anomaly_id"] == "an-2"]
+    assert not [a for a in orch.drain_events() if a["anomaly_id"] == "an-2"]
+
+
+def test_more_severe_call_suggests_and_reassigns_a_unit_on_its_way(wired):
+    from itms_common import encode_envelope
+
+    orch, emergency, anomalies, veh = wired
+    anomalies.items = [_anomaly("an-1", "T", AnomalySeverity.MEDIUM)]
+    orch.tick(step=1, sim_time_s=1.0)
+    old_request = _police_request(emergency).request_id
+    orch.drain_events()
+
+    anomalies.items.append(_anomaly("an-2", "H", AnomalySeverity.HIGH))
+    orch.tick(step=2, sim_time_s=2.0)
+    events = orch.drain_events()
+    suggestion = next(e for e in events if e.get("reassign_suggestions"))
+    (sug,) = suggestion["reassign_suggestions"]
+    assert sug["vehicle_id"] == "unit-police-0" and sug["from_anomaly_id"] == "an-1"
+    encode_envelope(event_type="EmergencyDispatched", source="test", payload=suggestion)
+
+    orch.tick(step=3, sim_time_s=3.0)                       # suggested once, not every tick
+    assert not [e for e in orch.drain_events() if e.get("reassign_suggestions")]
+
+    assert orch.accept_reassignment(sug["suggestion_id"], step=4, sim_time_s=4.0)
+    assert emergency.get_request(old_request).state.name == "CANCELLED"
+    moved = next(e for e in orch.drain_events() if e.get("reassigned_from"))
+    assert moved["anomaly_id"] == "an-2" and moved["reassigned_from"] == "an-1"
+    assert _police_request(emergency).destination_edge == "H"
+    # the medium call is back in line, keeping its original waiting time
+    assert [(w["anomaly_id"], w["since_s"]) for w in orch.waiting if w["kind"] == "police"] \
+        == [("an-1", 1.0)]
+    assert not orch.accept_reassignment(sug["suggestion_id"], step=5, sim_time_s=5.0)
+
+
+def test_equal_severity_never_suggests_a_reassignment(wired):
+    orch, emergency, anomalies, veh = wired
+    anomalies.items = [_anomaly("an-1", "T", AnomalySeverity.HIGH),
+                       _anomaly("an-2", "H", AnomalySeverity.HIGH)]
+    orch.tick(step=1, sim_time_s=1.0)
+    orch.tick(step=2, sim_time_s=2.0)
+    assert not [e for e in orch.drain_events() if e.get("reassign_suggestions")]

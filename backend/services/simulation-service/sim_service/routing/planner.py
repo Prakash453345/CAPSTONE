@@ -29,6 +29,7 @@ destination, or the vehicle's *own* current/destination edge itself blocked)
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import replace
 
 from itms_domain import EmergencyRoutingConfig, RouteCostBreakdown, RouteResult
 
@@ -52,26 +53,84 @@ class RoutePlanner:
         self,
         graph: RoadGraph,
         config: EmergencyRoutingConfig | None = None,
+        cost_model=None,
+        *,
+        static_prior: bool = False,
     ):
+        """`cost_model` defaults to the weighted `RouteCostModel`; pass an
+        `EtaCostModel` to cost routes in seconds (its A* heuristic is then
+        used too)."""
         self.graph = graph
         self.config = config or EmergencyRoutingConfig()
-        self.cost_model = RouteCostModel(self.config)
+        self.cost_model = cost_model or RouteCostModel(self.config)
+        # static_prior: the route that is best with no live traffic data
+        # (lanes, turns, signals, anomalies only) is kept unless the live best
+        # route beats it by the reroute margin. Live data about roads minutes
+        # ahead is a weak forecast; small predicted gains from it are noise.
+        self.static_prior = static_prior
 
     def plan(
         self,
         source_edge: str,
         dest_edge: str,
         conditions: Mapping[str, EdgeConditions] | None = None,
+        *,
+        allowed_edges: set[str] | None = None,
     ) -> list[RouteResult]:
+        """`allowed_edges` limits the search to a band of edges (hex band);
+        if no route exists inside it, the full graph is searched."""
         cond = dict(conditions or {})
+        source_edge, dest_edge = self.usable_ends(source_edge, dest_edge)
         self._preflight(source_edge, dest_edge, cond)
+        res = None
+        if allowed_edges is not None:
+            band = set(allowed_edges) | {source_edge, dest_edge}
+            try:
+                res = self._plan_on(self.graph.subgraph(band), source_edge, dest_edge, cond)
+            except NoRouteError:
+                res = None
+        if not res:
+            res = self._plan_on(self.graph, source_edge, dest_edge, cond)
+        if self.static_prior and hasattr(self.cost_model, "config"):
+            res = self._apply_static_prior(res, source_edge, dest_edge, cond)
+        return res
 
-        blocked = {e for e, c in cond.items() if c.is_blocked}
-        avoiding = self.graph.without_edges(blocked)
-        if source_edge not in avoiding.edges:
-            raise NoRouteError("the emergency vehicle's current road is blocked")
-        if dest_edge not in avoiding.edges:
-            raise NoRouteError("the destination road is blocked")
+    def _apply_static_prior(self, res, source_edge, dest_edge, cond):
+        from sim_service.routing.eta_cost import should_reroute
+
+        static_cond = {
+            e: EdgeConditions(anomaly_severity=c.anomaly_severity, anomaly_impact=c.anomaly_impact)
+            for e, c in cond.items()
+            if c.has_active_anomaly
+        }
+        try:
+            prior_edges = self._plan_on(self.graph, source_edge, dest_edge, static_cond)[0].edges
+            prior = self.evaluate(prior_edges, cond)
+        except NoRouteError:
+            return res
+        if prior.edges == res[0].edges or prior.forced_through:
+            return res
+        if should_reroute(prior.score, res[0].score, self.cost_model.config):
+            return res
+        return [replace(prior, anomalous_segments_avoided=res[0].anomalous_segments_avoided)] + [
+            r for r in res if r.edges != prior.edges
+        ]
+
+    def _plan_on(
+        self,
+        full: RoadGraph,
+        source_edge: str,
+        dest_edge: str,
+        cond: dict,
+    ) -> list[RouteResult]:
+
+        # The two ends of a trip are never avoided, blocked or not: a vehicle
+        # on a closed road still has to drive off it, and a closed road is
+        # exactly where police, ambulance and fire are sent. Refusing them
+        # meant no responder could ever reach a BLOCKED incident, and an
+        # ambulance at one could not leave for the hospital.
+        blocked = {e for e, c in cond.items() if c.is_blocked} - {source_edge, dest_edge}
+        avoiding = full.without_edges(blocked)
 
         graph = avoiding
         candidates = self._search(graph, source_edge, dest_edge, cond)
@@ -85,7 +144,7 @@ class RoutePlanner:
             # anomaly_norm precisely for this pass), so the search still
             # prefers any real alternative and only lands here when there
             # truly is none.
-            graph = self.graph
+            graph = full
             candidates = self._search(graph, source_edge, dest_edge, cond)
             fallback = True
 
@@ -127,11 +186,15 @@ class RoutePlanner:
     ):
         """The recommended route plus up to `max_alternatives` genuinely
         different alternatives (see `GraphSearchEngine.k_shortest`)."""
+        h = None
+        if hasattr(self.cost_model, "heuristic"):
+            h = self.cost_model.heuristic(graph, dest_edge)
         return GraphSearchEngine(graph).k_shortest(
             source_edge,
             dest_edge,
             self._weight(graph, cond),
             k=1 + max(0, self.config.max_alternatives),
+            heuristic=h,
             max_stretch=self.config.alternative_max_stretch,
             max_overlap=self.config.alternative_max_overlap,
         )
@@ -141,7 +204,9 @@ class RoutePlanner:
             ec = cond.get(ge.to_edge)
             if ge.signalised:
                 ec = _with_signal(ec)
-            return self.cost_model.edge_cost(graph.edges[ge.to_edge], ec).weighted_total
+            return self.cost_model.edge_cost(
+                graph.edges[ge.to_edge], ec, ge, graph.edges.get(from_edge), cond.get(from_edge)
+            ).weighted_total
 
         return weight
 
@@ -175,6 +240,95 @@ class RoutePlanner:
             forced_through=blocked & set(edges),
         )
 
+    def usable_ends(self, source_edge: str, dest_edge: str) -> tuple[str, str]:
+        """The roads a trip between these two can actually start and end on.
+
+        A road that leads nowhere (it leaves the map) cannot start a trip, and
+        one nothing leads into (it enters the map) cannot end one. A unit
+        parked on the first, or an incident on the second, used to be simply
+        unreachable. Both are usually one carriageway of a two-way road in OSM
+        data, so the trip uses the other carriageway of the same road (SUMO
+        names it with the sign flipped: "123#4" / "-123#4"); failing that, a
+        start moves back along the road to where it can turn off, and an end
+        moves on to the road just after.
+
+        Last, a destination the start cannot reach at all -- a stretch of road
+        the map extract cut off from everything else -- becomes the nearest
+        road that can be reached, when `edge_points` (road midpoints) is set:
+        responders stop on the closest connected road rather than not go.
+        """
+        g = self.graph
+        if g.has_edge(source_edge) and not g.neighbours(source_edge):
+            alt = _reverse_edge(source_edge)
+            if g.has_edge(alt) and g.neighbours(alt):
+                source_edge = alt
+            else:
+                source_edge = self._way_out(source_edge) or source_edge
+        entered = self._entered_edges()
+        if g.has_edge(dest_edge) and dest_edge not in entered:
+            alt = _reverse_edge(dest_edge)
+            if g.has_edge(alt) and alt in entered:
+                dest_edge = alt
+            else:
+                after = sorted(
+                    ge.to_edge for ge in g.neighbours(dest_edge) if ge.to_edge in entered
+                )
+                if after:
+                    dest_edge = after[0]
+        points = getattr(self, "edge_points", None)
+        if points and g.has_edge(source_edge) and dest_edge in points:
+            reach = self._reachable(source_edge)
+            if dest_edge not in reach:
+                px, py = points[dest_edge]
+                near = [e for e in reach if e in points and e != source_edge]
+                if near:
+                    dest_edge = min(
+                        near, key=lambda e: (points[e][0] - px) ** 2 + (points[e][1] - py) ** 2
+                    )
+        return source_edge, dest_edge
+
+    def _way_out(self, dead_end: str) -> str | None:
+        """The nearest road behind a dead end from which another road leads
+        off, walking back along the roads that feed it."""
+        preds: dict[str, list[str]] = {}
+        for e, ges in self.graph.adjacency.items():
+            for ge in ges:
+                preds.setdefault(ge.to_edge, []).append(e)
+        seen, frontier = {dead_end}, [dead_end]
+        for _ in range(12):
+            nxt: list[str] = []
+            for e in frontier:
+                for p in sorted(preds.get(e, ())):
+                    if p in seen:
+                        continue
+                    seen.add(p)
+                    if any(ge.to_edge not in seen for ge in self.graph.neighbours(p)):
+                        return p
+                    nxt.append(p)
+            frontier = nxt
+            if not frontier:
+                break
+        return None
+
+    def _reachable(self, source_edge: str) -> set[str]:
+        """Every road a trip starting on `source_edge` can get to."""
+        seen, stack = {source_edge}, [source_edge]
+        while stack:
+            for ge in self.graph.neighbours(stack.pop()):
+                if ge.to_edge not in seen:
+                    seen.add(ge.to_edge)
+                    stack.append(ge.to_edge)
+        return seen
+
+    def _entered_edges(self) -> set[str]:
+        """Every road some other road leads into (cached: the graph is fixed)."""
+        if getattr(self, "_entered_for", None) is not self.graph:
+            self._entered_cache = {
+                ge.to_edge for ges in self.graph.adjacency.values() for ge in ges
+            }
+            self._entered_for = self.graph
+        return self._entered_cache
+
     # ---- internals ----------------------------------------------
 
     def _preflight(
@@ -191,11 +345,7 @@ class RoutePlanner:
                 "with no onward road connections"
             )
             
-        has_incoming = any(
-            dest_edge in [ge.to_edge for ge in ges]
-            for ges in self.graph.adjacency.values()
-        )
-        if not has_incoming:
+        if dest_edge not in self._entered_edges():
             raise NoRouteError(
                 f"cannot route to {dest_edge!r} — it is a network boundary entry "
                 "edge with no incoming roads"
@@ -238,7 +388,9 @@ class RoutePlanner:
                 ec = _with_signal(ec)
                 if ge.junction_id not in signalised:
                     signalised.append(ge.junction_id)
-            parts = self.cost_model.edge_cost(info, ec)
+            parts = self.cost_model.edge_cost(
+                info, ec, ge, graph.edges.get(prev_edge), cond.get(prev_edge)
+            )
             total_distance += info.length_m
             travel_time_s += parts.travel_time_s
             congestion_cost += parts.congestion_cost
@@ -301,12 +453,9 @@ def _with_signal(ec: EdgeConditions | None) -> EdgeConditions:
         return EdgeConditions(entry_is_signalised=True)
     if ec.entry_is_signalised:
         return ec
-    return EdgeConditions(
-        congestion=ec.congestion,
-        mean_speed_frac=ec.mean_speed_frac,
-        congestion_variance=ec.congestion_variance,
-        anomaly_severity=ec.anomaly_severity,
-        anomaly_impact=ec.anomaly_impact,
-        entry_is_signalised=True,
-        entry_signal_phase=ec.entry_signal_phase,
-    )
+    return replace(ec, entry_is_signalised=True)
+
+
+def _reverse_edge(edge_id: str) -> str:
+    """SUMO's id for the other carriageway of an OSM two-way road."""
+    return edge_id[1:] if edge_id.startswith("-") else f"-{edge_id}"

@@ -1,0 +1,11 @@
+{
+  "type": "record",
+  "name": "CrewHospitalChoice",
+  "namespace": "itms.contracts",
+  "doc": "An ambulance crew, on `commands.operator`: the patient is on board, go to this hospital (empty facility_id = the system's pick). Sent again while driving to change hospital; sim-service then reroutes from where the ambulance is.",
+  "fields": [
+    { "name": "unit_id", "type": "string" },
+    { "name": "facility_id", "type": "string", "default": "" },
+    { "name": "requested_at", "type": { "type": "long", "logicalType": "timestamp-millis" } }
+  ]
+}

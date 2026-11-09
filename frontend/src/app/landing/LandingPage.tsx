@@ -1,59 +1,42 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Lenis from "lenis";
 import "lenis/dist/lenis.css";
+import { useNavigate } from "react-router-dom";
+import { useAuthStore } from "@/store/authStore";
 import { useTransitionStore } from "@/store/transitionStore";
 import "./landing.css";
-import { FloatingDock, IntroGate, Nav, Rail } from "./chrome";
+import { Nav } from "./chrome";
 import { Hero } from "./Hero";
 import { Corridor } from "./Corridor";
 import { Finale } from "./Finale";
 import { Features } from "./Features";
-import { Capabilities, Faq, Footer, Manifesto, Metrics, Ticker } from "./sections";
-
-const INTRO_KEY = "itms.landing.intro";
+import { Capabilities, Faq, Footer, Manifesto, Metrics } from "./sections";
 
 function prefersReducedMotion() {
   return typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 }
 
-function shouldPlayIntro(reduced: boolean) {
-  if (reduced || new URLSearchParams(window.location.search).has("nointro")) return false;
-  try {
-    return sessionStorage.getItem(INTRO_KEY) !== "1";
-  } catch {
-    return true;
-  }
-}
-
 /**
  * The public landing page at "/". A night-time, cinematic take on the product:
  * a WebGL avenue where signals turn green ahead of an ambulance, a scroll-driven
- * map that plays one incident from detection to a cleared corridor, and a
- * closing signal that has to turn green before you can go in.
+ * map that plays one incident from detection to a cleared corridor, then the
+ * features, the safety rules and a way into the demo. No intro screen: the
+ * headline is the first thing anyone sees.
  *
  * Every link to "/console" hands off to the Globe-to-Console cinematic (see
- * GlobeTransition) instead of navigating directly.
+ * GlobeTransition) instead of navigating directly -- once signed in. Signed
+ * out, it goes to /login first.
  */
 export function LandingPage() {
   const rootRef = useRef<HTMLDivElement>(null);
   const lenisRef = useRef<Lenis | null>(null);
   const transitioning = useTransitionStore((s) => s.active);
   const startTransition = useTransitionStore((s) => s.start);
+  const navigate = useNavigate();
   const [reduced] = useState(prefersReducedMotion);
-  const [intro, setIntro] = useState(() => shouldPlayIntro(reduced));
-  const ready = !intro;
-
-  const endIntro = useCallback(() => {
-    try {
-      sessionStorage.setItem(INTRO_KEY, "1");
-    } catch {
-      /* private mode: the intro simply plays again next time */
-    }
-    setIntro(false);
-  }, []);
 
   useEffect(() => {
-    document.title = "ITMS: traffic that responds before you call it in";
+    document.title = "Traffix: traffic lights that clear the way for ambulances";
     // Warm the cinematic's Earth textures while the visitor reads, so the
     // dive starts the instant they click through. Imported here rather than
     // at the top so three.js stays out of the landing page's first download.
@@ -86,17 +69,12 @@ export function LandingPage() {
     };
   }, [reduced]);
 
-  // Hold the page still while the intro plays or the transition runs.
+  // Hold the page still while the transition runs.
   useEffect(() => {
     const lenis = lenisRef.current;
-    const hold = intro || transitioning;
-    if (hold) lenis?.stop();
+    if (transitioning) lenis?.stop();
     else lenis?.start();
-    document.documentElement.style.overflow = intro ? "hidden" : "";
-    return () => {
-      document.documentElement.style.overflow = "";
-    };
-  }, [intro, transitioning]);
+  }, [transitioning]);
 
   // Links: "/console" starts the cinematic; in-page anchors glide there.
   useEffect(() => {
@@ -108,6 +86,13 @@ export function LandingPage() {
       const href = anchor.getAttribute("href") ?? "";
       if (href === "/console") {
         e.preventDefault();
+        // The cinematic ends inside the console, which needs a session. Signed
+        // out (or not yet known), go and sign in first rather than diving
+        // through the globe only to be turned back at the door.
+        if (useAuthStore.getState().status !== "authed") {
+          navigate("/login?next=%2Fconsole");
+          return;
+        }
         startTransition(); // no-ops if a transition is already running
         return;
       }
@@ -122,7 +107,7 @@ export function LandingPage() {
     };
     root.addEventListener("click", onClick);
     return () => root.removeEventListener("click", onClick);
-  }, [startTransition, reduced]);
+  }, [startTransition, navigate, reduced]);
 
   // Fade + lock the landing page the instant a transition starts, so the
   // globe overlay is never covering content that's still fully interactive.
@@ -137,22 +122,18 @@ export function LandingPage() {
 
   return (
     <div className="lp" ref={rootRef}>
-      <IntroGate show={intro} onDone={endIntro} />
-      <Nav ready={ready} />
-      <Rail ready={ready} />
+      <Nav />
       <main>
-        <Hero ready={ready} paused={transitioning} reduced={reduced} />
-        <Ticker />
+        <Hero paused={transitioning} reduced={reduced} />
         <Manifesto />
         <Corridor paused={transitioning} reduced={reduced} />
         <Features reduced={reduced} />
         <Capabilities />
         <Metrics />
         <Faq />
-        <Finale />
+        <Finale reduced={reduced} />
       </main>
       <Footer />
-      <FloatingDock />
     </div>
   );
 }

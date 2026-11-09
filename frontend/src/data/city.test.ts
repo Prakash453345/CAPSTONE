@@ -67,3 +67,14 @@ describe("both cities on one map", () => {
     }
   });
 });
+
+describe("liveCity", () => {
+  it("is the one city shown, unless set; Vijayawada by default", async () => {
+    const { liveCity, CITIES } = await import("@/data/city");
+    const amaravati = CITIES.filter((c) => c.id === "amaravati");
+    expect(liveCity(undefined, CITIES)).toBe("vijayawada");
+    expect(liveCity(undefined, amaravati)).toBe("amaravati");
+    expect(liveCity("amaravati", CITIES)).toBe("amaravati");
+    expect(liveCity("nowhere", CITIES)).toBe("vijayawada");
+  });
+});

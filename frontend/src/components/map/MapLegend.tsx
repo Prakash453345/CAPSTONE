@@ -44,13 +44,16 @@ export function MapLegend({ hidden = false }: { hidden?: boolean }) {
   const open = sheet === "legend";
   if (hidden || (sheet !== null && !open)) return null;
   return (
-    <div className="pointer-events-auto absolute bottom-10 left-3 z-[2] flex max-h-[calc(100%-10rem)] w-52 max-w-[calc(100%-4.75rem)] flex-col overflow-hidden rounded-xl bg-surface-raised shadow-elevation-1">
+    <div
+      style={{ left: "calc(12px + var(--inset-l, 0px))" }}
+      className="glass pointer-events-auto absolute bottom-10 z-[2] flex max-h-[calc(100%-10rem)] w-52 max-w-[calc(100%-4.75rem)] flex-col overflow-hidden rounded-[14px]"
+    >
       <button
         type="button"
         aria-expanded={open}
         aria-label="Map legend"
         onClick={() => toggle("legend")}
-        className="flex h-10 w-full shrink-0 items-center justify-between px-3.5 text-left transition-colors hover:bg-muted"
+        className="flex h-10 w-full shrink-0 items-center justify-between px-3.5 text-left transition-colors hover:bg-glass-hover"
       >
         <span className="text-sm font-medium text-foreground">
           Legend
@@ -70,7 +73,7 @@ export function MapLegend({ hidden = false }: { hidden?: boolean }) {
               <span className="text-muted-foreground">{r.label}</span>
             </div>
           ))}
-          <p className="border-t border-border pt-1.5 text-[10px] italic leading-snug text-muted-foreground/80">
+          <p className="border-t border-[var(--glass-edge)] pt-1.5 text-[10px] italic leading-snug text-muted-foreground/80">
             Signal colour shows controller activity, not a real per-approach
             phase reading.
           </p>

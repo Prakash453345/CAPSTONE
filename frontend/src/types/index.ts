@@ -229,8 +229,6 @@ export type ConnectionStatus =
 
 export type DataMode = "live" | "simulation";
 
-export type ViewMode = "single" | "split";
-
 export type WorkspaceId =
   | "overview"
   | "anomalies"
@@ -270,6 +268,7 @@ export type NotificationKind =
   | "junction-passed"
   | "emergency-vehicle-arrived"
   | "route-failure"
+  | "unit-stood-down"
   | "signal-fault"
   | "connection-lost"
   | "connection-restored"

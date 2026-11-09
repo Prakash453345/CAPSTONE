@@ -56,6 +56,7 @@ from vision_service.incidents import (
 from vision_service.pipeline import TickResult, VisionSystem
 from vision_service.privacy import EvidenceBuffer, EvidenceStore
 from vision_service.records import Detection
+from vision_service.review import ReviewSink
 from vision_service.simcam.world import WorldSnapshot, snapshot_from_records
 
 log = logging.getLogger("vision.service")
@@ -116,7 +117,9 @@ class VisionService:
         rules: str | RuleConfig = DEFAULT_OPERATING_POINT,
         lane_chains: tuple[Mapping, Mapping] | None = None,
         fire: FireMonitorConfig | None = None,
+        review_sink: ReviewSink | None = None,
     ):
+        self.review_sink = review_sink
         self.rig = rig
         self.publish = publish
         self.model = model
@@ -167,7 +170,7 @@ class VisionService:
         """A real camera frame and its detector output."""
         pipe = self.system.pipelines[camera_id]
         pipe.ingest_detections(t, detections, frame)
-        if self.evidence is not None:
+        if self.evidence is not None or self.review_sink is not None:
             self.buffers[camera_id].push(t, frame, detections + tracked_boxes(pipe.last_tracks))
 
     def on_fire_score(self, camera_id: str, t: float, score: FireScore) -> None:
@@ -233,12 +236,16 @@ class VisionService:
                            fire_payload(cand, edge_id=edge, start_time_ms=start_ms), edge or cid)
                 if cand.status == "RESOLVED":
                     self._anomaly_start_ms.pop(cand.candidate_id, None)
-                elif self.evidence is not None:
+                else:
                     buf = self.buffers.get(cid)
                     if buf is not None and len(buf):
-                        uri = self.evidence.save(cand.candidate_id, cid, buf.redacted_clip(),
-                                                 {"rule": "fire_smoke", "kind": cand.kind})
-                        log.info("evidence for %s from %s -> %s", cand.candidate_id, cid, uri)
+                        clip = buf.redacted_clip()
+                        if self.evidence is not None:
+                            uri = self.evidence.save(cand.candidate_id, cid, clip,
+                                                     {"rule": "fire_smoke", "kind": cand.kind})
+                            log.info("evidence for %s from %s -> %s", cand.candidate_id, cid, uri)
+                        if self.review_sink is not None:
+                            self.review_sink(cid, edge, cand.kind or "fire", clip)
 
     def _emit(self, topic: str, event_type: str, payload: dict, key: str | None) -> None:
         self.publish(topic, event_type, payload, key)
@@ -255,15 +262,18 @@ class VisionService:
         return self._lonlat[cid]
 
     def _save_evidence(self, cand) -> None:
-        if self.evidence is None:
-            return
         cams = self.rig.cameras_by_lane.get(cand.lane_id, [])
         for cid in cams:
             buf = self.buffers.get(cid)
-            if buf is not None and len(buf):
-                uri = self.evidence.save(cand.anomaly_id, cid, buf.redacted_clip(),
+            if buf is None or not len(buf):
+                continue
+            clip = buf.redacted_clip()
+            if self.evidence is not None:
+                uri = self.evidence.save(cand.anomaly_id, cid, clip,
                                          {"rule": cand.rule, "lane": cand.lane_id})
                 log.info("evidence for %s from %s -> %s", cand.anomaly_id, cid, uri)
+            if self.review_sink is not None:
+                self.review_sink(cid, cand.edge_id, cand.rule, clip)
 
 
 def tracked_boxes(tracks) -> list[Detection]:

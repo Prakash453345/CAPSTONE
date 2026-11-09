@@ -2,7 +2,8 @@
  * Street names for the corridor's SUMO edges, matched from OpenStreetMap
  * (ODbL) by nearest named way. The checked-in network carries no names, and
  * operators think in streets, not edge ids. Edges without a confident match
- * are left out and shown as a service road.
+ * are left out here and named from street-names.json instead. These were
+ * checked by hand, so they win over the generated names.
  */
 export const ROAD_NAMES: Record<string, string> = {
   "-177626285": "Eat Street",

@@ -22,7 +22,10 @@ RAW="${1:-raw_osm.xml}"
 # No --tls.join (the corridor build uses it): it can merge two nearby crossings
 # into one signal program spanning two junctions, and the Tier-0 extractor and
 # the arbiter model one signal per junction.
+# --lefthand: India drives on the left (SUMO defaults to right-hand traffic).
+# Also passed to the two --sumo-net-file passes below so it is never dropped.
 osm_opts=(
+  --lefthand
   --geometry.remove --geometry.remove.min-length 5
   --type-files "$SUMO_HOME/data/typemap/osmNetconvert.typ.xml"
   --junctions.join --junctions.join-dist 25
@@ -49,7 +52,7 @@ netconvert --osm-files filtered_district.osm.xml -o district_signalised.net.xml 
 echo "4/6  trimming to the strongly connected core ..."
 # On a finished network the edge ids are final, so the core list (taken from
 # the survey build, which merges geometry the same way) matches exactly.
-netconvert --sumo-net-file district_signalised.net.xml -o vijayawada_district.net.xml \
+netconvert --sumo-net-file district_signalised.net.xml -o vijayawada_district.net.xml --lefthand \
   --keep-edges.input-file district_keep_edges.txt --output.street-names
 
 # A few joined crossings are not addressable by their OSM nodes on the OSM
@@ -58,7 +61,7 @@ netconvert --sumo-net-file district_signalised.net.xml -o vijayawada_district.ne
 MISSING="$("$PY" select_district.py --missing vijayawada_district.net.xml - district_tls.txt | tr -d '
 ')"
 if [ -n "$MISSING" ]; then
-  netconvert --sumo-net-file vijayawada_district.net.xml -o district_final.net.xml     --tls.set "$MISSING" --output.street-names
+  netconvert --sumo-net-file vijayawada_district.net.xml -o district_final.net.xml --lefthand --tls.set "$MISSING" --output.street-names
   mv district_final.net.xml vijayawada_district.net.xml
 fi
 
