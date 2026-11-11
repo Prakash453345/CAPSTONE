@@ -13,6 +13,8 @@ elif test == "E3":
     r = T.test_E3(sys.argv[2], int(sys.argv[3])); name = f"E3_{sys.argv[2]}_s{sys.argv[3]}"
 elif test == "F":
     r = T.test_F(sys.argv[2], int(sys.argv[3])); name = f"F_{sys.argv[2]}_s{sys.argv[3]}"
+elif test == "G":
+    r = T.test_G(); name = "G_preemptable"
 elif test == "F3":
     r = T.test_F3(); name = "F3_coverage"
 r["wall_s"] = round(time.time() - t0, 1)

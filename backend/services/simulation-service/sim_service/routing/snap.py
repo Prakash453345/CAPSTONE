@@ -13,7 +13,7 @@ from pathlib import Path
 
 from sim_service.routing.graph import RoadGraph
 
-_RADII_M = (60.0, 150.0, 400.0, 1000.0)
+_RADII_M = (60.0, 150.0, 400.0, 1000.0, 2500.0)
 
 
 class EdgeSnapper:

@@ -161,7 +161,7 @@ def run_live(
         anomalies, emergency, crew_dispatcher=crew,
         facility_index=facility_index,
         police_depots=_snapped_depots(snapper, load_police_depots()),
-        fire_depots=_snapped_depots(snapper, load_fire_depots()),
+        fire_depots=_snapped_depots(snapper, load_fire_depots()) or None,
     )
     # Where crew units live while idle: ambulances at hospitals, police at
     # police stations, fire trucks at police stations too (this OSM extract

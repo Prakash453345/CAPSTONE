@@ -118,6 +118,8 @@ class EmergencyRoutingConfig:
     corridor_prepare_lead_s: float = 15.0     # open a junction this long before predicted arrival
     corridor_release_lag_s: float = 4.0       # keep it held this long after predicted pass
     corridor_min_gap_s: float = 5.0           # min spacing between two junctions' windows
+    corridor_lookahead_m: float = 260.0       # once the EV is this close (measured along the route) the junction is held for it
+    corridor_max_hold_s: float = 60.0         # never hold one junction longer than this for one EV
     corridor_max_simultaneous: int = 3        # hard cap on concurrent preemptions per corridor
 
     def validate(self) -> list[str]:

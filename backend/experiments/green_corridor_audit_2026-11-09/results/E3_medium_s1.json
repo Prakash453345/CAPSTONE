@@ -1,0 +1,626 @@
+{
+ "level": "medium",
+ "seed": 1,
+ "arm": "full",
+ "end_s": 900,
+ "evs": [
+  {
+   "rid": "dup",
+   "vid": "VD",
+   "src": "707562254#2",
+   "dst": "-850872311#0",
+   "tag": "dup1",
+   "created_t": 100.0,
+   "stop_signal_s": 69,
+   "stop_other_s": 1,
+   "state_after_create": "green_corridor_active",
+   "route0": [
+    "707562254#2",
+    "678625373#10",
+    "678625373#14",
+    "1415634466#0",
+    "1415634466#1",
+    "219013726#0",
+    "219013726#1-AddedOnRampEdge",
+    "219013726#1",
+    "22831013#0",
+    "678633498",
+    "441589923#2",
+    "441589923#3",
+    "177626285",
+    "1363282549#1",
+    "850872313#2",
+    "1414693658#0",
+    "1414693658#1",
+    "1414693659",
+    "850872311#0",
+    "-850872311#0"
+   ],
+   "crossings0": 5,
+   "eta0_s": 288.3,
+   "corridor_armed": true,
+   "state_after_activate": "green_corridor_active",
+   "reroutes": 2,
+   "spawn_t": 101.0,
+   "stop_at_red": 50,
+   "stop_at_green": 15,
+   "stop_at_yellow": 4,
+   "arrive_t": 510.0,
+   "end_state": "completed",
+   "end_t": 510.0,
+   "final_state": "completed",
+   "travel_s": 409.0,
+   "pos_tail": [
+    [
+     450,
+     "850872311#0",
+     13.5
+    ],
+    [
+     460,
+     "-850872311#0",
+     2.5
+    ],
+    [
+     470,
+     "-850872311#0",
+     13.3
+    ],
+    [
+     480,
+     "-850872311#0",
+     13.5
+    ],
+    [
+     490,
+     "-850872311#0",
+     13.6
+    ],
+    [
+     500,
+     "-850872311#0",
+     13.9
+    ]
+   ]
+  },
+  {
+   "rid": "cc",
+   "vid": "VC",
+   "src": "-279711567#1",
+   "dst": "1321774930#1",
+   "tag": "cancel_same_tick",
+   "created_t": 150.0,
+   "stop_signal_s": 0,
+   "stop_other_s": 0,
+   "state_after_create": "route_ready",
+   "route0": [
+    "-279711567#1",
+    "279711567#1",
+    "843806112#1",
+    "1414693661#1",
+    "843799226",
+    "1414693664",
+    "843775115#0",
+    "843775115#2",
+    "843775115#3-AddedOnRampEdge",
+    "843775115#3",
+    "843775115#4",
+    "843775115#5",
+    "-1414693659",
+    "-177626336#7",
+    "-177626336#6",
+    "-177626336#5",
+    "-177626336#4",
+    "-177626336#3",
+    "279067593#1",
+    "1321774930#1"
+   ],
+   "crossings0": 5,
+   "eta0_s": 443.1,
+   "end_state": "cancelled",
+   "end_t": 150.0,
+   "reroutes": 0,
+   "final_state": "cancelled",
+   "pos_tail": []
+  },
+  {
+   "rid": "same",
+   "vid": "VS",
+   "src": "850872312#0",
+   "dst": "850872312#0",
+   "tag": "src_eq_dst",
+   "created_t": 200.0,
+   "stop_signal_s": 0,
+   "stop_other_s": 0,
+   "state_after_create": "route_ready",
+   "route0": [
+    "850872312#0"
+   ],
+   "crossings0": 0,
+   "eta0_s": 25.6,
+   "corridor_armed": false,
+   "state_after_activate": "in_transit",
+   "reroutes": 0,
+   "spawn_t": 201.0,
+   "arrive_t": 229.0,
+   "end_state": "completed",
+   "end_t": 229.0,
+   "final_state": "completed",
+   "travel_s": 28.0,
+   "pos_tail": [
+    [
+     210,
+     "850872312#0",
+     13.0
+    ],
+    [
+     220,
+     "850872312#0",
+     12.2
+    ]
+   ]
+  },
+  {
+   "rid": "ghost",
+   "vid": "VG",
+   "src": "NOPE_EDGE",
+   "dst": "441589923#3",
+   "tag": "unknown_src",
+   "created_t": 210.0,
+   "stop_signal_s": 0,
+   "stop_other_s": 0,
+   "state_after_create": "cancelled",
+   "end_state": "cancelled",
+   "end_t": 210.0,
+   "reroutes": 0,
+   "final_state": "cancelled",
+   "pos_tail": []
+  },
+  {
+   "rid": "ghost2",
+   "vid": "VG2",
+   "src": "850872312#0",
+   "dst": "NOPE_EDGE",
+   "tag": "unknown_dst",
+   "created_t": 212.0,
+   "stop_signal_s": 0,
+   "stop_other_s": 0,
+   "state_after_create": "cancelled",
+   "end_state": "cancelled",
+   "end_t": 212.0,
+   "reroutes": 0,
+   "final_state": "cancelled",
+   "pos_tail": []
+  },
+  {
+   "rid": "v1",
+   "vid": "VSAME",
+   "src": "415765719#1",
+   "dst": "177626336#6",
+   "tag": "double_book_1",
+   "created_t": 250.0,
+   "stop_signal_s": 33,
+   "stop_other_s": 14,
+   "state_after_create": "route_ready",
+   "route0": [
+    "415765719#1",
+    "-415765719#1",
+    "279711567#1",
+    "843806112#1",
+    "1414693661#1",
+    "843799226",
+    "1414693664",
+    "843775115#0",
+    "843775115#2",
+    "843775115#3-AddedOnRampEdge",
+    "843775115#3",
+    "843775115#4",
+    "843775115#5",
+    "-1414693659",
+    "-1414693658#1",
+    "850872312#0",
+    "850872312#1",
+    "679017002#1",
+    "177626336#6"
+   ],
+   "crossings0": 6,
+   "eta0_s": 330.0,
+   "corridor_armed": true,
+   "state_after_activate": "green_corridor_active",
+   "reroutes": 4,
+   "spawn_t": 251.0,
+   "stop_at_red": 30,
+   "stop_at_green": 3,
+   "stop_while_reservation_open": 10,
+   "arrive_t": 755.0,
+   "end_state": "completed",
+   "end_t": 755.0,
+   "final_state": "completed",
+   "travel_s": 504.0,
+   "pos_tail": [
+    [
+     700,
+     "679017002#1",
+     11.6
+    ],
+    [
+     710,
+     "679017002#1",
+     0.0
+    ],
+    [
+     720,
+     "679017002#1",
+     0.0
+    ],
+    [
+     730,
+     "177626336#6",
+     6.1
+    ],
+    [
+     740,
+     "177626336#6",
+     11.9
+    ],
+    [
+     750,
+     "177626336#6",
+     12.4
+    ]
+   ]
+  },
+  {
+   "rid": "v2",
+   "vid": "VSAME",
+   "src": "470178558#1",
+   "dst": "279067598#0",
+   "tag": "double_book_2",
+   "created_t": 250.0,
+   "stop_signal_s": 33,
+   "stop_other_s": 14,
+   "state_after_create": "route_ready",
+   "route0": [
+    "470178558#1",
+    "177626316#0",
+    "-848411147",
+    "350502993#0",
+    "350502993#1",
+    "350502993#2",
+    "350502993#3",
+    "350502993#5",
+    "350502993#6",
+    "350502993#8",
+    "350502993#8-AddedOffRampEdge",
+    "350502993#9",
+    "350502993#11",
+    "350502993#12-AddedOnRampEdge",
+    "350502993#12",
+    "350502993#13",
+    "350502993#14",
+    "350502993#16",
+    "350502993#17",
+    "350502993#19",
+    "350502993#19-AddedOffRampEdge",
+    "350502993#21",
+    "219187866#5",
+    "219187866#6",
+    "219187866#7",
+    "219187866#8",
+    "219187866#1",
+    "219187866#2",
+    "219187866#3",
+    "1058429866#0",
+    "1058429866#2",
+    "1058429866#9-AddedOnRampEdge",
+    "1058429866#9",
+    "1058429866#11",
+    "1058429868",
+    "1231299485#0",
+    "279067598#0"
+   ],
+   "crossings0": 4,
+   "eta0_s": 436.2,
+   "corridor_armed": true,
+   "state_after_activate": "green_corridor_active",
+   "reroutes": 0,
+   "spawn_t": 251.0,
+   "stop_at_red": 30,
+   "stop_at_green": 3,
+   "stop_while_reservation_open": 10,
+   "arrive_t": 755.0,
+   "end_state": "completed",
+   "end_t": 755.0,
+   "final_state": "completed",
+   "travel_s": 504.0,
+   "pos_tail": [
+    [
+     700,
+     "679017002#1",
+     11.6
+    ],
+    [
+     710,
+     "679017002#1",
+     0.0
+    ],
+    [
+     720,
+     "679017002#1",
+     0.0
+    ],
+    [
+     730,
+     "177626336#6",
+     6.1
+    ],
+    [
+     740,
+     "177626336#6",
+     11.9
+    ],
+    [
+     750,
+     "177626336#6",
+     12.4
+    ]
+   ]
+  },
+  {
+   "rid": "x5",
+   "vid": "VX5",
+   "src": "1527125157#4-AddedOffRampEdge",
+   "dst": "374226425#2-AddedOnRampEdge",
+   "tag": "cancel_twice",
+   "created_t": 300.0,
+   "stop_signal_s": 0,
+   "stop_other_s": 0,
+   "state_after_create": "route_ready",
+   "route0": [
+    "1527125157#4-AddedOffRampEdge",
+    "219013734#0",
+    "-843799219",
+    "1248886877#0",
+    "1248886877#2",
+    "1248886877#3",
+    "843799213#1",
+    "843799213#2",
+    "843799213#3",
+    "343269495#0",
+    "343269495#2",
+    "220332271#2",
+    "220332271#2-AddedOffRampEdge",
+    "1254811825",
+    "843775115#3-AddedOnRampEdge",
+    "843775115#3",
+    "843775115#4",
+    "849218310",
+    "849218311#0",
+    "177626311#5",
+    "177626311#7",
+    "177626311#16",
+    "374226425#1",
+    "374226425#2-AddedOnRampEdge"
+   ],
+   "crossings0": 3,
+   "eta0_s": 515.2,
+   "corridor_armed": true,
+   "state_after_activate": "green_corridor_active",
+   "reroutes": 0,
+   "spawn_t": 301.0,
+   "end_state": "cancelled",
+   "end_t": 305.0,
+   "final_state": "cancelled",
+   "pos_tail": []
+  },
+  {
+   "rid": "toblocked",
+   "vid": "VTB",
+   "src": "-843799219",
+   "dst": "678625373#8",
+   "tag": "dest_blocked",
+   "created_t": 401.0,
+   "stop_signal_s": 15,
+   "stop_other_s": 13,
+   "state_after_create": "route_ready",
+   "route0": [
+    "-843799219",
+    "1248886877#0",
+    "1527125157#4",
+    "1527125157#4-AddedOffRampEdge",
+    "1527125157#5",
+    "219187866#7",
+    "219187866#8",
+    "219187866#1",
+    "219187866#2",
+    "219187866#3",
+    "1058429866#0",
+    "1058429866#2",
+    "1058429866#9-AddedOnRampEdge",
+    "1058429866#9",
+    "1058429866#11",
+    "1058429868",
+    "1231299485#0",
+    "1231299485#2",
+    "441589923#2",
+    "441589923#3",
+    "441589923#4",
+    "693155817",
+    "678625369#2",
+    "470178558#0",
+    "470178558#1",
+    "177626316#0",
+    "177626316#1",
+    "699308934",
+    "678625373#5",
+    "678625373#5-AddedOffRampEdge",
+    "678625373#6",
+    "678625373#7",
+    "678625373#8"
+   ],
+   "crossings0": 3,
+   "eta0_s": 376.4,
+   "corridor_armed": true,
+   "state_after_activate": "green_corridor_active",
+   "reroutes": 0,
+   "spawn_t": 402.0,
+   "stop_at_red": 15,
+   "final_state": "in_transit",
+   "pos_tail": [
+    [
+     850,
+     "678625373#5",
+     11.5
+    ],
+    [
+     860,
+     "678625373#5-AddedOffRampEdge",
+     11.1
+    ],
+    [
+     870,
+     "678625373#6",
+     11.2
+    ],
+    [
+     880,
+     "678625373#7",
+     11.2
+    ],
+    [
+     890,
+     "678625373#7",
+     0.2
+    ],
+    [
+     900,
+     "678625373#7",
+     0.0
+    ]
+   ]
+  }
+ ],
+ "safety": {},
+ "safety_examples": [],
+ "max_red_s": 40,
+ "max_red_tl": "cluster_11608007559_1880441514_4393295460_6354264758",
+ "collisions": 0,
+ "teleports": 10,
+ "corridors_left": [],
+ "unprotected_junctions": {
+  "cluster_1880441505_4393288485": 13,
+  "cluster_1880441740_4393296791": 12,
+  "1880441725": 29,
+  "1880441581": 10,
+  "1880441600": 17
+ },
+ "corridor_peak": 4,
+ "skipped_clustered_tls": [],
+ "tick_exceptions": [
+  "do_cancel@305: IllegalRequestTransition('request x5 in cancelled cannot cancel (legal: [])')"
+ ],
+ "n_tick_exceptions": 1,
+ "log": [],
+ "warnings": {
+  "corridor: green corridor: no phase at ########## protects movement(s) L# -- this": 3,
+  "corridor: green corridor: no phase at cluster_##########_########## protects mov": 2,
+  "emergency: emergency request dup already exists -- ignoring": 1,
+  "emergency: ACTIVATE_CORRIDOR ignored: request dup is green_corridor_active with r": 1,
+  "emergency: ACTIVATE_CORRIDOR ignored: request cc is cancelled with route=True": 1,
+  "emergency: emergency request ghost route failed: unknown source road 'NOPE_EDGE'": 1,
+  "emergency: emergency request ghost# route failed: unknown destination road 'NOPE_": 1,
+  "emergency: could not spawn emergency vehicle VSAME in SUMO": 1,
+  "emergency: command for unknown emergency request does_not_exist -- ignoring": 1,
+  "emergency: recalculate ignored: request x# is cancelled": 1,
+  "emergency: unknown emergency action BOGUS_ACTION": 1,
+  "anomaly: anomaly an# already active -- ignoring duplicate create": 1,
+  "anomaly: anomaly an#: no lanes for edge NOPE_EDGE -- skipping": 1,
+  "anomaly: clear for unknown/expired anomaly never_existed -- ignoring": 1
+ },
+ "runner": {
+  "steps": 900,
+  "interlock_violations": 0,
+  "spillback_events": null,
+  "teleports": 10,
+  "longest_wait_excess_s": -148.5,
+  "waits_over_bound": 0,
+  "unfinished_at_cap": 487,
+  "corridor": null
+ },
+ "inv": {
+  "two_live_trips": 506,
+  "examples": [
+   {
+    "t": 250.0,
+    "vehicle": "VSAME",
+    "requests": [
+     "v1",
+     "v2"
+    ]
+   },
+   {
+    "t": 251.0,
+    "vehicle": "VSAME",
+    "requests": [
+     "v1",
+     "v2"
+    ]
+   },
+   {
+    "t": 252.0,
+    "vehicle": "VSAME",
+    "requests": [
+     "v1",
+     "v2"
+    ]
+   },
+   {
+    "t": 253.0,
+    "vehicle": "VSAME",
+    "requests": [
+     "v1",
+     "v2"
+    ]
+   }
+  ]
+ },
+ "requests": {
+  "dup": [
+   "completed",
+   true
+  ],
+  "cc": [
+   "cancelled",
+   true
+  ],
+  "same": [
+   "completed",
+   true
+  ],
+  "ghost": [
+   "cancelled",
+   false
+  ],
+  "ghost2": [
+   "cancelled",
+   false
+  ],
+  "v1": [
+   "completed",
+   true
+  ],
+  "v2": [
+   "completed",
+   true
+  ],
+  "x5": [
+   "cancelled",
+   true
+  ],
+  "toblocked": [
+   "in_transit",
+   true
+  ]
+ },
+ "wall_s": 38.1
+}

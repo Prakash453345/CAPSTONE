@@ -1,0 +1,50 @@
+{
+ "scenario": "vijayawada",
+ "seed": 1,
+ "units": 2,
+ "end_s": 1800.0,
+ "fleet": {
+  "POLICE": [
+   "unit-police-0",
+   "unit-police-1"
+  ],
+  "AMBULANCE": [
+   "unit-ambulance-0",
+   "unit-ambulance-1"
+  ],
+  "FIRE_TRUCK": []
+ },
+ "stats": {
+  "anomaly_ACCIDENT_LOW": 1,
+  "anomaly_ACCIDENT_HIGH": 5,
+  "dispatches": 15,
+  "anomaly_LANE_BLOCKAGE_BLOCKED": 7,
+  "blocks_ahead": 3,
+  "served_from_queue": 8,
+  "anomaly_ACCIDENT_MEDIUM": 3,
+  "suggestions": 2,
+  "ticks_suggestable": 38,
+  "operator_cancels": 3,
+  "cleared_early": 3,
+  "reassigned": 1,
+  "trips": 19,
+  "completed": 9,
+  "reroutes": 5,
+  "still_waiting": 4
+ },
+ "violations_by_rule": {
+  "R6": 2
+ },
+ "violations": [
+  {
+   "rule": "R6",
+   "t": 1361.0,
+   "msg": "resp-an10-police-q8 stuck in green_corridor_active for 61 s"
+  },
+  {
+   "rule": "R6",
+   "t": 1745.0,
+   "msg": "resp-an13-police-q11 stuck in green_corridor_active for 61 s"
+  }
+ ]
+}

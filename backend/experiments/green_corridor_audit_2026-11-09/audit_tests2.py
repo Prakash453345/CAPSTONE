@@ -31,7 +31,7 @@ def _pick_long_pair(w: World, rng: random.Random, min_edges=9, min_sig=2):
 # ---------------------------------------------------------------- D: reroute
 def test_D(level: str, seed: int, variant: str) -> dict:
     """variant: ahead2..ahead5 | cutoff | flap | blockbefore"""
-    w = World(level, seed, "full", end_s=1500)
+    w = World(level, seed, "full", end_s=1700)
     rng = random.Random(500 + seed)
     a, b, route = _pick_long_pair(w, rng)
     T = 500.0
@@ -55,6 +55,8 @@ def test_D(level: str, seed: int, variant: str) -> dict:
                 if not cand or cand[0] == edges[-1]:
                     st["skipped"] = "route too short"; st["blocked"] = "-"; return
                 st["blocked"] = cand[0]
+            elif variant == "none":
+                st["blocked"] = "-"; return
             elif variant == "flap":
                 cand = edges[i + 3: i + 4]
                 if not cand or cand[0] == edges[-1]:
@@ -90,10 +92,7 @@ def test_D(level: str, seed: int, variant: str) -> dict:
                 st["left_t"] = t
                 st["route_after"] = list(req.route.edges)
                 st["armed_after"] = bool(w.corridor.corridor_for("ev0"))
-        try:
-            road = traci.vehicle.getRoadID("EV0")
-        except traci.TraCIException:
-            road = ""
+        road = traci.vehicle.getRoadID("EV0") if "EV0" in traci.vehicle.getIDList() else ""
         if st["blocked"] not in (None, "-", "CUT") and road == st["blocked"]:
             st["entered_blocked"] += 1
 
@@ -290,14 +289,19 @@ def test_F(variant: str, seed: int) -> dict:
         plan.append((f"acc{i}", "ACCIDENT", sev, e))
     w.end_s = 100 + 40 * 25 + 150
     res = w.run()
-    ev_by_a = {e["anomaly_id"]: e for e in w.all_orch_events if "anomaly_id" in e}
+    evs_by_a = defaultdict(list)
+    for e in w.all_orch_events:
+        if "anomaly_id" in e:
+            evs_by_a[e["anomaly_id"]].append(e)
     rows = []
     for aid, typ, sev, edge in plan:
-        e = ev_by_a.get(aid)
-        rows.append({"aid": aid, "type": typ, "sev": sev, "edge": edge,
-                     "dispatched": [d["vehicle_kind"] for d in (e or {}).get("dispatched", [])],
-                     "queued": (e or {}).get("queued_kinds"), "undispatched": (e or {}).get("undispatched_kinds"),
-                     "seen": e is not None})
+        es = evs_by_a.get(aid, [])
+        first = es[0] if es else None
+        disp = [d["vehicle_kind"] for e in es for d in e.get("dispatched", [])]
+        rows.append({"aid": aid, "type": typ, "sev": sev, "edge": edge, "seen": bool(es),
+                     "dispatched": disp,
+                     "first_queued": (first or {}).get("queued_kinds"),
+                     "first_undispatched": (first or {}).get("undispatched_kinds")})
     res["F"] = {"variant": variant, "rows": rows,
                 "units": {k.name: len(v) for k, v in w.orch._units.items()}}
     return res
@@ -347,3 +351,41 @@ def test_F3() -> dict:
         far = sorted(g.edges, key=lambda e: -d.get(e, 1e9))[:10]
         out[name]["farthest"] = [(e, round(d.get(e, 1e9))) for e in far]
     return out
+
+
+def test_G() -> dict:
+    """Static: which signalised moves can the corridor actually preempt (a ring phase protects them)?"""
+    from sim_service.live.corridor import load_corridor
+    from sim_service.live.green_corridor import CorridorController
+    from sim_service.routing import RoadGraph
+    from itms_domain.scenario import current
+    g = RoadGraph.from_network(current().net)
+    setup = load_corridor("light")
+    cfgs = setup.configs
+    phase_serving = CorridorController._phase_serving
+    moves, bad, no_cfg = 0, defaultdict(list), set()
+    by_tl_total = defaultdict(int)
+    for e in g.edges:
+        for n in g.neighbours(e):
+            if not (n.signalised and n.tl_id):
+                continue
+            moves += 1
+            by_tl_total[n.tl_id] += 1
+            wanted = frozenset(g.movements_for(n.tl_id, e, n.to_edge))
+            cfg = cfgs.get(n.tl_id)
+            if cfg is None:
+                no_cfg.add(n.tl_id)
+                bad[n.tl_id].append((e, n.to_edge, "no Tier0Config"))
+                continue
+            if not wanted:
+                bad[n.tl_id].append((e, n.to_edge, "no movements mapped"))
+                continue
+            if phase_serving(cfg, wanted, prefer="") is None:
+                bad[n.tl_id].append((e, n.to_edge, "no protected phase: " + ",".join(sorted(wanted))))
+    tls_all = {n.tl_id for e in g.edges for n in g.neighbours(e) if n.signalised and n.tl_id}
+    return {"signals_in_graph": len(tls_all), "signals_with_config": len(tls_all & set(cfgs)),
+            "signalised_moves": moves, "moves_not_preemptable": sum(len(v) for v in bad.values()),
+            "signals_with_any_unpreemptable_move": len(bad),
+            "per_signal": {t: {"total_moves": by_tl_total[t], "unpreemptable": len(v),
+                               "examples": v[:3]} for t, v in sorted(bad.items())},
+            "signals_missing_config": sorted(no_cfg)}

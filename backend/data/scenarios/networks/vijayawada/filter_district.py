@@ -12,6 +12,8 @@ Residential lanes, service roads, footways and paths are dropped: hundreds of
 short lanes add simulation cost and routes no dispatcher would send an
 ambulance down, without adding real alternatives between the arterials.
 
+`--add extra.osm.xml` keeps the roads in that file whole, whatever their class.
+
 `--extend more.osm.xml --box W,S,E,N --margin D` grows the district outward along
 the busy routes. From the second file only trunk, primary and secondary roads (and their
 links) are added, each clipped to the box grown by D degrees (0.01 is about 1 km),
@@ -69,6 +71,7 @@ def filter_district(
     extend: str | None = None,
     box: tuple[float, float, float, float] | None = None,
     margin: float = 0.0,
+    add: str | None = None,
 ) -> tuple[int, int]:
     root = ET.parse(src).getroot()
     nodes_by_id = {n.get("id"): n for n in root.findall("node")}
@@ -103,6 +106,19 @@ def filter_district(
         with open(dst + ".extension", "w") as f:
             f.write("\n".join(w.get("id") for w in kept_ways if w.get("id") not in seen_ids) + "\n")
 
+    if add:
+        # Roads taken whole, whatever their class: the few streets that join the
+        # district to a place it must reach (district_extra.osm.xml). Added after
+        # the extension list is written, so they are part of the district itself
+        # and are never pruned as extension.
+        extra = ET.parse(add).getroot()
+        for n in extra.findall("node"):
+            nodes_by_id.setdefault(n.get("id"), n)
+        for way in extra.findall("way"):
+            if way.get("id") not in seen_ids:
+                kept_ways.append(way)
+                seen_ids.add(way.get("id"))
+
     used_nodes = {nd.get("ref") for way in kept_ways for nd in way.findall("nd")}
     out = ET.Element("osm", root.attrib)
     for child in root:
@@ -124,9 +140,10 @@ def main() -> None:
     ap.add_argument("--extend", help="a larger OSM extract to take the busy routes from")
     ap.add_argument("--box", help="W,S,E,N of the district the routes connect to")
     ap.add_argument("--margin", type=float, default=0.0, help="degrees beyond the box to follow them")
+    ap.add_argument("--add", help="OSM file of extra roads to keep whole (district_extra.osm.xml)")
     args = ap.parse_args()
     box = tuple(float(v) for v in args.box.split(",")) if args.box else None
-    ways, nodes = filter_district(args.src, args.dst, args.extend, box, args.margin)  # type: ignore[arg-type]
+    ways, nodes = filter_district(args.src, args.dst, args.extend, box, args.margin, args.add)  # type: ignore[arg-type]
     print(f"kept {ways} ways, {nodes} nodes -> {args.dst}")
 
 

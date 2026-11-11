@@ -25,8 +25,9 @@ data exists, and that shows up as `undispatched_kinds` on the alert.
 **Anomaly -> authority mapping.** `itms_domain.anomaly.AnomalyType` has no
 `FIRE` value -- its values are road-network disruptions (accident, lane
 blockage, ...), not incident categories. `ACCIDENT` is the closest analog to
-a fire-accident scenario, so it is the one type that pages all three
-authorities; the rest page police only, and pure congestion pages no one.
+a fire-accident scenario, so it pages all three authorities, and so does FIRE
+(a fire may have casualties); the rest page police only, and pure congestion
+pages no one.
 """
 
 from __future__ import annotations
@@ -89,7 +90,7 @@ _RESPONSE_MAP: dict[AnomalyType, tuple[EmergencyKind, ...]] = {
     AnomalyType.LANE_BLOCKAGE: (EmergencyKind.POLICE,),
     AnomalyType.ROAD_OBSTRUCTION: (EmergencyKind.POLICE,),
     AnomalyType.HEAVY_CONGESTION: (),
-    AnomalyType.FIRE: (EmergencyKind.FIRE_TRUCK, EmergencyKind.POLICE),
+    AnomalyType.FIRE: (EmergencyKind.FIRE_TRUCK, EmergencyKind.POLICE, EmergencyKind.AMBULANCE),
     AnomalyType.UNKNOWN: (EmergencyKind.POLICE,),
 }
 
@@ -188,7 +189,7 @@ def load_police_depots(path: Path = DEPOTS_PATH) -> list[_Depot]:
         return []
     raw = json.loads(path.read_text())
     return [
-        _Depot(depot_id=d["id"], name=d["name"], edge=d["edge"], lat=d["lat"], lon=d["lon"])
+        _Depot(depot_id=d["id"], name=d["name"], edge=d.get("edge", ""), lat=d["lat"], lon=d["lon"])
         for d in raw["depots"]
         # `dispatch: false` marks a station that is not a base for patrol cars
         # (the Cyber Crime unit): it stays in the data but crews are not parked there.
@@ -198,14 +199,15 @@ def load_police_depots(path: Path = DEPOTS_PATH) -> list[_Depot]:
 
 def load_fire_depots(path: Path = DEPOTS_PATH) -> list[_Depot]:
     """Fire stations (`amenity=fire_station`). Only one is mapped near the
-    district, 1.4 km off its eastern edge -- see responder_depots.json."""
+    district; the district network reaches it through the Gurunanak Colony
+    road (district_extra.osm.xml) -- see responder_depots.json."""
     import json
 
     if not path.exists():
         return []
     raw = json.loads(path.read_text())
     return [
-        _Depot(depot_id=d["id"], name=d["name"], edge=d["edge"], lat=d["lat"], lon=d["lon"])
+        _Depot(depot_id=d["id"], name=d["name"], edge=d.get("edge", ""), lat=d["lat"], lon=d["lon"])
         for d in raw["depots"]
         if d["kind"] == "fire_station"
     ]
@@ -217,6 +219,14 @@ def load_hospital_depots(index: FacilityIndex) -> list[_Depot]:
         for f in index.all
         if f.kind == "hospital"
     ]
+
+
+def _fire_bases(fire_depots, police_depots) -> list[_Depot]:
+    if fire_depots is not None:
+        return fire_depots
+    if police_depots is not None:  # explicit police depots (tests): trucks share them
+        return police_depots
+    return load_fire_depots() or load_police_depots()
 
 
 class IncidentResponseOrchestrator:
@@ -264,11 +274,13 @@ class IncidentResponseOrchestrator:
                 self._unit(f"unit-ambulance-{i}", EmergencyKind.AMBULANCE, d)
                 for i, d in enumerate(load_hospital_depots(self._facility_index))
             ],
+            # Real fire stations (responder_depots.json). Where there are none
+            # for this network, or the caller named only police depots, fire
+            # trucks are based at the police depots so a fire always has a
+            # truck to send.
             EmergencyKind.FIRE_TRUCK: [
                 self._unit(f"unit-fire-{i}", EmergencyKind.FIRE_TRUCK, d)
-                for i, d in enumerate(
-                    fire_depots if fire_depots is not None else load_fire_depots()
-                )
+                for i, d in enumerate(_fire_bases(fire_depots, police_depots))
             ],
         }
         self._unit_by_vehicle_id: dict[str, _Unit] = {

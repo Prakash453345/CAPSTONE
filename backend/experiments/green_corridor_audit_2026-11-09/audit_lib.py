@@ -16,8 +16,9 @@ import json
 import math
 import os
 import random
+import logging
 import xml.etree.ElementTree as ET
-from collections import defaultdict
+from collections import Counter, defaultdict
 from pathlib import Path
 
 os.environ.setdefault("SIM_NETWORK", "district")
@@ -35,7 +36,7 @@ from sim_service.routing import RoadGraph  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
 RESULTS = HERE / "results"
-ARMS = ("plain", "route_only", "full")
+ARMS = ("plain", "route_only", "full", "retimed")
 
 
 def largest_scc(graph: RoadGraph) -> set[str]:
@@ -121,6 +122,49 @@ def foe_pairs(net_path: Path) -> dict:
     return out
 
 
+class RetimedCorridor(CorridorController):
+    """PROTOTYPE (test harness only, not in the repo): every RETIME_EVERY_S, rebuild the open reservations of
+    each active corridor from the EV's measured progress, so windows follow the EV instead of the free-flow
+    ETA computed once at activation."""
+    RETIME_EVERY_S = 3
+
+    def tick(self, step, sim_time_s, *, progress_by_request=None):
+        import dataclasses
+        super().tick(step, sim_time_s, progress_by_request=progress_by_request)
+        if int(sim_time_s) % self.RETIME_EVERY_S:
+            return
+        for rid, active in list(self._active.items()):
+            prog = (progress_by_request or {}).get(rid)
+            if prog is None:
+                continue
+            c = active.corridor
+            full = self.planner.crossings(tuple(c.route_edges))
+            ahead_idx = [i for i, x in enumerate(full) if x.distance_m > prog + 1.0]
+            if not ahead_idx:
+                continue
+            new = self.planner.plan(corridor_id=c.corridor_id, request_id=rid, vehicle_id=c.vehicle_id,
+                                    route_edges=tuple(c.route_edges), now_ms=int(sim_time_s * 1000),
+                                    progress_m=prog)
+            if new is None:
+                continue
+            kept = [r for r in c.reservations if r.order not in set(ahead_idx)]
+            moved = [dataclasses.replace(r, order=ahead_idx[r.order]) for r in new.reservations]
+            active.corridor = dataclasses.replace(c, reservations=tuple(kept + moved))
+
+
+class _Capture(logging.Handler):
+    def __init__(self):
+        super().__init__(level=logging.WARNING)
+        self.counts: Counter = Counter()
+        self.examples: dict = {}
+
+    def emit(self, record):
+        key = f"{record.name.split('.')[-1]}: {record.getMessage()[:70]}"
+        key = "".join("#" if c.isdigit() else c for c in key)
+        self.counts[key] += 1
+        self.examples.setdefault(key, record.getMessage()[:200])
+
+
 class World:
     def __init__(self, level: str, seed: int, arm: str, *, end_s: float, with_orch: bool = False):
         assert arm in ARMS
@@ -129,7 +173,7 @@ class World:
         self.setup = load_corridor(level)
         self.graph = RoadGraph.from_network(self.scen.net)
         self.anomalies = OperatorAnomalyController()
-        self.corridor = CorridorController(self.graph)
+        self.corridor = RetimedCorridor(self.graph) if arm == "retimed" else CorridorController(self.graph)
         self.emergency = EmergencyController(self.graph, self.anomalies,
                                              corridor_controller=self.corridor)
         if arm == "plain":
@@ -151,6 +195,9 @@ class World:
         self.ev: dict = {}
         self._corridor_peak = 0
         self._tick_exc: list[str] = []
+        self.corr_events: list = []
+        self.cap = _Capture()
+        logging.getLogger().addHandler(self.cap)
 
     def at(self, t: float, kind: str, **args) -> None:
         self.script.append((float(t), kind, args))
@@ -182,7 +229,8 @@ class World:
                 self.all_orch_events = getattr(self, "all_orch_events", []) + self.last_orch_events
             self.emergency.drain_events()
             self.emergency.drain_vehicle_events()
-            self.corridor.drain_events()
+            for _p in self.corridor.drain_events():
+                self.corr_events.append((t, _p))
             self._monitor(step, t)
         except Exception:  # noqa: BLE001
             import traceback
@@ -267,6 +315,21 @@ class World:
                 if spd < 0.5:
                     if nxt and nxt[0][2] <= 40:
                         m["stop_signal_s"] += 1
+                        ch = str(nxt[0][3])
+                        kind = "red" if ch in "rR" else ("yellow" if ch in "yY" else "green")
+                        m["stop_at_" + kind] = m.get("stop_at_" + kind, 0) + 1
+                        if kind == "red":
+                            try:
+                                ldr = traci.vehicle.getLeader(vid, 25)
+                            except traci.TraCIException:
+                                ldr = None
+                            k2 = "stop_red_queued" if ldr else "stop_red_first"
+                            m[k2] = m.get(k2, 0) + 1
+                        try:
+                            if self.corridor._open_reservation(nxt[0][0]) is not None:
+                                m["stop_while_reservation_open"] = m.get("stop_while_reservation_open", 0) + 1
+                        except Exception:  # noqa: BLE001
+                            pass
                     else:
                         m["stop_other_s"] += 1
                 if step % 10 == 0:
@@ -278,14 +341,69 @@ class World:
                 m["end_t"] = t
             m["reroutes"] = sum(1 for h in req.history if h.action.name == "REROUTE")
 
+    def _traced_preempt(self):
+        """Wrap preemption_plan and the interlock check to count why preemption does or does not happen."""
+        from sim_service.signal_controller import arbiter as _arb
+        tr = self.preempt_trace = Counter()
+        orig = self.corridor.preemption_plan
+        real_check = _arb.interlocks.check
+
+        def plan(cfg, ctx, **kw):
+            tr["calls"] += 1
+            res = orig(cfg, ctx, **kw)
+            if res is None:
+                tr["no_plan"] += 1
+            else:
+                tr["plan"] += 1
+                tr["plan_hold_same_phase" if len(res.steps) == 1 else "plan_switch"] += 1
+            return res
+
+        def check(p, ctx, cfg):
+            v = real_check(p, ctx, cfg)
+            if getattr(p, "source", "") == "corridor_preemption":
+                if v:
+                    tr["interlock_rejected"] += 1
+                    for x in v:
+                        tr["rule_" + str(x.rule)] += 1
+                else:
+                    tr["interlock_ok"] += 1
+            return v
+
+        _arb.interlocks.check = check
+        self._restore_check = lambda: setattr(_arb.interlocks, "check", real_check)
+        return plan
+
     def run(self) -> dict:
-        preempt = self.corridor.preemption_plan if self.arm == "full" else None
+        preempt = None
+        if self.arm in ("full", "retimed"):
+            preempt = self._traced_preempt()
         summary = run_controlled_scenario(
             self.setup.sumocfg_path, self.setup.configs, self.setup.strategy,
             seed=self.seed, step_length=1.0, max_steps=int(self.end_s),
             link_lanes=self.setup.link_lanes, receiving_lanes=self.setup.receiving_lanes,
             vtype_pcu=self.setup.vtype_pcu, on_tick=self.on_tick, preempt_source=preempt)
+        if hasattr(self, "_restore_check"):
+            self._restore_check()
         return self.finish(summary)
+
+    def window_stats(self) -> list[dict]:
+        acts: dict = {}
+        matched: dict = defaultdict(set)
+        rows = []
+        for t, p in self.corr_events:
+            cid = p["corridor_id"]
+            if p["event"] == "activated":
+                acts[cid] = {r["order"]: (r["intersection_id"], r["open_at_ms"] / 1000, r["close_at_ms"] / 1000)
+                             for r in p["reservations"]}
+            elif p["event"] == "junction_passed" and cid in acts:
+                for order, (tl, o, c) in sorted(acts[cid].items()):
+                    if tl == p["detail"] and order not in matched[cid]:
+                        matched[cid].add(order)
+                        rows.append({"request": p["request_id"], "corridor": cid, "order": order, "tl": tl,
+                                     "pass_t": t, "open_t": o, "close_t": c,
+                                     "pass_minus_close_s": round(t - c, 1), "pass_minus_open_s": round(t - o, 1)})
+                        break
+        return rows
 
     def finish(self, summary: dict) -> dict:
         evs = []
@@ -304,10 +422,13 @@ class World:
             "max_red_tl": max(self.max_red, key=self.max_red.get) if self.max_red else None,
             "collisions": self.collisions, "teleports": self.teleports,
             "corridors_left": self.corridor.active_corridor_ids(),
+            "unprotected_junctions": dict(getattr(self.corridor, "unprotected_junctions", {})),
             "corridor_peak": self._corridor_peak,
             "skipped_clustered_tls": self.skipped_tls,
             "tick_exceptions": self._tick_exc[:10], "n_tick_exceptions": len(self._tick_exc),
-            "log": self.log,
+            "window_stats": self.window_stats(),
+            "preempt_trace": dict(getattr(self, "preempt_trace", {})),
+            "log": self.log, "warnings": dict(self.cap.counts.most_common(25)),
             "runner": {k: summary.get(k) for k in summary if not isinstance(summary[k], (dict, list))},
         }
 

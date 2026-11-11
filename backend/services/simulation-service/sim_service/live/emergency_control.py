@@ -122,6 +122,8 @@ class EmergencyController:
         self._requests: dict[str, EmergencyRequest] = {}
         self._vehicles: dict[str, EmergencyVehicle] = {}
         self._alt_cache: dict[str, list[RouteResult]] = {}
+        self._pending_routes: dict[str, tuple[tuple[str, ...], float]] = {}
+        self._now_s = 0.0
         self._ev_runs: dict[str, _EvRun] = {}
         self._events: list[dict] = []
         self._vehicle_events: list[dict] = []
@@ -164,6 +166,24 @@ class EmergencyController:
             at_ms=at_ms,
             operator=operator,
         ).apply(EmergencyRequestAction.START_ROUTING, at_ms=at_ms, actor="system:router")
+        # One vehicle, one live trip. A second request for a vehicle that is
+        # already on a live one is refused here (as a failed route, visible to
+        # the operator) instead of being accepted, failing to spawn, and later
+        # reporting a trip that never happened.
+        busy_with = next(
+            (r.request_id for r in self._requests.values()
+             if r.vehicle_id == vehicle_id and not r.is_terminal),
+            None,
+        )
+        if busy_with is not None and vehicle_id:
+            self._requests[request_id] = req.apply(
+                EmergencyRequestAction.ROUTE_FAILED, at_ms=at_ms, actor="system:router",
+                detail=f"vehicle {vehicle_id} is already on live request {busy_with}",
+            )
+            log.warning("emergency request %s refused: vehicle %s already on %s",
+                        request_id, vehicle_id, busy_with)
+            self._queue(request_id, step=step, actor="system:router")
+            return
         self._vehicles[vehicle_id] = EmergencyVehicle(
             vehicle_id=vehicle_id,
             kind=kind,
@@ -227,6 +247,9 @@ class EmergencyController:
         at_ms = epoch_ms(payload.get("requested_at"), sim_time_s * 1000)
         actor = str(payload.get("operator", "operator:console"))
 
+        if action == "CANCEL" and req.is_terminal:
+            log.info("CANCEL for %s ignored: already %s", request_id, req.state.value)
+            return
         if action == "CANCEL":
             self._requests[request_id] = req.apply(
                 EmergencyRequestAction.CANCEL, at_ms=at_ms, actor=actor,
@@ -318,6 +341,8 @@ class EmergencyController:
     # ---- per-tick --------------------------------------------------
 
     def tick(self, step: int, sim_time_s: float) -> None:
+        self._now_s = sim_time_s
+        self._retry_pending_routes(sim_time_s)
         progress_by_request = self._advance_vehicles(step, sim_time_s)
         if self.corridor is not None:
             self.corridor.tick(step, sim_time_s, progress_by_request=progress_by_request)
@@ -696,15 +721,52 @@ class EmergencyController:
         )
         self._queue(request_id, step=step, actor=actor, detail=detail)
 
+    _ROUTE_RETRY_S = 20.0
+
     def _repoint_sumo_route(self, request_id: str, edges: tuple[str, ...]) -> None:
-        """Push a new edge list to a driving EV and rebuild its progress table."""
+        """Push a new edge list to a driving EV and rebuild its progress table.
+
+        SUMO refuses a route change while the vehicle is on a junction-internal
+        edge. That used to be logged and swallowed, leaving the request's route
+        and the vehicle's real route disagreeing. Now the change is retried
+        every tick (`_retry_pending_routes`) until SUMO accepts it, and the
+        progress table only switches once it has."""
         run = self._ev_runs.get(request_id)
         if run is None:
             return
+        if self._try_set_route(run, edges):
+            self._pending_routes.pop(request_id, None)
+            self._apply_route_tables(run, edges)
+        else:
+            self._pending_routes[request_id] = (edges, self._now_s)
+
+    def _try_set_route(self, run, edges: tuple[str, ...]) -> bool:
         try:
             traci.vehicle.setRoute(run.veh_id, list(edges))
-        except Exception:  # noqa: BLE001
-            log.exception("could not update SUMO route for %s", run.veh_id)
+            return True
+        except Exception as exc:  # noqa: BLE001
+            log.info("SUMO refused route change for %s (%s) -- will retry", run.veh_id,
+                     str(exc)[:80])
+            return False
+
+    def _retry_pending_routes(self, sim_time_s: float) -> None:
+        for rid, (edges, since) in list(self._pending_routes.items()):
+            run = self._ev_runs.get(rid)
+            req = self._requests.get(rid)
+            if run is None or req is None or req.is_terminal:
+                self._pending_routes.pop(rid, None)
+                continue
+            if self._try_set_route(run, edges):
+                self._pending_routes.pop(rid, None)
+                self._apply_route_tables(run, edges)
+            elif sim_time_s - since > self._ROUTE_RETRY_S:
+                log.warning("could not update SUMO route for %s after %.0f s -- keeping the old one",
+                            run.veh_id, self._ROUTE_RETRY_S)
+                self._pending_routes.pop(rid, None)
+                # the vehicle keeps its old route, so the request must too
+                self._last_route_s[rid] = -1e18
+
+    def _apply_route_tables(self, run, edges: tuple[str, ...]) -> None:
         acc = 0.0
         dist_to_start: dict[str, float] = {}
         for eid in edges:

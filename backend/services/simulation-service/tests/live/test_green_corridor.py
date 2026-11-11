@@ -259,3 +259,31 @@ def test_corridor_payload_round_trips_through_the_schema():
 
 # a Violation import guard so the unused-import linter and the reader agree
 _ = Violation
+
+
+def test_window_follows_the_measured_ev_not_the_planned_clock():
+    """A late EV still gets its green; an EV still far away does not, even if the planned window is open."""
+    c = CorridorController(_graph())
+    c.activate(request_id="er-1", vehicle_id="amb", route_edges=ROUTE, now_ms=0)
+    ctx = JunctionContext("J1", "P0", 12.0)
+    dist = c._active["er-1"].dist_by_order[0]
+    # planned window (15-34 s) is long over at 120 s, but the EV is only 100 m short of the line
+    c.tick(step=1, sim_time_s=120.0, progress_by_request={"er-1": dist - 100.0})
+    assert c.preemption_plan(_cfg("J1"), ctx) is not None
+    # planned window is open at 20 s, but the EV is 1 km away
+    c2 = CorridorController(_graph())
+    c2.activate(request_id="er-1", vehicle_id="amb", route_edges=ROUTE, now_ms=0)
+    c2.tick(step=1, sim_time_s=20.0, progress_by_request={"er-1": dist - 1000.0})
+    assert c2.preemption_plan(_cfg("J1"), ctx) is None
+
+
+def test_a_junction_is_not_held_forever_for_a_stuck_ev():
+    c = CorridorController(_graph())
+    c.activate(request_id="er-1", vehicle_id="amb", route_edges=ROUTE, now_ms=0)
+    ctx = JunctionContext("J1", "P0", 12.0)
+    dist = c._active["er-1"].dist_by_order[0]
+    prog = {"er-1": dist - 50.0}
+    c.tick(step=1, sim_time_s=100.0, progress_by_request=prog)
+    assert c.preemption_plan(_cfg("J1"), ctx) is not None
+    c.tick(step=2, sim_time_s=100.0 + c.config.corridor_max_hold_s + 5, progress_by_request=prog)
+    assert c.preemption_plan(_cfg("J1"), ctx) is None

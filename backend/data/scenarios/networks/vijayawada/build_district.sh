@@ -25,6 +25,13 @@ RAW="${1:-raw_osm.xml}"
 BUSY="${BUSY:-district_busy.osm.xml}"
 BOX="${BOX:-80.610982,16.485617,80.674690,16.520437}"
 MARGIN="${MARGIN:-0.03}"
+# Streets taken whole that join the district to a place it must reach: the
+# Gurunanak Colony road east to the Agni Mapaka Kendram fire station
+# (district_extra.osm.xml, from OpenStreetMap). Without it the station is 1.4 km
+# beyond the network's end.
+EXTRA="${EXTRA:-district_extra.osm.xml}"
+ADD=()
+[ -f "$EXTRA" ] && ADD=(--add "$EXTRA")
 EXTEND=()
 [ -f "$BUSY" ] && EXTEND=(--extend "$BUSY" --box "$BOX" --margin "$MARGIN")
 
@@ -45,7 +52,7 @@ osm_opts=(
 )
 
 echo "1/6  filtering $RAW to the arterial grid ..."
-"$PY" filter_district.py "$RAW" filtered_district.osm.xml "${EXTEND[@]}"
+"$PY" filter_district.py "$RAW" filtered_district.osm.xml ${ADD[@]+"${ADD[@]}"} "${EXTEND[@]}"
 
 echo "2/6  survey build: find the connected core and the arterial crossings ..."
 netconvert --osm-files filtered_district.osm.xml -o district_survey.net.xml "${osm_opts[@]}"

@@ -289,3 +289,57 @@ def test_a_crew_can_replan_only_its_own_trip(patched_edges):
 
     c.handle_command({**recalc, "reason": "operator"}, step=4, sim_time_s=4.0)
     assert [e["detail"] for e in c.drain_events()] == ["operator"]     # operator: any trip
+
+
+# ---- regressions from the 2026-11-09 audit ---------------------------
+
+
+def test_a_second_request_for_a_busy_vehicle_is_refused(patched_edges):
+    """Two live trips for one vehicle used to be accepted: the second spawn
+    failed yet the trip ended COMPLETED."""
+    c = EmergencyController(_diamond(), _FakeAnomalies())
+    c.handle_create(_create_payload(), step=1, sim_time_s=1.0)
+    c.handle_create(_create_payload(request_id="er-2"), step=1, sim_time_s=1.0)
+    assert c.get_request("er-2").state.value == "cancelled"
+    assert "already on live request er-1" in c.get_request("er-2").history[-1].detail
+    assert [r.request_id for r in c.active_requests()] == ["er-1"]
+    # once the first trip is over the vehicle can be booked again
+    c.handle_command({"request_id": "er-1", "action": "CANCEL", "operator": "x"},
+                     step=2, sim_time_s=2.0)
+    c.handle_create(_create_payload(request_id="er-3"), step=3, sim_time_s=3.0)
+    assert c.get_request("er-3").state.value != "cancelled"
+
+
+def test_cancelling_an_already_cancelled_request_is_ignored(patched_edges):
+    c = EmergencyController(_diamond(), _FakeAnomalies())
+    c.handle_create(_create_payload(), step=1, sim_time_s=1.0)
+    cmd = {"request_id": "er-1", "action": "CANCEL", "operator": "x"}
+    c.handle_command(cmd, step=2, sim_time_s=2.0)
+    c.handle_command(cmd, step=3, sim_time_s=3.0)  # used to raise IllegalRequestTransition
+    assert c.get_request("er-1").state.value == "cancelled"
+
+
+def test_a_refused_sumo_route_change_is_retried_until_it_is_accepted(patched_edges, monkeypatch):
+    """SUMO refuses a route change while the vehicle is on a junction-internal
+    edge; the change used to be dropped and the two routes diverged."""
+    c = EmergencyController(_diamond(), _FakeAnomalies())
+    calls = []
+
+    def set_route(vid, edges):
+        calls.append(list(edges))
+        if len(calls) < 3:
+            raise RuntimeError("Vehicle is on junction-internal edge")
+
+    monkeypatch.setattr(ec.traci.vehicle, "setRoute", set_route)
+    run = ec._EvRun(request_id="er-1", veh_id="amb-01", route_edges=("S", "T"),
+                    dist_to_edge_start={"S": 0.0, "T": 100.0}, total_length_m=200.0)
+    c._ev_runs["er-1"] = run
+    c.handle_create(_create_payload(), step=1, sim_time_s=1.0)
+    c._ev_runs["er-1"] = run
+    c._repoint_sumo_route("er-1", ("S", "A", "T"))
+    assert run.route_edges == ("S", "T")           # not switched while SUMO refuses
+    c._retry_pending_routes(2.0)
+    assert run.route_edges == ("S", "T")
+    c._retry_pending_routes(3.0)                    # third attempt succeeds
+    assert run.route_edges == ("S", "A", "T")
+    assert c._pending_routes == {}

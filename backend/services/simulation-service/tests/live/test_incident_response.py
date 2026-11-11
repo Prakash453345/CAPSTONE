@@ -147,7 +147,7 @@ def wired(monkeypatch):
     facility_index = FacilityIndex([_hospital()])
     police_depot = _Depot(depot_id="police-1", name="Central PS", edge="S", lat=16.49, lon=80.60)
     orch = IncidentResponseOrchestrator(
-        anomalies, emergency, facility_index=facility_index, police_depots=[police_depot], fire_depots=[],
+        anomalies, emergency, facility_index=facility_index, police_depots=[police_depot],
     )
     return orch, emergency, anomalies, veh
 
@@ -169,9 +169,11 @@ def test_heavy_congestion_pages_nobody():
     assert _RESPONSE_MAP[AnomalyType.HEAVY_CONGESTION] == ()
 
 
-def test_fire_pages_fire_truck_and_police():
+def test_fire_pages_fire_truck_police_and_ambulance():
     """Default policy for the M8 fire candidate once an operator confirms it; change here if the policy changes."""  # noqa: E501
-    assert set(_RESPONSE_MAP[AnomalyType.FIRE]) == {EmergencyKind.FIRE_TRUCK, EmergencyKind.POLICE}
+    assert set(_RESPONSE_MAP[AnomalyType.FIRE]) == {
+        EmergencyKind.FIRE_TRUCK, EmergencyKind.POLICE, EmergencyKind.AMBULANCE,
+    }
 
 
 # ---- dispatch on tick ---------------------------------------------------
@@ -183,18 +185,18 @@ def test_high_severity_accident_dispatches_police_and_ambulance(wired):
     orch.tick(step=1, sim_time_s=1.0)
 
     requests = {r.vehicle_id: r for r in emergency.active_requests()}
-    assert set(requests) == {"unit-police-0", "unit-ambulance-0"}
+    assert set(requests) == {"unit-police-0", "unit-ambulance-0", "unit-fire-0"}
     assert requests["unit-police-0"].state.name == "GREEN_CORRIDOR_ACTIVE"  # S-A-B-T, 2 signals
     assert requests["unit-ambulance-0"].state.name == "IN_TRANSIT"          # H-T, no signal
-    assert {v for v, _ in veh.added} == {"unit-police-0", "unit-ambulance-0"}
+    assert {v for v, _ in veh.added} == {"unit-police-0", "unit-ambulance-0", "unit-fire-0"}
 
     (alert,) = orch.drain_events()
     assert alert["anomaly_id"] == "an-1"
     assert alert["anomaly_type"] == "accident"
     assert alert["lat"] == 16.50 and alert["lon"] == 80.63
     dispatched_kinds = {d["vehicle_kind"] for d in alert["dispatched"]}
-    assert dispatched_kinds == {"POLICE", "AMBULANCE"}
-    assert alert["undispatched_kinds"] == ["fire_truck"]  # no depot data for it
+    assert dispatched_kinds == {"POLICE", "AMBULANCE", "FIRE_TRUCK"}
+    assert alert["undispatched_kinds"] == []  # fire trucks are based at the police depots
 
 
 class _AskingCrews:
@@ -217,7 +219,6 @@ def test_a_call_every_crew_declined_falls_back_to_a_depot_unit(wired):
         anomalies, emergency, facility_index=FacilityIndex([_hospital()]),
         police_depots=[_Depot(depot_id="police-1", name="Central PS", edge="S",
                               lat=16.49, lon=80.60)],
-        fire_depots=[],
         crew_dispatcher=crews,
     )
     anomalies.items = [_accident()]
@@ -248,7 +249,7 @@ def test_same_anomaly_is_only_dispatched_once(wired):
     orch.tick(step=2, sim_time_s=2.0)  # anomaly still active on the next tick
 
     assert orch.drain_events() == []  # no second alert / no second dispatch
-    assert len(emergency.active_requests()) == 2
+    assert len(emergency.active_requests()) == 3
 
 
 def test_fleet_exhaustion_leaves_the_kind_undispatched(wired):
@@ -325,7 +326,8 @@ def test_units_still_driving_to_an_incident_that_ended_are_stood_down(wired):
     orch.tick(step=1, sim_time_s=1.0)
     _arrive(emergency, veh, "unit-ambulance-0", edge="T")        # now on its hospital leg
     assert {r.vehicle_id for r in emergency.active_requests()} == {"unit-police-0",
-                                                                   "unit-ambulance-0"}
+                                                                   "unit-ambulance-0",
+                                                                   "unit-fire-0"}
     anomalies.items = []                                          # operator cleared it
     orch.tick(step=20, sim_time_s=20.0)
 
@@ -358,7 +360,7 @@ def _two_police_orch(monkeypatch, wired_parts):
     near = _Depot(depot_id="police-near", name="Near PS", edge="S", lat=16.499, lon=80.631)
     return IncidentResponseOrchestrator(
         anomalies, emergency, facility_index=FacilityIndex([_hospital()]),
-        police_depots=[far, near], fire_depots=[],
+        police_depots=[far, near],
     )
 
 
@@ -419,6 +421,10 @@ def test_operator_request_for_nearest_crew(wired):
 
 def test_operator_request_with_no_free_crew_raises_an_alert(wired):
     orch, emergency, _, _ = wired
+    for u in orch._units[EmergencyKind.FIRE_TRUCK]:   # a scenario with no fire units at all
+        orch._unit_by_vehicle_id.pop(u.vehicle_id, None)
+        orch._crews.remove(u.vehicle_id)
+    orch._units[EmergencyKind.FIRE_TRUCK].clear()
     orch.handle_nearest_request(
         {"request_id": "op-2", "vehicle_id": "", "vehicle_kind": "FIRE_TRUCK",
          "source_edge": "", "destination_edge": "T"},
@@ -543,6 +549,20 @@ def test_equal_severity_never_suggests_a_reassignment(wired):
     orch.tick(step=1, sim_time_s=1.0)
     orch.tick(step=2, sim_time_s=2.0)
     assert not [e for e in orch.drain_events() if e.get("reassign_suggestions")]
+
+
+def test_fire_dispatches_an_ambulance_and_a_fire_truck(wired):
+    """Regression (2026-11-09 audit): a FIRE anomaly paged no ambulance and no
+    fire-truck unit existed, so a fire sent police only."""
+    orch, emergency, anomalies, _ = wired
+    fire = Anomaly.create(
+        anomaly_id="an-fire", source=AnomalySource.OPERATOR, anomaly_type=AnomalyType.FIRE,
+        severity=AnomalySeverity.HIGH, edge_id="T", at_ms=1, estimated_impact=0.8,
+    )
+    anomalies.items = [fire]
+    orch.tick(step=1, sim_time_s=1.0)
+    (alert,) = orch.drain_events()
+    assert {d["vehicle_kind"] for d in alert["dispatched"]} == {"POLICE", "AMBULANCE", "FIRE_TRUCK"}
 
 
 def test_cyber_crime_is_not_a_police_depot():

@@ -1,0 +1,27 @@
+== light
+ plain      runs 9 ev 36 done 34 dnf 2 mean_travel 351.3 sigstop 1096 otherstop 1554 stuck>300 2 coll 0 tele 59 confl 0 g2r 0 maxred 38 reroutes/ev 0.0 armed [36, 36] left 0 exc 0
+ route_only runs 9 ev 36 done 34 dnf 2 mean_travel 353.3 sigstop 1006 otherstop 1551 stuck>300 2 coll 0 tele 58 confl 0 g2r 0 maxred 38 reroutes/ev 1.14 armed [36, 36] left 0 exc 0
+ full       runs 9 ev 36 done 35 dnf 1 mean_travel 345.8 sigstop 790 otherstop 741 stuck>300 1 coll 0 tele 53 confl 0 g2r 0 maxred 49 reroutes/ev 1.11 armed [36, 36] left 0 exc 0
+ retimed    runs 5 ev 20 done 20 dnf 0 mean_travel 345.2 sigstop 564 otherstop 54 stuck>300 0 coll 0 tele 20 confl 0 g2r 0 maxred 38 reroutes/ev 1.4 armed [20, 20] left 0 exc 0
+  full_vs_plain: completed-pairs {'n': 34, 'mean': -0.9, 'lo': -5.4, 'hi': 3.5} | dnf-censored {'n': 36, 'mean': -2.6, 'lo': -8.5, 'hi': 2.4}
+  route_vs_plain: completed-pairs {'n': 34, 'mean': 2.0, 'lo': -0.8, 'hi': 5.8} | dnf-censored {'n': 36, 'mean': 1.9, 'lo': -0.7, 'hi': 5.6}
+  full_vs_route: completed-pairs {'n': 34, 'mean': -2.8, 'lo': -6.2, 'hi': 0.6} | dnf-censored {'n': 36, 'mean': -4.4, 'lo': -9.6, 'hi': -0.3}
+  stop-at-signal full/plain: 0.72
+== medium
+ plain      runs 9 ev 36 done 34 dnf 2 mean_travel 387.9 sigstop 1248 otherstop 2218 stuck>300 2 coll 0 tele 111 confl 0 g2r 0 maxred 37 reroutes/ev 0.0 armed [36, 36] left 0 exc 0
+ route_only runs 9 ev 36 done 34 dnf 2 mean_travel 376.5 sigstop 1118 otherstop 1937 stuck>300 2 coll 0 tele 91 confl 0 g2r 0 maxred 37 reroutes/ev 1.44 armed [36, 36] left 0 exc 0
+ full       runs 9 ev 36 done 33 dnf 3 mean_travel 369.2 sigstop 1085 otherstop 1903 stuck>300 2 coll 0 tele 117 confl 0 g2r 0 maxred 54 reroutes/ev 1.36 armed [36, 36] left 0 exc 0
+ retimed    runs 5 ev 20 done 20 dnf 0 mean_travel 355.2 sigstop 600 otherstop 104 stuck>300 0 coll 0 tele 59 confl 0 g2r 0 maxred 37 reroutes/ev 1.65 armed [20, 20] left 0 exc 0
+  full_vs_plain: completed-pairs {'n': 33, 'mean': -2.3, 'lo': -7.3, 'hi': 2.5} | dnf-censored {'n': 36, 'mean': -1.8, 'lo': -6.5, 'hi': 2.6}
+  route_vs_plain: completed-pairs {'n': 34, 'mean': -1.2, 'lo': -5.2, 'hi': 2.7} | dnf-censored {'n': 36, 'mean': -1.2, 'lo': -4.9, 'hi': 2.3}
+  full_vs_route: completed-pairs {'n': 33, 'mean': -0.9, 'lo': -4.0, 'hi': 2.3} | dnf-censored {'n': 36, 'mean': -0.6, 'lo': -3.5, 'hi': 2.4}
+  stop-at-signal full/plain: 0.87
+== heavy
+ plain      runs 3 ev 12 done 6 dnf 6 mean_travel 445.3 sigstop 542 otherstop 4733 stuck>300 5 coll 0 tele 330 confl 0 g2r 0 maxred 94 reroutes/ev 0.0 armed [12, 12] left 6 exc 0
+ route_only runs 3 ev 12 done 9 dnf 3 mean_travel 516.9 sigstop 579 otherstop 1752 stuck>300 1 coll 2 tele 289 confl 0 g2r 0 maxred 94 reroutes/ev 1.67 armed [12, 12] left 3 exc 0
+ full       runs 3 ev 12 done 9 dnf 3 mean_travel 490.3 sigstop 457 otherstop 1454 stuck>300 1 coll 0 tele 279 confl 0 g2r 0 maxred 94 reroutes/ev 1.58 armed [12, 12] left 3 exc 0
+ retimed    runs 0 ev 0 done 0 dnf 0 mean_travel None sigstop 0 otherstop 0 stuck>300 0 coll 0 tele 0 confl 0 g2r 0 maxred None reroutes/ev None armed [0, 0] left 0 exc 0
+  full_vs_plain: completed-pairs {'n': 6, 'mean': 6.0, 'lo': -9.4, 'hi': 27.0} | dnf-censored {'n': 12, 'mean': -11.9, 'lo': -31.0, 'hi': 6.4}
+  route_vs_plain: completed-pairs {'n': 6, 'mean': 8.0, 'lo': -16.6, 'hi': 40.4} | dnf-censored {'n': 12, 'mean': -9.1, 'lo': -29.1, 'hi': 12.5}
+  full_vs_route: completed-pairs {'n': 9, 'mean': -0.6, 'lo': -16.0, 'hi': 17.7} | dnf-censored {'n': 12, 'mean': -0.4, 'lo': -12.6, 'hi': 12.3}
+  stop-at-signal full/plain: 0.84

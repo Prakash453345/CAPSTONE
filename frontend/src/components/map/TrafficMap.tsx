@@ -15,6 +15,7 @@ import { MapNewMenu } from "@/components/map/MapNewMenu";
 import { RoadLayer } from "@/components/map/layers/RoadLayer";
 import { VehicleLayer } from "@/components/map/layers/VehicleLayer";
 import { SignalLayer } from "@/components/map/layers/SignalLayer";
+import { StationLayer } from "@/components/map/layers/StationLayer";
 import { IncidentLayer } from "@/components/map/layers/IncidentLayer";
 import { AnomalyLayer } from "@/components/map/layers/AnomalyLayer";
 import { EmergencyRouteLayer } from "@/components/map/layers/EmergencyRouteLayer";
@@ -379,6 +380,7 @@ export function TrafficMap({
             <RoadLayer visible={activeLayers.has("congestion")} />
             <RoadHighlight />
             <SignalLayer visible={activeLayers.has("signals")} />
+            <StationLayer visible={activeLayers.has("emergency")} />
             <EmergencyRouteLayer visible={activeLayers.has("emergency")} />
             <EmergencyVehicleLayer visible={activeLayers.has("emergency")} />
             <IncidentLayer visible={activeLayers.has("incidents")} />
