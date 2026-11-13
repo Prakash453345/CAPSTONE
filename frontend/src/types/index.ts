@@ -119,7 +119,7 @@ export interface Intersection extends LatLng {
 }
 
 // -------------------------------------------------- emergency requests / routes
-export type EmergencyVehicleKind = "ambulance" | "fire_truck" | "police";
+export type EmergencyVehicleKind = "ambulance" | "fire_truck" | "police" | "traffic_police";
 export type EmergencyRequestState =
   | "created"
   | "routing"

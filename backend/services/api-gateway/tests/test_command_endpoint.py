@@ -190,6 +190,14 @@ def test_commands_need_a_session_when_sign_in_is_required(tmp_path):
     assert session_user(off) is None
 
 
+def test_a_crew_leaves_its_own_scene_only():
+    crew = _user("responder", "FIRE-02")
+    leave = CommandRequest(event_type="CrewLeaveScene",
+                           payload={"unit_id": "FIRE-99", "requested_at": 0})
+    assert _status(crew, leave, _ownership()) == 200
+    assert leave.payload["unit_id"] == "FIRE-02"  # its own truck, whatever it sent
+
+
 def test_a_crew_may_ask_for_a_corridor_for_itself_but_never_approve_one():
     own = _ownership()
     crew = _user("responder", "POL-02")

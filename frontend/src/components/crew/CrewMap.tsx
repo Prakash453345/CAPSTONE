@@ -518,7 +518,7 @@ function MapButtons({ mission }: { mission: Mission | null }) {
 const SELF_SRC = "crew-self";
 const SELF_HALO = "crew-self-halo";
 const SELF_DOT = "crew-self-dot";
-const KIND_COLOR: Record<string, string> = { ambulance: "#ff3b4f", police: "#4f8cff", fire_truck: "#ff8a4c" };
+const KIND_COLOR: Record<string, string> = { ambulance: "#ff3b4f", police: "#4f8cff", fire_truck: "#ff8a4c", traffic_police: "#2ec4d6" };
 
 /**
  * Where this crew's own vehicle is while it is not driving a call: parked at

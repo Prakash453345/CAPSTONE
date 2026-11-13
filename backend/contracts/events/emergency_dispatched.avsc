@@ -18,7 +18,7 @@
           "type": "record",
           "name": "DispatchedUnit",
           "fields": [
-            { "name": "vehicle_kind", "type": { "type": "enum", "name": "EmergencyVehicleKind", "symbols": ["AMBULANCE", "FIRE_TRUCK", "POLICE"] } },
+            { "name": "vehicle_kind", "type": { "type": "enum", "name": "EmergencyVehicleKind", "symbols": ["AMBULANCE", "FIRE_TRUCK", "POLICE", "TRAFFIC_POLICE"] } },
             { "name": "vehicle_id", "type": "string" },
             { "name": "request_id", "type": "string", "doc": "Correlates to the EmergencyRequestUpdated / GreenCorridorUpdated streams for this unit." }
           ]
@@ -78,7 +78,7 @@
           "doc": "A crew that was considered for this call: the nearest free crews of each kind found through the H3 hex index (control/dispatch/crew_index.py), ranked by live road travel time. `selected` is the one actually sent.",
           "fields": [
             { "name": "vehicle_id", "type": "string" },
-            { "name": "vehicle_kind", "type": "string", "doc": "AMBULANCE | POLICE | FIRE_TRUCK." },
+            { "name": "vehicle_kind", "type": "string", "doc": "AMBULANCE | POLICE | FIRE_TRUCK | TRAFFIC_POLICE." },
             { "name": "distance_m", "type": "double", "doc": "Straight-line metres from the call." },
             { "name": "road_time_s", "type": ["null", "double"], "default": null, "doc": "Live travel time; null when the router could not price the crew." },
             { "name": "cell", "type": "string", "doc": "The H3 cell the crew was found in." },

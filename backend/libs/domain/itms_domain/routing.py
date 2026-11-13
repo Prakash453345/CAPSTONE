@@ -119,7 +119,12 @@ class EmergencyRoutingConfig:
     corridor_release_lag_s: float = 4.0       # keep it held this long after predicted pass
     corridor_min_gap_s: float = 5.0           # min spacing between two junctions' windows
     corridor_lookahead_m: float = 260.0       # once the EV is this close (measured along the route) the junction is held for it
-    corridor_max_hold_s: float = 60.0         # never hold one junction longer than this for one EV
+    corridor_max_hold_s: float = 60.0         # never hold one junction longer than this at a stretch for one EV
+    # After a full hold the junction is given back for this long, then held
+    # again if the EV is still short of it. Before, a hold that ran out was
+    # never renewed: an EV still queued at the junction was left to the
+    # normal cycle for good (seen live: 218 s more in the lookahead range).
+    corridor_rehold_after_s: float = 20.0
     corridor_max_simultaneous: int = 3        # hard cap on concurrent preemptions per corridor
 
     def validate(self) -> list[str]:

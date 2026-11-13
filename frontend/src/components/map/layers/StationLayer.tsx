@@ -5,8 +5,9 @@ import { stations, STATION_LABEL } from "@/data/stations";
 
 const POLICE = "#2f7bff";
 const FIRE = "#ff5a1f";
+const TRAFFIC = "#12a5b8";
 
-/** Police and fire stations: a coloured disc with P / F and the station's name
+/** Police, traffic police and fire stations: a coloured disc with P / T / F and the station's name
  *  beside it. HTML markers rather than a symbol layer: those need the style's
  *  glyphs, which are not there until the basemap has loaded. */
 export function StationLayer({ visible }: { visible: boolean }) {
@@ -15,12 +16,12 @@ export function StationLayer({ visible }: { visible: boolean }) {
 
   useEffect(() => {
     markers.current = stations.map((s) => {
-      const color = s.kind === "police" ? POLICE : FIRE;
+      const color = s.kind === "police" ? POLICE : s.kind === "traffic_police" ? TRAFFIC : FIRE;
       const el = document.createElement("div");
       el.title = `${s.name} · ${STATION_LABEL[s.kind]}${s.offRoadM > 100 ? ` · ${(s.offRoadM / 1000).toFixed(1)} km from the mapped roads` : ""}`;
       el.style.cssText = "display:flex;flex-direction:column;align-items:center;pointer-events:auto;";
       const disc = document.createElement("div");
-      disc.textContent = s.kind === "police" ? "P" : "F";
+      disc.textContent = s.kind === "police" ? "P" : s.kind === "traffic_police" ? "T" : "F";
       disc.style.cssText = `width:24px;height:24px;border-radius:50%;background:${color};color:#fff;font:700 12px/24px system-ui,sans-serif;text-align:center;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.45);`;
       const name = document.createElement("div");
       name.textContent = s.name;

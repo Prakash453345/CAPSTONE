@@ -358,3 +358,61 @@ def test_no_viable_reroute_holds_the_current_route_without_crashing(wired_bypass
     assert veh.routes_set == []
     held = [e for e in c.drain_events() if "reroute held" in (e.get("detail") or "")]
     assert held
+
+
+def _driving_towards_j1(c, veh, anoms):
+    """amb-1 on A, 190 m of its 200 m gone; B (ahead) then blocks."""
+    _activate_bypass(c)
+    veh.state["amb-1"].update(edge="A", pos=60.0, speed=8.0, xy=(160.0, 0.0))
+    c.tick(step=1100, sim_time_s=1_100.0)
+    veh.routes_set.clear()
+    anoms.items = [_blocked("B")]
+    veh.state["amb-1"].update(edge="A", pos=190.0, speed=8.0)
+
+
+def test_a_reroute_sumo_refuses_changes_nothing_and_is_asked_again(wired_bypass):
+    """Inside a junction SUMO refuses a different turn. The request and the
+    corridor used to switch to the new route anyway: the corridor then read
+    the old route's distances, called every junction passed and shut down."""
+    c, corridor, veh, anoms = wired_bypass
+    _driving_towards_j1(c, veh, anoms)
+    old_corridor = corridor.corridor_for("er-1").corridor_id
+    refuse = {"on": True}
+    real = veh.setRoute
+
+    def set_route(veh_id, edges):
+        if refuse["on"]:
+            raise RuntimeError("Vehicle is on junction-internal edge leading elsewhere")
+        real(veh_id, edges)
+
+    veh.setRoute = set_route
+    c.tick(step=1104, sim_time_s=1_104.0)
+    req = c.active_requests()[0]
+    assert req.route.edges == ("S", "A", "B", "T")          # still the route it is on
+    assert corridor.corridor_for("er-1").corridor_id == old_corridor
+    assert c._ev_runs["er-1"].route_edges == ("S", "A", "B", "T")
+    assert not any(t.action.name == "REROUTE" for t in req.history)
+
+    refuse["on"] = False                                    # next look: SUMO accepts
+    c.tick(step=1108, sim_time_s=1_108.0)
+    req = c.active_requests()[0]
+    assert req.route.edges == ("A", "C", "T")
+    assert veh.routes_set == [("amb-1", ("A", "C", "T"))]
+    assert c._ev_runs["er-1"].route_edges == ("A", "C", "T")
+
+
+def test_a_reroute_does_not_let_go_of_the_junction_ahead(wired_bypass):
+    """The corridor armed for the new route knows where the vehicle is at
+    once. It used to wait for the next tick, and for that tick the junction
+    the vehicle was about to reach went back to its normal plan."""
+    c, corridor, veh, anoms = wired_bypass
+    _driving_towards_j1(c, veh, anoms)
+    veh.state["amb-1"].update(edge="C", pos=400.0, speed=8.0)  # 50 m short of J2
+    c._ev_runs["er-1"].current_edge = "A"
+    # reroute from A onto the bypass; the vehicle is 190 m along A
+    veh.state["amb-1"].update(edge="A", pos=190.0)
+    c.tick(step=1104, sim_time_s=1_104.0)
+    active = corridor._active["er-1"]
+    assert active.corridor.route_edges == ("A", "C", "T")
+    assert active.progress_m == pytest.approx(190.0)
+

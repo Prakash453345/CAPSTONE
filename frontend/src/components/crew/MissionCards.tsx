@@ -1,15 +1,50 @@
+import { useState } from "react";
 import { CheckCircle2, MapPinned, Radio, Route as RouteIcon, Siren, TriangleAlert, Waypoints } from "lucide-react";
 import { Button, EmptyState, Panel, PanelHeader, Pill } from "@/components/console/kit";
 import { STATE_WORDS, mmss, networkMood } from "@/components/console/words";
 import { toneText } from "@/components/console/tone";
 import { ManeuverIcon } from "@/components/crew/ManeuverBanner";
 import { roadLabel } from "@/data/network";
+import { CommandError, postCommand } from "@/services/traffic/commands";
 import { formatDistance } from "@/crew/plan";
 import type { Mission } from "@/crew/useMission";
 import { rerouteCount } from "@/store/emergencyStore";
 import { useIncidentStore } from "@/store/incidentStore";
 import { useSystemStore } from "@/store/systemStore";
 import { cn } from "@/utils/cn";
+
+/** A police or fire driver says the work at the scene is done: the unit is
+ *  free for calls again and drives back to a station. Nothing leaves a scene
+ *  on a timer. */
+export function LeaveSceneButton({ onLeft, className }: { onLeft?: () => void; className?: string }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const leave = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      // The gateway fills in the crew's own vehicle.
+      await postCommand({ event_type: "CrewLeaveScene", payload: { unit_id: "", requested_at: Date.now() } });
+      onLeft?.();
+    } catch (err) {
+      setError(err instanceof CommandError && err.status !== 0 ? err.detail : "No connection to dispatch. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className={className}>
+      <Button variant="primary" className="w-full" onClick={() => void leave()} disabled={busy}>
+        Leave the scene
+      </Button>
+      {error && (
+        <p role="alert" className="mt-2 text-[13px] text-status-critical">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
 
 function Fact({ label, value }: { label: string; value: string }) {
   return (
@@ -21,7 +56,7 @@ function Fact({ label, value }: { label: string; value: string }) {
 }
 
 /** No mission yet: the unit is available and the road is quiet or busy. */
-export function StandbyCard({ unitName, available = true, weatherAdvice }: { unitName: string | null; available?: boolean; weatherAdvice: string | null }) {
+export function StandbyCard({ unitName, available = true, onScene = false, weatherAdvice }: { unitName: string | null; available?: boolean; /** Still held at an incident that is not over. */ onScene?: boolean; weatherAdvice: string | null }) {
   const congestion = useSystemStore((s) => (s.summary.lastUpdate ? s.summary.congestion : null));
   const anomalies = useIncidentStore((s) => s.anomalies.filter((a) => a.status === "active").length);
   const mood = networkMood(congestion);
@@ -33,13 +68,20 @@ export function StandbyCard({ unitName, available = true, weatherAdvice }: { uni
         </span>
         <div className="min-w-0">
           <h2 id="standby-title" className="truncate text-[16px] font-semibold tracking-[-0.01em]">
-            {unitName ? (available ? `${unitName} is available` : `${unitName} is standing by`) : "Choose your vehicle"}
+            {unitName ? (onScene ? `${unitName} is on scene` : available ? `${unitName} is available` : `${unitName} is standing by`) : "Choose your vehicle"}
           </h2>
           <p className="mt-0.5 text-[13px] leading-snug text-muted-foreground">
-            {unitName ? (available ? "Available at the depot. No active corridor." : "Your route appears here when dispatch sends a call.") : "Pick the unit you are driving to follow its calls."}
+            {unitName
+              ? onScene
+                ? "Not available for new calls until you leave the scene."
+                : available
+                  ? "Available for calls. No active corridor."
+                  : "Your route appears here when dispatch sends a call."
+              : "Pick the unit you are driving to follow its calls."}
           </p>
         </div>
       </div>
+      {unitName && onScene && <LeaveSceneButton className="px-5 pb-4" />}
       {unitName && (
         <ul className="space-y-2.5 border-t border-border px-5 py-3.5 text-[13px]">
           <li className="flex items-center gap-2.5">
@@ -164,7 +206,10 @@ export function BriefingCard({
 }
 
 /** The run is over. */
-export function ArrivalCard({ mission, onDone }: { mission: Mission; onDone: () => void }) {
+/** The end of a leg. For an ambulance at the scene (`pickup`) the job is only
+ *  half done: the patient still goes to a hospital, so it says that instead
+ *  of offering to go back to standby. */
+export function ArrivalCard({ mission, onDone, pickup = false, held = false }: { mission: Mission; onDone: () => void; pickup?: boolean; /** A police or fire unit still held at this scene: the driver says when it leaves. */ held?: boolean }) {
   const cancelled = mission.request.state === "cancelled";
   const passed = mission.corridor?.passedIntersections.length ?? 0;
   const reroutes = rerouteCount(mission.request);
@@ -175,7 +220,7 @@ export function ArrivalCard({ mission, onDone }: { mission: Mission; onDone: () 
           {cancelled ? <MapPinned className="size-7" /> : <CheckCircle2 className="size-7" />}
         </span>
         <h2 id="arrival-title" className="mt-4 text-xl font-semibold tracking-[-0.01em]">
-          {cancelled ? "This call was stood down" : "You have arrived"}
+          {cancelled ? "This call was stood down" : pickup ? "You are at the scene" : "You have arrived"}
         </h2>
         <p className="mt-1 text-[13px] text-muted-foreground">{roadLabel(mission.request.destinationEdge)}</p>
         {!cancelled && (
@@ -185,9 +230,20 @@ export function ArrivalCard({ mission, onDone }: { mission: Mission; onDone: () 
             <Fact label="Re-routes" value={String(reroutes)} />
           </div>
         )}
-        <Button variant="primary" className="mt-5 w-full" onClick={onDone}>
-          Back to standby
-        </Button>
+        {pickup && !cancelled ? (
+          <p role="status" className="mt-5 text-[14px] text-muted-foreground">
+            Pick up the patient, then choose the hospital. Your route and green corridor start as soon as you do.
+          </p>
+        ) : held && !cancelled ? (
+          <>
+            <p className="mt-5 text-[14px] text-muted-foreground">You stay on this call until you say you are leaving.</p>
+            <LeaveSceneButton className="mt-3 w-full" onLeft={onDone} />
+          </>
+        ) : (
+          <Button variant="primary" className="mt-5 w-full" onClick={onDone}>
+            Back to standby
+          </Button>
+        )}
       </div>
     </Panel>
   );

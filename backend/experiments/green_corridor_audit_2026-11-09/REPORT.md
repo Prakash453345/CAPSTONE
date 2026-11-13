@@ -132,3 +132,21 @@ Heavy demand still gridlocks on this map (3 seeds, 279 teleports); not improved 
 - 31 % of signal movements still have no protected phase; those junctions are still skipped.
 - Re-run after the fixes covered the B test only (corridor arm, light and medium); D, E and F were not repeated end to end.
 - Pre-fix numbers are the first pass; I did not tune the new constants on a separate set of seeds, so 260 m and 60 s were chosen once and the same 9 seeds measured them.
+
+---
+
+# Correction, 12 Nov: the corridor is not better than reactive preemption
+
+The earlier "−6.6 % / −6.9 %" was against a fixed route with **no preemption**. It does not show the corridor beats reactive preemption, and the 14 Oct M7 tests (corridor ≈ reactive) still stand. Round 2 tests it directly (`TARGETS_2.md`, written first; held-out seeds 11–19, 9 seeds × 4 EVs per cell):
+
+| EV travel time vs reactive (hold the EV's phase once within 150 m) | light | medium |
+|---|---|---|
+| live corridor after my fix (260 m lookahead) | −1.6 % [−4.0, +0.6] | −3.3 % [−6.5, 0.0] (censored −3.7 [−7.1, −0.6]) |
+| queue-aware variant (150 m + queue widening) | 0.0 % | +0.1 % |
+
+- After my fix the "corridor" is reactive preemption with a longer lookahead. Its measured edge over reactive is that extra distance (stop-at-signal time at medium 287 s vs 779 s), not any planning. Reactive at 150 m is the weaker field setting; a corridor plan adds nothing measurable.
+- Queue-aware widening did nothing: with 12 m/s and 2 s per queued car the widened lookahead only exceeds 260 m for queues of 9+ cars, which the audit trips rarely meet. Removed from the code (not validated, so not shipped).
+- Dev-seed check of other lookaheads (seeds 1–9): 400 m is +6.3 % worse at medium, −1.7 % (n.s.) at light. 260 m stays.
+- No conflicting greens, skipped yellows or collisions in any arm. Longest red about equal (50–56 s mean per run).
+
+What is defensible: safe preemption (corridor or reactive) saves about 150 s per EV vs none (14 Oct); the live path now preempts with a 260 m lookahead; the corridor planner itself has no demonstrated advantage over it. Don't claim one.

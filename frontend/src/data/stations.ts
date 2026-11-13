@@ -6,7 +6,7 @@ import depots from "../../../backend/data/scenarios/networks/vijayawada/responde
 import { LIVE_CITY } from "@/data/city";
 import { roadEdges } from "@/data/network";
 
-export type StationKind = "police" | "fire_station";
+export type StationKind = "police" | "fire_station" | "traffic_police";
 
 export interface Station {
   id: string;
@@ -24,6 +24,7 @@ export interface Station {
 export const STATION_LABEL: Record<StationKind, string> = {
   police: "Police station",
   fire_station: "Fire station",
+  traffic_police: "Traffic police station",
 };
 
 const M_PER_DEG_LAT = 111_320;
@@ -53,7 +54,7 @@ export function nearestRoadPoint(lat: number, lon: number): { at: [number, numbe
 }
 
 export const stations: Station[] = (depots.depots as Array<Omit<Station, "at" | "offRoadM"> & { dispatch?: boolean }>)
-  .filter((d) => (d.kind === "police" || d.kind === "fire_station") && d.dispatch !== false)
+  .filter((d) => (d.kind === "police" || d.kind === "fire_station" || d.kind === "traffic_police") && d.dispatch !== false)
   .map(({ id, name, kind, lat, lon }) => {
     const road = nearestRoadPoint(lat, lon);
     return { id, name, kind, lat, lon, at: road?.at ?? [lon, lat], offRoadM: road ? Math.round(road.distM) : 0 };

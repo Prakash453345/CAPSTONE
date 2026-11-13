@@ -67,6 +67,10 @@ class RoadGraph:
     # True when the network drives on the left (SUMO `lefthand="true"`, India).
     # Decides which turn crosses the opposing stream.
     lefthand: bool = False
+    # {tl_id: {"L2": {"L3"}}} -- the other signal links that leave the same
+    # approach lane. A preemption that greens the EV's link but not these
+    # leaves the car in front of the EV waiting at its own red (12 Nov 2026).
+    link_lane_mates: Mapping[str, Mapping[str, frozenset[str]]] = field(default_factory=dict)
 
     # ---- queries -----------------------------------------------------
 
@@ -105,6 +109,7 @@ class RoadGraph:
             signalised_junctions=self.signalised_junctions,
             link_movements=self.link_movements,
             lefthand=self.lefthand,
+            link_lane_mates=self.link_lane_mates,
         )
 
     def subgraph(self, keep: Iterable[str]) -> RoadGraph:
@@ -182,6 +187,7 @@ class RoadGraph:
         # pair with two through lanes contributes two link indices to the same
         # movement set).
         link_movements: dict[str, dict[tuple[str, str], set[str]]] = {}
+        by_lane: dict[str, dict[tuple[str, str], set[str]]] = {}
         for c in root.findall("connection"):
             tl = c.get("tl")
             link_index = c.get("linkIndex")
@@ -189,6 +195,14 @@ class RoadGraph:
             if not tl or link_index is None or not a or not b:
                 continue
             link_movements.setdefault(tl, {}).setdefault((a, b), set()).add(f"L{link_index}")
+            by_lane.setdefault(tl, {}).setdefault((a, c.get("fromLane", "")), set()).add(
+                f"L{link_index}"
+            )
+        lane_mates: dict[str, dict[str, frozenset[str]]] = {}
+        for tl, lanes in by_lane.items():
+            for links in lanes.values():
+                for link in links:
+                    lane_mates.setdefault(tl, {})[link] = frozenset(links - {link})
 
         return cls(
             edges=edges,
@@ -199,6 +213,7 @@ class RoadGraph:
                 for tl, pairs in link_movements.items()
             },
             lefthand=root.get("lefthand", "false").lower() == "true",
+            link_lane_mates=lane_mates,
         )
 
 

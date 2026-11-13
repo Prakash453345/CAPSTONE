@@ -54,7 +54,7 @@ const OFFER_SECONDS = 25;
  *  while driving -- the stand-in for a phone's GPS. */
 export interface FleetUnit {
   unitId: string;
-  kind: "ambulance" | "police" | "fire_truck" | string;
+  kind: "ambulance" | "police" | "fire_truck" | "traffic_police" | string;
   callSign: string;
   crew: string | null;
   onDuty: boolean;

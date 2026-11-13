@@ -23,6 +23,7 @@ export const EMERGENCY_ICON_ID: Record<EmergencyVehicleKind, string> = {
   ambulance: "itms-em-ambulance",
   fire_truck: "itms-em-fire",
   police: "itms-em-police",
+  traffic_police: "itms-em-traffic-police",
 };
 
 /**
@@ -256,7 +257,7 @@ function drawEmergency(
     ctx.fillStyle = "#ffcc66";
     ctx.fillRect(30, 9, 6, 2.5);
     ctx.fillRect(44, 9, 6, 2.5);
-  } else if (kind === "police") {
+  } else if (kind === "police" || kind === "traffic_police") {
     paintBody(ctx, 26, 12, 28, 56, 8, color);
     windshield(ctx, 30, 18, 20, 12, 3);
     roundRect(ctx, 30, 44, 20, 12, 3);

@@ -1,18 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import {
-  AlertTriangle,
-  Ambulance,
-  Check,
-  ChevronRight,
-  Flame,
-  Hospital,
-  Loader2,
-  RefreshCw,
-  Route as RouteIcon,
-  Send,
-  Shield,
-  X,
-} from "lucide-react";
+import { AlertTriangle, Ambulance, Check, ChevronRight, Flame, Hospital, Loader2, RefreshCw, Route as RouteIcon, Send, Shield, TrafficCone, X } from "lucide-react";
 import { cn } from "@/utils/cn";
 import { isCorridorAsk } from "@/crew/corridorAsk";
 import { CommandError, postCommand } from "@/services/traffic/commands";
@@ -66,23 +53,26 @@ const KIND_EVENT: Record<Kind, string> = {
   ambulance: "AMBULANCE",
   fire_truck: "FIRE_TRUCK",
   police: "POLICE",
+  traffic_police: "TRAFFIC_POLICE",
 };
 
 const KIND_ICON: Record<Kind, React.ReactNode> = {
   ambulance: <Ambulance />,
   police: <Shield />,
+  traffic_police: <TrafficCone />,
   fire_truck: <Flame />,
 };
 
 const KIND_NOUN: Record<Kind, string> = {
   ambulance: "ambulance",
   police: "police unit",
+  traffic_police: "traffic police unit",
   fire_truck: "fire engine",
 };
 
 function kindOf(raw: string): Kind {
   const k = raw.toLowerCase();
-  return k === "police" || k === "fire_truck" ? k : "ambulance";
+  return k === "police" || k === "fire_truck" || k === "traffic_police" ? k : "ambulance";
 }
 
 function errorText(err: unknown, fallback: string): string {

@@ -1,0 +1,836 @@
+{
+ "arm": "corridor@base_lead_s=15",
+ "seed": 101,
+ "demand": "medium",
+ "summary": {
+  "ev_duration_s": 992.0,
+  "ev_time_loss_s": 91.09,
+  "ev_waiting_time_s": 7.0,
+  "ev_stops": 3,
+  "n_ev_completed": 4,
+  "person_delay_s": 49967.539,
+  "interlock_violations": 0
+ },
+ "corridor_stats": {
+  "reports": 992,
+  "unauthorized": 0,
+  "reservations_granted": 24,
+  "denied_by_interlock": 0,
+  "coalesced": 0,
+  "arbitration_conflicts": 0,
+  "preempted_s": 269.0,
+  "release_passed": 24.0,
+  "release_route_changed": 0.0,
+  "release_stale_report": 0.0,
+  "release_max_dwell": 0.0,
+  "release_budget": 0.0,
+  "release_max_wait_headroom": 0.0,
+  "release_superseded": 0.0,
+  "defer_min_green": 40.0,
+  "defer_pedestrian": 0.0,
+  "defer_no_protected_phase": 0.0,
+  "defer_faulted_phase": 0.0,
+  "defer_max_wait_headroom": 0.0,
+  "defer_budget": 0.0
+ },
+ "stops": [
+  {
+   "t": 1336.0,
+   "tls": null,
+   "dist": null,
+   "light": null,
+   "ahead_on_lane": 0,
+   "leader_gap": 43.3,
+   "edge": ":7871074777_4",
+   "lane": ":7871074777_4_0",
+   "leader": {
+    "id": "veh527",
+    "speed": 11.45,
+    "edge": "343269496",
+    "next_tls": "2833253632",
+    "light": "G",
+    "dist": 379.3,
+    "route_next": [
+     "343269496",
+     "350502993#8"
+    ]
+   },
+   "head": {
+    "id": "EV2",
+    "speed": 0.0,
+    "light": null,
+    "to_edge": "343269496",
+    "to_edge_halting": 0,
+    "to_edge_occ": 0.0
+   },
+   "ev_to_edge": "343269496",
+   "dur": 4.0
+  },
+  {
+   "t": 1686.0,
+   "tls": "2833253632",
+   "dist": 5.7,
+   "light": "r",
+   "ahead_on_lane": 1,
+   "leader_gap": 0.0,
+   "edge": "350502993#7",
+   "lane": "350502993#7_0",
+   "leader": {
+    "id": "veh623",
+    "speed": 0.0,
+    "edge": "350502993#7",
+    "next_tls": "2833253632",
+    "light": "r",
+    "dist": 1.0,
+    "route_next": [
+     "350502993#7",
+     "350502993#8"
+    ]
+   },
+   "head": {
+    "id": "veh623",
+    "speed": 0.0,
+    "light": "r",
+    "to_edge": "350502993#8",
+    "to_edge_halting": 0,
+    "to_edge_occ": 0.0
+   },
+   "ev_to_edge": "-343269496",
+   "reserved_for_ev": true,
+   "jp_state": "entry_clear",
+   "tracked": true,
+   "defers": {
+    "min_green": 7
+   },
+   "dur": 2.0
+  },
+  {
+   "t": 1721.0,
+   "tls": null,
+   "dist": null,
+   "light": null,
+   "ahead_on_lane": 0,
+   "leader_gap": 0.1,
+   "edge": ":7871074777_4",
+   "lane": ":7871074777_4_0",
+   "leader": {
+    "id": "veh683",
+    "speed": 7.62,
+    "edge": ":7871074777_0",
+    "next_tls": "2833253632",
+    "light": "r",
+    "dist": 425.9,
+    "route_next": [
+     "843775117#0",
+     "343269496"
+    ]
+   },
+   "head": {
+    "id": "EV3",
+    "speed": 0.0,
+    "light": null,
+    "to_edge": "343269496",
+    "to_edge_halting": 0,
+    "to_edge_occ": 0.0
+   },
+   "ev_to_edge": "343269496",
+   "dur": 2.0
+  }
+ ],
+ "claims": [
+  {
+   "ev": "EV0",
+   "tls": "cluster_1880441740_4393296791",
+   "granted_s": 308.0,
+   "dist_at_grant": 203.97587999999996,
+   "speed_at_grant": 15.119265,
+   "n": 1,
+   "released_s": 324.0,
+   "states": [
+    [
+     309.0,
+     "dwell"
+    ]
+   ],
+   "release_counts": {
+    "passed": 1
+   },
+   "crossed_s": 323.0
+  },
+  {
+   "ev": "EV0",
+   "tls": "cluster_1880441541_4393295474",
+   "granted_s": 349.0,
+   "dist_at_grant": 200.26601500000004,
+   "speed_at_grant": 15.119265,
+   "n": 1,
+   "released_s": 365.0,
+   "states": [
+    [
+     350.0,
+     "entry_hold"
+    ],
+    [
+     354.0,
+     "entry_clear"
+    ],
+    [
+     361.0,
+     "dwell"
+    ]
+   ],
+   "release_counts": {
+    "passed": 1
+   },
+   "crossed_s": 364.0
+  },
+  {
+   "ev": "EV0",
+   "tls": "cluster_1880441532_4393295467_6357870905_6357870906",
+   "granted_s": 365.0,
+   "dist_at_grant": 201.71737148674023,
+   "speed_at_grant": 15.119265,
+   "n": 1,
+   "released_s": 381.0,
+   "states": [
+    [
+     366.0,
+     "entry_hold"
+    ],
+    [
+     368.0,
+     "entry_clear"
+    ],
+    [
+     375.0,
+     "dwell"
+    ]
+   ],
+   "release_counts": {
+    "passed": 1
+   },
+   "crossed_s": 380.0
+  },
+  {
+   "ev": "EV0",
+   "tls": "cluster_11608007559_1880441514_4393295460_6354264758",
+   "granted_s": 389.0,
+   "dist_at_grant": 203.0877384221133,
+   "speed_at_grant": 15.119265,
+   "n": 1,
+   "released_s": 405.0,
+   "states": [
+    [
+     390.0,
+     "dwell"
+    ]
+   ],
+   "release_counts": {
+    "passed": 1
+   },
+   "crossed_s": 404.0
+  },
+  {
+   "ev": "EV0",
+   "tls": "1880441505",
+   "granted_s": 418.0,
+   "dist_at_grant": 197.60905342211325,
+   "speed_at_grant": 15.119265,
+   "n": 1,
+   "released_s": 434.0,
+   "states": [
+    [
+     419.0,
+     "dwell"
+    ]
+   ],
+   "release_counts": {
+    "passed": 1
+   },
+   "crossed_s": 433.0
+  },
+  {
+   "ev": "EV0",
+   "tls": "2833253632",
+   "granted_s": 467.0,
+   "dist_at_grant": 210.51506842211347,
+   "speed_at_grant": 15.119265,
+   "n": 1,
+   "released_s": 487.0,
+   "states": [
+    [
+     468.0,
+     "entry_clear"
+    ],
+    [
+     475.0,
+     "dwell"
+    ]
+   ],
+   "release_counts": {
+    "passed": 1
+   },
+   "crossed_s": 486.0
+  },
+  {
+   "ev": "EV1",
+   "tls": "cluster_1880441740_4393296791",
+   "granted_s": 712.0,
+   "dist_at_grant": 176.18519480929533,
+   "speed_at_grant": 14.016399000000002,
+   "n": 1,
+   "released_s": 727.0,
+   "states": [
+    [
+     713.0,
+     "entry_clear"
+    ],
+    [
+     720.0,
+     "dwell"
+    ]
+   ],
+   "release_counts": {
+    "passed": 2
+   },
+   "crossed_s": 726.0
+  },
+  {
+   "ev": "EV1",
+   "tls": "cluster_1880441541_4393295474",
+   "granted_s": 755.0,
+   "dist_at_grant": 189.66003780929555,
+   "speed_at_grant": 14.016399000000002,
+   "n": 1,
+   "released_s": 771.0,
+   "states": [
+    [
+     756.0,
+     "entry_clear"
+    ],
+    [
+     763.0,
+     "dwell"
+    ]
+   ],
+   "release_counts": {
+    "passed": 2
+   },
+   "crossed_s": 770.0
+  },
+  {
+   "ev": "EV1",
+   "tls": "cluster_1880441532_4393295467_6357870905_6357870906",
+   "granted_s": 772.0,
+   "dist_at_grant": 194.12125480929586,
+   "speed_at_grant": 14.016399000000002,
+   "n": 1,
+   "released_s": 789.0,
+   "states": [
+    [
+     773.0,
+     "entry_hold"
+    ],
+    [
+     779.0,
+     "entry_clear"
+    ],
+    [
+     786.0,
+     "dwell"
+    ]
+   ],
+   "release_counts": {
+    "passed": 2
+   },
+   "crossed_s": 788.0
+  },
+  {
+   "ev": "EV1",
+   "tls": "cluster_11608007559_1880441514_4393295460_6354264758",
+   "granted_s": 799.0,
+   "dist_at_grant": 183.62560299931013,
+   "speed_at_grant": 14.016399000000002,
+   "n": 1,
+   "released_s": 815.0,
+   "states": [
+    [
+     800.0,
+     "dwell"
+    ]
+   ],
+   "release_counts": {
+    "passed": 2
+   },
+   "crossed_s": 814.0
+  },
+  {
+   "ev": "EV1",
+   "tls": "1880441505",
+   "granted_s": 831.0,
+   "dist_at_grant": 168.08083499931016,
+   "speed_at_grant": 14.016399000000002,
+   "n": 1,
+   "released_s": 845.0,
+   "states": [
+    [
+     832.0,
+     "dwell"
+    ]
+   ],
+   "release_counts": {
+    "passed": 2
+   },
+   "crossed_s": 844.0
+  },
+  {
+   "ev": "EV1",
+   "tls": "2833253632",
+   "granted_s": 883.0,
+   "dist_at_grant": 192.97808699931068,
+   "speed_at_grant": 14.016399000000002,
+   "n": 1,
+   "released_s": 903.0,
+   "states": [
+    [
+     884.0,
+     "entry_clear"
+    ],
+    [
+     891.0,
+     "dwell"
+    ]
+   ],
+   "release_counts": {
+    "passed": 2
+   },
+   "crossed_s": 902.0
+  },
+  {
+   "ev": "EV2",
+   "tls": "cluster_1880441740_4393296791",
+   "granted_s": 1106.0,
+   "dist_at_grant": 225.397038,
+   "speed_at_grant": 16.588827,
+   "n": 1,
+   "released_s": 1122.0,
+   "states": [
+    [
+     1107.0,
+     "dwell"
+    ]
+   ],
+   "release_counts": {
+    "passed": 3
+   },
+   "crossed_s": 1121.0
+  },
+  {
+   "ev": "EV2",
+   "tls": "cluster_1880441541_4393295474",
+   "granted_s": 1146.0,
+   "dist_at_grant": 178.02395800000016,
+   "speed_at_grant": 16.588827,
+   "n": 1,
+   "released_s": 1161.0,
+   "states": [
+    [
+     1147.0,
+     "entry_hold"
+    ],
+    [
+     1154.0,
+     "entry_clear"
+    ]
+   ],
+   "release_counts": {
+    "passed": 3
+   },
+   "crossed_s": 1160.0
+  },
+  {
+   "ev": "EV2",
+   "tls": "cluster_1880441532_4393295467_6357870905_6357870906",
+   "granted_s": 1164.0,
+   "dist_at_grant": 161.76656871955052,
+   "speed_at_grant": 16.588827,
+   "n": 1,
+   "released_s": 1177.0,
+   "states": [
+    [
+     1165.0,
+     "entry_hold"
+    ],
+    [
+     1167.0,
+     "entry_clear"
+    ],
+    [
+     1174.0,
+     "dwell"
+    ]
+   ],
+   "release_counts": {
+    "passed": 3
+   },
+   "crossed_s": 1176.0
+  },
+  {
+   "ev": "EV2",
+   "tls": "cluster_11608007559_1880441514_4393295460_6354264758",
+   "granted_s": 1188.0,
+   "dist_at_grant": 187.5667773351621,
+   "speed_at_grant": 14.40432210706085,
+   "n": 1,
+   "released_s": 1204.0,
+   "states": [
+    [
+     1189.0,
+     "entry_hold"
+    ],
+    [
+     1195.0,
+     "entry_clear"
+    ],
+    [
+     1202.0,
+     "dwell"
+    ]
+   ],
+   "release_counts": {
+    "passed": 3
+   },
+   "crossed_s": 1203.0
+  },
+  {
+   "ev": "EV2",
+   "tls": "1880441505",
+   "granted_s": 1214.0,
+   "dist_at_grant": 226.04351507768283,
+   "speed_at_grant": 16.588827,
+   "n": 1,
+   "released_s": 1230.0,
+   "states": [
+    [
+     1215.0,
+     "entry_clear"
+    ],
+    [
+     1222.0,
+     "dwell"
+    ]
+   ],
+   "release_counts": {
+    "passed": 3
+   },
+   "crossed_s": 1229.0
+  },
+  {
+   "ev": "EV2",
+   "tls": "2833253632",
+   "granted_s": 1277.0,
+   "dist_at_grant": 148.99821218850695,
+   "speed_at_grant": 10.541819340535897,
+   "n": 1,
+   "released_s": 1294.0,
+   "states": [
+    [
+     1278.0,
+     "entry_clear"
+    ],
+    [
+     1285.0,
+     "dwell"
+    ]
+   ],
+   "release_counts": {
+    "passed": 3
+   },
+   "crossed_s": 1293.0
+  },
+  {
+   "ev": "EV3",
+   "tls": "cluster_1880441740_4393296791",
+   "granted_s": 1508.0,
+   "dist_at_grant": 204.67593599999998,
+   "speed_at_grant": 15.031758000000002,
+   "n": 1,
+   "released_s": 1524.0,
+   "states": [
+    [
+     1509.0,
+     "entry_hold"
+    ],
+    [
+     1514.0,
+     "entry_clear"
+    ],
+    [
+     1521.0,
+     "dwell"
+    ]
+   ],
+   "release_counts": {
+    "passed": 4
+   },
+   "crossed_s": 1523.0
+  },
+  {
+   "ev": "EV3",
+   "tls": "cluster_1880441541_4393295474",
+   "granted_s": 1549.0,
+   "dist_at_grant": 204.5538579999997,
+   "speed_at_grant": 15.031758000000002,
+   "n": 1,
+   "released_s": 1565.0,
+   "states": [
+    [
+     1550.0,
+     "dwell"
+    ]
+   ],
+   "release_counts": {
+    "passed": 4
+   },
+   "crossed_s": 1564.0
+  },
+  {
+   "ev": "EV3",
+   "tls": "cluster_1880441532_4393295467_6357870905_6357870906",
+   "granted_s": 1565.0,
+   "dist_at_grant": 206.78572999999966,
+   "speed_at_grant": 15.031758000000002,
+   "n": 1,
+   "released_s": 1581.0,
+   "states": [
+    [
+     1566.0,
+     "dwell"
+    ]
+   ],
+   "release_counts": {
+    "passed": 4
+   },
+   "crossed_s": 1580.0
+  },
+  {
+   "ev": "EV3",
+   "tls": "cluster_11608007559_1880441514_4393295460_6354264758",
+   "granted_s": 1589.0,
+   "dist_at_grant": 208.94353799999962,
+   "speed_at_grant": 15.031758000000002,
+   "n": 1,
+   "released_s": 1606.0,
+   "states": [
+    [
+     1590.0,
+     "entry_hold"
+    ],
+    [
+     1591.0,
+     "entry_clear"
+    ],
+    [
+     1598.0,
+     "dwell"
+    ]
+   ],
+   "release_counts": {
+    "passed": 4
+   },
+   "crossed_s": 1605.0
+  },
+  {
+   "ev": "EV3",
+   "tls": "1880441505",
+   "granted_s": 1619.0,
+   "dist_at_grant": 207.34728324183348,
+   "speed_at_grant": 15.031758000000002,
+   "n": 1,
+   "released_s": 1635.0,
+   "states": [
+    [
+     1620.0,
+     "entry_clear"
+    ],
+    [
+     1627.0,
+     "dwell"
+    ]
+   ],
+   "release_counts": {
+    "passed": 4
+   },
+   "crossed_s": 1634.0
+  },
+  {
+   "ev": "EV3",
+   "tls": "2833253632",
+   "granted_s": 1673.0,
+   "dist_at_grant": 149.38235124183302,
+   "speed_at_grant": 15.031758000000002,
+   "n": 1,
+   "released_s": 1690.0,
+   "states": [
+    [
+     1674.0,
+     "entry_hold"
+    ],
+    [
+     1681.0,
+     "entry_clear"
+    ],
+    [
+     1688.0,
+     "dwell"
+    ]
+   ],
+   "release_counts": {
+    "passed": 4
+   },
+   "crossed_s": 1689.0
+  }
+ ],
+ "passes": [
+  {
+   "ev": "EV0",
+   "tls": "cluster_1880441740_4393296791",
+   "t": 323.0
+  },
+  {
+   "ev": "EV0",
+   "tls": "cluster_1880441541_4393295474",
+   "t": 364.0
+  },
+  {
+   "ev": "EV0",
+   "tls": "cluster_1880441532_4393295467_6357870905_6357870906",
+   "t": 380.0
+  },
+  {
+   "ev": "EV0",
+   "tls": "cluster_11608007559_1880441514_4393295460_6354264758",
+   "t": 404.0
+  },
+  {
+   "ev": "EV0",
+   "tls": "1880441505",
+   "t": 433.0
+  },
+  {
+   "ev": "EV0",
+   "tls": "2833253632",
+   "t": 486.0
+  },
+  {
+   "ev": "EV0",
+   "tls": "7871074777",
+   "t": 522.0
+  },
+  {
+   "ev": "EV1",
+   "tls": "cluster_1880441740_4393296791",
+   "t": 726.0
+  },
+  {
+   "ev": "EV1",
+   "tls": "cluster_1880441541_4393295474",
+   "t": 770.0
+  },
+  {
+   "ev": "EV1",
+   "tls": "cluster_1880441532_4393295467_6357870905_6357870906",
+   "t": 788.0
+  },
+  {
+   "ev": "EV1",
+   "tls": "cluster_11608007559_1880441514_4393295460_6354264758",
+   "t": 814.0
+  },
+  {
+   "ev": "EV1",
+   "tls": "1880441505",
+   "t": 844.0
+  },
+  {
+   "ev": "EV1",
+   "tls": "2833253632",
+   "t": 902.0
+  },
+  {
+   "ev": "EV1",
+   "tls": "7871074777",
+   "t": 945.0
+  },
+  {
+   "ev": "EV2",
+   "tls": "cluster_1880441740_4393296791",
+   "t": 1121.0
+  },
+  {
+   "ev": "EV2",
+   "tls": "cluster_1880441541_4393295474",
+   "t": 1160.0
+  },
+  {
+   "ev": "EV2",
+   "tls": "cluster_1880441532_4393295467_6357870905_6357870906",
+   "t": 1176.0
+  },
+  {
+   "ev": "EV2",
+   "tls": "cluster_11608007559_1880441514_4393295460_6354264758",
+   "t": 1203.0
+  },
+  {
+   "ev": "EV2",
+   "tls": "1880441505",
+   "t": 1229.0
+  },
+  {
+   "ev": "EV2",
+   "tls": "2833253632",
+   "t": 1293.0
+  },
+  {
+   "ev": "EV2",
+   "tls": "7871074777",
+   "t": 1334.0
+  },
+  {
+   "ev": "EV3",
+   "tls": "cluster_1880441740_4393296791",
+   "t": 1523.0
+  },
+  {
+   "ev": "EV3",
+   "tls": "cluster_1880441541_4393295474",
+   "t": 1564.0
+  },
+  {
+   "ev": "EV3",
+   "tls": "cluster_1880441532_4393295467_6357870905_6357870906",
+   "t": 1580.0
+  },
+  {
+   "ev": "EV3",
+   "tls": "cluster_11608007559_1880441514_4393295460_6354264758",
+   "t": 1605.0
+  },
+  {
+   "ev": "EV3",
+   "tls": "1880441505",
+   "t": 1634.0
+  },
+  {
+   "ev": "EV3",
+   "tls": "2833253632",
+   "t": 1689.0
+  },
+  {
+   "ev": "EV3",
+   "tls": "7871074777",
+   "t": 1720.0
+  }
+ ]
+}

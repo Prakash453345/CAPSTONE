@@ -285,7 +285,11 @@ class _Injector:
             if vid in self._added or now_s < depart:
                 continue
             self._added.add(vid)
-            traci.vehicle.add(vid, "ev_corridor", typeID=EV_VTYPE, departSpeed="max")
+            # The trip ends at the hospital, not at the far end of its road
+            # (12 Nov 2026: the default end of edge 343269496 is 212 m past
+            # the trauma centre, and EVs queued there for the next signal).
+            traci.vehicle.add(vid, "ev_corridor", typeID=EV_VTYPE, departSpeed="max",
+                              arrivalPos=str(self.decision.facility.edge_offset_m))
             # SUMO's emergency vClass may pass red on its own if allowed;
             # this build measures what the *signals* do, so that override
             # stays off and the emergency vehicle obeys every indication.
@@ -298,7 +302,18 @@ def ev_vehicle_ids() -> frozenset[str]:
     return frozenset(f"{_EV_PREFIX}{i}" for i in range(len(EV_DEPARTURES_S)))
 
 
-def build_arm(name: str) -> _Arm:
+def lane_mates() -> dict[str, dict[str, frozenset[str]]]:
+    """Junction -> movement -> the other movements leaving the same lane."""
+    out: dict[str, dict[str, frozenset[str]]] = {}
+    for tls, links in link_to_lane_map(NET_PATH).items():
+        by_lane: dict[str, set[str]] = {}
+        for movement, lane in links.items():
+            by_lane.setdefault(lane, set()).add(movement)
+        out[tls] = {m: frozenset(by_lane[lane] - {m}) for m, lane in links.items()}
+    return out
+
+
+def build_arm(name: str, corridor_cfg: CorridorConfig | None = None) -> _Arm:
     """Five arms, three of which exist only to attribute a loss.
 
     The first gate run produced a clear negative result: the full
@@ -318,8 +333,24 @@ def build_arm(name: str) -> _Arm:
     if name == "none":
         return _Arm("none", None, zeroed)
     authorized = dict.fromkeys(ev_vehicle_ids(), PreemptionClass.FIRE)
+    # Both preempting arms choose the phase that clears the EV's whole lane
+    # (12 Nov 2026 fix). `<arm>_ringorder` keeps the old first-in-ring-order
+    # choice for comparison with earlier results.
+    mates = None
+    if name.endswith("_ringorder"):
+        name = name[: -len("_ringorder")]
+    else:
+        mates = lane_mates()
+    # `<arm>_yield`: also give priority (not preemption) at junctions where
+    # the EV's movement is only permissive (`CorridorConfig.yield_priority`).
+    yield_cfg = None
+    if name.endswith("_yield"):
+        name = name[: -len("_yield")]
+        yield_cfg = replace(corridor_cfg or CorridorConfig(), yield_priority=True)
+        corridor_cfg = yield_cfg
     if name == "reactive":
-        return _Arm("reactive", ReactivePreemption(authorized=authorized), zeroed)
+        return _Arm("reactive", ReactivePreemption(yield_cfg, authorized=authorized,
+                                                   lane_mates=mates), zeroed)
     configs = {
         # Preemption policy differs from `reactive`, pressure function
         # does not: isolates the lead-time trigger on its own.
@@ -332,7 +363,8 @@ def build_arm(name: str) -> _Arm:
     if name in configs:
         return _Arm(
             name,
-            CorridorEngine(CorridorConfig(), authorized=authorized),
+            CorridorEngine(corridor_cfg or CorridorConfig(), authorized=authorized,
+                           lane_mates=mates),
             configs[name],
         )
     raise ValueError(f"unknown arm {name!r}")
@@ -351,7 +383,8 @@ def run_one(arm_name: str, demand_level: str, seed: int, inputs=None) -> dict:
 
     reporter = None
     if arm.corridor is not None:
-        index = build_movement_index(link_lanes, receiving_lanes, configs)
+        index = build_movement_index(link_lanes, receiving_lanes, configs,
+                                     include_yield=arm.corridor.cfg.yield_priority)
         reporter = EmergencyVehicleReporter(arm.corridor, index, ev_vehicle_ids())
     injector = _Injector(reporter)
 

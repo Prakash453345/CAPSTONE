@@ -12,7 +12,7 @@ export type Role = "operator" | "responder";
 
 export const parseRole = (raw: unknown): Role => (raw === "responder" ? "responder" : "operator");
 
-const UNIT_KINDS: readonly EmergencyVehicleKind[] = ["ambulance", "police", "fire_truck"];
+const UNIT_KINDS: readonly EmergencyVehicleKind[] = ["ambulance", "police", "fire_truck", "traffic_police"];
 
 /** What a crew account drives, as the server reports it; null when it says nothing usable. */
 export const parseUnitKind = (raw: unknown): EmergencyVehicleKind | null =>

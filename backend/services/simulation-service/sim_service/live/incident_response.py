@@ -69,6 +69,8 @@ from itms_domain.scenario import current as _current_scenario  # noqa: E402
 _SCEN = _current_scenario().directory
 FACILITIES_PATH = _SCEN / "facilities.json"
 DEPOTS_PATH = _SCEN / "responder_depots.json"
+# Which base each crew vehicle belongs to: {unit_id: facility or depot id}.
+CREW_HOMES_PATH = _SCEN / "crew_homes.json"
 
 _KIND_BY_NAME = {k.name: k for k in EmergencyKind}
 
@@ -85,11 +87,14 @@ _RESPONSE_MAP: dict[AnomalyType, tuple[EmergencyKind, ...]] = {
     AnomalyType.ACCIDENT: (
         EmergencyKind.POLICE, EmergencyKind.AMBULANCE, EmergencyKind.FIRE_TRUCK,
     ),
-    AnomalyType.VEHICLE_BREAKDOWN: (EmergencyKind.POLICE,),
-    AnomalyType.STALLED_VEHICLE: (EmergencyKind.POLICE,),
-    AnomalyType.LANE_BLOCKAGE: (EmergencyKind.POLICE,),
-    AnomalyType.ROAD_OBSTRUCTION: (EmergencyKind.POLICE,),
-    AnomalyType.HEAVY_CONGESTION: (),
+    # What is on the road, not a crime: traffic police clear it and direct
+    # traffic around it. Regular police go where there may be an offence or
+    # people to protect (an accident, a fire).
+    AnomalyType.VEHICLE_BREAKDOWN: (EmergencyKind.TRAFFIC_POLICE,),
+    AnomalyType.STALLED_VEHICLE: (EmergencyKind.TRAFFIC_POLICE,),
+    AnomalyType.LANE_BLOCKAGE: (EmergencyKind.TRAFFIC_POLICE,),
+    AnomalyType.ROAD_OBSTRUCTION: (EmergencyKind.TRAFFIC_POLICE,),
+    AnomalyType.HEAVY_CONGESTION: (EmergencyKind.TRAFFIC_POLICE,),
     AnomalyType.FIRE: (EmergencyKind.FIRE_TRUCK, EmergencyKind.POLICE, EmergencyKind.AMBULANCE),
     AnomalyType.UNKNOWN: (EmergencyKind.POLICE,),
 }
@@ -197,6 +202,20 @@ def load_police_depots(path: Path = DEPOTS_PATH) -> list[_Depot]:
     ]
 
 
+def load_traffic_police_depots(path: Path = DEPOTS_PATH) -> list[_Depot]:
+    """Traffic police stations (`kind: traffic_police` in responder_depots.json)."""
+    import json
+
+    if not path.exists():
+        return []
+    raw = json.loads(path.read_text())
+    return [
+        _Depot(depot_id=d["id"], name=d["name"], edge=d.get("edge", ""), lat=d["lat"], lon=d["lon"])
+        for d in raw["depots"]
+        if d["kind"] == "traffic_police"
+    ]
+
+
 def load_fire_depots(path: Path = DEPOTS_PATH) -> list[_Depot]:
     """Fire stations (`amenity=fire_station`). Only one is mapped near the
     district; the district network reaches it through the Gurunanak Colony
@@ -213,12 +232,30 @@ def load_fire_depots(path: Path = DEPOTS_PATH) -> list[_Depot]:
     ]
 
 
+def load_crew_homes(path: Path = CREW_HOMES_PATH) -> dict[str, str]:
+    """{unit_id: id of the hospital or station that vehicle is based at}.
+    Empty when the file is missing: units are then spread over the depots."""
+    import json
+
+    if not path.exists():
+        return {}
+    return {str(k): str(v) for k, v in json.loads(path.read_text()).get("homes", {}).items()}
+
+
 def load_hospital_depots(index: FacilityIndex) -> list[_Depot]:
     return [
         _Depot(depot_id=f.id, name=f.name, edge=f.edge, lat=f.lat, lon=f.lon)
         for f in index.all
         if f.kind == "hospital"
     ]
+
+
+def _traffic_bases(traffic_depots, police_depots) -> list[_Depot]:
+    if traffic_depots is not None:
+        return traffic_depots
+    if police_depots is not None:
+        return police_depots
+    return load_traffic_police_depots() or load_police_depots()
 
 
 def _fire_bases(fire_depots, police_depots) -> list[_Depot]:
@@ -244,6 +281,7 @@ class IncidentResponseOrchestrator:
         facility_index: FacilityIndex | None = None,
         police_depots: list[_Depot] | None = None,
         fire_depots: list[_Depot] | None = None,
+        traffic_depots: list[_Depot] | None = None,
         crew_dispatcher=None,
     ):
         self.anomalies = anomalies
@@ -281,6 +319,13 @@ class IncidentResponseOrchestrator:
             EmergencyKind.FIRE_TRUCK: [
                 self._unit(f"unit-fire-{i}", EmergencyKind.FIRE_TRUCK, d)
                 for i, d in enumerate(_fire_bases(fire_depots, police_depots))
+            ],
+            # Traffic police stations; with none known (or only police depots
+            # named) they share the police stations, so a breakdown always has
+            # someone to send.
+            EmergencyKind.TRAFFIC_POLICE: [
+                self._unit(f"unit-traffic-{i}", EmergencyKind.TRAFFIC_POLICE, d)
+                for i, d in enumerate(_traffic_bases(traffic_depots, police_depots))
             ],
         }
         self._unit_by_vehicle_id: dict[str, _Unit] = {

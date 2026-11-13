@@ -46,6 +46,9 @@ export function CrewPage() {
   const setVoice = useCrewStore((s) => s.setVoice);
   const { request, mission, units } = useMission(unitId);
   const unitKind = useCrewStore((s) => s.fleet.find((u) => u.unitId === unitId)?.kind);
+  // Dispatch still counts the unit as on a job: a fire or police crew stays at
+  // its scene, busy, until the incident is over, though its trip there has ended.
+  const unitBusy = useCrewStore((s) => s.fleet.find((u) => u.unitId === unitId)?.busy === true);
   // Dispatch offering this crew a call. It is keyed on the unit the account is
   // bound to, so a driver only ever sees their own calls.
   const offer = useMyOffer(unitId);
@@ -110,7 +113,10 @@ export function CrewPage() {
   const name = unitId ? (units.find((u) => u.id === unitId)?.name ?? unitName(unitId)) : null;
   useCallAlerts({ unitName: name, request, offer, hospital });
   const finished = Boolean(mission && (mission.arrived || mission.request.state === "completed" || mission.request.state === "cancelled"));
-  const showArrival = finished && mission && dismissed !== mission.request.id;
+  // An ambulance at the scene still has the patient to deliver: it stays on
+  // the arrival card (it cannot be dismissed to standby) until the hospital leg starts.
+  const pickup = hospital?.state === "at_scene";
+  const showArrival = finished && mission && (pickup || dismissed !== mission.request.id);
   const stale = connection === "reconnecting" || connection === "offline";
 
   // Which set of cards is showing: changing it cross-fades them (opacity only,
@@ -124,13 +130,13 @@ export function CrewPage() {
     view = "standby";
     body = (
       <div className="space-y-3">
-        <StandbyCard unitName={name} available={units.find((u) => u.id === unitId)?.status !== "dispatched"} weatherAdvice={weather ? trafficAdvice(weather) : null} />
+        <StandbyCard unitName={name} available={!unitBusy && units.find((u) => u.id === unitId)?.status !== "dispatched"} onScene={unitBusy && !mission?.underway} weatherAdvice={weather ? trafficAdvice(weather) : null} />
         {canAskCorridor(unitKind) && <CorridorAskCard className="pointer-events-auto" />}
       </div>
     );
   } else if (showArrival) {
     view = "arrival";
-    body = <ArrivalCard mission={mission} onDone={() => setDismissed(mission.request.id)} />;
+    body = <ArrivalCard mission={mission} pickup={pickup} held={unitBusy && unitKind !== "ambulance" && mission.arrived} onDone={() => setDismissed(mission.request.id)} />;
   } else if (showDirections && mission.plan) {
     view = "directions";
     body = <DirectionsCard mission={mission} onClose={() => setShowDirections(false)} />;

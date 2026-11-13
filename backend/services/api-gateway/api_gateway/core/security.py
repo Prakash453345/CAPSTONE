@@ -26,7 +26,8 @@ from api_gateway.services.crew_ownership import CrewOwnership
 # a new route, ask an operator for a corridor. Everything else (incidents,
 # dispatch, approving a corridor) is operators'.
 CREW_COMMANDS = {
-    "CrewOfferResponse", "CrewHospitalChoice", "CrewCorridorRequest", "EmergencyCommand",
+    "CrewOfferResponse", "CrewHospitalChoice", "CrewCorridorRequest", "CrewLeaveScene",
+    "EmergencyCommand",
 }
 
 
@@ -97,7 +98,7 @@ def check_crew_command(
     unit = user.unit_id or ""
     if not unit:
         raise HTTPException(status_code=403, detail="This crew account has no vehicle.")
-    if cmd.event_type in ("CrewHospitalChoice", "CrewCorridorRequest"):
+    if cmd.event_type in ("CrewHospitalChoice", "CrewCorridorRequest", "CrewLeaveScene"):
         # A crew acts for its own vehicle only (a hospital for its ambulance, a
         # corridor for its car): whatever unit the payload names is replaced.
         cmd.payload["unit_id"] = unit

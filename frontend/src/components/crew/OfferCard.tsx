@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Ambulance, Flame, Loader2, ShieldAlert, X } from "lucide-react";
+import { Ambulance, Flame, Loader2, ShieldAlert, TrafficCone, X } from "lucide-react";
 import { CommandError, postCommand } from "@/services/traffic/commands";
 import { roadLabel } from "@/data/network";
 import { useCrewStore, type CrewOffer } from "@/store/crewStore";
@@ -24,12 +24,14 @@ const KIND_ICON: Record<string, typeof Ambulance> = {
   ambulance: Ambulance,
   fire_truck: Flame,
   police: ShieldAlert,
+  traffic_police: TrafficCone,
 };
 
 const KIND_LABEL: Record<string, string> = {
   ambulance: "Ambulance",
   fire_truck: "Fire",
   police: "Police",
+  traffic_police: "Traffic police",
 };
 
 function etaText(seconds: number): string {

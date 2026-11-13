@@ -3,10 +3,11 @@
     python -m api_gateway.services.users create <username> [--name "Display Name"]
         [--email you@example.org]
                                          [--role operator|responder] [--unit unit-police-0]
-                                         [--kind ambulance|police|fire_truck]
+                                         [--kind ambulance|police|fire_truck|traffic_police]
     python -m api_gateway.services.users set-role <username> operator|responder
     python -m api_gateway.services.users set-unit <username> <vehicle-id> [--kind <kind>]
-    python -m api_gateway.services.users set-kind <username> ambulance|police|fire_truck
+    python -m api_gateway.services.users set-kind <username>
+                                         ambulance|police|fire_truck|traffic_police
     python -m api_gateway.services.users passwd <username>
     python -m api_gateway.services.users set-email <username> <email>
     python -m api_gateway.services.users disable <username>
@@ -109,7 +110,7 @@ def main(argv: list[str] | None = None) -> None:
     create.add_argument(
         "--kind",
         default="",
-        help="what the crew drives: ambulance | police | fire_truck "
+        help="what the crew drives: ambulance | police | fire_truck | traffic_police "
         "(worked out from the vehicle id when it names one)",
     )
     create.add_argument("--stdin", action="store_true", help="read the password from stdin")
@@ -119,7 +120,9 @@ def main(argv: list[str] | None = None) -> None:
     setunit = sub.add_parser("set-unit", help="set the vehicle a crew account drives")
     setunit.add_argument("username")
     setunit.add_argument("unit")
-    setunit.add_argument("--kind", default="", help="ambulance | police | fire_truck")
+    setunit.add_argument(
+        "--kind", default="", help="ambulance | police | fire_truck | traffic_police"
+    )
     setkind = sub.add_parser("set-kind", help="set what a crew account drives")
     setkind.add_argument("username")
     setkind.add_argument("kind")
@@ -171,7 +174,8 @@ def main(argv: list[str] | None = None) -> None:
                 kind = _resolve_kind(args.kind, unit)
                 if args.role == "responder" and kind is None:
                     raise SystemExit(
-                        "error: say what this crew drives: --kind ambulance|police|fire_truck"
+                        "error: say what this crew drives: "
+                        "--kind ambulance|police|fire_truck|traffic_police"
                     )
                 password = _read_password(args.stdin)
                 try:

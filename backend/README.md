@@ -226,7 +226,7 @@ start-up (fine for local dev, not for anything else). Interactive API docs:
 http://localhost:8000/docs.
 
 **Video incident detection** needs the trained models in `data/models/`
-(not in git; ask the vision owner): `itms_six_aug_640.onnx` (vehicles),
+(not in git; ask the vision owner): `itms_six_fp32_640.onnx` (vehicles; v2, v3 is `itms_six_aug_640.onnx`),
 `itms_fire_640.pt` + `itms_fire_cls_112.onnx` (fire/smoke, needs the
 `[fire]` extra), `itms_accident_224.onnx` (accidents, from
 `ml/notebooks/m8_accident_step1_train.ipynb`). The worker

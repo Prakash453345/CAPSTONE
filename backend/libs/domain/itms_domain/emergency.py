@@ -30,6 +30,9 @@ class EmergencyKind(StrEnum):
     AMBULANCE = "ambulance"
     FIRE_TRUCK = "fire_truck"
     POLICE = "police"
+    # Traffic police: the unit for what is on the road rather than a crime --
+    # a breakdown, a blocked lane, an obstruction, a jam.
+    TRAFFIC_POLICE = "traffic_police"
 
 
 class EmergencyVehicleStatus(StrEnum):

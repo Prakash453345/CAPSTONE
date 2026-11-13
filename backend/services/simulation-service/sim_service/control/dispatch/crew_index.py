@@ -63,7 +63,7 @@ class Crew:
 
     crew_id: str
     kind: str
-    """`EmergencyKind.name`: "AMBULANCE", "POLICE" or "FIRE_TRUCK"."""
+    """`EmergencyKind.name`: "AMBULANCE", "POLICE", "FIRE_TRUCK" or "TRAFFIC_POLICE"."""
     lat: float
     lon: float
     available: bool = True

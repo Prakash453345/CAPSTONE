@@ -88,6 +88,7 @@ from sim_service.control.corridor.junction import (
     ReleaseReason,
     protected_phase_for,
     transfer_time,
+    yield_phase_for,
 )
 from sim_service.control.corridor.requests import (
     PreemptionClass,
@@ -186,6 +187,26 @@ class CorridorConfig:
     """Half-life of the speed EWMA the ETA is computed from. Short: this
     smooths sensor noise, it does not model the vehicle."""
 
+    yield_priority: bool = False
+    """Give a vehicle whose movement is only permissive at a junction that
+    movement's ordinary phase, with a flashing (yield) confirmation, instead
+    of leaving the junction to its normal cycle. Off: such junctions are
+    never claimed, as before. See `junction.yield_phase_for`."""
+
+    queue_range_m: float = 150.0
+    """A slow or stopped vehicle this close to the next junction on its
+    route is standing in that junction's queue, not stopped at a scene.
+    It may claim the junction (the queue in front of it only clears on a
+    green) and its track is kept for `queue_grace_s` instead of
+    `stopped_grace_s`. About 20 queued cars; under the 300 m the reactive
+    baseline uses for a moving vehicle."""
+
+    queue_grace_s: float = 45.0
+    """How long a vehicle standing in a junction's queue keeps its track.
+    Longer than `stopped_grace_s` because a queue takes a transfer plus a
+    discharge to clear, and still finite: a vehicle parked near a junction
+    with its emitter running must not hold the signal for good (E7/F9)."""
+
     rho_couple: float = 0.4
     """Receiving-link occupancy above which the link to the next junction
     is treated as needing to be cleared *before* the vehicle arrives, not
@@ -256,11 +277,31 @@ class _Track:
             return float("inf")
         return distance / speed
 
+    def queued_at(self, junction_id: str, cfg: CorridorConfig) -> bool:
+        """Slow or stopped within `queue_range_m` of `junction_id`, the next
+        junction on its route: held up by that junction's own queue."""
+        if self.smoothed_speed_mps >= cfg.stopped_speed_mps:
+            return False
+        if not self.report.route or self.report.route[0] != junction_id:
+            return False
+        distance = self.report.distance_to_m.get(junction_id)
+        return distance is not None and distance <= cfg.queue_range_m
+
     def stopped(self, now_s: float, cfg: CorridorConfig) -> bool:
-        return (
-            self.smoothed_speed_mps < cfg.stopped_speed_mps
-            and now_s - self.moving_since_s >= cfg.stopped_grace_s
+        if self.smoothed_speed_mps >= cfg.stopped_speed_mps:
+            return False
+        # A vehicle in the queue of its next junction gets the longer grace.
+        # With the short one its track was dropped after 8 s at a red and
+        # the junction went back to its normal cycle with the vehicle still
+        # waiting (measured in a unit run: held 20 s, then released as
+        # `stale_report` and never claimed again).
+        nxt = self.report.route[0] if self.report.route else None
+        grace = (
+            cfg.queue_grace_s
+            if nxt is not None and self.queued_at(nxt, cfg)
+            else cfg.stopped_grace_s
         )
+        return now_s - self.moving_since_s >= grace
 
     def accepted(self, now_s: float, cfg: CorridorConfig) -> bool:
         return now_s - self.first_seen_s >= cfg.acceptance_dwell_s
@@ -314,8 +355,13 @@ class CorridorEngine:
         *,
         authorized: Mapping[str, PreemptionClass] | None = None,
         debt_half_life_s: float = 120.0,
+        lane_mates: Mapping[str, Mapping[str, frozenset[str]]] | None = None,
     ) -> None:
         self.cfg = cfg or CorridorConfig()
+        self._lane_mates = lane_mates or {}
+        """Junction -> movement -> the other movements leaving the same
+        lane (see `protected_phase_for`). Empty: phase choice by ring order
+        alone, as before."""
         self._authorized = dict(authorized or {})
         """Vehicle id -> class. The engine's answer to E13.
 
@@ -346,6 +392,7 @@ class CorridorEngine:
             "denied_by_interlock": 0,
             "coalesced": 0,
             "arbitration_conflicts": 0,
+            "yield_priority_granted": 0,
         }
 
     # -- ingestion ----------------------------------------------------
@@ -472,7 +519,13 @@ class CorridorEngine:
             if not track.accepted(now_s, self.cfg):
                 continue
             for junction_id in track.report.route:
-                claims.setdefault(junction_id, []).append(track)
+                # Only a vehicle that holds the junction, or is close enough
+                # to claim it, contends for it. Counting every vehicle with
+                # the junction anywhere on its route let one that was first
+                # seen but minutes away win the junction and then not claim
+                # it (too far), so a vehicle about to arrive got nothing.
+                if self._contends(track, junction_id):
+                    claims.setdefault(junction_id, []).append(track)
 
         winners: dict[str, str] = {}
         for junction_id, contenders in claims.items():
@@ -490,11 +543,33 @@ class CorridorEngine:
                     junction_id, self.cfg
                 ):
                     by_response[key] = track
+            holder = self._holder(junction_id)
             winners[junction_id] = min(
                 by_response.values(),
-                key=lambda t: (int(t.priority), t.first_seen_s, t.vehicle_id),
+                # Within a class the vehicle already holding the junction
+                # keeps it: an equal-priority arrival must not cut a dwell
+                # short for a vehicle that is still on its way through.
+                key=lambda t: (
+                    int(t.priority), t.vehicle_id != holder, t.first_seen_s, t.vehicle_id
+                ),
             ).vehicle_id
         return winners
+
+    def _holder(self, junction_id: str) -> str | None:
+        jp = self._junctions.get(junction_id)
+        if jp is None or jp.reservation is None:
+            return None
+        return jp.reservation.vehicle_id
+
+    def _contends(self, track: _Track, junction_id: str) -> bool:
+        """Does `track` compete for `junction_id` this tick? Yes if it holds
+        the junction, stands in its queue, or could arrive within the longest
+        lead a claim may have (`max_lead_s`)."""
+        if self._holder(junction_id) == track.vehicle_id:
+            return True
+        if track.queued_at(junction_id, self.cfg):
+            return True
+        return track.eta_s(junction_id, self.cfg) <= self.cfg.max_lead_s
 
     # -- the CorridorPort protocol ------------------------------------
 
@@ -526,7 +601,13 @@ class CorridorEngine:
         movement = track.report.movement_at.get(junction_id)
         if movement is None:
             return None
-        target = protected_phase_for(cfg, movement)
+        target = protected_phase_for(
+            cfg, movement, self._lane_mates.get(junction_id, {}).get(movement, frozenset())
+        )
+        yield_only = False
+        if target is None and self.cfg.yield_priority:
+            target = yield_phase_for(cfg, movement)
+            yield_only = target is not None
         if target is None:
             jp._defer(DeferReason.NO_PROTECTED_PHASE)  # noqa: SLF001
             return None
@@ -546,8 +627,10 @@ class CorridorEngine:
                 ),
                 target,
                 self._now_s,
+                yield_only=yield_only,
             )
             self.counters["reservations_granted"] += 1
+            self.counters["yield_priority_granted"] += int(yield_only)
 
         before = jp.preempted_s
         plan = jp.propose(
@@ -660,7 +743,10 @@ class CorridorEngine:
         has."""
         eta = track.eta_s(cfg.intersection_id, self.cfg)
         if eta == float("inf"):
-            return False
+            # Stopped or crawling. In this junction's own queue that is the
+            # case preemption exists for, so claim; anywhere else the
+            # vehicle is not inbound and claims nothing.
+            return track.queued_at(cfg.intersection_id, self.cfg)
         sat = max(cfg.sat_flow_pcu_s.get(movement, 0.0), _EPS)
         discharge_ahead = ctx.queue_pcu.get(movement, 0.0) / sat
         downstream = 0.0

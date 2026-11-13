@@ -183,6 +183,45 @@ class EtaCostModel:
         return h
 
 
+def traffic_speed_frac(
+    *,
+    mean_speed_mps: float,
+    vehicles: float,
+    halting: float,
+    length_m: float,
+    lanes: int,
+    speed_limit_mps: float,
+    jam_spacing_m: float = 7.5,
+    headway_s: float = 1.5,
+) -> float:
+    """How fast traffic lets a vehicle drive along a road, as a fraction of
+    the limit, from one snapshot of the road.
+
+    The road's mean speed alone is not that number. It is an average over
+    whoever is on the road, however few: one car pulling away on a 396 m road
+    read as 0.02 and made the road cost 139 s instead of 24 s (12 Nov 2026,
+    district map), and the emergency vehicle flipped between two routes on
+    such readings until the run ended. Two corrections:
+
+    * Standing vehicles are left out. They are the queue, which the cost
+      model already charges once as `queue_s`; counting them in the speed as
+      well charged them twice.
+    * The moving vehicles slow only the part of the road they cover (each
+      takes a jam spacing plus a time headway at its speed). The rest is
+      driven at free speed.
+    """
+    limit = max(0.1, speed_limit_mps)
+    if mean_speed_mps < 0 or vehicles <= 0:
+        return 1.0
+    moving = vehicles - max(0.0, halting)
+    if moving <= 0:
+        return 1.0
+    v_moving = min(limit, mean_speed_mps * vehicles / moving)
+    covered = moving * (jam_spacing_m + v_moving * headway_s)
+    share = min(1.0, covered / max(1.0, length_m * max(1, lanes)))
+    return 1.0 - share * (1.0 - v_moving / limit)
+
+
 def should_reroute(current_s: float, alternative_s: float, config: EtaCostConfig) -> bool:
     """Switch only if the saving beats a margin plus the cost of switching
     (cancelling granted preemptions, new ones to set up). The margin stops

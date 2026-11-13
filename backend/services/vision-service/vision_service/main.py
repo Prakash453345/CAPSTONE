@@ -24,9 +24,10 @@ Env vars:
                      held-out seeds) or "hand_set" (37 % at ~37/h) --
                      see vision_service.incidents.rules.OPERATING_POINTS
   VISION_DETECTOR    video mode: a .pt (Ultralytics) or .onnx model (default
-                     data/models/itms_six_aug_640.onnx, fine-tune v3 (v2 plus
-                     degradation augmentation): `make vision-model` puts it
-                     there; itms_six_fp32_640.onnx is v2; yolo11n.pt is stock;
+                     data/models/itms_six_fp32_640.onnx, fine-tune v2: `make
+                     vision-model` puts it there; v3 (itms_six_aug_640.onnx,
+                     v2 plus degradation augmentation, better at night and
+                     in glare or noise) is not in this checkout; yolo11n.pt is stock;
                      itms_uvh26_m_640.onnx is the YOLO11-M trained on the full
                      UVH-26 set, GPU-class: score line 0.60, 14 UVH-26 classes
                      merged to the six, baselines/2026-10-31_m8_m_coco/)
@@ -62,7 +63,7 @@ log = logging.getLogger("vision.main")
 # the adopted detector (baselines/2026-09-27_m8_finetune_v2/) and the simcam
 # error model fitted to it; data/ is not in git, `make vision-model` fills it
 DEFAULT_PRESET = "itms6_640"
-DEFAULT_DETECTOR = MODELS_DIR / "itms_six_aug_640.onnx"
+DEFAULT_DETECTOR = MODELS_DIR / "itms_six_fp32_640.onnx"
 # the v4 fire/smoke detector and the Step 2 crop classifier (baselines/2026-10-03_m8_fire_v5_step2/)
 DEFAULT_FIRE_DETECTOR = MODELS_DIR / "itms_fire_640.pt"
 DEFAULT_FIRE_CLASSIFIER = MODELS_DIR / "itms_fire_cls_112.onnx"
@@ -77,7 +78,7 @@ def detector_path() -> str:
     if not DEFAULT_DETECTOR.exists():
         raise SystemExit(
             f"no detector at {DEFAULT_DETECTOR}. Run `make vision-model` (it copies the adopted "
-            "fine-tune from data/uvh26/finetune_v3/, where the fine-tune notebook's results "
+            "fine-tune from data/uvh26/finetune_v2/, where the fine-tune notebook's results "
             "go), or set VISION_DETECTOR to a .onnx/.pt model (yolo11n.pt is the stock COCO one).")
     return str(DEFAULT_DETECTOR)
 

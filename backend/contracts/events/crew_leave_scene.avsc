@@ -1,0 +1,19 @@
+{
+  "type": "record",
+  "name": "CrewLeaveScene",
+  "namespace": "itms.contracts",
+  "doc": "A police or fire crew, on `commands.operator`: the work at the scene is done. sim-service frees the unit for new calls and sends it back to a station. Nothing leaves a scene on a timer; the driver says when.",
+  "fields": [
+    {
+      "name": "unit_id",
+      "type": "string"
+    },
+    {
+      "name": "requested_at",
+      "type": {
+        "type": "long",
+        "logicalType": "timestamp-millis"
+      }
+    }
+  ]
+}

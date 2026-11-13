@@ -293,7 +293,9 @@ def transfer_time(cfg: Tier0Config, ctx: JunctionContext, target_phase: str) -> 
     return TransferTime(remaining_min_green, remaining_ped, cfg.yellow_s, cfg.all_red_s)
 
 
-def protected_phase_for(cfg: Tier0Config, movement: str) -> str | None:
+def protected_phase_for(
+    cfg: Tier0Config, movement: str, lane_mates: frozenset[str] = frozenset()
+) -> str | None:
     """The phase that serves `movement` with protection, or None.
 
     "With protection" is the whole content of this function. A movement
@@ -315,7 +317,27 @@ def protected_phase_for(cfg: Tier0Config, movement: str) -> str | None:
     Ties broken by ring order so the choice is deterministic and
     reproducible -- D7's lesson about undocumented precedence conventions
     applies to a controller's own internal choices as much as to a
-    vendor's input numbering."""
+    vendor's input numbering.
+
+    `lane_mates`: the other movements that leave the emergency vehicle's
+    lane. When given, a protecting phase that also shows all of them green
+    is preferred. Otherwise a shared lane can stay blocked by the car in
+    front of the emergency vehicle waiting at its own red (found
+    12 Nov 2026: at 2833253632 the EV's left turn L2 is protected in both
+    P0, the side-street phase, and P1, its own approach; ring order picked
+    P0, which holds the straight L3 from the same lane on red)."""
+    if lane_mates:
+        for phase_id in cfg.ring_order:
+            phase = cfg.phases.get(phase_id)
+            if phase is None:
+                continue
+            protected = (
+                phase.protected_movements
+                if phase.protected_movements is not None
+                else phase.green_movements
+            )
+            if movement in protected and lane_mates <= phase.green_movements:
+                return phase_id
     for phase_id in cfg.ring_order:
         phase = cfg.phases.get(phase_id)
         if phase is None:
@@ -337,6 +359,28 @@ def protected_phase_for(cfg: Tier0Config, movement: str) -> str | None:
             else phase.green_movements
         )
         if movement in protected:
+            return phase_id
+    return None
+
+
+def yield_phase_for(cfg: Tier0Config, movement: str) -> str | None:
+    """The phase that shows `movement` green when no phase protects it (the
+    first in ring order), or None.
+
+    For *priority*, not preemption. A movement that is only ever permissive
+    (a turn that yields on green) cannot be preempted: `protected_phase_for`
+    refuses, because a solid confirmation would tell the crew the junction is
+    theirs when they still have to yield (D3/A5). But leaving the junction to
+    its normal cycle means the vehicle meets a red there as often as anyone:
+    on the benchmark route every red-light stop left, in both the reactive
+    and the corridor arm, was at the one such junction (7871074777, 12 Nov
+    2026). Showing the ordinary phase early is safe -- it is a phase the
+    junction shows every cycle, and the vehicle yields in it like any other
+    driver -- as long as the crew is told to yield, which is what the
+    flashing confirmation means (`JunctionPreemption.yield_only`)."""
+    for phase_id in cfg.ring_order:
+        phase = cfg.phases.get(phase_id)
+        if phase is not None and movement in phase.green_movements:
             return phase_id
     return None
 
@@ -385,6 +429,10 @@ class JunctionPreemption:
     last_defer: DeferReason = DeferReason.NONE
     releases: dict[ReleaseReason, int] | None = None
     defers: dict[DeferReason, int] | None = None
+    yield_only: bool = False
+    """The reserved movement is only permissive in the target phase: the
+    vehicle is given the phase but must yield in it, so the confirmation
+    never goes solid. See `yield_phase_for`."""
     preempted_s: float = 0.0
     """Total seconds this junction has actually spent in ENTRY or DWELL
     under a reservation. Distinct from the reservations' nominal
@@ -401,11 +449,15 @@ class JunctionPreemption:
 
     # -- lifecycle ----------------------------------------------------
 
-    def grant(self, reservation: Reservation, target_phase: str, now_s: float) -> None:
+    def grant(
+        self, reservation: Reservation, target_phase: str, now_s: float,
+        *, yield_only: bool = False,
+    ) -> None:
         if self.reservation is not None and self.reservation.vehicle_id != reservation.vehicle_id:
             self._count_release(ReleaseReason.SUPERSEDED)
         self.reservation = reservation
         self.target_phase = target_phase
+        self.yield_only = yield_only
         self.state = PreemptState.ENTRY_HOLD
         self.entered_at_s = now_s
         self.dwell_started_at_s = None
@@ -418,6 +470,7 @@ class JunctionPreemption:
         self.target_phase = None
         self.state = PreemptState.IDLE
         self.dwell_started_at_s = None
+        self.yield_only = False
         self.last_defer = DeferReason.NONE
 
     def _count_release(self, reason: ReleaseReason) -> None:
@@ -607,6 +660,8 @@ class JunctionPreemption:
         vehicle holding the reservation. See `Confirmation`."""
         if self.reservation is None:
             return Confirmation.NONE
+        if self.yield_only:
+            return Confirmation.FLASHING  # the phase is shown, the vehicle still yields
         if self.state is PreemptState.DWELL and ctx.current_phase_id == self.target_phase:
             return Confirmation.SOLID
         return Confirmation.FLASHING

@@ -45,7 +45,7 @@ from sim_service.live.anomaly_control import OperatorAnomalyController
 from sim_service.live.green_corridor import CorridorController
 from sim_service.live.timeparse import epoch_ms
 from sim_service.routing import EdgeConditions, NoRouteError, RoadGraph, RoutePlanner
-from sim_service.routing.eta_cost import EtaCostModel, should_reroute
+from sim_service.routing.eta_cost import EtaCostModel, should_reroute, traffic_speed_frac
 
 log = logging.getLogger("sim-service.live.emergency")
 
@@ -68,6 +68,7 @@ _KIND_MAP = {
     "AMBULANCE": EmergencyKind.AMBULANCE,
     "FIRE_TRUCK": EmergencyKind.FIRE_TRUCK,
     "POLICE": EmergencyKind.POLICE,
+    "TRAFFIC_POLICE": EmergencyKind.TRAFFIC_POLICE,
 }
 
 OnArrivalHook = Callable[[EmergencyRequest, EmergencyVehicle | None, int, float], None]
@@ -122,7 +123,6 @@ class EmergencyController:
         self._requests: dict[str, EmergencyRequest] = {}
         self._vehicles: dict[str, EmergencyVehicle] = {}
         self._alt_cache: dict[str, list[RouteResult]] = {}
-        self._pending_routes: dict[str, tuple[tuple[str, ...], float]] = {}
         self._now_s = 0.0
         self._ev_runs: dict[str, _EvRun] = {}
         self._events: list[dict] = []
@@ -342,7 +342,6 @@ class EmergencyController:
 
     def tick(self, step: int, sim_time_s: float) -> None:
         self._now_s = sim_time_s
-        self._retry_pending_routes(sim_time_s)
         progress_by_request = self._advance_vehicles(step, sim_time_s)
         if self.corridor is not None:
             self.corridor.tick(step, sim_time_s, progress_by_request=progress_by_request)
@@ -603,8 +602,11 @@ class EmergencyController:
         conditions: Mapping[str, EdgeConditions] | None = None,
         initial: bool = False,
         keep_if_same: tuple[str, ...] | None = None,
-    ) -> None:
+    ) -> bool:
         """Plan (or replan, when `from_edge` is set) and apply `action`.
+
+        Returns False only when a new route was found for a driving vehicle
+        and SUMO refused it (nothing was changed); True otherwise.
 
         `from_edge` is the vehicle's current edge for an in-flight reroute --
         the plan starts there, the request's own `source_edge` is unchanged, and
@@ -640,7 +642,7 @@ class EmergencyController:
                 )
                 log.warning("emergency request %s reroute failed, holding route: %s",
                             request_id, exc.reason)
-                return
+                return True
             try:
                 self._requests[request_id] = req.apply(
                     EmergencyRequestAction.ROUTE_FAILED, at_ms=at_ms, actor="system:router",
@@ -656,11 +658,11 @@ class EmergencyController:
                     request_id, step=step, actor="system:router",
                     detail=f"routing problem (not applied): {exc.reason}",
                 )
-                return
+                return True
             self._release_vehicle(req.vehicle_id)
             self._queue(request_id, step=step, actor="system:router")
             log.warning("emergency request %s route failed: %s", request_id, exc.reason)
-            return
+            return True
 
         best = routes[0]
         edges = tuple(best.edges)
@@ -680,7 +682,7 @@ class EmergencyController:
             run = self._ev_runs.get(request_id)
             self._progress_at_route[request_id] = run.last_progress_m if run else 0.0
             log.info("emergency request %s: replanned, route unchanged", request_id)
-            return
+            return True
         if (keep_if_same is not None and edges == tuple(keep_if_same)
                 and detail.startswith(_AUTO_REROUTE_PREFIX)):
             # Same roads, only now knowingly through the new blockage: there is
@@ -690,11 +692,31 @@ class EmergencyController:
             detail = (f"{_REROUTE_HELD_PREFIX}{detail[len(_AUTO_REROUTE_PREFIX):]}"
                       ", no way around it")
 
+        run = self._ev_runs.get(request_id)
+        if from_edge is not None and run is not None and run.spawned:
+            # The vehicle has to take the new route before anything else is
+            # allowed to believe in it. SUMO refuses a different turn while
+            # the vehicle is inside a junction, and the old code swapped the
+            # request and the corridor to the new route anyway and retried
+            # the same road list for 20 s -- which cannot succeed once the
+            # vehicle has driven on. The corridor then measured the new
+            # route with the old route's distances, declared every junction
+            # passed and shut down (seen live: medium, seed 205). Now a
+            # refusal changes nothing, and the monitor plans again from
+            # wherever the vehicle is at its next look.
+            if not self._try_set_route(run, edges):
+                log.info("emergency request %s: reroute deferred, SUMO refused it", request_id)
+                if actor != "system:monitor":  # an operator asked: say why nothing changed
+                    self._queue(
+                        request_id, step=step, actor=actor,
+                        detail=f"{_REROUTE_HELD_PREFIX}vehicle is inside a junction, ask again",
+                    )
+                return False
+            self._apply_route_tables(run, edges)
         # re-point SUMO + green corridor first (in-flight reroute only), so the
         # single state transition below carries the new corridor id
         new_corridor_id: str | None = None
         if from_edge is not None:
-            self._repoint_sumo_route(request_id, edges)
             req_now = self._requests[request_id]
             # arm a corridor for the new route even if the old route had none
             # (it crossed no signal); a signal on the new route still needs one
@@ -702,6 +724,12 @@ class EmergencyController:
                 new_corridor_id = self.corridor.activate(
                     request_id=request_id, vehicle_id=req_now.vehicle_id,
                     route_edges=edges, now_ms=int(sim_time_s * 1000), step=step,
+                    # The new route starts on the road the vehicle is on, so
+                    # its position along that road is its progress. Without
+                    # it the new corridor fell back to planned time windows
+                    # until the next tick, and a junction being held for the
+                    # vehicle was let go for that tick.
+                    progress_m=run.lane_pos_m if run is not None and run.spawned else None,
                 )
 
         self._requests[request_id] = req.apply(
@@ -720,51 +748,15 @@ class EmergencyController:
             " (rerouted in flight)" if from_edge is not None else "",
         )
         self._queue(request_id, step=step, actor=actor, detail=detail)
-
-    _ROUTE_RETRY_S = 20.0
-
-    def _repoint_sumo_route(self, request_id: str, edges: tuple[str, ...]) -> None:
-        """Push a new edge list to a driving EV and rebuild its progress table.
-
-        SUMO refuses a route change while the vehicle is on a junction-internal
-        edge. That used to be logged and swallowed, leaving the request's route
-        and the vehicle's real route disagreeing. Now the change is retried
-        every tick (`_retry_pending_routes`) until SUMO accepts it, and the
-        progress table only switches once it has."""
-        run = self._ev_runs.get(request_id)
-        if run is None:
-            return
-        if self._try_set_route(run, edges):
-            self._pending_routes.pop(request_id, None)
-            self._apply_route_tables(run, edges)
-        else:
-            self._pending_routes[request_id] = (edges, self._now_s)
+        return True
 
     def _try_set_route(self, run, edges: tuple[str, ...]) -> bool:
         try:
             traci.vehicle.setRoute(run.veh_id, list(edges))
             return True
         except Exception as exc:  # noqa: BLE001
-            log.info("SUMO refused route change for %s (%s) -- will retry", run.veh_id,
-                     str(exc)[:80])
+            log.info("SUMO refused route change for %s (%s)", run.veh_id, str(exc)[:80])
             return False
-
-    def _retry_pending_routes(self, sim_time_s: float) -> None:
-        for rid, (edges, since) in list(self._pending_routes.items()):
-            run = self._ev_runs.get(rid)
-            req = self._requests.get(rid)
-            if run is None or req is None or req.is_terminal:
-                self._pending_routes.pop(rid, None)
-                continue
-            if self._try_set_route(run, edges):
-                self._pending_routes.pop(rid, None)
-                self._apply_route_tables(run, edges)
-            elif sim_time_s - since > self._ROUTE_RETRY_S:
-                log.warning("could not update SUMO route for %s after %.0f s -- keeping the old one",
-                            run.veh_id, self._ROUTE_RETRY_S)
-                self._pending_routes.pop(rid, None)
-                # the vehicle keeps its old route, so the request must too
-                self._last_route_s[rid] = -1e18
 
     def _apply_route_tables(self, run, edges: tuple[str, ...]) -> None:
         acc = 0.0
@@ -848,7 +840,7 @@ class EmergencyController:
                 continue
 
             log.info("auto-reroute for %s (%s): %s", request_id, req.state.value, reason)
-            self._route_and_transition(
+            applied = self._route_and_transition(
                 request_id,
                 at_ms=int(sim_time_s * 1000),
                 step=step,
@@ -860,6 +852,10 @@ class EmergencyController:
                 conditions=conditions,
                 keep_if_same=remaining,
             )
+            if not applied and trigger is not None:
+                # not acted on: the same blockage is still urgent next look
+                self._urgent_seen.discard((request_id, trigger))
+                self._severe_seen.get(request_id, set()).discard(trigger)
 
     @staticmethod
     def _remaining_edges(
@@ -938,16 +934,28 @@ class EmergencyController:
             except traci.TraCIException:
                 occ, mean_speed = 0.0, -1.0
             halting = 0.0
-            if isinstance(self.planner.cost_model, EtaCostModel):
-                try:  # only the time-based cost uses the queue length
-                    halting = float(traci.edge.getLastStepHaltingNumber(edge_id))
-                except traci.TraCIException:
-                    halting = 0.0
             speed_frac = (
                 1.0
                 if mean_speed < 0
                 else min(1.0, mean_speed / max(0.1, info.speed_limit_mps))
             )
+            if isinstance(self.planner.cost_model, EtaCostModel):
+                try:  # only the time-based cost uses the queue length
+                    halting = float(traci.edge.getLastStepHaltingNumber(edge_id))
+                except traci.TraCIException:
+                    halting = 0.0
+                try:
+                    vehicles: float | None = float(traci.edge.getLastStepVehicleNumber(edge_id))
+                except Exception:  # noqa: BLE001 -- no count: keep the plain mean speed
+                    vehicles = None
+                if vehicles is not None:
+                    # the queue is charged as `halting`; the speed is that of
+                    # the moving traffic, over the part of the road it covers
+                    speed_frac = traffic_speed_frac(
+                        mean_speed_mps=mean_speed, vehicles=vehicles, halting=halting,
+                        length_m=info.length_m, lanes=info.num_lanes,
+                        speed_limit_mps=info.speed_limit_mps,
+                    )
             sev_impact = anomaly_by_edge.get(edge_id)
             out[edge_id] = EdgeConditions(
                 congestion=max(0.0, min(1.0, occ)),

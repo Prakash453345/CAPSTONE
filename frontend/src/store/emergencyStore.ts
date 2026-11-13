@@ -31,6 +31,7 @@ export const CREW_TYPES: CrewType[] = [
   { kind: "ambulance", label: "Ambulance" },
   { kind: "police", label: "Police" },
   { kind: "fire_truck", label: "Fire truck" },
+  { kind: "traffic_police", label: "Traffic police" },
 ];
 
 export function crewTypeFor(kind: EmergencyVehicleKind): CrewType {

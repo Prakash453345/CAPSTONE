@@ -8,7 +8,7 @@ The file has a header row and these columns (extra columns are ignored):
     username,password,email,role,unit_kind,unit_id,display_name
 
 - role: operator (the console) or responder (a crew: the crew page only)
-- unit_kind: ambulance, police or fire_truck (responders only; blank for operators)
+- unit_kind: ambulance, police, fire_truck or traffic_police (responders only; blank for operators)
 - unit_id: the vehicle a responder drives, e.g. AMB-03 (blank for operators)
 - email: where forgot-password codes go; blank for none
 

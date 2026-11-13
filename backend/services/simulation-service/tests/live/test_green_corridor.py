@@ -287,3 +287,20 @@ def test_a_junction_is_not_held_forever_for_a_stuck_ev():
     assert c.preemption_plan(_cfg("J1"), ctx) is not None
     c.tick(step=2, sim_time_s=100.0 + c.config.corridor_max_hold_s + 5, progress_by_request=prog)
     assert c.preemption_plan(_cfg("J1"), ctx) is None
+
+
+def test_a_hold_that_ran_out_is_renewed_after_a_rest():
+    """A hold used to end for good after `corridor_max_hold_s`: an EV still
+    queued short of the junction was left to the normal cycle."""
+    c = CorridorController(_graph())
+    c.activate(request_id="er-1", vehicle_id="amb", route_edges=ROUTE, now_ms=0)
+    ctx = JunctionContext("J1", "P0", 12.0)
+    prog = {"er-1": c._active["er-1"].dist_by_order[0] - 50.0}
+    hold, rest = c.config.corridor_max_hold_s, c.config.corridor_rehold_after_s
+    c.tick(step=1, sim_time_s=100.0, progress_by_request=prog)
+    assert c.preemption_plan(_cfg("J1"), ctx) is not None
+    c.tick(step=2, sim_time_s=100.0 + hold + rest / 2, progress_by_request=prog)
+    assert c.preemption_plan(_cfg("J1"), ctx) is None        # the cross street's turn
+    c.tick(step=3, sim_time_s=100.0 + hold + rest + 5, progress_by_request=prog)
+    assert c.preemption_plan(_cfg("J1"), ctx) is not None    # held again
+

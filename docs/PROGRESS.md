@@ -6248,3 +6248,29 @@ detector); the clip and camera paths do dispatch.
 - severe-anomaly reroute shared across trips and fired for already-known anomalies.
 
 All fixed, along with 3 issues from the fact-check and 1 from the final run. 14 new tests, each failing without its fix; repo 1111 passed, 12 skipped. Final code: 0 rule violations in 10 runs (old code: 20 in 10). Open design questions: operator cancel drops the call; unreachable calls dropped for good; units return to base instantly.
+
+## 2026-11-12: why the green corridor does not beat reactive preemption, and a shared-lane fix (not committed)
+`backend/experiments/baselines/2026-11-12_m7_shared_lane/README.md`. Diagnosis on training seeds 101–110; held-out seeds 500–519, with targets written first.
+- **Cause 1, same trigger.** The corridor's computed lead time sits at its 20 s floor, so it claims each junction at about the same moment as reactive's 300 m (median claim 20 s before the EV crosses, in both). EV time: corridor vs reactive +0.5 % [−1.0, +1.8].
+- **Cause 2, a shared-lane flaw in both arms.** At `2833253632` the EV's left turn shares a lane with a straight movement. Preemption picks the first phase in ring order that protects the turn (the side-street phase), which holds the straight on red. The car in front waits at its red and the EV waits about 25 s behind it on a green it cannot use. This was 74–80 % of EV stopped time.
+- **Fix.** `protected_phase_for(..., lane_mates)` / `CorridorEngine(lane_mates=...)`, off by default: prefer a protecting phase that also greens the EV's whole lane.
+- **Held-out results.**
+  - EV time: −4.9 % [−6.1, −3.7] (reactive), −4.6 % [−5.8, −3.4] (corridor); time lost down 40–45 %; those stops gone.
+  - Non-EV person-delay: +2.6 % [−0.4, +5.7] under reactive (H3 FAIL), −3.7 % under corridor.
+  - 0 violations; 80/80 EVs arrived.
+  - With the fix, the corridor still ties reactive for the EV (+0.7 %).
+- **Not done.** The live `green_corridor.py` `_phase_serving` has the same tie rule (not changed). `7871074777` is never claimed (not investigated).
+
+## 2026-11-12 (afternoon): corridor fixes made default; what is left (not committed)
+Round 2 in `backend/experiments/baselines/2026-11-12_m7_shared_lane/README.md`.
+- **Benchmark:** both preempting arms now choose the phase that clears the EV's lane (old rule: `*_ringorder` arms). The trip now ends at the hospital (`arrivalPos` 212 m) instead of 212 m past it, so absolute EV times change.
+- **Live corridor (`green_corridor.py`):** among equally protecting phases, prefer one that greens the lane mates that have cars queued (`RoadGraph.link_lane_mates`). District map, 10 training seeds: no measurable effect (medium +0.35 %, median 0). Kept as a correctness fix.
+- **Corridor benchmark, both fixes:**
+  - EV 15–17 s lost per trip; stopped only about 1.5–2 s per trip.
+  - Almost all of that is at the final U-turn `7871074777`. It is permissive-only, so it is never preempted (safety rule); a preemption-only state would be needed. Not built.
+- **Rejected:** claiming later (lead floor 15/12/8 s instead of 20 s). More EV stops, and no clear saving for other traffic.
+- **Tests:** +5 (corridor junction, live corridor); suite 1682 passed, 4 pre-existing failures (`test_live_service` ×3, `test_snap` ×1).
+- **Still open:**
+  - unprotected movements on the district map (31 %);
+  - EVs as plain cars queued behind traffic;
+  - multi-EV arbitration as the corridor's possible edge over reactive.

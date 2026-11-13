@@ -1,7 +1,13 @@
 """EtaCostModel, should_reroute and HexIndex."""
 
+import pytest
 from sim_service.routing import EdgeConditions, RoadGraph, RoutePlanner
-from sim_service.routing.eta_cost import EtaCostConfig, EtaCostModel, should_reroute
+from sim_service.routing.eta_cost import (
+    EtaCostConfig,
+    EtaCostModel,
+    should_reroute,
+    traffic_speed_frac,
+)
 from sim_service.routing.graph import EdgeInfo, GraphEdge
 from sim_service.routing.hexgrid import HexIndex, cell_of, disk
 
@@ -83,3 +89,31 @@ def test_hex_cells_and_band():
     assert band is not None and {"S", "T"} <= band
     planner = RoutePlanner(g, cost_model=EtaCostModel())
     assert planner.plan("S", "T", {}, allowed_edges=band)[0].edges[0] == "S"
+
+
+def _frac(**kw):
+    base = dict(mean_speed_mps=13.9, vehicles=0, halting=0, length_m=400.0, lanes=1,
+                speed_limit_mps=13.9)
+    base.update(kw)
+    return traffic_speed_frac(**base)
+
+
+def test_one_slow_car_does_not_slow_a_whole_road():
+    """One car pulling away on a 396 m road read as speed 0.02 of the limit
+    and made the road cost 139 s instead of 24 s."""
+    assert _frac(mean_speed_mps=0.3, vehicles=1, length_m=396.0) > 0.95
+
+
+def test_standing_vehicles_are_the_queue_not_the_speed():
+    # two cars at a red light: charged as queue (halting), not as a slow road
+    assert _frac(mean_speed_mps=0.0, vehicles=2, halting=2) == 1.0
+    # 15 standing, 10 moving at 5.2 m/s: the speed is the movers', not the mean
+    f = _frac(mean_speed_mps=2.08, vehicles=25, halting=15, length_m=216.0)
+    assert 0.4 < f < 0.7
+
+
+def test_dense_slow_traffic_still_slows_the_road():
+    # 30 cars spread along 400 m at 4 m/s: the whole road moves at that speed
+    assert _frac(mean_speed_mps=4.0, vehicles=30) == pytest.approx(4.0 / 13.9)
+    assert _frac(vehicles=0) == 1.0 and _frac(mean_speed_mps=-1.0, vehicles=3) == 1.0
+

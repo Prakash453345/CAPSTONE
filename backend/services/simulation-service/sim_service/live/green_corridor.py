@@ -232,9 +232,14 @@ class CorridorController:
         route_edges: tuple[str, ...],
         now_ms: int,
         step: int | None = None,
+        progress_m: float | None = None,
     ) -> str | None:
         """Create and arm a corridor for `request_id`. Returns the new corridor
-        id, or None if the route has no signalised junction to coordinate."""
+        id, or None if the route has no signalised junction to coordinate.
+
+        `progress_m`: how far along `route_edges` the vehicle already is, when
+        the corridor replaces one for a vehicle that is driving (a reroute).
+        The junctions near it are then held from this tick on, with no gap."""
         if request_id in self._active:
             self.deactivate(request_id, reason="superseded", step=step)
         corridor_id = f"gc-{next(self._ids):04d}"
@@ -254,6 +259,7 @@ class CorridorController:
         active = _ActiveCorridor(
             corridor=proposed.with_status(CorridorStatus.ACTIVE),
             dist_by_order={i: c.distance_m for i, c in enumerate(ahead)},
+            progress_m=progress_m,
         )
         self._active[request_id] = active
         self._now_ms = max(self._now_ms, now_ms)
@@ -349,7 +355,20 @@ class CorridorController:
             return None
 
         wanted = frozenset(reservation.movements)
-        target = self._phase_serving(cfg, wanted, prefer=ctx.current_phase_id)
+        # Only lane mates with cars queued on them count: they are the ones
+        # that can block the EV. With none, the live phase keeps the tie, so
+        # an EV whose phase is already green is not made to wait through a
+        # needless switch (fact-check of 12 Nov: switching regardless made
+        # some trips worse).
+        mates = frozenset(
+            m
+            for m in frozenset().union(
+                *(self.graph.link_lane_mates.get(cfg.intersection_id, {}).get(w, frozenset())
+                  for w in wanted)
+            ) - wanted
+            if ctx.queue_pcu.get(m, 0.0) > 0.0
+        )
+        target = self._phase_serving(cfg, wanted, prefer=ctx.current_phase_id, lane_mates=mates)
         if target is None:
             # Counted and warned rather than returned silently -- see
             # `unprotected_junctions`. The corridor stays active and the other
@@ -418,8 +437,10 @@ class CorridorController:
         of passes happened after the window had closed). Once the EV's measured
         route progress is known, the window follows it instead: open when it is
         within `corridor_lookahead_m` of the stop line, closed when it has
-        passed (`tick` marks that) or after `corridor_max_hold_s`. Before any
-        progress report, the planned time window is used."""
+        passed (`tick` marks that). A hold lasts at most `corridor_max_hold_s`
+        at a stretch; the junction is then given back for
+        `corridor_rehold_after_s` and held again if the EV is still short of
+        it. Before any progress report, the planned time window is used."""
         dist = active.dist_by_order.get(r.order)
         if active.progress_m is None or dist is None:
             return r.open_at_ms <= self._now_ms <= r.close_at_ms
@@ -427,7 +448,10 @@ class CorridorController:
         if ahead_m > self.config.corridor_lookahead_m:
             return False
         started = active.opened_ms.setdefault(r.order, self._now_ms)
-        return self._now_ms - started <= self.config.corridor_max_hold_s * 1000
+        hold_ms = self.config.corridor_max_hold_s * 1000
+        rest_ms = max(0.0, self.config.corridor_rehold_after_s) * 1000
+        # hold, give the cross street `rest`, hold again -- until it passes
+        return (self._now_ms - started) % (hold_ms + rest_ms) <= hold_ms
 
     def _report_unprotected(self, cfg: Tier0Config, wanted: frozenset[str]) -> None:
         """Record that this junction cannot be preempted, and return None.
@@ -451,7 +475,8 @@ class CorridorController:
 
     @staticmethod
     def _phase_serving(
-        cfg: Tier0Config, wanted: frozenset[str], *, prefer: str
+        cfg: Tier0Config, wanted: frozenset[str], *, prefer: str,
+        lane_mates: frozenset[str] = frozenset(),
     ) -> str | None:
         """The ring phase that serves the most of `wanted` *with
         protection*; `prefer` (usually the live phase) wins ties so the
@@ -469,9 +494,16 @@ class CorridorController:
         such movements, each conflicting with a protected movement in its
         own phase. Same `if not None` idiom as `protected_phase_for`, for
         the reason given there: an empty protected set must read as
-        "nothing protected", not fall back to the full green set."""
+        "nothing protected", not fall back to the full green set.
+
+        `lane_mates`: other movements leaving the EV's lane(s). Among phases
+        that serve `wanted` equally, one that also shows these green beats
+        `prefer`. Otherwise a car in front of the EV that is going another
+        way waits at its own red and blocks the EV on a green it cannot use
+        (12 Nov 2026: 74-80 % of EV stopped time on the corridor benchmark)."""
         best_phase: str | None = None
         best_overlap = 0
+        best_mates = -1
         for phase_id in cfg.ring_order:
             phase = cfg.phases.get(phase_id)
             if phase is None:
@@ -482,10 +514,13 @@ class CorridorController:
                 else phase.green_movements
             )
             overlap = len(protected & wanted)
+            mates = len(lane_mates & phase.green_movements)
             if overlap > best_overlap or (
-                overlap == best_overlap and overlap > 0 and phase_id == prefer
+                overlap == best_overlap and overlap > 0 and (
+                    mates > best_mates or (mates == best_mates and phase_id == prefer)
+                )
             ):
-                best_phase, best_overlap = phase_id, overlap
+                best_phase, best_overlap, best_mates = phase_id, overlap, mates
         return best_phase if best_overlap > 0 else None
 
     def _emit(

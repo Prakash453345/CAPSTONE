@@ -93,7 +93,7 @@ _UNIT_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$")
 # What a crew drives. Dispatch sends a call to the nearest free crew *of the
 # right kind*, so every crew account has to say which it is. Same names as the
 # wire's EmergencyVehicleKind, lower-cased.
-UNIT_KINDS = ("ambulance", "police", "fire_truck")
+UNIT_KINDS = ("ambulance", "police", "fire_truck", "traffic_police")
 
 
 def validate_unit_kind(kind: str) -> str | None:
@@ -108,6 +108,8 @@ def infer_unit_kind(unit: str | None) -> str | None:
     `amb-01`, `fire-2`), for accounts made before kinds were recorded. None
     when the id says nothing, in which case the kind must be set explicitly."""
     lowered = (unit or "").lower()
+    if "traffic" in lowered:
+        return "traffic_police"
     if "police" in lowered:
         return "police"
     if "fire" in lowered:
@@ -577,7 +579,7 @@ class SessionUser(BaseModel):
     role: str
     # The vehicle a crew account drives; null for operators (who see every unit).
     unit_id: str | None = None
-    # What the crew drives: ambulance | police | fire_truck. Null for operators.
+    # What the crew drives: ambulance | police | fire_truck | traffic_police. Null for operators.
     unit_kind: str | None = None
 
 

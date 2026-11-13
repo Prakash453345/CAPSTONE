@@ -34,7 +34,7 @@ export interface UnitOption {
 
 export type UnitStatus = "corridor" | "dispatched" | "available";
 
-const KINDS = new Set<string>(["ambulance", "fire_truck", "police"]);
+const KINDS = new Set<string>(["ambulance", "fire_truck", "police", "traffic_police"]);
 
 const STATUS_RANK: Record<UnitStatus, number> = { corridor: 0, dispatched: 1, available: 2 };
 

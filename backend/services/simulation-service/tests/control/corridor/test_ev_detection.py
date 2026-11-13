@@ -77,6 +77,24 @@ def test_every_indexed_movement_has_a_protected_phase(corridor):
         assert protected_phase_for(configs[junction_id], movement) is not None
 
 
+def test_yield_movements_are_indexed_only_when_asked(corridor):
+    """`include_yield` adds manoeuvres no phase protects (for
+    `CorridorConfig.yield_priority`) and changes nothing else."""
+    from link_lanes import link_to_lane_map, link_to_receiving_lane_map
+
+    configs, index = corridor
+    wide = build_movement_index(
+        link_to_lane_map(str(_NET)), link_to_receiving_lane_map(str(_NET)), configs,
+        include_yield=True,
+    )
+    assert all(wide[k] == v for k, v in index.items())
+    extra = {k: v for k, v in wide.items() if k not in index}
+    assert extra
+    assert all(protected_phase_for(configs[j], m) is None for j, m in extra.values())
+    # the benchmark route's last signal, the U-turn into the hospital road
+    assert ("-343269496", "343269496") in extra
+
+
 def test_route_order_is_traversal_order(corridor):
     """The engine's release rule depends on it: junctions leave a
     vehicle's route from the front as it drives past them, and a junction

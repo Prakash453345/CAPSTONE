@@ -26,6 +26,7 @@ const VEHICLE_LABEL: Record<EmergencyVehicleKind, string> = {
   ambulance: "Ambulance",
   fire_truck: "Fire truck",
   police: "Police unit",
+  traffic_police: "Traffic police unit",
 };
 
 function vehicleLabel(kind: EmergencyVehicleKind | undefined, vehicleId: string): string {

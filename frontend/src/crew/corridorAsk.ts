@@ -8,7 +8,7 @@ export function isCorridorAsk(r: Pick<EmergencyRequest, "state" | "detail">): bo
   return r.state === "route_ready" && Boolean(r.detail?.startsWith(CORRIDOR_ASK_PREFIX));
 }
 
-/** Only police crews may ask; ambulances and fire trucks get a corridor from dispatch. */
+/** Only police and traffic police crews may ask; ambulances and fire trucks get a corridor from dispatch. */
 export function canAskCorridor(kind: string | undefined): boolean {
-  return kind === "police";
+  return kind === "police" || kind === "traffic_police";
 }

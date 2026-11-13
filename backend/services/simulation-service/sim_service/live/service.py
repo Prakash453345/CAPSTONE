@@ -52,8 +52,10 @@ from sim_service.live.green_corridor import CorridorController
 from sim_service.live.incident_response import (
     FACILITIES_PATH,
     IncidentResponseOrchestrator,
+    load_crew_homes,
     load_fire_depots,
     load_police_depots,
+    load_traffic_police_depots,
 )
 from sim_service.routing import RoadGraph
 from sim_service.routing.hexgrid import HexIndex
@@ -80,6 +82,7 @@ _CREW_KIND = {
     "AMBULANCE": EmergencyKind.AMBULANCE,
     "FIRE_TRUCK": EmergencyKind.FIRE_TRUCK,
     "POLICE": EmergencyKind.POLICE,
+    "TRAFFIC_POLICE": EmergencyKind.TRAFFIC_POLICE,
 }
 
 
@@ -137,11 +140,17 @@ def run_live(
         (the crew accepting *is* the go-ahead; nobody else has to press
         dispatch)."""
         unit = roster.get(offer.unit_id)
-        missions.stop_return(offer.unit_id)  # on its way home: take the call from here
+        # On its way home: take the call from exactly where the vehicle is on
+        # the road (see `CrewMissions.end_return`).
+        here, here_pos = missions.end_return(
+            offer.unit_id, edge_of=emergency.current_edge, pos_of=emergency.current_lane_pos
+        )
+        source = here or (unit.edge_id if unit and unit.edge_id else offer.edge_id)
         ok = incident_response._create_and_activate(  # noqa: SLF001
             request_id=offer.incident_id, vehicle_id=offer.unit_id, kind=offer.kind,
-            source_edge=unit.edge_id if unit and unit.edge_id else offer.edge_id,
-            dest_edge=offer.edge_id, step=clock["step"], sim_time_s=clock["sim_time"],  # type: ignore[arg-type]
+            source_edge=source, dest_edge=offer.edge_id,
+            step=clock["step"], sim_time_s=clock["sim_time"],  # type: ignore[arg-type]
+            depart_pos_m=here_pos,
         )
         if not ok:
             crew.release(offer.unit_id)
@@ -162,6 +171,7 @@ def run_live(
         facility_index=facility_index,
         police_depots=_snapped_depots(snapper, load_police_depots()),
         fire_depots=_snapped_depots(snapper, load_fire_depots()) or None,
+        traffic_depots=_snapped_depots(snapper, load_traffic_police_depots()) or None,
     )
     # Where crew units live while idle: ambulances at hospitals, police at
     # police stations, fire trucks at police stations too (this OSM extract
@@ -181,10 +191,40 @@ def run_live(
     depots[EmergencyKind.FIRE_TRUCK] = depots.get(EmergencyKind.FIRE_TRUCK) or depots.get(
         EmergencyKind.POLICE, []
     )
+    depots[EmergencyKind.TRAFFIC_POLICE] = depots.get(
+        EmergencyKind.TRAFFIC_POLICE
+    ) or depots.get(EmergencyKind.POLICE, [])
+    # A crew vehicle that belongs to one place (crew_homes.json) starts there,
+    # if that place is on the connected network; otherwise it is spread over
+    # the depots of its kind like any other unit.
+    base_edges = {
+        u.depot.depot_id: u.depot.edge
+        for us in incident_response._units.values()  # noqa: SLF001
+        for u in us
+    }
+    unit_homes = {
+        unit_id: base_edges[base]
+        for unit_id, base in load_crew_homes().items()
+        if base_edges.get(base) and _connected(base_edges[base])
+    }
+    def _scene_active(request_id: str, scene_edge: str, kind: EmergencyKind) -> bool:
+        """Is the incident a police or fire unit was sent to still going? A
+        call made for an anomaly is named `resp-<anomaly id>-<kind>`; any other
+        trip (an operator's own dispatch to a road) counts while an anomaly is
+        active on that road. Anomalies with no duration last until an operator
+        resolves them, and so does the crew's time at the scene."""
+        active = anomalies.active_anomalies()
+        prefix, suffix = "resp-", f"-{kind.value}"
+        if request_id.startswith(prefix) and request_id.endswith(suffix):
+            anomaly_id = request_id[len(prefix):-len(suffix)]
+            return any(a.anomaly_id == anomaly_id for a in active)
+        return any(a.edge_id == scene_edge for a in active)
+
     missions = CrewMissions(
         crew,
         facility_index=incident_response._facility_index,  # noqa: SLF001
         home_edges=depots,
+        unit_homes=unit_homes,
         create_leg=lambda rid, uid, src, dst: incident_response._create_and_activate(  # noqa: SLF001
             request_id=rid, vehicle_id=uid, kind=EmergencyKind.AMBULANCE,
             source_edge=src, dest_edge=dst, step=clock["step"], sim_time_s=clock["sim_time"],  # type: ignore[arg-type]
@@ -202,15 +242,25 @@ def run_live(
         annotate=lambda rid, who, note: emergency.annotate(
             rid, step=clock["step"], actor=who, detail=note,
         ),
+        scene_active=_scene_active,
         create_return=lambda rid, uid, src, dst, kind: incident_response.start_return_leg(  # noqa: SLF001
             request_id=rid, vehicle_id=uid, kind=kind, source_edge=src, dest_edge=dst,
             step=clock["step"], sim_time_s=clock["sim_time"],  # type: ignore[arg-type]
         ),
         edge_latlon=edge_latlon,
         route_fn=_route_from_scene(traci_route_fn()),
-        # 45 s of real time for the crew to choose, then the fastest hospital.
-        auto_choose_after_s=float(os.environ.get("CREW_HOSPITAL_CHOICE_SECONDS", "45"))
-        * max(1.0, realtime_factor),
+        # The driver decides when a vehicle leaves a scene: an ambulance waits
+        # for its crew to pick the hospital, a police or fire unit for its
+        # driver to say it is leaving. Nothing moves on a timer. For a run
+        # with nobody at the crew pages, CREW_AUTO_LEAVE=true brings back the
+        # automatic behaviour: the fastest hospital after
+        # CREW_HOSPITAL_CHOICE_SECONDS (real seconds, default 45), and police
+        # and fire leaving when their incident is over.
+        auto_choose_after_s=(
+            float(os.environ.get("CREW_HOSPITAL_CHOICE_SECONDS", "45")) * max(1.0, realtime_factor)
+            if _auto_leave() else None
+        ),
+        driver_releases=not _auto_leave(),
     )
     _orchestrator_arrival = emergency.on_arrival
 
@@ -417,6 +467,10 @@ def _build_dispatch(
                     str(payload.get("unit_id", "")), str(payload.get("destination_edge", "")),
                     str(payload.get("reason", "")), now_s=sim_time, step=step,
                 )
+        elif etype == "CrewLeaveScene":
+            # A police or fire crew: done here, free for calls again.
+            if missions is not None:
+                missions.leave_scene(str(payload.get("unit_id", "")))
         elif etype == "CrewHospitalChoice":
             # An ambulance crew at the scene: patient on board, go here.
             if missions is not None:
@@ -436,6 +490,10 @@ def _build_dispatch(
             log.info("no live handler for command %s (step %d) -- ignored", etype, step)
 
     return dispatch
+
+
+def _auto_leave() -> bool:
+    return os.environ.get("CREW_AUTO_LEAVE", "false").strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _snapped_facilities(snapper: EdgeSnapper) -> FacilityIndex:

@@ -36,7 +36,7 @@ from sim_service.routing import RoadGraph  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
 RESULTS = HERE / "results"
-ARMS = ("plain", "route_only", "full", "retimed")
+ARMS = ("plain", "route_only", "full", "retimed", "reactive", "queue", "la400", "q260")
 
 
 def largest_scc(graph: RoadGraph) -> set[str]:
@@ -173,7 +173,23 @@ class World:
         self.setup = load_corridor(level)
         self.graph = RoadGraph.from_network(self.scen.net)
         self.anomalies = OperatorAnomalyController()
-        self.corridor = RetimedCorridor(self.graph) if arm == "retimed" else CorridorController(self.graph)
+        if arm == "retimed":
+            self.corridor = RetimedCorridor(self.graph)
+        elif arm in ("reactive", "queue", "la400", "q260"):
+            import dataclasses
+            from itms_domain import EmergencyRoutingConfig
+            cfg = dataclasses.replace(EmergencyRoutingConfig(), corridor_lookahead_m={"la400": 400.0, "q260": 260.0}.get(arm, 150.0),
+                                      corridor_queue_aware=(arm in ("queue", "q260")))
+            self.corridor = CorridorController(self.graph, cfg)
+            if arm in ("queue", "q260"):
+                def _probe(edge):
+                    try:
+                        return traci.edge.getLastStepHaltingNumber(edge)
+                    except Exception:  # noqa: BLE001
+                        return 0
+                self.corridor.queue_probe = _probe
+        else:
+            self.corridor = CorridorController(self.graph)
         self.emergency = EmergencyController(self.graph, self.anomalies,
                                              corridor_controller=self.corridor)
         if arm == "plain":
@@ -375,7 +391,7 @@ class World:
 
     def run(self) -> dict:
         preempt = None
-        if self.arm in ("full", "retimed"):
+        if self.arm in ("full", "retimed", "reactive", "queue", "la400", "q260"):
             preempt = self._traced_preempt()
         summary = run_controlled_scenario(
             self.setup.sumocfg_path, self.setup.configs, self.setup.strategy,

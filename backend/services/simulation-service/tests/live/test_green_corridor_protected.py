@@ -190,3 +190,84 @@ def test_an_unprotected_junction_is_counted_and_warned_not_silently_skipped(capl
     )
     assert "J" in warnings[0].getMessage()
     assert ctx.current_phase_id == "P0"  # nothing was commanded
+
+
+# -- shared approach lane (12 Nov 2026) -----------------------------------
+
+
+def _shared_lane_cfg() -> Tier0Config:
+    """Junction 2833253632 in miniature: the EV's turn `t` is protected in
+    both P0 (side street `x` + `t`) and P1 (`t` + the straight `s` from the
+    EV's own lane)."""
+    both = frozenset({"t"})
+    return Tier0Config(
+        intersection_id="J",
+        phases={
+            "P0": Phase("P0", green_movements=both | {"x"}, protected_movements=both | {"x"}),
+            "P1": Phase("P1", green_movements=both | {"s"}, protected_movements=both | {"s"}),
+        },
+        ring_order=("P0", "P1"),
+        conflict_matrix={"x": frozenset({"s"}), "s": frozenset({"x"}), "t": frozenset()},
+        min_green_s={"P0": 10.0, "P1": 10.0},
+        max_green_s={"P0": 40.0, "P1": 40.0},
+        yellow_s=3.0,
+        all_red_s=2.0,
+        sat_flow_pcu_s={"x": 1.0, "s": 1.0, "t": 1.0},
+    )
+
+
+def test_the_phase_that_clears_the_evs_whole_lane_wins_a_tie():
+    cfg = _shared_lane_cfg()
+    # without lane information: the live phase wins the tie, as before
+    assert CorridorController._phase_serving(cfg, frozenset({"t"}), prefer="P0") == "P0"
+    # with it: P1, which also greens the straight `s` leaving the EV's lane,
+    # even though P0 is live
+    assert CorridorController._phase_serving(
+        cfg, frozenset({"t"}), prefer="P0", lane_mates=frozenset({"s"})
+    ) == "P1"
+
+
+def test_lane_mates_never_outrank_protection():
+    """A phase that greens the whole lane but protects less of what the EV
+    needs must still lose to one that protects more of it."""
+    cfg = _shared_lane_cfg()
+    # the EV needs t and x; P0 protects both, P1 protects only t (but greens s)
+    assert CorridorController._phase_serving(
+        cfg, frozenset({"t", "x"}), prefer="P1", lane_mates=frozenset({"s"})
+    ) == "P0"
+
+
+def test_road_graph_records_links_that_share_an_approach_lane():
+    from sim_service.routing import RoadGraph
+    from itms_domain.paths import DATA_DIR
+
+    net = DATA_DIR / "scenarios" / "networks" / "vijayawada" / "vijayawada_corridor.net.xml"
+    if not net.exists():
+        import pytest
+        pytest.skip("corridor network not present")
+    g = RoadGraph.from_network(net)
+    assert g.link_lane_mates["2833253632"]["L2"] == frozenset({"L3"})
+    assert g.link_lane_mates["2833253632"]["L4"] == frozenset()
+
+
+def test_preemption_switches_for_the_lane_only_when_a_lane_mate_is_queued():
+    """`preemption_plan` wiring: the lane preference applies only when a car
+    is queued on a movement sharing the EV's lane. Otherwise the live phase,
+    which already protects the EV, is kept."""
+    from types import SimpleNamespace
+
+    cfg = _shared_lane_cfg()
+    ctl = CorridorController.__new__(CorridorController)
+    ctl.graph = SimpleNamespace(link_lane_mates={"J": {"t": frozenset({"s"}), "s": frozenset({"t"})}})
+    ctl.unprotected_junctions = {}
+    ctl._warned_unprotected = set()
+    ctl._open_reservation = lambda tl: SimpleNamespace(movements=("t",))
+
+    def target(queue):
+        ctx = JunctionContext(intersection_id="J", current_phase_id="P0",
+                              current_phase_elapsed_s=30.0, queue_pcu=queue)
+        plan = CorridorController.preemption_plan(ctl, cfg, ctx, tick_s=1.0)
+        return plan.steps[-1].phase_id
+
+    assert target({}) == "P0"            # nobody on the lane: keep the live phase
+    assert target({"s": 2.0}) == "P1"    # a straight car queued: clear the lane

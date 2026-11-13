@@ -455,3 +455,23 @@ def test_no_reservation_means_no_opinion():
     cfg = _config()
     assert JunctionPreemption("J").propose(cfg, _ctx(cfg), 100.0, **_PROPOSE) is None
     assert JunctionPreemption("J").confirmation(cfg, _ctx(cfg)) is Confirmation.NONE
+
+
+def test_a_shared_lane_prefers_the_phase_that_clears_the_whole_lane():
+    """12 Nov 2026, junction 2833253632 on the corridor: the EV's turn `t`
+    is protected both in the side-street phase P0 and in its own approach's
+    phase P1. Ring order picked P0, which holds the straight `s` from the
+    same lane on red, so the car in front of the EV waited at its red and
+    the EV waited behind it. With the lane mates given, P1 is chosen; with
+    none, the old ring-order choice is unchanged."""
+    from dataclasses import replace
+
+    base = _config()
+    cfg = replace(base, phases={
+        "P0": Phase("P0", frozenset({"x", "t"}), protected_movements=frozenset({"x", "t"})),
+        "P1": Phase("P1", frozenset({"t", "s"}), protected_movements=frozenset({"t", "s"})),
+    }, ring_order=("P0", "P1"))
+    assert protected_phase_for(cfg, "t") == "P0"
+    assert protected_phase_for(cfg, "t", frozenset({"s"})) == "P1"
+    # no phase greens the whole lane: fall back to ring order
+    assert protected_phase_for(cfg, "t", frozenset({"s", "x"})) == "P0"

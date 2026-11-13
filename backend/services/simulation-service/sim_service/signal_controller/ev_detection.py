@@ -55,6 +55,8 @@ def build_movement_index(
     link_lanes: Mapping[str, Mapping[str, str]],
     receiving_lanes: Mapping[str, Mapping[str, str]],
     configs: Mapping[str, Tier0Config],
+    *,
+    include_yield: bool = False,
 ) -> dict[tuple[str, str], tuple[str, str]]:
     """`(approach edge, receiving edge) -> (junction id, movement id)`,
     built once per run.
@@ -81,7 +83,7 @@ def build_movement_index(
     Dropping rather than guessing still costs only a preemption. Guessing
     wrong would hand an emergency vehicle a confirmation indication for a
     path that was never cleared, which is hazard D3."""
-    from sim_service.control.corridor.junction import protected_phase_for
+    from sim_service.control.corridor.junction import protected_phase_for, yield_phase_for
 
     candidates: dict[tuple[str, str], list[tuple[str, str]]] = {}
     for tls_id, movements in link_lanes.items():
@@ -103,6 +105,20 @@ def build_movement_index(
             continue
         phases = {protected_phase_for(cfg, movement) for _, movement in hits}
         phases.discard(None)
+        if not phases:
+            # No phase protects this manoeuvre: it yields on green. With
+            # `include_yield` it is indexed when one phase shows it, so an
+            # engine running `CorridorConfig.yield_priority` knows the
+            # vehicle crosses this junction (it gives priority there; it
+            # never preempts). Off, every indexed movement has a protected
+            # phase, as before.
+            if not include_yield:
+                continue
+            shown = {yield_phase_for(cfg, movement) for _, movement in hits}
+            shown.discard(None)
+            if len(shown) == 1:
+                index[key] = (tls_id, sorted(m for _, m in hits)[0])
+            continue
         if len(phases) != 1:
             continue  # candidates disagree about which phase serves them
         phase = phases.pop()

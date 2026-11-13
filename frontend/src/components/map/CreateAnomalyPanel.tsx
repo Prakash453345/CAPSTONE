@@ -18,10 +18,10 @@ export interface AnomalyTarget {
 const TYPES: { id: AnomalyKind; label: string; event: string; sends: string }[] = [
   { id: "accident", label: "Accident", event: "ACCIDENT", sends: "Police, ambulance and fire" },
   { id: "fire", label: "Fire", event: "FIRE", sends: "Fire and police" },
-  { id: "vehicle_breakdown", label: "Breakdown", event: "VEHICLE_BREAKDOWN", sends: "Police" },
-  { id: "lane_blockage", label: "Lane blocked", event: "LANE_BLOCKAGE", sends: "Police" },
-  { id: "road_obstruction", label: "Obstruction", event: "ROAD_OBSTRUCTION", sends: "Police" },
-  { id: "heavy_congestion", label: "Congestion", event: "HEAVY_CONGESTION", sends: "No responders" },
+  { id: "vehicle_breakdown", label: "Breakdown", event: "VEHICLE_BREAKDOWN", sends: "Traffic police" },
+  { id: "lane_blockage", label: "Lane blocked", event: "LANE_BLOCKAGE", sends: "Traffic police" },
+  { id: "road_obstruction", label: "Obstruction", event: "ROAD_OBSTRUCTION", sends: "Traffic police" },
+  { id: "heavy_congestion", label: "Congestion", event: "HEAVY_CONGESTION", sends: "Traffic police" },
 ];
 
 const SEVERITIES: { id: AnomalySeverity; label: string; event: string; hint: string }[] = [

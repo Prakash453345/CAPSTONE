@@ -36,9 +36,9 @@ log = logging.getLogger(__name__)
 ROSTER_EVERY_S = 5.0
 # How long an operator has to answer a crew's corridor request (simulated s).
 CORRIDOR_ASK_TTL_S = 120.0
-# Who may ask: police only. Ambulances and fire trucks are sent by dispatch,
-# which already gives them a corridor.
-CORRIDOR_ASK_KINDS = (EmergencyKind.POLICE,)
+# Who may ask: police and traffic police. Ambulances and fire trucks are sent
+# by dispatch, which already gives them a corridor.
+CORRIDOR_ASK_KINDS = (EmergencyKind.POLICE, EmergencyKind.TRAFFIC_POLICE)
 # How many hospitals the crew is offered, and how many are routed to rank them.
 HOSPITAL_CHOICES = 4
 HOSPITAL_SHORTLIST = 8
@@ -83,7 +83,26 @@ class CrewMissions:
         create_return: Callable[[str, str, str, str, EmergencyKind], bool] | None = None,
         create_ask: Callable[[str, str, str, str, EmergencyKind, str], bool] | None = None,
         annotate: Callable[[str, str, str], None] | None = None,
+        scene_active: Callable[[str, str, EmergencyKind], bool] | None = None,
+        unit_homes: dict[str, str] | None = None,
+        driver_releases: bool = False,
     ) -> None:
+        # True: nothing leaves a scene on a clock or because the incident
+        # ended. A police or fire unit stays, busy, until its driver says it
+        # is leaving (`leave_scene`); an ambulance until its crew picks the
+        # hospital. False (unattended runs): units leave by themselves when
+        # the incident is over.
+        self.driver_releases = driver_releases
+        # unit_id -> the road its own base is on (crew_homes.json: this
+        # ambulance belongs to that hospital, this car to that station). A
+        # unit not named there is spread over the depots of its kind.
+        self.unit_homes = unit_homes or {}
+        # `scene_active(request_id, scene_edge, kind)`: is the incident a
+        # police or fire unit was sent to still going? Such a unit stays at
+        # the scene, busy, until it is not (a fire crew does not leave a fire
+        # that is still burning), then drives home. None = leave at once.
+        self._scene_active = scene_active
+        self._on_scene: dict[str, tuple[str, str]] = {}  # unit_id -> (request_id, scene_edge)
         # Plans a route and holds it for an operator (no corridor yet).
         self._create_ask = create_ask
         self._annotate = annotate
@@ -112,17 +131,22 @@ class CrewMissions:
     # ---- fleet ----------------------------------------------------------
 
     def place_new_units(self) -> None:
-        """Park every unit that has no position yet at a home depot of its
-        kind, spreading units of one kind over the depots in a fixed order so
-        the same accounts always start in the same places."""
+        """Park every unit that has no position yet at its own base when it
+        has one (`unit_homes`), else at a home depot of its kind, spreading
+        those units over the depots in a fixed order so the same accounts
+        always start in the same places."""
         by_kind: dict[EmergencyKind, int] = {}
         for unit in sorted(self.roster.all(), key=lambda u: u.unit_id):
             homes = self.home_edges.get(unit.kind) or []
             i = by_kind.get(unit.kind, 0)
             by_kind[unit.kind] = i + 1
-            if unit.edge_id or not homes:
+            if unit.edge_id:
                 continue
-            self.roster.set_position(unit.unit_id, homes[i % len(homes)])
+            own = self.unit_homes.get(unit.unit_id)
+            if own:
+                self.roster.set_position(unit.unit_id, own)
+            elif homes:
+                self.roster.set_position(unit.unit_id, homes[i % len(homes)])
 
     def tick(self, sim_time_s: float) -> None:
         """Follow driving units, pick hospitals nobody picked, and republish
@@ -150,6 +174,7 @@ class CrewMissions:
         for vehicle_id, edge in driving.items():
             if edge and self.roster.get(vehicle_id) is not None:
                 self.roster.set_position(vehicle_id, edge)
+        self._leave_finished_scenes()
         if sim_time_s >= self._next_roster_s:
             self._next_roster_s = sim_time_s + ROSTER_EVERY_S
             self._events.append({"event_type": "CrewRosterUpdated", "payload": self.fleet()})
@@ -211,8 +236,51 @@ class CrewMissions:
             self._missions[vehicle_id] = mission
             self._publish(mission)
             return
+        if self.driver_releases or (
+            self._scene_active is not None
+            and self._scene_active(request_id, destination_edge, unit.kind)
+        ):
+            # the driver has not said they are leaving / still burning or
+            # blocked: the crew stays and stays busy
+            self._on_scene[vehicle_id] = (request_id, destination_edge)
+            log.info("%s on scene at %s until the incident is over", vehicle_id, destination_edge)
+            return
         self.dispatcher.release(vehicle_id)
         self._head_home(unit, destination_edge, request_id)
+
+    def is_on_scene(self, unit_id: str) -> bool:
+        return unit_id in self._on_scene
+
+    def leave_scene(self, unit_id: str) -> bool:
+        """The driver of a police or fire unit says the work at the scene is
+        done: the unit is free for calls again and drives back to a station.
+        False when that unit is not at a scene."""
+        held = self._on_scene.pop(unit_id, None)
+        unit = self.roster.get(unit_id)
+        if held is None or unit is None:
+            return False
+        request_id, edge = held
+        log.info("%s leaves the scene at %s (its driver said so)", unit_id, edge)
+        self.dispatcher.release(unit_id)
+        self._head_home(unit, edge, request_id)
+        return True
+
+    def _leave_finished_scenes(self) -> None:
+        """Units whose incident has been resolved (or has expired) are free
+        again and drive home from the scene. Not when the driver decides."""
+        if self._scene_active is None or self.driver_releases:
+            return
+        for unit_id, (request_id, edge) in list(self._on_scene.items()):
+            unit = self.roster.get(unit_id)
+            if unit is None:
+                del self._on_scene[unit_id]
+                continue
+            if self._scene_active(request_id, edge, unit.kind):
+                continue
+            del self._on_scene[unit_id]
+            log.info("incident at %s is over: %s leaves the scene", edge, unit_id)
+            self.dispatcher.release(unit_id)
+            self._head_home(unit, edge, request_id)
 
     def _head_home(self, unit, from_edge: str, request_id: str) -> None:
         """Police and fire units drive back to the nearest station by road.
@@ -239,6 +307,26 @@ class CrewMissions:
 
     def is_returning(self, unit_id: str) -> bool:
         return unit_id in self._returning
+
+    def end_return(
+        self,
+        unit_id: str,
+        *,
+        edge_of: Callable[[str], str | None],
+        pos_of: Callable[[str], float | None],
+    ) -> tuple[str | None, float | None]:
+        """A unit on its way home was given a call: end the trip home and say
+        where the next trip starts -- the road the vehicle is on and how far
+        along it (metres). Both are read *before* the trip is cancelled,
+        because cancelling forgets them; without the position the next trip
+        starts at the beginning of that road and the vehicle jumps backwards.
+        (None, None) when the unit was not driving home."""
+        rid = self._returning.get(unit_id)
+        if rid is None:
+            return None, None
+        edge, pos = edge_of(rid), pos_of(rid)
+        self.stop_return(unit_id)
+        return edge, (pos if edge else None)
 
     def ask_corridor(
         self, unit_id: str, dest_edge: str, reason: str, *, now_s: float, step: int

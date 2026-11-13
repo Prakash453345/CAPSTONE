@@ -165,8 +165,12 @@ def test_accident_pages_police_ambulance_and_fire_truck():
     }
 
 
-def test_heavy_congestion_pages_nobody():
-    assert _RESPONSE_MAP[AnomalyType.HEAVY_CONGESTION] == ()
+def test_what_is_on_the_road_pages_traffic_police_not_police():
+    for kind in (
+        AnomalyType.VEHICLE_BREAKDOWN, AnomalyType.STALLED_VEHICLE, AnomalyType.LANE_BLOCKAGE,
+        AnomalyType.ROAD_OBSTRUCTION, AnomalyType.HEAVY_CONGESTION,
+    ):
+        assert _RESPONSE_MAP[kind] == (EmergencyKind.TRAFFIC_POLICE,)
 
 
 def test_fire_pages_fire_truck_police_and_ambulance():

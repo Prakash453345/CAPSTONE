@@ -7,8 +7,8 @@ import { cn } from "@/utils/cn";
 
 /**
  * The patient leg. When an ambulance reaches the scene the system lists the
- * hospitals it can reach, fastest first by live traffic, and picks the first;
- * the crew confirms it or chooses another (the patient may need a particular
+ * hospitals it can reach, fastest first by live traffic, and suggests the
+ * first; nothing moves until the crew confirms it or chooses another (the patient may need a particular
  * one, or the family may ask). On the way they can still change it, and the
  * route is re-planned from where the ambulance is.
  */
@@ -77,7 +77,7 @@ export function HospitalCard({
           </p>
           <p className="text-[13px] leading-snug text-muted-foreground">
             {variant === "choose"
-              ? "Fastest first by live traffic. If you don't choose, the fastest is picked in 45 s."
+              ? `Suggested: ${mission.options.find((o) => o.facilityId === mission.recommendedId)?.name ?? mission.options[0]!.name}, the fastest by live traffic. Go there or choose another. You leave when you say so.`
               : `To ${chosen?.name ?? "hospital"}`}
           </p>
         </div>

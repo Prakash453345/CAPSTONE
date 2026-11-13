@@ -64,7 +64,7 @@ export function EmergencyVehicleLayer({
       string,
     ][]) {
       const color =
-        kind === "ambulance" ? VEHICLE_COLOR.ambulance : kind === "fire_truck" ? "#ff8a4c" : "#6ea8ff";
+        kind === "ambulance" ? VEHICLE_COLOR.ambulance : kind === "fire_truck" ? "#ff8a4c" : kind === "traffic_police" ? "#2ec4d6" : "#6ea8ff";
       try {
         upsertMapImage(map, name, makeEmergencyIcon(kind, color));
       } catch (err) {
@@ -127,6 +127,8 @@ export function EmergencyVehicleLayer({
               EMERGENCY_ICON_ID.fire_truck,
               "police",
               EMERGENCY_ICON_ID.police,
+              "traffic_police",
+              EMERGENCY_ICON_ID.traffic_police,
               EMERGENCY_ICON_ID.ambulance,
             ],
           ],

@@ -53,6 +53,15 @@ def test_units_start_at_depots_of_their_kind_in_a_fixed_order() -> None:
     assert roster.get("POL-1").edge_id == "dP"
 
 
+def test_a_unit_with_its_own_base_starts_there_and_the_rest_are_spread() -> None:
+    roster, missions, *_ = _setup()
+    missions.unit_homes = {"AMB-1": "dB"}
+    missions.place_new_units()
+    assert roster.get("AMB-1").edge_id == "dB"
+    assert roster.get("AMB-2").edge_id == "dB"  # still the second depot in the rotation
+    assert roster.get("POL-1").edge_id == "dP"
+
+
 def test_a_driving_unit_is_where_its_vehicle_is_and_the_fleet_is_published() -> None:
     roster, missions, *_ = _setup()
     missions.place_new_units()
@@ -183,6 +192,31 @@ def test_a_call_accepted_on_the_way_home_ends_the_trip_home() -> None:
     assert cancelled == ["req-1-return"]
 
 
+def test_a_call_taken_on_the_way_home_starts_where_the_vehicle_is_on_the_road() -> None:
+    """Fire 1 drove home from one fire and took a second call 140 m along a
+    road: the new trip must start there, not at the road's beginning (the
+    truck jumped backwards on the map). The position is read before the trip
+    home is cancelled, because cancelling forgets it."""
+    _, missions, _, cancelled = _with_return()
+    missions.on_arrival("req-1", "POL-1", "scene")
+    seen: list[str] = []
+
+    def edge_of(rid: str) -> str | None:
+        seen.append(f"edge:{rid}:cancelled={rid in cancelled}")
+        return "road9"
+
+    def pos_of(rid: str) -> float | None:
+        seen.append(f"pos:{rid}:cancelled={rid in cancelled}")
+        return 140.0
+
+    assert missions.end_return("POL-1", edge_of=edge_of, pos_of=pos_of) == ("road9", 140.0)
+    assert seen == ["edge:req-1-return:cancelled=False", "pos:req-1-return:cancelled=False"]
+    assert cancelled == ["req-1-return"]
+    # not on its way home: nothing to read, nothing to cancel
+    assert missions.end_return("POL-1", edge_of=edge_of, pos_of=pos_of) == (None, None)
+    assert cancelled == ["req-1-return"]
+
+
 def _asking(vehicles=None, ok=True):
     roster = CrewRoster()
     roster.upsert(_unit("POL-1", EmergencyKind.POLICE, "police1", "Police 1"))
@@ -256,3 +290,72 @@ def test_an_unanswered_ask_is_stood_down_and_an_approved_one_is_kept() -> None:
     drivers["POL-1"] = "road9"  # an operator approved: the vehicle is on the road
     missions.tick(400.0)
     assert cancelled == [rid] and roster.get("POL-1").busy and rid2
+
+
+def _on_scene_setup(active: set[str]):
+    """A fire unit and a police unit; `active` holds the request ids whose
+    incident is still going."""
+    roster = CrewRoster()
+    roster.upsert(_unit("FIRE-1", EmergencyKind.FIRE_TRUCK, "fire1", "Fire 1"))
+    roster.upsert(_unit("POL-1", EmergencyKind.POLICE, "police1", "Police 1"))
+    returns: list[tuple] = []
+    missions = CrewMissions(
+        CrewDispatcher(roster, _Planner(), None),
+        facility_index=FacilityIndex([]),
+        home_edges={EmergencyKind.FIRE_TRUCK: ["station"], EmergencyKind.POLICE: ["station"]},
+        create_leg=lambda *a: True,
+        cancel=lambda rid: None,
+        vehicle_edges=lambda: {},
+        edge_latlon=lambda e: (16.5, 80.6),
+        route_fn=lambda a, b: ((a, b), 60.0),
+        create_return=lambda *a: returns.append(a) or True,
+        scene_active=lambda rid, edge, kind: rid in active,
+    )
+    return roster, missions, returns
+
+
+def test_a_fire_crew_stays_at_a_fire_that_is_still_burning_then_drives_home() -> None:
+    active = {"resp-an-1-fire_truck"}
+    roster, missions, returns = _on_scene_setup(active)
+    roster.set_busy("FIRE-1", True)
+    missions.on_arrival("resp-an-1-fire_truck", "FIRE-1", "scene")
+    missions.tick(10.0)
+    assert roster.get("FIRE-1").busy and missions.is_on_scene("FIRE-1")
+    assert returns == []                      # not heading home yet
+    active.clear()                            # the fire is out (resolved or expired)
+    missions.tick(20.0)
+    assert not roster.get("FIRE-1").busy and not missions.is_on_scene("FIRE-1")
+    assert returns == [("resp-an-1-fire_truck-return", "FIRE-1", "scene", "station",
+                        EmergencyKind.FIRE_TRUCK)]
+    missions.tick(30.0)
+    assert len(returns) == 1                  # sent home once, not every tick
+
+
+def test_a_unit_whose_incident_is_already_over_leaves_at_once() -> None:
+    roster, missions, returns = _on_scene_setup(set())
+    roster.set_busy("POL-1", True)
+    missions.on_arrival("resp-an-2-police", "POL-1", "scene")
+    assert not roster.get("POL-1").busy and not missions.is_on_scene("POL-1")
+    assert returns and returns[0][1] == "POL-1"
+
+
+def test_when_the_driver_decides_a_unit_stays_until_they_say_they_are_leaving() -> None:
+    roster, missions, returns = _on_scene_setup(set())   # no incident going at all
+    missions.driver_releases = True
+    roster.set_busy("POL-1", True)
+    missions.on_arrival("resp-an-2-police", "POL-1", "scene")
+    missions.tick(10_000.0)                              # no clock moves it
+    assert roster.get("POL-1").busy and missions.is_on_scene("POL-1") and returns == []
+    assert missions.leave_scene("POL-1")
+    assert not roster.get("POL-1").busy and not missions.is_on_scene("POL-1")
+    assert returns[0][1] == "POL-1"
+    assert not missions.leave_scene("POL-1")             # only once
+
+
+    active = {"resp-an-1-fire_truck", "resp-an-1-fire_truck-return"}
+    roster, missions, returns = _on_scene_setup(active)
+    missions.on_arrival("resp-an-1-fire_truck", "FIRE-1", "scene")
+    active.discard("resp-an-1-fire_truck")
+    missions.tick(1.0)
+    missions.on_arrival("resp-an-1-fire_truck-return", "FIRE-1", "station")
+    assert not missions.is_on_scene("FIRE-1") and not roster.get("FIRE-1").busy

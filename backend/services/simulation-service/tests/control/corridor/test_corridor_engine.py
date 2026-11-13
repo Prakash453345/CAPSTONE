@@ -165,7 +165,7 @@ def test_a_stopped_vehicle_releases_its_corridor():
     for t in (0.0, 1.0, 2.0, 3.0):
         _feed(engine, [_report("FIRE1", t)], t)
     assert engine.active_at("J1") or engine.propose(cfg, _ctx(cfg)) is not None
-    for t in range(4, 30):
+    for t in range(4, 60):  # past queue_grace_s (45 s): it stands 60 m from the line
         _feed(engine, [_report("FIRE1", float(t), speed_mps=0.0)], float(t))
     assert engine.propose(cfg, _ctx(cfg)) is None
     assert not engine.active_at("J1")
@@ -790,3 +790,123 @@ def test_the_engine_repays_from_ordinary_green_not_only_while_preempting():
         engine.begin_tick(float(t))
         engine.propose(cfg, _ctx(cfg, current_phase_id="P0"))
     assert engine.debt.owed("J1", "m0") == 0.0, "green service did not settle the debt"
+
+
+def test_a_far_vehicle_does_not_take_a_junction_from_one_about_to_arrive():
+    """FIRE1 is seen first but is 200 s away; FIRE2 is 10 s away. The junction
+    used to go to FIRE1 (first seen), who was too far to claim it, so FIRE2
+    got no preemption at all."""
+    cfg = _config()
+    engine = _engine()
+    plan = None
+    for t in range(0, 8):
+        reports = [_report("FIRE1", float(t), distance_m=3000.0, speed_mps=15.0, movement="m0")]
+        if t >= 1:
+            reports.append(
+                _report("FIRE2", float(t), distance_m=120.0 - 10 * t, speed_mps=10.0)
+            )
+        _feed(engine, reports, float(t))
+        plan = engine.propose(cfg, _ctx(cfg, current_phase_elapsed_s=30.0 + t))
+    assert plan is not None and plan.steps[-1].phase_id == "P1"   # FIRE2's phase
+
+
+def test_the_vehicle_holding_a_junction_keeps_it_against_an_equal_class_arrival():
+    cfg = _config()
+    engine = _engine()
+    for t in range(0, 5):   # FIRE2 (seen later than FIRE1 will be "first seen") claims
+        _feed(engine, [_report("FIRE2", float(t), distance_m=80.0, speed_mps=5.0)], float(t))
+        engine.propose(cfg, _ctx(cfg))
+    assert engine._junctions["J1"].reservation.vehicle_id == "FIRE2"
+    engine._tracks["FIRE2"].first_seen_s = 3.0          # FIRE1 below was seen earlier
+    for t in range(5, 9):
+        f1 = _report("FIRE1", float(t), distance_m=100.0, speed_mps=10.0, movement="m0")
+        f1_track_first = engine._tracks.get("FIRE1")
+        _feed(engine, [f1, _report("FIRE2", float(t), distance_m=60.0, speed_mps=5.0)], float(t))
+        if f1_track_first is None:
+            engine._tracks["FIRE1"].first_seen_s = 0.0
+        engine.propose(cfg, _ctx(cfg))
+    assert engine._junctions["J1"].reservation.vehicle_id == "FIRE2"
+
+
+def test_a_vehicle_queued_at_a_red_keeps_its_junction():
+    """Stopped 40 m short of the line in the junction's queue. After 8 s its
+    track used to be dropped and the junction released as `stale_report`."""
+    cfg = _config()
+    engine = _engine()
+    held = []
+    for t in range(0, 40):
+        moving = t < 6
+        _feed(engine, [_report("FIRE1", float(t), distance_m=max(40.0, 100.0 - 10 * t),
+                               speed_mps=10.0 if moving else 0.0)], float(t))
+        held.append(engine.propose(cfg, _ctx(cfg, current_phase_id="P1")) is not None)
+    assert all(held[3:])
+
+
+def test_a_vehicle_crawling_in_a_junctions_queue_can_claim_it():
+    cfg = _config()
+    engine = _engine()
+    plan = None
+    for t in range(0, 12):
+        _feed(engine, [_report("FIRE1", float(t), distance_m=80.0, speed_mps=0.5)], float(t))
+        plan = engine.propose(cfg, _ctx(cfg))
+    assert plan is not None
+
+
+def _yield_config() -> Tier0Config:
+    """P1 shows m1 green, but only permissively (it yields to m2)."""
+    phases = {
+        "P0": Phase("P0", frozenset({"m0"})),
+        "P1": Phase("P1", frozenset({"m1", "m2"}), protected_movements=frozenset({"m2"})),
+    }
+    return Tier0Config(
+        intersection_id="J1", phases=phases, ring_order=("P0", "P1"),
+        conflict_matrix={"m0": frozenset({"m1", "m2"}), "m1": frozenset({"m0", "m2"}),
+                         "m2": frozenset({"m0", "m1"})},
+        min_green_s={"P0": 10.0, "P1": 10.0}, max_green_s={"P0": 90.0, "P1": 90.0},
+        yellow_s=6.0, all_red_s=2.0, max_wait_s=250.0,
+        sat_flow_pcu_s={"m0": 0.5, "m1": 0.5, "m2": 0.5},
+    )
+
+
+def _approach(engine, cfg, n=6):
+    plan = None
+    for t in range(n):
+        _feed(engine, [_report("FIRE1", float(t), distance_m=100.0 - 10 * t)], float(t))
+        plan = engine.propose(cfg, _ctx(cfg, current_phase_elapsed_s=30.0 + t))
+    return plan
+
+
+def test_a_yield_only_movement_is_not_claimed_by_default():
+    cfg = _yield_config()
+    engine = _engine()
+    assert _approach(engine, cfg) is None
+    assert engine.stats()["defer_no_protected_phase"] > 0
+
+
+def test_yield_priority_shows_the_phase_and_never_confirms_solid():
+    """The junction where the vehicle's turn only ever yields was left to its
+    normal cycle: every red-light stop left on the benchmark route was there.
+    With `yield_priority` its phase is shown, and the crew is told to yield."""
+    cfg = _yield_config()
+    engine = _engine(yield_priority=True)
+    plan = _approach(engine, cfg)
+    assert plan is not None and plan.steps[-1].phase_id == "P1"
+    assert not interlocks.check(plan, _ctx(cfg, current_phase_elapsed_s=35.0), cfg)
+    assert engine.counters["yield_priority_granted"] == 1
+    # even once P1 is up and held, the indication stays "yield"
+    dwell = _ctx(cfg, current_phase_id="P1", current_phase_elapsed_s=3.0)
+    _feed(engine, [_report("FIRE1", 6.0, distance_m=40.0)], 6.0)
+    engine.propose(cfg, dwell)
+    assert engine.confirmation("J1", cfg, dwell).value == "flashing"
+
+
+def test_yield_priority_leaves_protected_movements_solid():
+    cfg = _config()
+    engine = _engine(yield_priority=True)
+    _approach(engine, cfg)
+    dwell = _ctx(cfg, current_phase_id="P1", current_phase_elapsed_s=3.0)
+    _feed(engine, [_report("FIRE1", 6.0, distance_m=40.0)], 6.0)
+    engine.propose(cfg, dwell)
+    assert engine.confirmation("J1", cfg, dwell).value == "solid"
+    assert engine.counters["yield_priority_granted"] == 0
+
